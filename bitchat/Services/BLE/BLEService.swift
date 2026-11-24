@@ -6656,7 +6656,7 @@ extension BLEService {
             withRegistryBarrier: { [weak self] body in
                 self?.onEngine { body() }
             },
-            upsertVerifiedAnnounce: { [weak self] peerID, announcement, isConnected, now in
+            upsertVerifiedAnnounce: { [weak self] peerID, announcement, isConnected, now, announceTimestamp in
                 // Called from inside withRegistryBarrier; access registry directly.
                 guard let self = self else {
                     return BLEPeerAnnounceUpdate(isNewPeer: false, wasDisconnected: false, previousNickname: nil)
@@ -6675,7 +6675,8 @@ extension BLEService {
                         // preserved.
                         now: now,
                         capabilities: announcement.capabilities,
-                        bridgeGeohash: announcement.bridgeGeohash
+                        bridgeGeohash: announcement.bridgeGeohash,
+                        announceTimestamp: announceTimestamp
                     )
                 }
             },
@@ -6687,8 +6688,12 @@ extension BLEService {
                     minimumInterval: TransportConfig.bleReconnectLogDebounceSeconds
                 ) ?? false
             },
-            updateTopology: { [weak self] peerID, neighbors in
-                self?.meshTopology.updateNeighbors(for: peerID.routingData, neighbors: neighbors)
+            updateTopology: { [weak self] peerID, neighbors, announceTimestamp in
+                self?.meshTopology.updateNeighbors(
+                    for: peerID.routingData,
+                    neighbors: neighbors,
+                    announceTimestamp: announceTimestamp
+                )
             },
             persistIdentity: { [weak self] announcement in
                 self?.identityManager.upsertCryptographicIdentity(

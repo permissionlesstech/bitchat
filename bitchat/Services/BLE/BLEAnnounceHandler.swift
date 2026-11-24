@@ -45,13 +45,14 @@ struct BLEAnnounceHandlerEnvironment {
         _ peerID: PeerID,
         _ announcement: AnnouncementPacket,
         _ isConnected: Bool,
-        _ now: Date
+        _ now: Date,
+        _ announceTimestamp: UInt64
     ) -> BLEPeerAnnounceUpdate?
     /// Debounced reconnect-log decision.
     /// Must only be called from inside `withRegistryBarrier`.
     let shouldEmitReconnectLog: (_ peerID: PeerID, _ now: Date) -> Bool
     /// Records verified direct-neighbor claims in the mesh topology.
-    let updateTopology: (_ peerID: PeerID, _ neighbors: [Data]) -> Void
+    let updateTopology: (_ peerID: PeerID, _ neighbors: [Data], _ announceTimestamp: UInt64) -> Void
     /// Persists the announced cryptographic identity for offline verification.
     let persistIdentity: (AnnouncementPacket) -> Void
     /// Announce-back dedup check.
@@ -210,11 +211,13 @@ final class BLEAnnounceHandler {
             // The pre-barrier trust check reads the registry outside the
             // barrier, so this closes the race where two announces for the
             // same peer are evaluated concurrently.
+            var isStaleAnnounce = false
             guard let update = env.upsertVerifiedAnnounce(
                 peerID,
                 announcement,
                 hasPeripheralConnection || hasCentralSubscription || (isDirectAnnounce && !linkBoundToOtherPeer),
-                now
+                now,
+                packet.timestamp
             ) else {
                 SecureLogger.warning("🚨 Registry refused announce for \(peerID.id.prefix(8))… — signing key differs from pinned key", category: .security)
                 verifiedAnnounce = false
@@ -222,11 +225,12 @@ final class BLEAnnounceHandler {
                 isReconnectedPeer = false
                 return
             }
+            isStaleAnnounce = update.wasStaleAnnounce
             isNewPeer = update.isNewPeer
             isReconnectedPeer = update.wasDisconnected
 
             // Log connection status only for direct connectivity changes; debounce to reduce spam
-            if isDirectAnnounce || hasPeripheralConnection || hasCentralSubscription {
+            if !isStaleAnnounce && (isDirectAnnounce || hasPeripheralConnection || hasCentralSubscription) {
                 let now = env.now()
                 if update.isNewPeer {
                     SecureLogger.debug("🆕 New peer: \(announcement.nickname)", category: .session)
@@ -242,7 +246,7 @@ final class BLEAnnounceHandler {
 
         // Update topology with verified neighbor claims (only for authenticated announces)
         if verifiedAnnounce, let neighbors = announcement.directNeighbors {
-            env.updateTopology(peerID, neighbors)
+            env.updateTopology(peerID, neighbors, packet.timestamp)
         }
 
         // Persist cryptographic identity and signing key for robust offline
