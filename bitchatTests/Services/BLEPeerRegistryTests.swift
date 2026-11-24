@@ -192,7 +192,7 @@ struct BLEPeerRegistryTests {
         #expect(stale.wasStaleAnnounce)
         #expect(registry.nickname(for: peerID, connectedOnly: true) == "new-nick")
         #expect(registry.capabilities(for: peerID) == [.bridge])
-        #expect(registry.bridgeGeohash(for: peerID) == "u4pru")
+        #expect(registry.advertisedBridgeGeohash() == "u4pru")
     }
 
     @Test("reachability keeps recent verified offline peers only when mesh is attached")
