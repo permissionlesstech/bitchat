@@ -109,20 +109,31 @@ struct BLERelayLifecycleStore {
     }
 
     /// Returns `true` if `messageID` may enter relay evaluation.
+    ///
+    /// When `messageID` is already `.suppressed` and `packet` is provided,
+    /// reopening requires the packet to match the stored authenticated digest
+    /// (covering packets such as fragments that bypass global message dedup
+    /// after the short ingress-link window expires).
     mutating func canProceed(
         messageID: String,
         isDuplicateIngress: Bool,
+        packet: BitchatPacket? = nil,
         now: Date = Date()
     ) -> Bool {
         prune(now: now)
-        let current = entries[messageID]?.state
-        switch current {
+        guard let entry = entries[messageID] else {
+            return !isDuplicateIngress
+        }
+        switch entry.state {
         case .relayed:
             return false
         case .suppressed:
-            return true
-        case nil:
-            return !isDuplicateIngress
+            guard let packet else { return true }
+            guard let expectedDigest = entry.authenticatedDigest,
+                  let incomingDigest = Self.authenticationDigest(for: packet) else {
+                return false
+            }
+            return expectedDigest == incomingDigest
         }
     }
 

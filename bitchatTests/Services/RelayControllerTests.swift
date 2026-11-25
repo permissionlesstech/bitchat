@@ -284,7 +284,7 @@ struct RelayControllerTests {
             now: now
         ) == .mpr2Covered)
 
-        // Unsigned broadcast fragments and group messages fail closed to prunedFlood
+        // Unsigned or unauthenticated broadcast envelopes fail closed to prunedFlood
         #expect(RelayController.broadcastRelayPolicy(
             for: packet(.fragment, signature: nil),
             originPeerID: origin,
@@ -293,6 +293,33 @@ struct RelayControllerTests {
             topology: tracker,
             now: now
         ) == .prunedFlood)
+        #expect(RelayController.broadcastRelayPolicy(
+            for: packet(.fragment, signature: sig),
+            originPeerID: origin,
+            forceConservativeRelay: false,
+            sourceRouteFallback: false,
+            isAuthenticated: false,
+            topology: tracker,
+            now: now
+        ) == .prunedFlood)
+        #expect(RelayController.broadcastRelayPolicy(
+            for: packet(.message, signature: sig),
+            originPeerID: origin,
+            forceConservativeRelay: false,
+            sourceRouteFallback: false,
+            isAuthenticated: false,
+            topology: tracker,
+            now: now
+        ) == .prunedFlood)
+        #expect(RelayController.broadcastRelayPolicy(
+            for: packet(.announce, signature: sig),
+            originPeerID: origin,
+            forceConservativeRelay: false,
+            sourceRouteFallback: false,
+            isAuthenticated: false,
+            topology: tracker,
+            now: now
+        ) == .conservativeFlood)
         #expect(RelayController.broadcastRelayPolicy(
             for: packet(.groupMessage, signature: nil),
             originPeerID: origin,

@@ -69,14 +69,19 @@ final class MeshTopologyTracker {
     ///   - announceTimestamp: Optional wire packet timestamp (ms) for verified
     ///     ANNOUNCE updates. When provided, older or equal timestamps are ignored
     ///     and `false` is returned.
+    ///   - maxFreshAge: Freshness threshold used to detect when a previously
+    ///     known peer's prior topology entry had already gone stale before this
+    ///     update arrived.
     ///   - now: Local receipt timestamp.
-    /// - Returns: `true` if the update was accepted and either introduced `sourceData`
-    ///   or changed its wire-reported neighbor set; `false` otherwise.
+    /// - Returns: `true` if the update was accepted and either introduced
+    ///   `sourceData`, refreshed a previously stale entry, or changed its
+    ///   wire-reported neighbor set; `false` otherwise.
     @discardableResult
     func updateNeighbors(
         for sourceData: Data?,
         neighbors: [Data],
         announceTimestamp: UInt64? = nil,
+        maxFreshAge: TimeInterval = TransportConfig.bleMprEdgeMaxAgeSeconds,
         at now: Date = Date()
     ) -> Bool {
         guard let source = sanitize(sourceData) else { return false }
@@ -98,8 +103,9 @@ final class MeshTopologyTracker {
                 self.lastAnnounceTimestamp[source] = announceTimestamp
             }
 
+            let wasFresh = self.isFreshLocked(source, now: now, maxAge: maxFreshAge)
             let prevReported = self.reportedClaims[source]
-            let topologyChanged = prevReported == nil || prevReported != validNeighbors
+            let topologyChanged = prevReported == nil || prevReported != validNeighbors || !wasFresh
             self.reportedClaims[source] = validNeighbors
             self.claims[source] = validNeighbors
             self.lastSeen[source] = now

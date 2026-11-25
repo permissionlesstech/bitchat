@@ -51,15 +51,22 @@ struct BLERelayLifecycleStoreTests {
 
         // Exact signed packet with mutated hop TTL matches and may proceed.
         let canReconsiderValid = store.canReconsiderSuppressed(messageID: "m1", packet: secondCopyDifferentTTL, now: now)
-        let canProceedValid = store.canProceed(messageID: "m1", isDuplicateIngress: true, now: now)
+        let canProceedValid = store.canProceed(messageID: "m1", isDuplicateIngress: true, packet: secondCopyDifferentTTL, now: now)
+        let canProceedFirstArrivalValid = store.canProceed(messageID: "m1", isDuplicateIngress: false, packet: secondCopyDifferentTTL, now: now)
         #expect(canReconsiderValid)
         #expect(canProceedValid)
+        #expect(canProceedFirstArrivalValid)
 
-        // Tampered or unsigned copies are rejected.
+        // Tampered or unsigned copies are rejected on both duplicate and
+        // post-ingress-window first-arrival paths (e.g., fragments).
         let canReconsiderTampered = store.canReconsiderSuppressed(messageID: "m1", packet: tamperedCopy, now: now)
         let canReconsiderUnsigned = store.canReconsiderSuppressed(messageID: "m1", packet: unsignedCopy, now: now)
+        let canProceedTampered = store.canProceed(messageID: "m1", isDuplicateIngress: false, packet: tamperedCopy, now: now)
+        let canProceedUnsigned = store.canProceed(messageID: "m1", isDuplicateIngress: false, packet: unsignedCopy, now: now)
         #expect(!canReconsiderTampered)
         #expect(!canReconsiderUnsigned)
+        #expect(!canProceedTampered)
+        #expect(!canProceedUnsigned)
 
         // Claiming transitions to terminal .relayed; further claims fail.
         let firstClaim = store.tryClaimRelay(messageID: "m1", isDuplicateIngress: true, now: now)

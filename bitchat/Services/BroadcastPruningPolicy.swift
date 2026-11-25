@@ -58,7 +58,7 @@ enum BroadcastPruningPolicy {
 
         // 5. Conservative / topology-healing packets skip neighbor pruning so
         // broken links heal.
-        if skipNeighborPruning || isConservativePacket(packet) {
+        if skipNeighborPruning || RelayController.isAlwaysConservativeBroadcastPacket(packet) {
             return false
         }
 
@@ -143,30 +143,5 @@ enum BroadcastPruningPolicy {
         }
 
         return excluded
-    }
-
-    private static func isConservativePacket(_ packet: BitchatPacket) -> Bool {
-        if !BLEPacketFreshnessPolicy.isBroadcastRecipient(packet.recipientID) {
-            return true
-        }
-        guard let messageType = MessageType(rawValue: packet.type) else {
-            return true
-        }
-        switch messageType {
-        case .leave,
-             .noiseHandshake,
-             .noiseEncrypted,
-             .requestSync,
-             .courierEnvelope,
-             .ping,
-             .pong,
-             .nostrCarrier,
-             .announceV2:
-            return true
-        case .boardPost:
-            return BoardWire.urgentFlag(in: packet.payload)
-        case .announce, .message, .fragment, .fileTransfer, .prekeyBundle, .groupMessage, .voiceFrame:
-            return false
-        }
     }
 }

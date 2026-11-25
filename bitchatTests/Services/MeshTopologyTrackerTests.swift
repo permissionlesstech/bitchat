@@ -299,4 +299,31 @@ struct MeshTopologyTrackerTests {
         #expect(tracker.adjacencySnapshot()[a]?.contains(b) != true)
     }
 
+    @Test func unchangedAnnounceFromStaleOriginReportsTopologyChanged() throws {
+        let tracker = MeshTopologyTracker()
+        let a = try hex("0101010101010101")
+        let b = try hex("0202020202020202")
+        let t0 = Date(timeIntervalSince1970: 1_000)
+
+        #expect(tracker.updateNeighbors(for: a, neighbors: [b], announceTimestamp: 10, maxFreshAge: 120, at: t0))
+        // Still fresh with unchanged neighbors -> topologyChanged = false.
+        #expect(!tracker.updateNeighbors(
+            for: a,
+            neighbors: [b],
+            announceTimestamp: 20,
+            maxFreshAge: 120,
+            at: t0.addingTimeInterval(60)
+        ))
+        // Prior entry aged past maxFreshAge (121s > 120s) without pruning:
+        // unchanged neighbors must still report topologyChanged = true so
+        // conservative flooding runs for stale originators.
+        #expect(tracker.updateNeighbors(
+            for: a,
+            neighbors: [b],
+            announceTimestamp: 30,
+            maxFreshAge: 120,
+            at: t0.addingTimeInterval(181)
+        ))
+    }
+
 }

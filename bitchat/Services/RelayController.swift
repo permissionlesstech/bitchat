@@ -122,6 +122,35 @@ struct RelayController {
 
     // MARK: - Traffic-Class-Aware MPR Relay Policy
 
+    /// Single source of truth for packet types that must always use
+    /// conservative flooding (no MPR suppression, no neighbor pruning).
+    /// Shared by `broadcastRelayPolicy` and `BroadcastPruningPolicy` so relay
+    /// evaluation and egress target pruning never disagree.
+    static func isAlwaysConservativeBroadcastPacket(_ packet: BitchatPacket) -> Bool {
+        if !BLEPacketFreshnessPolicy.isBroadcastRecipient(packet.recipientID) {
+            return true
+        }
+        guard let messageType = MessageType(rawValue: packet.type) else {
+            return true
+        }
+        switch messageType {
+        case .leave,
+             .noiseHandshake,
+             .noiseEncrypted,
+             .requestSync,
+             .courierEnvelope,
+             .ping,
+             .pong,
+             .nostrCarrier,
+             .announceV2:
+            return true
+        case .boardPost:
+            return BoardWire.urgentFlag(in: packet.payload)
+        case .announce, .message, .fragment, .fileTransfer, .prekeyBundle, .groupMessage, .voiceFrame:
+            return false
+        }
+    }
+
     /// Determines the broadcast relay policy for a packet, in parity with
     /// Android's `PacketRelayManager.relayPolicyFor`.
     static func broadcastRelayPolicy(
@@ -129,56 +158,56 @@ struct RelayController {
         originPeerID: PeerID,
         forceConservativeRelay: Bool,
         sourceRouteFallback: Bool,
+        isAuthenticated: Bool = true,
         topology: MeshTopologyTracker,
         edgeMaxAge: TimeInterval = TransportConfig.bleMprEdgeMaxAgeSeconds,
         now: Date = Date()
     ) -> BroadcastRelayPolicy {
-        if sourceRouteFallback {
+        if sourceRouteFallback || isAlwaysConservativeBroadcastPacket(packet) {
             return .conservativeFlood
         }
 
-        let isBroadcast = BLEPacketFreshnessPolicy.isBroadcastRecipient(packet.recipientID)
         guard let messageType = MessageType(rawValue: packet.type) else {
             return .conservativeFlood
         }
 
         switch messageType {
-        case .voiceFrame:
-            return isBroadcast ? .mpr1Covered : .conservativeFlood
+        case .voiceFrame, .boardPost:
+            return isAuthenticated ? .mpr1Covered : .prunedFlood
 
         case .message:
-            return isBroadcast ? .mpr1Covered : .conservativeFlood
+            // Only cryptographically authenticated signed broadcast messages can
+            // safely enter MPR suppression (so a matching duplicate from an
+            // electing hop can reopen suppression). Unsigned or unverified
+            // messages fail closed to neighbor-pruned relaying.
+            return (packet.signature != nil && isAuthenticated) ? .mpr1Covered : .prunedFlood
 
         case .fragment:
-            guard isBroadcast else { return .conservativeFlood }
-            // Unsigned legacy/v1 fragment envelopes cannot be cryptographically
-            // re-authenticated on duplicate ingress, so fail closed to
-            // neighbor-pruned relaying rather than irreversibly MPR-suppressing
-            // on first arrival.
-            return packet.signature != nil ? .mpr2Covered : .prunedFlood
+            // Only cryptographically authenticated signed broadcast fragments
+            // can safely enter 2-covered MPR (so a matching duplicate from an
+            // electing hop can reopen suppression). Unsigned or unverified
+            // fragments fail closed to neighbor-pruned relaying.
+            return (packet.signature != nil && isAuthenticated) ? .mpr2Covered : .prunedFlood
 
         case .fileTransfer:
-            return isBroadcast ? .mpr2Covered : .conservativeFlood
+            return isAuthenticated ? .mpr2Covered : .prunedFlood
 
         case .announce:
-            if forceConservativeRelay || !topology.isFreshAnnouncement(for: originPeerID, maxAge: edgeMaxAge, now: now) {
+            if !isAuthenticated
+                || forceConservativeRelay
+                || !topology.isFreshAnnouncement(for: originPeerID, maxAge: edgeMaxAge, now: now) {
                 return .conservativeFlood
             }
             return .mpr1Covered
-
-        case .boardPost:
-            guard isBroadcast else { return .conservativeFlood }
-            return BoardWire.urgentFlag(in: packet.payload) ? .conservativeFlood : .mpr1Covered
 
         case .groupMessage:
             // Sealed group messages have an unsigned outer envelope (authenticated
             // inside ChaChaPoly only by group members), so non-member relays
             // cannot re-authenticate duplicates; use neighbor-pruned relaying.
-            return isBroadcast ? .prunedFlood : .conservativeFlood
+            return .prunedFlood
 
         case .prekeyBundle:
-            guard isBroadcast else { return .conservativeFlood }
-            return packet.signature != nil ? .mpr1Covered : .prunedFlood
+            return (packet.signature != nil && isAuthenticated) ? .mpr1Covered : .prunedFlood
 
         case .leave,
              .noiseHandshake,
@@ -205,6 +234,7 @@ struct RelayController {
         hasUnidentifiedDirectLink: Bool,
         forceConservativeRelay: Bool = false,
         sourceRouteFallback: Bool = false,
+        isAuthenticated: Bool = true,
         topology: MeshTopologyTracker,
         smallNetworkThreshold: Int = TransportConfig.bleMprSmallNetworkRelayThreshold,
         edgeMaxAge: TimeInterval = TransportConfig.bleMprEdgeMaxAgeSeconds,
@@ -215,6 +245,7 @@ struct RelayController {
             originPeerID: originPeerID,
             forceConservativeRelay: forceConservativeRelay,
             sourceRouteFallback: sourceRouteFallback,
+            isAuthenticated: isAuthenticated,
             topology: topology,
             edgeMaxAge: edgeMaxAge,
             now: now
