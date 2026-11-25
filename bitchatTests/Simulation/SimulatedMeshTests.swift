@@ -56,14 +56,14 @@ struct SimulatedMeshTests {
         mesh.connect(1, 2)
 
         mesh.announceAll()
-        // Discovery is not quiet after one advance: every first-seen peer
-        // schedules an afterglow re-announce at a RANDOM 0.3–0.6s delay
-        // (BLEAnnounceHandler), and each of those can cascade another relay
-        // round. Whether that traffic lands before or after a one-shot
-        // baseline snapshot depends on the draw — the budget assertion below
-        // flaked on CI at 14 and 18 frames for exactly that reason. Advance
-        // until the mesh goes a full window with no new frames, so the
-        // baseline only ever measures the message under test.
+        // Discovery is not quiet after one advance: a node re-announces once
+        // it learns a neighbour its last announce did not list, and that
+        // announce is retried after the forced throttle window, then relayed
+        // with jitter. Whether that traffic lands before or after a one-shot
+        // baseline snapshot depends on timing — the budget assertion below
+        // flaked on CI at 14 and 18 frames for exactly that kind of reason.
+        // Advance until the mesh goes a full window with no new frames, so
+        // the baseline only ever measures the message under test.
         var settled = mesh.deliveredFrameCount
         for _ in 0..<20 {
             mesh.advanceTime(by: 2)

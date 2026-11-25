@@ -683,6 +683,33 @@ struct BLEServiceCoreTests {
         #expect(!ble.canDeliverSecurely(to: victimPeerID))
     }
 
+    /// Completing a handshake sends no announce: every announce floods the
+    /// whole mesh, and nothing about the peer list changed.
+    @Test
+    func completedHandshakeSendsNoAnnounce() async throws {
+        let ble = makeService()
+        let alice = NoiseEncryptionService(keychain: MockKeychain())
+        let alicePeerID = PeerID(publicKey: alice.getStaticPublicKeyData())
+        let outbound = OutboundPacketTap()
+        ble._test_onOutboundPacket = outbound.record
+
+        let message1 = try alice.initiateHandshake(with: ble.myPeerID)
+        let message2 = try #require(
+            try ble._test_noiseProcessHandshakeMessage(from: alicePeerID, message: message1)
+        )
+        let message3 = try #require(
+            try alice.processHandshakeMessage(from: ble.myPeerID, message: message2)
+        )
+        _ = try ble._test_noiseProcessHandshakeMessage(from: alicePeerID, message: message3)
+        // The establishment transition and anything it queues are their own
+        // serialized phases behind the handshake.
+        await ble._test_drainNoiseMessagePipeline()
+        await ble._test_drainNoiseMessagePipeline()
+
+        #expect(ble.canDeliverSecurely(to: alicePeerID))
+        #expect(outbound.count(ofType: .announce) == 0)
+    }
+
     @Test
     func failedInboundReconnectRestoresAndDrainsWaitingWorkOnce() async throws {
         let ble = makeService()
@@ -711,9 +738,9 @@ struct BLEServiceCoreTests {
         )
         await ble._test_drainNoiseMessagePipeline()
         #expect(ble.canDeliverSecurely(to: alicePeerID))
-        // The establishment transition enqueues its forced announce as a
-        // separate serialized phase; drain again so it lands before the tap
-        // and cannot masquerade as restore-driven announce traffic below.
+        // The establishment transition queues its follow-up sends as a
+        // separate serialized phase; drain again so they land before the tap
+        // and cannot masquerade as restore-driven traffic below.
         await ble._test_drainNoiseMessagePipeline()
 
         let outbound = OutboundPacketTap()

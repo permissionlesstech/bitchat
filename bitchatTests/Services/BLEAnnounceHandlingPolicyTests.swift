@@ -235,33 +235,34 @@ struct BLEAnnounceHandlingPolicyTests {
         let directNew = BLEAnnounceResponsePolicy.plan(
             isDirectAnnounce: true,
             isNewPeer: true,
-            isReconnectedPeer: false,
-            shouldSendAnnounceBack: false
+            isReconnectedPeer: false
         )
         #expect(directNew.shouldNotifyPeerConnected)
         #expect(directNew.shouldScheduleInitialSync)
-        #expect(directNew.shouldScheduleAfterglow)
+
+        let directReconnected = BLEAnnounceResponsePolicy.plan(
+            isDirectAnnounce: true,
+            isNewPeer: false,
+            isReconnectedPeer: true
+        )
+        #expect(directReconnected.shouldNotifyPeerConnected)
+        #expect(directReconnected.shouldScheduleInitialSync)
 
         let relayedNew = BLEAnnounceResponsePolicy.plan(
             isDirectAnnounce: false,
             isNewPeer: true,
-            isReconnectedPeer: false,
-            shouldSendAnnounceBack: true
+            isReconnectedPeer: false
         )
         #expect(!relayedNew.shouldNotifyPeerConnected)
         #expect(!relayedNew.shouldScheduleInitialSync)
-        #expect(relayedNew.shouldSendAnnounceBack)
-        #expect(relayedNew.shouldScheduleAfterglow)
 
         let directExisting = BLEAnnounceResponsePolicy.plan(
             isDirectAnnounce: true,
             isNewPeer: false,
-            isReconnectedPeer: false,
-            shouldSendAnnounceBack: false
+            isReconnectedPeer: false
         )
         #expect(!directExisting.shouldNotifyPeerConnected)
         #expect(!directExisting.shouldScheduleInitialSync)
-        #expect(!directExisting.shouldScheduleAfterglow)
     }
 
     private func makeAnnouncePacket(

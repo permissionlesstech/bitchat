@@ -304,6 +304,18 @@ final class BLEService: NSObject {
     /// before it enqueues onto `messageQueue`. Tests use this boundary to
     /// force the quarantine-restore handler to win the dispatch race.
     var _test_beforeHandshakeRecoveryEnqueued: ((PeerID) -> Void)?
+    /// Clock for announce admission. SimulatedMesh points it at each node's
+    /// manual engine clock, so the forced-announce throttle — and with it
+    /// every announce count — follows virtual time, not runner speed.
+    var _test_announceClock: (() -> Date)?
+    /// Leaves initial gossip sync to the test (`_test_requestInitialSyncNow`).
+    /// Production schedules it through a main-actor hop and a wall-clock
+    /// delay, which land at arbitrary points of a virtual-time harness.
+    var _test_suppressAutoInitialSync = false
+    /// Replaces the random relay jitter. With one fixed delay a flood moves
+    /// in hop-count waves, so its reach no longer depends on which copy of
+    /// it wins a race (dense nodes clamp the TTL of the copy they relay).
+    var _test_fixedRelayDelay: TimeInterval?
     #endif
     private var selfBroadcastTracker = BLESelfBroadcastTracker()
     private let meshTopology = MeshTopologyTracker()
@@ -327,7 +339,10 @@ final class BLEService: NSObject {
     
     // Simple announce throttling
     private let announceThrottle = BLEAnnounceThrottle()
-    
+    // The broadcast count the latest owed-announce retry was armed at
+    // (engine-confined; see sendOwedAnnounce).
+    private var owedAnnounceRetrySince: UInt64?
+
     // Application state tracking (thread-safe)
     #if os(iOS)
     var isAppActive: Bool = true  // Assume active initially
@@ -913,12 +928,16 @@ final class BLEService: NSObject {
     var myNickname: String { localIdentityState.snapshot().nickname }
     private var myPeerIDData: Data { localIdentityState.snapshot().peerIDData }
 
-    /// Sole mutator for `myNickname`: updates the stored value and force-sends
-    /// an announce so peers learn the new name.
+    /// Sole mutator for `myNickname`: updates the stored value and, when it
+    /// changed, announces so peers learn the new name. The announce is owed:
+    /// one landing inside the forced throttle window is sent right after it
+    /// instead of being dropped, which would leave peers on the old name
+    /// until the next periodic announce.
     func setNickname(_ nickname: String) {
-        localIdentityState.setNickname(nickname)
-        // Send announce to notify peers of nickname change (force send)
-        sendAnnounce(forceSend: true)
+        guard localIdentityState.setNickname(nickname), !isPanicSuspended else { return }
+        messageQueue.async { [weak self] in
+            self?.sendOwedAnnounce()
+        }
     }
     
     // MARK: Lifecycle
@@ -2752,12 +2771,41 @@ final class BLEService: NSObject {
         }
     }
 
+    /// Link-layer bootstrap for a link that just became usable (central: our
+    /// copy of the peer's characteristic is stored; peripheral: the central
+    /// subscribed). Called on bleQueue once the link is registered. Makes
+    /// sure at least one of our announces reaches the link:
+    /// - skipped when an announce is broadcast after this call: our own
+    ///   announces go on every live link, so it already reached this one
+    ///   (typically the announce we owed the neighbour this link connected);
+    /// - owed when the forced throttle refuses it, since the announce that
+    ///   tripped the throttle predates the link.
+    func scheduleLinkUpAnnounce(after delay: TimeInterval) {
+        let broadcastsBeforeLinkUp = announceThrottle.broadcastCount
+        engineScheduler.schedule(after: delay) { [weak self] in
+            guard let self else { return }
+            if self.announceThrottle.broadcastCount == broadcastsBeforeLinkUp {
+                self.sendOwedAnnounce()
+            }
+            // Try flushing any spooled directed packets now that we have a link
+            self.flushDirectedSpool()
+        }
+    }
+
+    /// Time source for announce admission.
+    private func announceClockNow() -> Date {
+        #if DEBUG
+        if let clock = _test_announceClock { return clock() }
+        #endif
+        return Date()
+    }
+
     private func sendAnnounceNow(forceSend: Bool) {
         // Re-check on the serialized queue: a panic suspend may have started
         // after this announce was scheduled but before it runs.
         guard !isPanicSuspended else { return }
         // Throttle announces to prevent flooding
-        if !announceThrottle.shouldSend(force: forceSend, now: Date()) {
+        if !announceThrottle.shouldSend(force: forceSend, now: announceClockNow()) {
             return
         }
 
@@ -2801,7 +2849,9 @@ final class BLEService: NSObject {
             SecureLogger.error("❌ Failed to sign announce packet", category: .security)
             return
         }
-        
+
+        // Before the broadcast reads link state (see noteBroadcast).
+        announceThrottle.noteBroadcast(claimingNeighbors: connectedPeerIDs)
         broadcastPacket(signedPacket)
         // Ensure our own announce is included in sync state
         gossipSyncManager?.onPublicPacketSeen(signedPacket)
@@ -2809,6 +2859,44 @@ final class BLEService: NSObject {
         // Keep our prekey bundle riding alongside presence (throttled; the
         // send is a no-op when the bundle was refreshed recently).
         sendPrekeyBundle()
+    }
+
+    /// A forced announce that must reach the mesh: sent now, or — if the
+    /// forced throttle refuses it — once more after the window, unless
+    /// another announce is broadcast first (any announce built later carries
+    /// the same information). Engine-confined.
+    ///
+    /// Requests refused between the same two broadcasts share one retry. A
+    /// request refused after a newer broadcast gets its own: a retry armed
+    /// before that broadcast can fire inside its throttle window and be
+    /// refused as well. A retry never re-arms itself: with nothing broadcast
+    /// since it was armed, only an announce that failed to build (a nickname
+    /// too long to encode) can have refused it, and re-arming would turn
+    /// that into a timer loop.
+    private func sendOwedAnnounce() {
+        guard !isPanicSuspended else { return }
+        let broadcastsBefore = announceThrottle.broadcastCount
+        sendAnnounceNow(forceSend: true)
+        guard announceThrottle.broadcastCount == broadcastsBefore,
+              owedAnnounceRetrySince != broadcastsBefore else { return }
+        owedAnnounceRetrySince = broadcastsBefore
+        engineScheduler.schedule(after: TransportConfig.bleForceAnnounceRetryDelaySeconds) { [weak self] in
+            guard let self, self.owedAnnounceRetrySince == broadcastsBefore else { return }
+            self.owedAnnounceRetrySince = nil
+            guard self.announceThrottle.broadcastCount == broadcastsBefore else { return }
+            self.sendAnnounceNow(forceSend: true)
+        }
+    }
+
+    /// Re-announces when `peerID` is connected but our last announce did
+    /// not list it. Source routes use only edges both endpoints claim, and
+    /// the first announce either side sends on a new link predates the
+    /// other side, so it cannot list it. Engine-confined.
+    private func announceIfNeighborUnclaimed(_ peerID: PeerID) {
+        guard peerRegistry.isConnected(peerID),
+              let neighbor = peerID.routingData,
+              announceThrottle.lastBroadcastOmits(neighbor) else { return }
+        sendOwedAnnounce()
     }
 
     // MARK: QR Verification over Noise
@@ -3111,6 +3199,36 @@ extension BLEService {
     /// deterministic settling fence for simulated-mesh pumping.
     func _test_fenceEngine() {
         onEngine {}
+    }
+
+    /// Sends, now, the initial REQUEST_SYNC that `.peerConnected` schedules
+    /// (pairs with `_test_suppressAutoInitialSync`).
+    func _test_requestInitialSyncNow(to peerID: PeerID) {
+        gossipSyncManager?._sendInitialSyncNow(to: peerID)
+    }
+
+    /// Blocks until gossip work submitted so far (store updates, sync
+    /// replies handed back to the engine) has run.
+    func _test_fenceGossip() {
+        gossipSyncManager?._fence()
+    }
+
+    /// Pushes `count` unique IDs through the packet deduplicator — the
+    /// ordinary-traffic churn that evicts its oldest entries.
+    func _test_churnDeduplicator(count: Int) {
+        for index in 0..<count {
+            _ = messageDeduplicator.isDuplicate("test-churn-\(index)-\(UUID().uuidString)")
+        }
+    }
+
+    /// Intermediate hops on this node's shortest fresh path of edges claimed
+    /// by both endpoints to `peerID` — what source routing needs — or nil
+    /// when there is none. Refreshes our own claim first, as
+    /// `computeMeshPath` does; the version gate is off because harness
+    /// traffic is all v1.
+    func _test_confirmedRouteHops(to peerID: PeerID) -> Int? {
+        refreshLocalTopology()
+        return meshTopology.computeRoute(from: myPeerIDData, to: routingData(for: peerID))?.count
     }
 
     func _test_emitTransportEvent(
@@ -4224,7 +4342,22 @@ extension BLEService {
         #endif
         sendPendingMessagesAfterHandshake(for: normalizedPeerID)
         sendPendingNoisePayloadsAfterHandshake(for: normalizedPeerID)
-        sendAnnounce(forceSend: true)
+        handOverCourierMailOnAuthenticatedLink(to: normalizedPeerID, fingerprint: fingerprint)
+    }
+
+    /// The forced announce that used to end a fresh authentication had one
+    /// real job: give a courier carrying mail for this peer a verified
+    /// announce on the freshly authenticated link (handleAnnounce's
+    /// authenticated branch). Do that directly instead of flooding the mesh
+    /// to trigger it. The key comes from the session the handshake proved,
+    /// so the peer's announce need not have been handled first.
+    private func handOverCourierMailOnAuthenticatedLink(to peerID: PeerID, fingerprint: String) {
+        guard !courierStore.isEmpty,
+              hasCurrentNoiseAuthenticatedLink(to: peerID),
+              let noiseKey = noiseService.getPeerPublicKeyData(peerID),
+              noiseKey.sha256Fingerprint() == fingerprint else { return }
+        deliverCourierMail(to: peerID, noiseKey: noiseKey)
+        sprayCourierMail(to: peerID, noiseKey: noiseKey, isVerifiedPeer: true)
     }
 
     private func sendAuthenticatedPeerState(to peerID: PeerID, echo: Bool) {
@@ -4805,11 +4938,12 @@ extension BLEService {
             }
         }
         let policy = courierDepositPolicy
-        notifyUI {
+        notifyUI { [weak self] in
             // Same trust gate as deposits: don't hand mail to a peer who
-            // would reject it from us.
+            // would reject it from us. The gate reads main-actor state; the
+            // sends read engine-owned link state, so they go back there.
             guard policy(noiseKey, isVerifiedPeer) != nil else { return }
-            sendSpray()
+            self?.messageQueue.async(execute: sendSpray)
         }
     }
 
@@ -6097,9 +6231,16 @@ extension BLEService {
         messageQueue.async { [weak self] in
             self?.scheduledRelays.schedule(work, messageID: messageID)
         }
-        engineScheduler.schedule(after: Double(decision.delayMs) / 1_000, execute: work)
+        engineScheduler.schedule(after: relayDelay(for: decision), execute: work)
     }
     
+    private func relayDelay(for decision: RelayDecision) -> TimeInterval {
+        #if DEBUG
+        if let fixed = _test_fixedRelayDelay { return fixed }
+        #endif
+        return Double(decision.delayMs) / 1_000
+    }
+
     private func handleAnnounce(_ packet: BitchatPacket, from peerID: PeerID) {
         let result = announceHandler.handle(packet, from: peerID)
 
@@ -6128,6 +6269,15 @@ extension BLEService {
         if let result, result.isVerified, result.isDirectAnnounce {
             rebindLinkAfterVerifiedDirectAnnounce(packet, to: result.peerID)
             retireRedundantPeripheralLinks(packet, to: result.peerID)
+        }
+
+        // No announce is ever answered: each one floods the whole mesh, so
+        // answering them made every node in flood range answer every
+        // newcomer. We announce again only when this announce (or the
+        // rebind above) made a peer connected that our last announce did
+        // not list.
+        if let result, result.isVerified {
+            announceIfNeighborUnclaimed(result.peerID)
         }
 
         // Bridge courier watch: a verified announce may add a peer whose
@@ -6433,6 +6583,15 @@ extension BLEService {
         }
     }
 
+    /// False only under a test harness that sends initial sync itself.
+    private var autoSchedulesInitialSync: Bool {
+        #if DEBUG
+        return !_test_suppressAutoInitialSync
+        #else
+        return true
+        #endif
+    }
+
     /// Builds the announce handler environment. All queue hops stay here so
     /// `BLEAnnounceHandler` remains queue-agnostic and synchronously testable.
     private func makeAnnounceHandlerEnvironment() -> BLEAnnounceHandlerEnvironment {
@@ -6525,12 +6684,6 @@ extension BLEService {
                     claimedNickname: announcement.nickname
                 )
             },
-            dedupContains: { [weak self] id in
-                self?.messageDeduplicator.contains(id) ?? true
-            },
-            dedupMarkProcessed: { [weak self] id in
-                self?.messageDeduplicator.markProcessed(id)
-            },
             deliverAnnounceUIEvents: { [weak self] peerID, notifyPeerConnected, scheduleInitialSync in
                 // Single main-actor hop so event order is guaranteed:
                 // .peerConnected → initial sync scheduling → .peerListUpdated.
@@ -6539,7 +6692,7 @@ extension BLEService {
                     if notifyPeerConnected {
                         self.deliverTransportEvent(.peerConnected(peerID))
                     }
-                    if scheduleInitialSync {
+                    if scheduleInitialSync, self.autoSchedulesInitialSync {
                         self.gossipSyncManager?.scheduleInitialSyncToPeer(peerID, delaySeconds: 1.0)
                     }
                     // Get current peer list (after addition)
@@ -6550,14 +6703,6 @@ extension BLEService {
             },
             trackPacketSeen: { [weak self] packet in
                 self?.gossipSyncManager?.onPublicPacketSeen(packet)
-            },
-            sendAnnounceBack: { [weak self] in
-                self?.sendAnnounce(forceSend: true)
-            },
-            scheduleAfterglow: { [weak self] delay in
-                self?.engineScheduler.schedule(after: delay) { [weak self] in
-                    self?.sendAnnounce(forceSend: true)
-                }
             }
         )
     }

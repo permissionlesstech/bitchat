@@ -52,7 +52,8 @@ final class MessageDeduplicator {
         return false
     }
 
-    /// Add an ID without checking (for announce-back tracking)
+    /// Add an ID without checking (pre-marks our own broadcasts so their
+    /// relayed copies are dropped as duplicates)
     func markProcessed(_ id: String) {
         lock.lock()
         defer { lock.unlock() }
@@ -62,13 +63,6 @@ final class MessageDeduplicator {
             entries.append(Entry(id: id, timestamp: now))
             lookup[id] = now
         }
-    }
-
-    /// Check if ID exists without adding
-    func contains(_ id: String) -> Bool {
-        lock.lock()
-        defer { lock.unlock() }
-        return lookup[id] != nil
     }
 
     private func trimIfNeeded() {

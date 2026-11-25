@@ -201,26 +201,30 @@ final class GossipSyncManager {
 
     func scheduleInitialSyncToPeer(_ peerID: PeerID, delaySeconds: TimeInterval = 5.0) {
         queue.asyncAfter(deadline: .now() + delaySeconds) { [weak self] in
-            guard let self = self else { return }
-
-            var types: SyncTypeFlags = .publicMessages
-            if self.config.groupMessageCapacity > 0 {
-                types.formUnion(.groupMessage)
-            }
-            if self.config.fragmentCapacity > 0 && self.config.fragmentSyncIntervalSeconds > 0 {
-                types.formUnion(.fragment)
-            }
-            if self.config.fileTransferCapacity > 0 && self.config.fileTransferSyncIntervalSeconds > 0 {
-                types.formUnion(.fileTransfer)
-            }
-            if self.config.prekeyBundleCapacity > 0 && self.config.prekeyBundleSyncIntervalSeconds > 0 {
-                types.formUnion(.prekeyBundle)
-            }
-            if self.config.boardCapacity > 0 && self.config.boardSyncIntervalSeconds > 0 && self.boardPacketsProvider != nil {
-                types.formUnion(.board)
-            }
-            self.sendRequestSync(to: peerID, types: types)
+            self?.sendInitialSync(to: peerID)
         }
+    }
+
+    /// The first sync with a newly connected peer: one request covering
+    /// every type this node carries. Queue-confined.
+    private func sendInitialSync(to peerID: PeerID) {
+        var types: SyncTypeFlags = .publicMessages
+        if config.groupMessageCapacity > 0 {
+            types.formUnion(.groupMessage)
+        }
+        if config.fragmentCapacity > 0 && config.fragmentSyncIntervalSeconds > 0 {
+            types.formUnion(.fragment)
+        }
+        if config.fileTransferCapacity > 0 && config.fileTransferSyncIntervalSeconds > 0 {
+            types.formUnion(.fileTransfer)
+        }
+        if config.prekeyBundleCapacity > 0 && config.prekeyBundleSyncIntervalSeconds > 0 {
+            types.formUnion(.prekeyBundle)
+        }
+        if config.boardCapacity > 0 && config.boardSyncIntervalSeconds > 0 && boardPacketsProvider != nil {
+            types.formUnion(.board)
+        }
+        sendRequestSync(to: peerID, types: types)
     }
 
     func onPublicPacketSeen(_ packet: BitchatPacket) {
@@ -821,6 +825,16 @@ extension GossipSyncManager {
         queue.sync {
             performPeriodicMaintenance(now: now)
         }
+    }
+
+    func _sendInitialSyncNow(to peerID: PeerID) {
+        queue.sync {
+            sendInitialSync(to: peerID)
+        }
+    }
+
+    func _fence() {
+        queue.sync {}
     }
 
     func _hasAnnouncement(for peerID: PeerID) -> Bool {

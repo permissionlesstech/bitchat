@@ -49,8 +49,11 @@ final class BLELocalIdentityStateStore: @unchecked Sendable {
         lock.withLock { state }
     }
 
-    func setNickname(_ nickname: String) {
+    /// Sets the nickname. Returns whether anything changed.
+    @discardableResult
+    func setNickname(_ nickname: String) -> Bool {
         lock.withLock {
+            guard nickname != state.nickname else { return false }
             state = BLELocalIdentitySnapshot(
                 peerID: state.peerID,
                 peerIDData: state.peerIDData,
@@ -58,6 +61,7 @@ final class BLELocalIdentityStateStore: @unchecked Sendable {
                 runtimeCapabilities: state.runtimeCapabilities,
                 bridgeGeohash: state.bridgeGeohash
             )
+            return true
         }
     }
 

@@ -53,6 +53,7 @@ final class MockTransport: Transport, PrivateMediaDeletionPersisting,
     private(set) var stopServicesCallCount = 0
     private(set) var emergencyDisconnectCallCount = 0
     private(set) var broadcastAnnounceCallCount = 0
+    private(set) var setNicknameCallCount = 0
     private(set) var triggeredHandshakes: [PeerID] = []
     private(set) var purgedArchivePeers: [PeerID] = []
 
@@ -87,6 +88,7 @@ final class MockTransport: Transport, PrivateMediaDeletionPersisting,
 
     func setNickname(_ nickname: String) {
         myNickname = nickname
+        setNicknameCallCount += 1
     }
 
     func startServices() {
@@ -389,6 +391,7 @@ final class MockTransport: Transport, PrivateMediaDeletionPersisting,
         stopServicesCallCount = 0
         emergencyDisconnectCallCount = 0
         broadcastAnnounceCallCount = 0
+        setNicknameCallCount = 0
         triggeredHandshakes.removeAll()
     }
 

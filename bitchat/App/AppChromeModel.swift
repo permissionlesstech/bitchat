@@ -6,7 +6,7 @@ import Foundation
 @MainActor
 final class AppChromeModel: ObservableObject {
     @Published private(set) var hasUnreadPrivateMessages = false
-    @Published var nickname: String
+    @Published private(set) var nickname: String
     @Published var showingFingerprintFor: PeerID?
     @Published var isAppInfoPresented = false
     @Published var isLocationChannelsSheetPresented = false
@@ -54,18 +54,15 @@ final class AppChromeModel: ObservableObject {
         isLocationChannelsSheetPresented || isAppInfoPresented
     }
 
-    func setNickname(_ nickname: String) {
-        self.nickname = nickname
-        if chatViewModel.nickname != nickname {
-            chatViewModel.nickname = nickname
+    /// Commits the header's nickname draft (see
+    /// `ChatViewModel.commitNickname`) and mirrors the result synchronously.
+    @discardableResult
+    func commitNickname(_ draft: String, replacing base: String) -> String {
+        let committed = chatViewModel.commitNickname(draft, replacing: base)
+        if nickname != committed {
+            nickname = committed
         }
-    }
-
-    func validateAndSaveNickname() {
-        chatViewModel.validateAndSaveNickname()
-        if nickname != chatViewModel.nickname {
-            nickname = chatViewModel.nickname
-        }
+        return committed
     }
 
     func openMostRelevantPrivateChat() {
