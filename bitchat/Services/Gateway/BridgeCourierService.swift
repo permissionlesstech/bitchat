@@ -145,6 +145,7 @@ final class BridgeCourierService: ObservableObject {
     private let dedupStore: BridgeDropDedupStore
 
     private var dedupPersistScheduled = false
+    private var dedupPersistTask: Task<Void, Never>?
 
     init(now: @escaping () -> Date = Date.init, dedupStore: BridgeDropDedupStore? = nil) {
         self.now = now
@@ -183,10 +184,11 @@ final class BridgeCourierService: ObservableObject {
     private func persistDedup() {
         guard !dedupPersistScheduled else { return }
         dedupPersistScheduled = true
-        Task { @MainActor [weak self] in
+        dedupPersistTask = Task { @MainActor [weak self] in
             try? await Task.sleep(nanoseconds: UInt64(Limits.dedupPersistCoalesceSeconds * 1_000_000_000))
-            guard let self else { return }
+            guard let self, !Task.isCancelled else { return }
             self.dedupPersistScheduled = false
+            self.dedupPersistTask = nil
             self.flushDedupSnapshot()
         }
     }
@@ -203,6 +205,9 @@ final class BridgeCourierService: ObservableObject {
 
     /// Panic wipe: forget queued drops and the persisted dedup record.
     func wipe() {
+        dedupPersistTask?.cancel()
+        dedupPersistTask = nil
+        dedupPersistScheduled = false
         cancelActivePublishes()
         rejectedDropKeys = ExpiringIDSet(
             capacity: Limits.maxTrackedIDs,

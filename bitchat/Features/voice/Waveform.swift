@@ -62,6 +62,12 @@ final class WaveformCache {
         }
     }
 
+    func resetForPanic() {
+        queue.sync(flags: .barrier) {
+            cache.removeAll(keepingCapacity: false)
+        }
+    }
+
     static func computeWaveform(url: URL, bins: Int) -> [Float]? {
         guard bins > 0 else { return nil }
         // Use autoreleasepool to manage memory from audio buffer allocations

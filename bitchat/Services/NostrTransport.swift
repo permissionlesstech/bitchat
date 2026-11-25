@@ -97,6 +97,7 @@ final class NostrTransport: Transport, @unchecked Sendable {
         private let queue = DispatchQueue(label: "chat.bitchat.nostr-ack-pacer")
         private var pending: [() -> Void] = []
         private var isSending = false
+        private var generation: UInt64 = 0
         private let interval: TimeInterval = TransportConfig.nostrReadAckInterval
         private let scheduleAfter: Scheduler
 
@@ -113,15 +114,28 @@ final class NostrTransport: Transport, @unchecked Sendable {
             }
         }
 
+        /// Synchronously drops all queued ACK closures (which may capture
+        /// pre-panic Nostr identities and peer IDs) and fences any in-flight
+        /// pacing timer callback.
+        func resetForPanic() {
+            queue.sync {
+                self.generation &+= 1
+                self.pending.removeAll(keepingCapacity: false)
+                self.isSending = false
+            }
+        }
+
         /// Must be called on `queue`.
         private func processNext() {
             guard !isSending, !pending.isEmpty else { return }
             isSending = true
+            let currentGeneration = generation
             let send = pending.removeFirst()
             send()
             scheduleAfter(interval) { [weak self] in
                 guard let self else { return }
                 self.queue.async {
+                    guard self.generation == currentGeneration else { return }
                     self.isSending = false
                     self.processNext()
                 }

@@ -47,6 +47,16 @@ final class NostrIdentityBridge {
         return pubkey
     }
     
+    /// Drop in-memory private key caches without touching Keychain.
+    /// Used by shadow service bridges during panic wipe so post-panic events
+    /// cannot keep signing with pre-panic keys cached in memory.
+    func clearInMemoryCaches() {
+        cacheLock.lock()
+        deviceSeedCache = nil
+        derivedIdentityCache.removeAll()
+        cacheLock.unlock()
+    }
+
     /// Clear all Nostr identity associations and current identity
     func clearAllAssociations() {
         // Must go through the injected keychain, not raw SecItem calls:
@@ -54,14 +64,11 @@ final class NostrIdentityBridge {
         // would wipe the developer's real Nostr identity on every test run.
         keychain.deleteAll(service: keychainService)
 
-        deviceSeedCache = nil
-        // Also drop the in-memory derived per-geohash identities. These hold the
-        // actual secp256k1 private keys; if left cached, post-panic geohash
+        // Also drop the in-memory derived per-geohash identities and seed. These
+        // hold actual secp256k1 private keys; if left cached, post-panic geohash
         // messages would still be signed with pre-panic keys (linkable across the
         // wipe) until the app is force-quit.
-        cacheLock.lock()
-        derivedIdentityCache.removeAll()
-        cacheLock.unlock()
+        clearInMemoryCaches()
     }
 
     // MARK: - Per-Geohash Identities (Location Channels)
@@ -69,11 +76,19 @@ final class NostrIdentityBridge {
     /// Returns a stable device seed used to derive unlinkable per-geohash identities.
     /// Stored only on device keychain.
     private func getOrCreateDeviceSeed() -> Data {
-        if let cached = deviceSeedCache { return cached }
+        cacheLock.lock()
+        if let cached = deviceSeedCache {
+            cacheLock.unlock()
+            return cached
+        }
+        cacheLock.unlock()
+
         if let existing = keychain.load(key: deviceSeedKey, service: keychainService) {
             // Migrate to AfterFirstUnlockThisDeviceOnly for stability during lock
             keychain.save(key: deviceSeedKey, data: existing, service: keychainService, accessible: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly)
+            cacheLock.lock()
             deviceSeedCache = existing
+            cacheLock.unlock()
             return existing
         }
         // CryptoKit key generation cannot fail, unlike SecRandomCopyBytes —
@@ -81,7 +96,9 @@ final class NostrIdentityBridge {
         let seed = SymmetricKey(size: .bits256).withUnsafeBytes { Data($0) }
         // Ensure availability after first unlock to prevent unintended rotation when locked
         keychain.save(key: deviceSeedKey, data: seed, service: keychainService, accessible: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly)
+        cacheLock.lock()
         deviceSeedCache = seed
+        cacheLock.unlock()
         return seed
     }
 

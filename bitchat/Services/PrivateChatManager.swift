@@ -47,6 +47,10 @@ final class PrivateChatManager: ObservableObject {
         bindSelectionMirror() // didSet does not fire during init
     }
 
+    func resetForPanic() {
+        sentReadReceipts.removeAll(keepingCapacity: false)
+    }
+
     /// Keeps `selectedPeer` in lock-step with the store's selection axis
     /// (including store-internal handoffs such as conversation migration).
     private func bindSelectionMirror() {

@@ -159,6 +159,22 @@ final class GatewayService: ObservableObject {
         onEnabledChanged?(enabled)
     }
 
+    /// Panic-wipe hook: disable gateway mode, clear its persisted toggle, and
+    /// drop queued uplinks/downlinks and loop-prevention caches.
+    func resetForPanic() {
+        isEnabled = false
+        defaults.removeObject(forKey: Self.enabledKey)
+        queuedUplinks.removeAll(keepingCapacity: false)
+        pendingDownlinks.removeAll(keepingCapacity: false)
+        downlinkDrainScheduled = false
+        uplinkDepositTimes.removeAll(keepingCapacity: false)
+        downlinkSendTimes.removeAll(keepingCapacity: false)
+        meshBroadcastEventIDs = BoundedIDSet(capacity: Limits.maxTrackedEventIDs)
+        publishedEventIDs = BoundedIDSet(capacity: Limits.maxTrackedEventIDs)
+        rebroadcastEventIDs = BoundedIDSet(capacity: Limits.maxTrackedEventIDs)
+        onEnabledChanged?(false)
+    }
+
     // MARK: - Mesh carrier ingress (both roles)
 
     /// Entry point for received `nostrCarrier` packets. `directedToUs` is

@@ -58,4 +58,13 @@ final class LocationNotesPool {
             entries[manager.geohash] = (entry.manager, entry.refs - 1)
         }
     }
+
+    /// Panic-wipe hook: cancel subscriptions, wipe in-memory notes/identities,
+    /// and drop every pooled manager.
+    func resetForPanic() {
+        for entry in entries.values {
+            entry.manager.resetForPanic()
+        }
+        entries.removeAll(keepingCapacity: false)
+    }
 }

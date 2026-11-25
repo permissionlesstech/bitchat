@@ -83,6 +83,7 @@ public final class TorManager: ObservableObject {
     // dropped — it is recorded here and honored when the shutdown finishes.
     private var shutdownsInFlight = 0
     private var startPendingAfterShutdown = false
+    private var wipeDataDirectoryOnShutdown = false
     private var bootstrapMonitorStarted = false
     // Fences the detached poll loop: shutdown, dormancy, and restart each bump
     // this, so a loop from a previous attempt cannot run out its deadline and
@@ -402,6 +403,10 @@ public final class TorManager: ObservableObject {
                 // Note: Don't clear startedAt here - it will be set fresh on next startIfNeeded()
                 // Clearing it here races with startup and defeats the grace period
                 self.shutdownsInFlight -= 1
+                if self.shutdownsInFlight == 0 && self.wipeDataDirectoryOnShutdown {
+                    self.wipeDataDirectoryOnShutdown = false
+                    self.removeDataDirectoryOnDisk()
+                }
                 if self.shutdownsInFlight == 0 && self.startPendingAfterShutdown {
                     self.startPendingAfterShutdown = false
                     SecureLogger.debug("TorManager: honoring start deferred during shutdown", category: .session)
@@ -409,6 +414,26 @@ public final class TorManager: ObservableObject {
                 }
             }
         }
+    }
+
+    /// Panic-wipe hook: removes `Application Support/bitchat/arti` (guard
+    /// nodes, state, consensus cache). If Arti is currently shutting down,
+    /// defers removal until `arti_stop()` finishes so SQLite/state files are
+    /// deleted cleanly before any post-panic restart.
+    public func wipeStateDirectoryForPanic() {
+        if shutdownsInFlight > 0 || arti_is_running() != 0 {
+            wipeDataDirectoryOnShutdown = true
+            if shutdownsInFlight == 0 {
+                shutdownCompletely()
+            }
+            return
+        }
+        removeDataDirectoryOnDisk()
+    }
+
+    private func removeDataDirectoryOnDisk() {
+        guard let dir = dataDirectoryURL() else { return }
+        try? FileManager.default.removeItem(at: dir)
     }
 
     private func restartArti() async {

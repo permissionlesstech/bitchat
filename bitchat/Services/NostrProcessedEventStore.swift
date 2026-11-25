@@ -56,7 +56,7 @@ final class NostrProcessedEventStore {
     }
 
     func wipe() {
-        ioQueue.async { [self] in
+        ioQueue.sync {
             guard let fileURL else { return }
             try? FileManager.default.removeItem(at: fileURL)
         }
