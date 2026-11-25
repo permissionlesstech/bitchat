@@ -78,17 +78,32 @@ struct BLERelayLifecycleStore {
     }
 
     /// Computes a deterministic authentication tag covering every signed packet
-    /// field and the signature bytes. Returns `nil` for unsigned packets.
+    /// field and the signature bytes. Supports outer-signed packets as well as
+    /// self-authenticating `boardPost` packets carrying a verified embedded
+    /// Ed25519 signature inside `payload`. Returns `nil` for unsigned packets.
     static func authenticationDigest(for packet: BitchatPacket) -> Data? {
-        guard let signature = packet.signature,
-              let signingData = packet.toBinaryDataForSigning() else {
+        guard let signingData = packet.toBinaryDataForSigning() else {
             return nil
         }
-        var combined = Data()
-        combined.reserveCapacity(signingData.count + signature.count)
-        combined.append(signingData)
-        combined.append(signature)
-        return combined.sha256Hash()
+        if let signature = packet.signature {
+            var combined = Data()
+            combined.reserveCapacity(signingData.count + signature.count)
+            combined.append(signingData)
+            combined.append(signature)
+            return combined.sha256Hash()
+        }
+        if packet.type == MessageType.boardPost.rawValue,
+           let wire = BoardWire.decode(from: packet.payload),
+           wire.verifySignature() {
+            return signingData.sha256Hash()
+        }
+        return nil
+    }
+
+    /// Returns the current unexpired lifecycle state for `messageID`, if any.
+    mutating func state(for messageID: String, now: Date = Date()) -> State? {
+        prune(now: now)
+        return entries[messageID]?.state
     }
 
     /// Returns `true` when `messageID` is currently `.suppressed` and `packet`

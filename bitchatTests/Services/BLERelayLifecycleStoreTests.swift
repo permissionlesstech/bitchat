@@ -7,6 +7,7 @@
 //
 
 import BitFoundation
+import CryptoKit
 import Foundation
 import Testing
 @testable import bitchat
@@ -112,5 +113,65 @@ struct BLERelayLifecycleStoreTests {
         store.markSuppressed(messageID: "m4", packet: p, isAuthenticated: true, now: t0.addingTimeInterval(3))
         let expiredCanReconsider = store.canReconsiderSuppressed(messageID: "m4", packet: p, now: t0.addingTimeInterval(14))
         #expect(!expiredCanReconsider)
+    }
+
+    @Test
+    func selfAuthenticatingBoardPostWithoutOuterSignatureCanReopenSuppressedRelay() throws {
+        var store = BLERelayLifecycleStore(maxCount: 16, ttl: 60)
+        let now = Date(timeIntervalSince1970: 1_700_000_000)
+        let createdAt = UInt64(now.timeIntervalSince1970 * 1000)
+        let author = Curve25519.Signing.PrivateKey()
+        let postID = Data(repeating: 0x42, count: 16)
+        let signingBytes = BoardPostPacket.signingBytes(
+            postID: postID,
+            geohash: "9q8yy",
+            content: "board note",
+            authorSigningKey: author.publicKey.rawRepresentation,
+            authorNickname: "alice",
+            createdAt: createdAt,
+            expiresAt: createdAt + 60_000,
+            flags: 0
+        )
+        let post = BoardPostPacket(
+            postID: postID,
+            geohash: "9q8yy",
+            content: "board note",
+            authorSigningKey: author.publicKey.rawRepresentation,
+            authorNickname: "alice",
+            createdAt: createdAt,
+            expiresAt: createdAt + 60_000,
+            flags: 0,
+            signature: try author.signature(for: signingBytes)
+        )
+        let boardPacket = BitchatPacket(
+            type: MessageType.boardPost.rawValue,
+            senderID: Data(repeating: 0x11, count: 8),
+            recipientID: nil,
+            timestamp: createdAt,
+            payload: BoardWire.post(post).encode(),
+            signature: nil,
+            ttl: 6
+        )
+        var duplicateCopy = boardPacket
+        duplicateCopy.ttl = 5
+
+        var tamperedPayload = duplicateCopy.payload
+        tamperedPayload[tamperedPayload.count - 1] ^= 0xFF
+        let tamperedCopy = BitchatPacket(
+            type: duplicateCopy.type,
+            senderID: duplicateCopy.senderID,
+            recipientID: duplicateCopy.recipientID,
+            timestamp: duplicateCopy.timestamp,
+            payload: tamperedPayload,
+            signature: nil,
+            ttl: duplicateCopy.ttl
+        )
+
+        store.markSuppressed(messageID: "bp1", packet: boardPacket, isAuthenticated: true, now: now)
+
+        let canReconsiderValid = store.canReconsiderSuppressed(messageID: "bp1", packet: duplicateCopy, now: now)
+        let canReconsiderTampered = store.canReconsiderSuppressed(messageID: "bp1", packet: tamperedCopy, now: now)
+        #expect(canReconsiderValid)
+        #expect(!canReconsiderTampered)
     }
 }

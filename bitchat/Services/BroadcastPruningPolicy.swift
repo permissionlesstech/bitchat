@@ -40,8 +40,12 @@ enum BroadcastPruningPolicy {
 
         let originPeerID = PeerID(hexData: packet.senderID)
 
-        // 2. Never send back to the packet's originator.
-        if let targetPeerID, targetPeerID == originPeerID {
+        // 2. Never echo a broadcast relay back to the packet's originator,
+        //    except when answering a solicited sync replay (RSR, TTL 0)
+        //    addressed to that peer (e.g., restoring its own cached history).
+        if let targetPeerID,
+           targetPeerID == originPeerID,
+           !(packet.isRSR && packet.ttl == 0) {
             return true
         }
 

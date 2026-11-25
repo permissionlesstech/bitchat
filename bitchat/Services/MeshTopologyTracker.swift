@@ -152,6 +152,9 @@ final class MeshTopologyTracker {
             for origin in self.claims.keys {
                 self.claims[origin]?.remove(peer)
             }
+            for origin in self.reportedClaims.keys {
+                self.reportedClaims[origin]?.remove(peer)
+            }
         }
     }
 
@@ -169,6 +172,9 @@ final class MeshTopologyTracker {
             if !stalePeers.isEmpty {
                 for origin in self.claims.keys {
                     self.claims[origin]?.subtract(stalePeers)
+                }
+                for origin in self.reportedClaims.keys {
+                    self.reportedClaims[origin]?.subtract(stalePeers)
                 }
             }
             self.observedVersions = self.observedVersions.filter { $0.value.seenAt >= deadline }

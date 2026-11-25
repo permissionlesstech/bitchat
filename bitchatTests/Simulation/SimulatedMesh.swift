@@ -35,6 +35,7 @@ final class SimulatedMesh {
     private(set) var nodes: [Node] = []
     private var neighbors: [Set<Int>] = []
     private var duplicateLinkEdges: Set<String> = []
+    private var droppedPrimaryLinks: Set<String> = []
     private var emitted: [[BitchatPacket]] = []
     private var plannedTransmissions: [[(to: Int, packet: BitchatPacket)]] = []
 
@@ -91,7 +92,7 @@ final class SimulatedMesh {
                 if !selection.centralIDs.isEmpty || !selection.peripheralIDs.isEmpty {
                     self.emitted[index].append(packet)
                 }
-                for selectedUUID in selection.centralIDs {
+                for selectedUUID in selection.centralIDs.sorted() {
                     guard let (target, isDuplicate) = self.decodeVirtualCentralLink(selectedUUID, at: index),
                           self.neighbors[index].contains(target) else {
                         continue
@@ -131,8 +132,10 @@ final class SimulatedMesh {
     }
 
     func connect(_ a: Int, _ b: Int) {
+        lock.lock()
         neighbors[a].insert(b)
         neighbors[b].insert(a)
+        lock.unlock()
     }
 
     /// Radio silence: stops delivering between two nodes without reporting
@@ -140,8 +143,10 @@ final class SimulatedMesh {
     /// a peer walks out of range before its link times out. Lets a test
     /// capture a packet the far side never received.
     func silence(_ a: Int, _ b: Int) {
+        lock.lock()
         neighbors[a].remove(b)
         neighbors[b].remove(a)
+        lock.unlock()
     }
 
     /// Models two live links to the same phone (issue #1538): every frame
@@ -156,8 +161,19 @@ final class SimulatedMesh {
     /// link state keyed by a real CBPeripheral, which no CB-free harness
     /// can fabricate.
     func connectDuplicateLinks(_ a: Int, _ b: Int) {
-        connect(a, b)
+        lock.lock()
+        neighbors[a].insert(b)
+        neighbors[b].insert(a)
         duplicateLinkEdges.insert(Self.edgeKey(a, b))
+        lock.unlock()
+    }
+
+    /// Removes only the primary link of a duplicate-link edge while keeping
+    /// the second link active (simulating single-link drop on a multi-link peer).
+    func dropPrimaryDuplicateLink(_ a: Int, _ b: Int) {
+        lock.lock()
+        droppedPrimaryLinks.insert(Self.edgeKey(a, b))
+        lock.unlock()
     }
 
     /// The synthetic central link a frame from `sender` arrives on at
@@ -178,23 +194,35 @@ final class SimulatedMesh {
     }
 
     private func links(from sender: Int, at receiver: Int) -> [BLEIngressLinkID] {
-        var links: [BLEIngressLinkID] = [.central(linkUUID(from: sender, at: receiver))]
-        if duplicateLinkEdges.contains(Self.edgeKey(sender, receiver)) {
-            links.append(.central(duplicateLinkUUID(from: sender, at: receiver)))
+        lock.lock()
+        let key = Self.edgeKey(sender, receiver)
+        let hasDup = duplicateLinkEdges.contains(key)
+        let primaryDropped = droppedPrimaryLinks.contains(key)
+        lock.unlock()
+        var result: [BLEIngressLinkID] = []
+        if !primaryDropped {
+            result.append(.central(linkUUID(from: sender, at: receiver)))
         }
-        return links
+        if hasDup {
+            result.append(.central(duplicateLinkUUID(from: sender, at: receiver)))
+        }
+        return result
     }
 
     private func activeVirtualCentralIDs(at nodeIndex: Int) -> [String] {
         lock.lock()
         let peerIndices = neighbors[nodeIndex].sorted()
         let dupEdges = duplicateLinkEdges
+        let droppedPrimary = droppedPrimaryLinks
         lock.unlock()
         var ids: [String] = []
         ids.reserveCapacity(peerIndices.count)
         for peer in peerIndices {
-            ids.append(linkUUID(from: peer, at: nodeIndex))
-            if dupEdges.contains(Self.edgeKey(peer, nodeIndex)) {
+            let key = Self.edgeKey(peer, nodeIndex)
+            if !droppedPrimary.contains(key) {
+                ids.append(linkUUID(from: peer, at: nodeIndex))
+            }
+            if dupEdges.contains(key) {
                 ids.append(duplicateLinkUUID(from: peer, at: nodeIndex))
             }
         }
@@ -242,7 +270,10 @@ final class SimulatedMesh {
             }
 
             for (from, packet) in batch {
-                for receiver in neighbors[from] {
+                lock.lock()
+                let peerIndices = Array(neighbors[from])
+                lock.unlock()
+                for receiver in peerIndices {
                     for link in links(from: from, at: receiver) {
                         deliveredFrameCount += 1
                         nodes[receiver].service._test_ingestFrame(packet, link: link)

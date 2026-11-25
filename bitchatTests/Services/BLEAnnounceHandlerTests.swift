@@ -64,8 +64,9 @@ struct BLEAnnounceHandlerTests {
                 recorder.reconnectLogQueries.append(peerID)
                 return recorder.shouldEmitReconnectLogResult
             },
-            updateTopology: { peerID, neighbors in
+            updateTopology: { peerID, neighbors, _ in
                 recorder.topologyUpdates.append((peerID, neighbors))
+                return true
             },
             persistIdentity: { announcement in
                 recorder.persistedIdentities.append(announcement)
@@ -728,7 +729,7 @@ struct BLEAnnounceHandlerTests {
                 )
             },
             shouldEmitReconnectLog: { _, _ in false },
-            updateTopology: { _, _ in },
+            updateTopology: { _, _, _ in true },
             persistIdentity: { announcement in
                 box.persistedIdentities.append(announcement)
             },
@@ -843,7 +844,7 @@ struct BLEAnnounceHandlerTests {
                     )
                 },
                 shouldEmitReconnectLog: { _, _ in false },
-                updateTopology: { _, _ in },
+                updateTopology: { _, _, _ in true },
                 persistIdentity: { announcement in
                     identityManager.upsertCryptographicIdentity(
                         fingerprint: announcement.noisePublicKey.sha256Fingerprint(),

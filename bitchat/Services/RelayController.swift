@@ -209,15 +209,9 @@ struct RelayController {
         case .prekeyBundle:
             return (packet.signature != nil && isAuthenticated) ? .mpr1Covered : .prunedFlood
 
-        case .leave,
-             .noiseHandshake,
-             .noiseEncrypted,
-             .requestSync,
-             .courierEnvelope,
-             .ping,
-             .pong,
-             .nostrCarrier,
-             .announceV2:
+        default:
+            // All other packet types are classified as conservative by
+            // `isAlwaysConservativeBroadcastPacket(_:)` above.
             return .conservativeFlood
         }
     }

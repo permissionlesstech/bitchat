@@ -326,4 +326,26 @@ struct MeshTopologyTrackerTests {
         ))
     }
 
+    @Test func removePeerAndPruneScrubReportedClaimsBackReferences() throws {
+        let tracker = MeshTopologyTracker()
+        let a = try hex("0101010101010101")
+        let b = try hex("0202020202020202")
+        let c = try hex("0303030303030303")
+        let t0 = Date(timeIntervalSince1970: 1_000)
+
+        #expect(tracker.updateNeighbors(for: a, neighbors: [b, c], announceTimestamp: 10, at: t0))
+        #expect(tracker.updateNeighbors(for: b, neighbors: [a], announceTimestamp: 10, at: t0))
+        #expect(tracker.updateNeighbors(for: c, neighbors: [a], announceTimestamp: 10, at: t0))
+
+        // Removing B must scrub B from A's reportedClaims so a subsequent announce
+        // from A re-claiming [b, c] reports topologyChanged == true.
+        tracker.removePeer(b)
+        #expect(tracker.updateNeighbors(for: a, neighbors: [b, c], announceTimestamp: 20, at: t0.addingTimeInterval(1)))
+
+        // Pruning stale C must scrub C from A's reportedClaims as well.
+        #expect(tracker.updateNeighbors(for: a, neighbors: [c], announceTimestamp: 30, at: t0.addingTimeInterval(100)))
+        tracker.prune(olderThan: 60, now: t0.addingTimeInterval(110))
+        #expect(tracker.updateNeighbors(for: a, neighbors: [c], announceTimestamp: 40, at: t0.addingTimeInterval(115)))
+    }
+
 }

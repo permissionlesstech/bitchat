@@ -285,4 +285,31 @@ struct BroadcastPruningPolicyTests {
             .central("c-origin")
         ])
     }
+
+    @Test
+    func solicitedSyncReplayAllowsDeliveringSelfAuthoredPacketBackToOrigin() {
+        let tracker = MeshTopologyTracker()
+        let now = Date(timeIntervalSince1970: 1_000)
+        let origin = peer(0x01)
+        let local = peer(0x02)
+
+        let rsrReplay = BitchatPacket(
+            type: MessageType.message.rawValue,
+            senderID: origin.routingData ?? Data(),
+            recipientID: nil,
+            timestamp: 1_000,
+            payload: Data("self-history".utf8),
+            signature: nil,
+            ttl: 0,
+            isRSR: true
+        )
+
+        #expect(!BroadcastPruningPolicy.shouldSkipTarget(
+            packet: rsrReplay,
+            localPeerID: local,
+            targetPeerID: origin,
+            topology: tracker,
+            now: now
+        ))
+    }
 }

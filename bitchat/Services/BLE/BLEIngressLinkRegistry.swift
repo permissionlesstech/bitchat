@@ -195,6 +195,7 @@ final class BLEIngressLinkStore: @unchecked Sendable {
         link: BLEIngressLinkID,
         peerID: PeerID,
         previousHopPeerID: PeerID? = nil,
+        now: Date = Date(),
         lifetime: TimeInterval
     ) -> Bool {
         lock.withLock {
@@ -203,6 +204,7 @@ final class BLEIngressLinkStore: @unchecked Sendable {
                 link: link,
                 peerID: peerID,
                 previousHopPeerID: previousHopPeerID,
+                now: now,
                 lifetime: lifetime
             )
         }

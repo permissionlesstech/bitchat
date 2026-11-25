@@ -50,12 +50,10 @@ struct BLEAnnounceHandlerEnvironment {
     /// Debounced reconnect-log decision.
     /// Must only be called from inside `withRegistryBarrier`.
     let shouldEmitReconnectLog: (_ peerID: PeerID, _ now: Date) -> Bool
-    /// Records verified direct-neighbor claims in the mesh topology.
-    let updateTopology: (_ peerID: PeerID, _ neighbors: [Data]) -> Void
-    /// Optional timestamp-aware topology update returning whether the peer's
-    /// reported neighbor set was newly introduced or changed. When nil,
-    /// `updateTopology` is invoked and topology change defaults to `true`.
-    var updateTopologyWithTimestamp: ((_ peerID: PeerID, _ neighbors: [Data], _ timestamp: UInt64) -> Bool)? = nil
+    /// Records verified direct-neighbor claims in the mesh topology with the
+    /// packet's monotonic timestamp, returning whether the peer's topology
+    /// entry was newly introduced, previously stale, or changed.
+    let updateTopology: (_ peerID: PeerID, _ neighbors: [Data], _ timestamp: UInt64) -> Bool
     /// Persists the announced cryptographic identity for offline verification.
     let persistIdentity: (AnnouncementPacket) -> Void
     /// Announce-back dedup check.
@@ -271,14 +269,7 @@ final class BLEAnnounceHandler {
         var topologyChanged = false
         if verifiedAnnounce {
             let neighbors = announcement.directNeighbors ?? []
-            if let updateTopologyWithTimestamp = env.updateTopologyWithTimestamp {
-                topologyChanged = updateTopologyWithTimestamp(peerID, neighbors, packet.timestamp)
-            } else {
-                if announcement.directNeighbors != nil {
-                    env.updateTopology(peerID, neighbors)
-                }
-                topologyChanged = true
-            }
+            topologyChanged = env.updateTopology(peerID, neighbors, packet.timestamp)
         }
 
         // Persist cryptographic identity and signing key for robust offline

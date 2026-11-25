@@ -240,17 +240,22 @@ struct SimulatedMeshMPRTests {
         #expect(!mTargets.contains(indices.c1))
         #expect(!mTargets.contains(indices.c2))
 
-        // 3. A third arrival from P2 must not re-relay (terminal .relayed state).
+        // 3. A third arrival from P2 must not re-relay (terminal .relayed state)
+        //    and must not double-deliver locally on M or Leaf.
         m.service._test_ingestFrame(signedPacket, link: linkFromP2)
         mesh.pump()
         mesh.advanceTime(by: 2)
         #expect(countOutboundPublicMessages(mesh, nodeIndex: indices.m) - mRelaysBefore == 1)
+        #expect(await captureM.drainedCount(content: "dual-hop", afterFencing: [m.service]) == 1)
+        #expect(await captureLeaf.drainedCount(content: "dual-hop", afterFencing: [leaf.service]) == 1)
     }
 
-    /// Regression for R1-STD-01 & R1-SPEC-01: valid signed broadcast fragments
-    /// enter 2-covered MPR (`k = 2`), store an `authenticatedDigest` when
-    /// suppressed on a non-electing hop, and reopen once on a matching duplicate
-    /// from an electing hop both within AND after the 3s ingress-link window.
+    /// Regression for R1-STD-01, R1-SPEC-01, and R2-STD-02: valid signed broadcast
+    /// fragments enter 2-covered MPR (`k = 2`), store an `authenticatedDigest`
+    /// when suppressed on a non-electing hop, and reopen once on a matching
+    /// duplicate from an electing hop both within AND after the 3s ingress-link
+    /// window — driven by a deterministic injected clock (`_test_now`) that
+    /// exercises real `BLEIngressLinkRegistry` TTL expiry without sleeps.
     /// Tampered copies cannot reopen suppression, and unsigned broadcast
     /// fragments fail closed to pruned flood rather than suppressing.
     @Test
@@ -260,23 +265,31 @@ struct SimulatedMeshMPRTests {
         let p2 = mesh.nodes[indices.p2]
         let m = mesh.nodes[indices.m]
 
+        // Pin M's clock deterministically so runner pauses can never push a
+        // within-window check past the 3s ingress lifetime, and advancing the
+        // clock exercises real `BLEIngressLinkRegistry.recordIfNew` expiry.
+        var clock = Date()
+        m.service._test_now = { clock }
+
         // Verify k = 2 MPR elections explicitly on M's live topology.
         let mpr2P1 = MPRSelector.selectMPRs(
             previousHopPeerID: p1.service.myPeerID,
             topology: m.service._test_topologyTracker,
-            coverageK: 2
+            coverageK: 2,
+            now: clock
         )
         let mpr2P2 = MPRSelector.selectMPRs(
             previousHopPeerID: p2.service.myPeerID,
             topology: m.service._test_topologyTracker,
-            coverageK: 2
+            coverageK: 2,
+            now: clock
         )
         #expect(!mpr2P1.contains(m.service.myPeerID))
         #expect(mpr2P2.contains(m.service.myPeerID))
 
         let linkFromP1 = BLEIngressLinkID.central(mesh.linkUUID(from: indices.p1, at: indices.m))
         let linkFromP2 = BLEIngressLinkID.central(mesh.linkUUID(from: indices.p2, at: indices.m))
-        let baseTs = UInt64(Date().timeIntervalSince1970 * 1000)
+        let baseTs = UInt64(clock.timeIntervalSince1970 * 1000)
 
         func makeFragmentPayload(tag: UInt8) -> Data {
             // Minimal valid 13-byte fragment header + 8-byte chunk payload
@@ -307,7 +320,8 @@ struct SimulatedMeshMPRTests {
         mesh.advanceTime(by: 2)
         #expect(countOutboundFragments(mesh, nodeIndex: indices.m) - fragsBefore1 == 0)
 
-        // Exact matching duplicate from electing hop P2 within 3s window -> relays once.
+        // Exact matching duplicate from electing hop P2 within 3s window (+0.5s) -> relays once.
+        clock = clock.addingTimeInterval(0.5)
         m.service._test_ingestFrame(signedFrag1, link: linkFromP2)
         mesh.pump()
         mesh.advanceTime(by: 2)
@@ -338,8 +352,8 @@ struct SimulatedMeshMPRTests {
         mesh.advanceTime(by: 2)
         #expect(countOutboundFragments(mesh, nodeIndex: indices.m) - fragsBefore2 == 0)
 
-        // Simulate 3s ingress-link window expiry deterministically without sleeping.
-        m.service._test_clearIngressLinks()
+        // Advance clock past real ingress record lifetime (> 3s) without clearing directly.
+        clock = clock.addingTimeInterval(TransportConfig.bleIngressRecordLifetimeSeconds + 1.0)
 
         // A tampered copy (wrong signature, same messageID) must NOT reopen suppression.
         var tamperedFrag2 = signedFrag2
@@ -349,15 +363,15 @@ struct SimulatedMeshMPRTests {
         mesh.advanceTime(by: 2)
         #expect(countOutboundFragments(mesh, nodeIndex: indices.m) - fragsBefore2 == 0)
 
-        // Clear ingress record from the tampered attempt; exact valid copy reopens once.
-        m.service._test_clearIngressLinks()
+        // Advance past ingress window again; exact valid copy reopens once.
+        clock = clock.addingTimeInterval(TransportConfig.bleIngressRecordLifetimeSeconds + 1.0)
         m.service._test_ingestFrame(signedFrag2, link: linkFromP2)
         mesh.pump()
         mesh.advanceTime(by: 2)
         #expect(countOutboundFragments(mesh, nodeIndex: indices.m) - fragsBefore2 == 1)
 
-        // Even after ingress-link expiry, a subsequent copy never re-relays once terminal.
-        m.service._test_clearIngressLinks()
+        // Even after another ingress-link expiry, a subsequent copy never re-relays once terminal.
+        clock = clock.addingTimeInterval(TransportConfig.bleIngressRecordLifetimeSeconds + 1.0)
         m.service._test_ingestFrame(signedFrag2, link: linkFromP2)
         mesh.pump()
         mesh.advanceTime(by: 2)
@@ -638,10 +652,13 @@ struct SimulatedMeshMPRTests {
         mesh.advanceTime(by: 2)
         #expect(countOutboundPublicMessages(mesh, nodeIndex: 1) - a1RelaysBefore == 1)
 
-        // 2. Egress path (`sendOnAllLinks`): bridge's relay must disable neighbor
-        //    pruning when originLinkOnBridge is physically dead, so a2 (a fresh
-        //    confirmed neighbor of origin that would normally be pruned) IS included
-        //    in bridge's planned targets alongside b1!
+        // 2. Egress-only teardown between scheduleRelayIfNeeded and sendOnAllLinks:
+        //    originLinkOnBridge IS live during scheduleRelayIfNeeded (so relayContext
+        //    is created with skipNeighborPruning == false), and ONLY goes physically
+        //    dead before the jittered sendOnAllLinks fires. sendOnAllLinks must
+        //    independently revalidate physical liveness and disable neighbor pruning,
+        //    so a2 (a fresh confirmed neighbor of origin) IS included alongside b1!
+        bridge.service._test_isPhysicalLinkLive = { _ in true }
         let bridgePlannedBefore = mesh.plannedTransmissions(from: 3).count
         let signedPacket2 = origin.service.signPacketForBroadcast(BitchatPacket(
             type: MessageType.message.rawValue,
@@ -654,6 +671,9 @@ struct SimulatedMeshMPRTests {
         ))
         bridge.service._test_ingestFrame(signedPacket2, link: originLinkOnBridge)
         mesh.pump()
+        // Now tear down originLinkOnBridge physically BEFORE the jittered relay fires
+        // (while linkBindings still retains the binding).
+        bridge.service._test_isPhysicalLinkLive = { $0 != originLinkOnBridge }
         mesh.advanceTime(by: 2)
 
         let bridgeTargets = Set(
@@ -663,14 +683,16 @@ struct SimulatedMeshMPRTests {
                 .map(\.to)
         )
         #expect(bridgeTargets.contains(4)) // b1
-        #expect(bridgeTargets.contains(2)) // a2 NOT pruned when previous hop link is physically gone
+        #expect(bridgeTargets.contains(2)) // a2 NOT pruned when previous hop link dies before egress
     }
 
-    /// Regression for R1-SPEC-04: `sendEncrypted` must forward `relayContext`
-    /// into `sendFragmentedPacket` on BOTH direct-recipient MTU paths
-    /// (peripheral write limit and central notify limit). If the recipient
-    /// disconnects between fragment chunks, later chunks must still exclude the
-    /// original ingress link and previous hop instead of flooding back to them.
+    /// Regression for R1-SPEC-04 & R2-SPEC-04: `sendEncrypted` must forward
+    /// `relayContext` into `sendFragmentedPacket` on BOTH direct-recipient MTU
+    /// paths (peripheral write limit and central notify limit). Even when
+    /// `origin != prevHop` and BOTH the recipient AND `prevHop`'s original
+    /// ingress link disconnect mid-fragment-train (while `prevHop` retains a
+    /// surviving alternate link), later chunks must NEVER echo back onto
+    /// `prevHop`'s surviving link while still reaching `other`.
     @Test
     func encryptedRelayFragmentationPreservesRelayContextAcrossDisconnectForBothRoles() {
         for role in ["peripheral", "central"] {
@@ -679,10 +701,12 @@ struct SimulatedMeshMPRTests {
             let relay = mesh.addNode(nickname: "relay")
             let recipient = mesh.addNode(nickname: "dest")
             let other = mesh.addNode(nickname: "other")
+            let origin = mesh.addNode(nickname: "origin")
 
-            mesh.connect(0, 1) // prev - relay
-            mesh.connect(1, 2) // relay - dest
-            mesh.connect(1, 3) // relay - other
+            mesh.connectDuplicateLinks(0, 1) // prev - relay has TWO links (primary + duplicate)
+            mesh.connect(1, 2)               // relay - dest
+            mesh.connect(1, 3)               // relay - other
+            mesh.connect(4, 0)               // origin - prev (origin != prevHop!)
             settleDiscovery(mesh)
 
             let recipientID = recipient.service.myPeerID
@@ -696,19 +720,21 @@ struct SimulatedMeshMPRTests {
                 }
             }
 
-            // Large encrypted packet (> 90 bytes) addressed to dest, arriving from prevHop.
+            // Large encrypted packet (> 90 bytes) originated by `origin` (NOT `prevHop`),
+            // addressed to `dest`, arriving at `relay` over `prevHop`'s primary link.
             let largeEncrypted = BitchatPacket(
                 type: MessageType.noiseEncrypted.rawValue,
-                senderID: prevHop.service.myPeerID.routingData ?? Data(),
+                senderID: origin.service.myPeerID.routingData ?? Data(),
                 recipientID: recipientID.routingData,
                 timestamp: UInt64(Date().timeIntervalSince1970 * 1000),
                 payload: Data(repeating: 0x5A, count: 260),
                 signature: nil,
-                ttl: TransportConfig.messageTTLDefault
+                ttl: TransportConfig.messageTTLDefault - 1
             )
 
             let plannedBefore = mesh.plannedTransmissions(from: 1).count
-            let ingressLink = BLEIngressLinkID.central(mesh.linkUUID(from: 0, at: 1))
+            let ingressLinkUUID = mesh.linkUUID(from: 0, at: 1)
+            let ingressLink = BLEIngressLinkID.central(ingressLinkUUID)
             relay.service._test_ingestFrame(largeEncrypted, link: ingressLink)
             mesh.pump()
             // Noise packets hop onto messageQueue a second time in handleReceivedPacket;
@@ -722,11 +748,14 @@ struct SimulatedMeshMPRTests {
             mesh.advanceTime(by: 0.07)
             mesh.advanceTime(by: 0.01)
 
-            // Disconnect recipient mid-fragment-train!
+            // Disconnect recipient AND drop prevHop's original ingress link while
+            // prevHop's surviving duplicate link stays connected!
             let destLinkOnRelay = mesh.linkUUID(from: 2, at: 1)
             mesh.silence(1, 2)
+            mesh.dropPrimaryDuplicateLink(0, 1)
             relay.service._test_directLinkMTU = nil
             relay.service.emitLinkEvent(.centralLinkEnded(centralUUID: destLinkOnRelay))
+            relay.service.emitLinkEvent(.centralLinkEnded(centralUUID: ingressLinkUUID))
             relay.service._test_fenceEngine()
 
             // Flush all remaining fragment chunks.
@@ -737,11 +766,265 @@ struct SimulatedMeshMPRTests {
                 .filter { $0.packet.type == MessageType.fragment.rawValue }
             // Early chunk(s) reached dest directly before disconnect; later chunks
             // fell back to flooding non-excluded links (`other`) and NEVER echoed
-            // back onto `prevHop` (node 0).
+            // back onto `prevHop`'s surviving link (node 0).
             #expect(fragmentTransmissions.contains { $0.to == 2 })
             #expect(fragmentTransmissions.contains { $0.to == 3 })
             #expect(!fragmentTransmissions.contains { $0.to == 0 })
         }
+    }
+
+    /// Regression for R2-SPEC-01: an off-route receiver receiving a source-routed
+    /// packet whose `route[0]` is its own ingress peer must not drop the packet
+    /// after egress excludes that peer — it must fall back to conservative
+    /// broadcast/flood and deliver over an alternate path.
+    @Test
+    func offRouteSourceRoutedPacketFallsBackToConservativeFloodWhenRouteFirstHopIsIngress() async {
+        let mesh = SimulatedMesh(usePlannedLinkDelivery: true)
+        let origin = mesh.addNode(nickname: "origin")       // 0
+        let firstHop = mesh.addNode(nickname: "firstHop")   // 1 (route[0])
+        let offRoute = mesh.addNode(nickname: "offRoute")   // 2 (receives from firstHop)
+        let dest = mesh.addNode(nickname: "dest")           // 3 (alternate path from offRoute)
+
+        mesh.connect(0, 1)
+        mesh.connect(1, 2)
+        mesh.connect(2, 3)
+        settleDiscovery(mesh)
+
+        let captureDest = MPRPublicMessageCapture()
+        dest.service.eventDelegate = captureDest
+
+        // Source-routed packet with route = [firstHop], arriving at `offRoute` from `firstHop`.
+        // `offRoute` is not in `route`, and `route[0]` IS its own ingress peer (`firstHop`).
+        let routedPacket = origin.service.signPacketForBroadcast(BitchatPacket(
+            type: MessageType.message.rawValue,
+            senderID: origin.service.myPeerID.routingData ?? Data(),
+            recipientID: dest.service.myPeerID.routingData,
+            timestamp: UInt64(Date().timeIntervalSince1970 * 1000),
+            payload: Data("route-fallback".utf8),
+            signature: nil,
+            ttl: TransportConfig.messageTTLDefault - 1,
+            version: 2,
+            route: [firstHop.service.myPeerID.routingData].compactMap { $0 }
+        ))
+
+        let ingressLink = BLEIngressLinkID.central(mesh.linkUUID(from: 1, at: 2))
+        offRoute.service._test_ingestFrame(routedPacket, link: ingressLink)
+        mesh.pump()
+        mesh.advanceTime(by: 2)
+
+        // Conservative flood fallback delivered the packet to `dest` via alternate link.
+        let plannedFromOffRoute = mesh.plannedTransmissions(from: 2)
+            .filter { $0.packet.type == MessageType.message.rawValue }
+            .map(\.to)
+        #expect(plannedFromOffRoute.contains(3))
+        #expect(!plannedFromOffRoute.contains(1))
+    }
+
+    /// Regression for R2-SPEC-02 & R2-SPEC-03: a provisional raw `ANNOUNCE`
+    /// binding (before signature verification) must neither impersonate a
+    /// verified previous hop to suppress/prune traffic nor hide an unidentified
+    /// live link from MPR fail-safes.
+    @Test
+    func provisionalRawAnnounceBindingNeitherImpersonatesPreviousHopNorHidesUnidentifiedLink() {
+        let mesh = SimulatedMesh(usePlannedLinkDelivery: true)
+        // Cluster A clique {0 (origin), 1 (a1), 2 (a2), 3 (bridge)} + Cluster B {3, 4 (b1)}
+        let origin = mesh.addNode(nickname: "origin")
+        let a1 = mesh.addNode(nickname: "a1")
+        _ = mesh.addNode(nickname: "a2")
+        _ = mesh.addNode(nickname: "bridge")
+        _ = mesh.addNode(nickname: "b1")
+        let newcomer = mesh.addNode(nickname: "newcomer") // 5
+
+        for a in 0..<4 {
+            for b in (a + 1)..<4 {
+                mesh.connect(a, b)
+            }
+        }
+        mesh.connect(3, 4)
+        settleDiscovery(mesh)
+
+        // Connect newcomer to a1 WITHOUT verifying its announce, then send an
+        // UNSIGNED (unverified) raw direct announce so linkBindings holds a
+        // provisional binding to newcomer while peerRegistry has no connected row.
+        mesh.connect(1, 5)
+        let newcomerLinkOnA1 = BLEIngressLinkID.central(mesh.linkUUID(from: 5, at: 1))
+        let unverifiedAnnounce = BitchatPacket(
+            type: MessageType.announce.rawValue,
+            senderID: newcomer.service.myPeerID.routingData ?? Data(),
+            recipientID: nil,
+            timestamp: UInt64(Date().timeIntervalSince1970 * 1000) + 500,
+            payload: AnnouncementPacket(
+                nickname: "newcomer",
+                noisePublicKey: newcomer.service.noiseStaticPublicKeyData(),
+                signingPublicKey: newcomer.service.noiseSigningPublicKeyData(),
+                directNeighbors: []
+            ).encode() ?? Data(),
+            signature: nil,
+            ttl: TransportConfig.messageTTLDefault
+        )
+        a1.service._test_ingestFrame(unverifiedAnnounce, link: newcomerLinkOnA1)
+        mesh.pump()
+        mesh.advanceTime(by: 2)
+
+        // Confirm provisional binding exists, yet newcomer is NOT connected in peerRegistry.
+        #expect(a1.service._test_linkBinding(newcomerLinkOnA1) == newcomer.service.myPeerID)
+        #expect(!a1.service.isPeerConnected(newcomer.service.myPeerID))
+
+        // 1. R2-SPEC-03: Normally a1 suppresses origin's broadcast, but because
+        //    newcomer's link is only provisionally bound (unverified), a1 MUST
+        //    fail safe and relay so newcomer is never stranded!
+        let a1RelaysBefore = countOutboundPublicMessages(mesh, nodeIndex: 1)
+        let originMsg = origin.service.signPacketForBroadcast(BitchatPacket(
+            type: MessageType.message.rawValue,
+            senderID: origin.service.myPeerID.routingData ?? Data(),
+            recipientID: nil,
+            timestamp: UInt64(Date().timeIntervalSince1970 * 1000) + 1_000,
+            payload: Data("dont-strand-newcomer".utf8),
+            signature: nil,
+            ttl: TransportConfig.messageTTLDefault
+        ))
+        let originLinkOnA1 = BLEIngressLinkID.central(mesh.linkUUID(from: 0, at: 1))
+        a1.service._test_ingestFrame(originMsg, link: originLinkOnA1)
+        mesh.pump()
+        mesh.advanceTime(by: 2)
+        #expect(countOutboundPublicMessages(mesh, nodeIndex: 1) - a1RelaysBefore == 1)
+
+        // 2. R2-SPEC-02: An unverified provisional link claiming an existing fresh
+        //    peer (`origin`) must NOT act as a verified previous hop to suppress.
+        let spoofedLink = BLEIngressLinkID.central("SIM-SPOOF-ORIGIN")
+        a1.service._test_bindCentral("SIM-SPOOF-ORIGIN", to: origin.service.myPeerID, verified: false)
+        // Drop newcomer link so the ONLY thing preventing suppression is the unverified ingress.
+        mesh.silence(1, 5)
+        a1.service.emitLinkEvent(.centralLinkEnded(centralUUID: mesh.linkUUID(from: 5, at: 1)))
+        a1.service._test_fenceEngine()
+
+        let a1RelaysBeforeSpoof = countOutboundPublicMessages(mesh, nodeIndex: 1)
+        let spoofHopMsg = origin.service.signPacketForBroadcast(BitchatPacket(
+            type: MessageType.message.rawValue,
+            senderID: origin.service.myPeerID.routingData ?? Data(),
+            recipientID: nil,
+            timestamp: UInt64(Date().timeIntervalSince1970 * 1000) + 2_000,
+            payload: Data("provisional-hop-must-not-suppress".utf8),
+            signature: nil,
+            ttl: TransportConfig.messageTTLDefault
+        ))
+        a1.service._test_ingestFrame(spoofHopMsg, link: spoofedLink)
+        mesh.pump()
+        mesh.advanceTime(by: 2)
+        #expect(countOutboundPublicMessages(mesh, nodeIndex: 1) - a1RelaysBeforeSpoof == 1)
+    }
+
+    /// Regression for R2-SPEC-05: a duplicate arriving on an unbound/unknown-hop
+    /// link must NOT prematurely reopen or claim terminal `.relayed` for a
+    /// suppressed authenticated packet, so a subsequent arrival from the
+    /// electing hop still relays once.
+    @Test
+    func unknownHopDuplicateDoesNotPrematurelyClaimSuppressedRelay() async {
+        let (mesh, indices) = makeDualHopLifecycleMesh()
+        let p2 = mesh.nodes[indices.p2]
+        let m = mesh.nodes[indices.m]
+        let leaf = mesh.nodes[indices.leaf]
+
+        let captureLeaf = MPRPublicMessageCapture()
+        leaf.service.eventDelegate = captureLeaf
+
+        let signedPacket = p2.service.signPacketForBroadcast(BitchatPacket(
+            type: MessageType.message.rawValue,
+            senderID: p2.service.myPeerID.routingData ?? Data(),
+            recipientID: nil,
+            timestamp: UInt64(Date().timeIntervalSince1970 * 1000),
+            payload: Data("unknown-hop-dup".utf8),
+            signature: nil,
+            ttl: TransportConfig.messageTTLDefault
+        ))
+
+        let mRelaysBefore = countOutboundPublicMessages(mesh, nodeIndex: indices.m)
+        let linkFromP1 = BLEIngressLinkID.central(mesh.linkUUID(from: indices.p1, at: indices.m))
+        let linkFromP2 = BLEIngressLinkID.central(mesh.linkUUID(from: indices.p2, at: indices.m))
+        let unboundLink = BLEIngressLinkID.central("SIM-UNBOUND-LINK")
+
+        // 1. First arrival from non-electing P1 -> suppressed.
+        var fromP1Copy = signedPacket
+        fromP1Copy.ttl = TransportConfig.messageTTLDefault - 1
+        m.service._test_ingestFrame(fromP1Copy, link: linkFromP1)
+        mesh.pump()
+        mesh.advanceTime(by: 2)
+        #expect(countOutboundPublicMessages(mesh, nodeIndex: indices.m) - mRelaysBefore == 0)
+
+        // 2. Duplicate on unbound link (unknown previous hop) -> must NOT relay or
+        //    claim terminal `.relayed`.
+        m.service._test_ingestFrame(fromP1Copy, link: unboundLink)
+        mesh.pump()
+        mesh.advanceTime(by: 2)
+        #expect(countOutboundPublicMessages(mesh, nodeIndex: indices.m) - mRelaysBefore == 0)
+
+        // 3. Subsequent arrival from electing hop P2 STILL reopens and relays once!
+        m.service._test_ingestFrame(signedPacket, link: linkFromP2)
+        mesh.pump()
+        mesh.advanceTime(by: 2)
+        #expect(countOutboundPublicMessages(mesh, nodeIndex: indices.m) - mRelaysBefore == 1)
+        #expect(await captureLeaf.drainedCount(content: "unknown-hop-dup", afterFencing: [leaf.service]) == 1)
+    }
+
+    /// Regression for R2-BUG-01: solicited gossip replay (RSR, TTL 0) must
+    /// still deliver a peer's own cached public message back to that peer over
+    /// planned links (even though `targetPeerID == originPeerID`), after the
+    /// ingress record has expired.
+    @Test
+    func solicitedGossipReplayRestoresSelfAuthoredPublicMessageOverPlannedLinks() async {
+        let mesh = SimulatedMesh(usePlannedLinkDelivery: true)
+        let alice = mesh.addNode(nickname: "alice") // 0
+        let bob = mesh.addNode(nickname: "bob")     // 1
+
+        var clock = Date()
+        alice.service._test_now = { clock }
+        bob.service._test_now = { clock }
+
+        mesh.connect(0, 1)
+        settleDiscovery(mesh)
+
+        let captureAlice = MPRPublicMessageCapture()
+        alice.service.eventDelegate = captureAlice
+
+        // Alice broadcasts a public message; Bob caches it.
+        let originalPacket = alice.service.signPacketForBroadcast(BitchatPacket(
+            type: MessageType.message.rawValue,
+            senderID: alice.service.myPeerID.routingData ?? Data(),
+            recipientID: nil,
+            timestamp: UInt64(clock.timeIntervalSince1970 * 1000),
+            payload: Data("restore-my-history".utf8),
+            signature: nil,
+            ttl: TransportConfig.messageTTLDefault
+        ))
+        let aliceLinkOnBob = BLEIngressLinkID.central(mesh.linkUUID(from: 0, at: 1))
+        bob.service._test_ingestFrame(originalPacket, link: aliceLinkOnBob)
+        mesh.pump()
+        mesh.advanceTime(by: 2)
+
+        // Expire the ingress record on Bob via controlled clock.
+        clock = clock.addingTimeInterval(TransportConfig.bleIngressRecordLifetimeSeconds + 2.0)
+
+        // Alice registers an outgoing sync request to Bob, and Bob answers with
+        // a solicited gossip sync replay (TTL 0, isRSR = true) of Alice's own
+        // message via `sendPacket(to:packet:)`.
+        alice.service._test_registerOutgoingSyncRequest(to: bob.service.myPeerID)
+        var rsrReplay = originalPacket
+        rsrReplay.ttl = 0
+        rsrReplay.isRSR = true
+
+        let bobPlannedBefore = mesh.plannedTransmissions(from: 1).count
+        bob.service.sendPacket(to: alice.service.myPeerID, packet: rsrReplay)
+        mesh.pump()
+        mesh.advanceTime(by: 1)
+
+        // Bob's planned links MUST include Alice (node 0), and Alice MUST
+        // receive her own restored public message.
+        let bobReplayTargets = mesh.plannedTransmissions(from: 1)
+            .dropFirst(bobPlannedBefore)
+            .filter { $0.packet.type == MessageType.message.rawValue && $0.packet.isRSR }
+            .map(\.to)
+        #expect(bobReplayTargets == [0])
+        #expect(await captureAlice.drainedCount(content: "restore-my-history", afterFencing: [alice.service]) == 1)
     }
 
     // MARK: - Helpers
@@ -865,10 +1148,18 @@ private final class MPRPublicMessageCapture: TransportEventDelegate, @unchecked 
         return contents.filter { $0 == content }.count
     }
 
-    func drainedCount(content: String, drains: Int = 50) async -> Int {
+    func drainedCount(
+        content: String,
+        afterFencing services: [BLEService] = [],
+        drains: Int = 8
+    ) async -> Int {
+        services.forEach { $0._test_fenceEngine() }
+        // Never break early on the first callback: drain multiple MainActor
+        // turns so any unexpected duplicate delivery task enqueued on the
+        // engine is guaranteed to execute before the exact-once assertion.
         for _ in 0..<drains {
-            if count(content: content) > 0 { break }
             await MainActor.run {}
+            await Task.yield()
         }
         return count(content: content)
     }
