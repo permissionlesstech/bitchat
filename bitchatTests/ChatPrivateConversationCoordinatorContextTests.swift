@@ -135,7 +135,6 @@ private final class MockChatPrivateConversationContext: ChatPrivateConversationC
     var blockedPeers: Set<PeerID> = []
     var noiseKeysByPeerID: [PeerID: Data] = [:]
     var ephemeralPeerIDsByNoiseKey: [Data: PeerID] = [:]
-    var peerIDsByNickname: [String: PeerID] = [:]
     var fingerprintsByPeerID: [PeerID: String] = [:]
     private(set) var clearedFingerprints: [PeerID] = []
 
@@ -145,7 +144,6 @@ private final class MockChatPrivateConversationContext: ChatPrivateConversationC
     func isPeerBlocked(_ peerID: PeerID) -> Bool { blockedPeers.contains(peerID) }
     func noisePublicKey(for peerID: PeerID) -> Data? { noiseKeysByPeerID[peerID] }
     func ephemeralPeerID(forNoiseKey noiseKey: Data) -> PeerID? { ephemeralPeerIDsByNoiseKey[noiseKey] }
-    func getPeerIDForNickname(_ nickname: String) -> PeerID? { peerIDsByNickname[nickname] }
     func getFingerprint(for peerID: PeerID) -> String? { fingerprintsByPeerID[peerID] }
     func storedFingerprint(for peerID: PeerID) -> String? { fingerprintsByPeerID[peerID] }
 
