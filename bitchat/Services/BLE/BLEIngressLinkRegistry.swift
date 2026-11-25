@@ -14,7 +14,24 @@ struct BLEIngressPacketContext: Equatable {
 struct BLEIngressLinkRecord: Equatable {
     let link: BLEIngressLinkID
     let peerID: PeerID
+    /// Immediate previous-hop neighbor that delivered this packet when the
+    /// ingress link was bound to a known peer. Nil for unbound links so MPR
+    /// and neighbor pruning fail safe instead of assuming the claimed origin
+    /// is a direct neighbor.
+    let previousHopPeerID: PeerID?
     let timestamp: Date
+
+    init(
+        link: BLEIngressLinkID,
+        peerID: PeerID,
+        previousHopPeerID: PeerID? = nil,
+        timestamp: Date
+    ) {
+        self.link = link
+        self.peerID = peerID
+        self.previousHopPeerID = previousHopPeerID
+        self.timestamp = timestamp
+    }
 }
 
 enum BLEIngressRejection: Error, Equatable {
@@ -49,6 +66,7 @@ struct BLEIngressLinkRegistry {
         _ packet: BitchatPacket,
         link: BLEIngressLinkID,
         peerID: PeerID,
+        previousHopPeerID: PeerID? = nil,
         now: Date = Date(),
         lifetime: TimeInterval
     ) -> Bool {
@@ -58,8 +76,29 @@ struct BLEIngressLinkRegistry {
             return false
         }
 
-        ingressByMessageID[messageID] = BLEIngressLinkRecord(link: link, peerID: peerID, timestamp: now)
+        ingressByMessageID[messageID] = BLEIngressLinkRecord(
+            link: link,
+            peerID: peerID,
+            previousHopPeerID: previousHopPeerID,
+            timestamp: now
+        )
         return true
+    }
+
+    mutating func updateRecord(
+        _ packet: BitchatPacket,
+        link: BLEIngressLinkID,
+        peerID: PeerID,
+        previousHopPeerID: PeerID?,
+        now: Date = Date()
+    ) {
+        let messageID = Self.messageID(for: packet)
+        ingressByMessageID[messageID] = BLEIngressLinkRecord(
+            link: link,
+            peerID: peerID,
+            previousHopPeerID: previousHopPeerID,
+            timestamp: now
+        )
     }
 
     mutating func prune(before cutoff: Date) {
@@ -155,10 +194,35 @@ final class BLEIngressLinkStore: @unchecked Sendable {
         _ packet: BitchatPacket,
         link: BLEIngressLinkID,
         peerID: PeerID,
+        previousHopPeerID: PeerID? = nil,
         lifetime: TimeInterval
     ) -> Bool {
         lock.withLock {
-            registry.recordIfNew(packet, link: link, peerID: peerID, lifetime: lifetime)
+            registry.recordIfNew(
+                packet,
+                link: link,
+                peerID: peerID,
+                previousHopPeerID: previousHopPeerID,
+                lifetime: lifetime
+            )
+        }
+    }
+
+    func updateRecord(
+        _ packet: BitchatPacket,
+        link: BLEIngressLinkID,
+        peerID: PeerID,
+        previousHopPeerID: PeerID?,
+        now: Date = Date()
+    ) {
+        lock.withLock {
+            registry.updateRecord(
+                packet,
+                link: link,
+                peerID: peerID,
+                previousHopPeerID: previousHopPeerID,
+                now: now
+            )
         }
     }
 

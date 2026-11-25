@@ -27,6 +27,7 @@ struct BLERouteForwardingPolicyTests {
         let plan = forwardingPlan(packet, local: local)
 
         #expect(!plan.shouldSuppressFloodRelay)
+        #expect(!plan.isSourceRouteFallback)
         #expect(plan.forwardPacket == nil)
         #expect(plan.nextHop == nil)
     }
@@ -55,6 +56,27 @@ struct BLERouteForwardingPolicyTests {
         let plan = forwardingPlan(packet, local: local, connected: [])
 
         #expect(!plan.shouldSuppressFloodRelay)
+        #expect(plan.isSourceRouteFallback)
+        #expect(plan.forwardPacket == nil)
+        #expect(plan.nextHop == nil)
+    }
+
+    @Test("routed packet with duplicate hops is dropped to prevent loops")
+    func duplicateHopsInRouteAreDropped() {
+        let local = peer("1111111111111111")
+        let hop = peer("2222222222222222")
+        let destination = peer("3333333333333333")
+        let packet = makePacket(
+            sender: peer("4444444444444444"),
+            recipient: destination,
+            ttl: 6,
+            route: [routeData(hop), routeData(local), routeData(hop)]
+        )
+
+        let plan = forwardingPlan(packet, local: local, connected: [hop])
+
+        #expect(plan.shouldSuppressFloodRelay)
+        #expect(!plan.isSourceRouteFallback)
         #expect(plan.forwardPacket == nil)
         #expect(plan.nextHop == nil)
     }

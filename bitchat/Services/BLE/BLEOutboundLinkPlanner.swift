@@ -23,7 +23,8 @@ enum BLEOutboundLinkPlanner {
         preferredPeripheralPerPeer: [PeerID: String] = [:],
         directAnnounceTTL: UInt8 = TransportConfig.messageTTLDefault,
         directedOnlyPeer: PeerID?,
-        requireDirectPeerLink: Bool = false
+        requireDirectPeerLink: Bool = false,
+        applyBroadcastSubsetting: Bool = true
     ) -> BLEOutboundLinkPlan {
         let directedPeerHint = directedPeerHint(for: packet, explicitPeer: directedOnlyPeer)
         // Direct announces bypass the per-peer duplicate-link collapse so
@@ -38,6 +39,7 @@ enum BLEOutboundLinkPlanner {
             centralPeerBindings: centralPeerBindings,
             preferredPeripheralPerPeer: preferredPeripheralPerPeer,
             collapseDuplicatePeerLinks: !isDirectAnnounce,
+            applyBroadcastSubsetting: applyBroadcastSubsetting,
             directedPeerHint: directedPeerHint,
             requireDirectPeerLink: requireDirectPeerLink,
             packetType: packet.type,

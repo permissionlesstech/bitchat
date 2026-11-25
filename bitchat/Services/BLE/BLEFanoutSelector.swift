@@ -17,6 +17,7 @@ enum BLEFanoutSelector {
         centralPeerBindings: [String: PeerID] = [:],
         preferredPeripheralPerPeer: [PeerID: String] = [:],
         collapseDuplicatePeerLinks: Bool = true,
+        applyBroadcastSubsetting: Bool = true,
         directedPeerHint: PeerID?,
         requireDirectPeerLink: Bool = false,
         packetType: UInt8,
@@ -68,7 +69,8 @@ enum BLEFanoutSelector {
             )
             : rawAllowed
 
-        guard shouldSubset(packetType: packetType, directedPeerHint: directedPeerHint) else {
+        guard applyBroadcastSubsetting,
+              shouldSubset(packetType: packetType, directedPeerHint: directedPeerHint) else {
             return BLEFanoutSelection(
                 peripheralIDs: Set(allowed.peripheralIDs),
                 centralIDs: Set(allowed.centralIDs)

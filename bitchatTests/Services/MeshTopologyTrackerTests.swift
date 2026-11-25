@@ -6,6 +6,7 @@
 // For more information, see <https://unlicense.org>
 //
 
+import BitFoundation
 import Testing
 import Foundation
 @testable import bitchat
@@ -220,6 +221,82 @@ struct MeshTopologyTrackerTests {
         tracker.prune(olderThan: 60)
         // Claims are fresh but the version observations aged out.
         #expect(tracker.computeRoute(from: a, to: c, requiringVersion: 2) == nil)
+    }
+
+    @Test func freshnessBoundedNeighborsExpireAtMaxAge() throws {
+        let tracker = MeshTopologyTracker()
+        let a = try hex("0101010101010101")
+        let b = try hex("0202020202020202")
+        let c = try hex("0303030303030303")
+        let peerA = try #require(PeerID(routingData: a))
+        let peerB = try #require(PeerID(routingData: b))
+        let peerC = try #require(PeerID(routingData: c))
+
+        let t0 = Date(timeIntervalSince1970: 1_000)
+        tracker.updateNeighbors(for: a, neighbors: [b], at: t0)
+        tracker.updateNeighbors(for: b, neighbors: [a, c], at: t0)
+        tracker.updateNeighbors(for: c, neighbors: [b], at: t0)
+
+        let atBoundary = t0.addingTimeInterval(120)
+        #expect(tracker.isFreshAnnouncement(for: peerA, maxAge: 120, now: atBoundary))
+        #expect(tracker.isFreshConfirmedNeighbor(peerA, peerB, maxAge: 120, now: atBoundary))
+        #expect(tracker.freshConfirmedNeighbors(of: peerB, maxAge: 120, now: atBoundary) == [peerA, peerC])
+
+        let snapshot = tracker.freshTwoHopNeighborhood(around: peerA, maxAge: 120, now: atBoundary)
+        #expect(snapshot.centerIsFresh)
+        #expect(snapshot.n1 == [peerB])
+        #expect(snapshot.neighborsByN1[peerB] == [peerA, peerC])
+
+        let expired = t0.addingTimeInterval(121)
+        #expect(!tracker.isFreshAnnouncement(for: peerA, maxAge: 120, now: expired))
+        #expect(!tracker.isFreshConfirmedNeighbor(peerA, peerB, maxAge: 120, now: expired))
+        #expect(tracker.freshConfirmedNeighbors(of: peerB, maxAge: 120, now: expired).isEmpty)
+        #expect(!tracker.freshTwoHopNeighborhood(around: peerA, maxAge: 120, now: expired).centerIsFresh)
+    }
+
+    @Test func removeDirectEdgePreservesTopologyChangedForSubsequentAnnounce() throws {
+        let tracker = MeshTopologyTracker()
+        let a = try hex("0101010101010101")
+        let b = try hex("0202020202020202")
+        let c = try hex("0303030303030303")
+        let peerA = try #require(PeerID(routingData: a))
+        let peerB = try #require(PeerID(routingData: b))
+        let peerC = try #require(PeerID(routingData: c))
+        let now = Date(timeIntervalSince1970: 1_000)
+
+        #expect(tracker.updateNeighbors(for: a, neighbors: [b, c], announceTimestamp: 10, at: now))
+        #expect(tracker.updateNeighbors(for: b, neighbors: [a], announceTimestamp: 10, at: now))
+        #expect(tracker.updateNeighbors(for: c, neighbors: [a], announceTimestamp: 10, at: now))
+
+        // Identical announce with newer timestamp reports topologyChanged = false.
+        #expect(!tracker.updateNeighbors(for: a, neighbors: [b, c], announceTimestamp: 20, at: now))
+        // Stale/equal timestamp is rejected.
+        #expect(!tracker.updateNeighbors(for: a, neighbors: [c], announceTimestamp: 20, at: now))
+
+        // Local disconnect pruning drops edge (A, B) immediately without losing (A, C).
+        tracker.removeDirectEdge(between: a, and: b)
+        #expect(!tracker.isFreshConfirmedNeighbor(peerA, peerB, now: now))
+        #expect(tracker.isFreshConfirmedNeighbor(peerA, peerC, now: now))
+
+        // Subsequent wire ANNOUNCE from A without B still reports topologyChanged = true.
+        #expect(tracker.updateNeighbors(for: a, neighbors: [c], announceTimestamp: 30, at: now))
+    }
+
+    @Test func removePeerScrubsBackReferencesImmediately() throws {
+        let tracker = MeshTopologyTracker()
+        let a = try hex("0101010101010101")
+        let b = try hex("0202020202020202")
+        let peerA = try #require(PeerID(routingData: a))
+        let peerB = try #require(PeerID(routingData: b))
+        let now = Date(timeIntervalSince1970: 1_000)
+
+        tracker.updateNeighbors(for: a, neighbors: [b], at: now)
+        tracker.updateNeighbors(for: b, neighbors: [a], at: now)
+        #expect(tracker.isFreshConfirmedNeighbor(peerA, peerB, now: now))
+
+        tracker.removePeer(b)
+        #expect(!tracker.isFreshConfirmedNeighbor(peerA, peerB, now: now))
+        #expect(tracker.adjacencySnapshot()[a]?.contains(b) != true)
     }
 
 }

@@ -34,6 +34,21 @@ enum TransportConfig {
     static let bleFragmentRelayTtlCap: UInt8 = 7
     static let bleFragmentRelayTtlCapDense: UInt8 = 5       // Contain fragment floods in dense graphs
 
+    // Deterministic 2-hop MPR relay & previous-hop neighbor pruning
+    // Maximum local age for a peer's announcement to be treated as fresh for
+    // MPR hub selection and broadcast neighbor pruning (4x the 30s dense
+    // announce cadence, matching Android DEFAULT_EDGE_MAX_AGE_MS).
+    static let bleMprEdgeMaxAgeSeconds: TimeInterval = 120.0
+    // Networks at or below this peer count always relay broadcasts rather than
+    // MPR-suppressing, while still applying neighbor pruning when fresh.
+    static let bleMprSmallNetworkRelayThreshold: Int = 3
+    // Prompt topology-change announce delay after losing a peer's last direct
+    // link while other direct neighbors remain connected.
+    static let bleTopologyChangeAnnounceDelaySeconds: TimeInterval = 0.5
+    // Bounded process-local relay lifecycle tracking (suppressed vs. relayed).
+    static let bleRelayLifecycleMaxCount: Int = 1000
+    static let bleRelayLifecycleMaxAgeSeconds: TimeInterval = 300
+
     // Live voice (push-to-talk)
     // Burst-content budget per voice packet. Sized so the Noise ciphertext
     // (content + 1 type byte + 16 tag bytes) stays within MessagePadding's

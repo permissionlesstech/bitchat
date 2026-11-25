@@ -1,6 +1,14 @@
 import BitFoundation
 import Foundation
 
+/// Carries ingress and neighbor-pruning metadata from a relay decision to
+/// outbound link selection (including fragmented relays).
+struct BLERelaySendContext: Equatable {
+    let ingressLink: BLEIngressLinkID?
+    let previousHopPeerID: PeerID?
+    let skipNeighborPruning: Bool
+}
+
 struct BLEOutboundFragmentTransferRequest {
     let packet: BitchatPacket
     let pad: Bool
@@ -9,6 +17,7 @@ struct BLEOutboundFragmentTransferRequest {
     let transferId: String?
     let requireDirectPeerLink: Bool
     let requireNoiseAuthenticatedPeerLink: Bool
+    let relayContext: BLERelaySendContext?
 
     init(
         packet: BitchatPacket,
@@ -17,7 +26,8 @@ struct BLEOutboundFragmentTransferRequest {
         directedPeer: PeerID?,
         transferId: String?,
         requireDirectPeerLink: Bool = false,
-        requireNoiseAuthenticatedPeerLink: Bool = false
+        requireNoiseAuthenticatedPeerLink: Bool = false,
+        relayContext: BLERelaySendContext? = nil
     ) {
         self.packet = packet
         self.pad = pad
@@ -26,6 +36,7 @@ struct BLEOutboundFragmentTransferRequest {
         self.transferId = transferId
         self.requireDirectPeerLink = requireDirectPeerLink
         self.requireNoiseAuthenticatedPeerLink = requireNoiseAuthenticatedPeerLink
+        self.relayContext = relayContext
     }
 
     var resolvedTransferId: String? {
