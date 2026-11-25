@@ -216,8 +216,12 @@ final class ChatLifecycleCoordinator {
         // non-favorite mesh peers too. `sentReadReceipts` dedups against the
         // PrivateChatManager path; the router drops receipts it can't route.
 
+        // A full-key conversation can contain mesh rows whose sender IDs stay short.
+        let shortPeerID = peerID.toShort()
         for message in getPrivateChatMessages(for: peerID) {
-            guard (message.senderPeerID == peerID || message.senderPeerID == noiseKeyHex) && !message.isRelay else {
+            guard let senderPeerID = message.senderPeerID,
+                  senderPeerID == peerID || senderPeerID == noiseKeyHex || senderPeerID == shortPeerID,
+                  !message.isRelay else {
                 continue
             }
 
