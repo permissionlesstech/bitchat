@@ -148,7 +148,7 @@ final class GeohashSubscriptionManager {
             since: Date().addingTimeInterval(-TransportConfig.nostrGeohashInitialLookbackSeconds),
             limit: TransportConfig.nostrGeohashInitialLimit
         )
-        let subRelays = GeoRelayDirectory.shared.closestRelays(
+        let subRelays = GeoRelayDirectory.shared.routingRelays(
             toGeohash: channel.geohash,
             count: TransportConfig.nostrGeoRelayCount
         )
@@ -250,7 +250,7 @@ final class GeohashSubscriptionManager {
         context.startGeoParticipantRefreshTimer()
         let ts = Date().addingTimeInterval(-TransportConfig.nostrGeohashInitialLookbackSeconds)
         let filter = NostrFilter.geohashEphemeral(channel.geohash, since: ts, limit: TransportConfig.nostrGeohashInitialLimit)
-        let subRelays = GeoRelayDirectory.shared.closestRelays(toGeohash: channel.geohash, count: 5)
+        let subRelays = GeoRelayDirectory.shared.routingRelays(toGeohash: channel.geohash, count: 5)
         replayingGeoSubscriptionID = subID
         NostrRelayManager.shared.subscribe(filter: filter, id: subID, relayUrls: subRelays, handler: { [weak self] event in
             Task { @MainActor [weak self] in
@@ -297,16 +297,10 @@ final class GeohashSubscriptionManager {
         let event = geoContext.event
         let identity = geoContext.identity
 
-        let targetRelays = GeoRelayDirectory.shared.closestRelays(
-            toGeohash: channel.geohash,
-            count: TransportConfig.nostrGeoRelayCount
-        )
-
-        if targetRelays.isEmpty {
-            SecureLogger.warning("Geo: no geohash relays available for \(channel.geohash); not sending", category: .session)
-        } else {
-            NostrRelayManager.shared.sendEvent(event, to: targetRelays)
-        }
+        // The manager retains geographic intent while the directory is empty
+        // and retargets it when entries arrive. Always submit the composed event.
+        let relayManager = context.nostrRelayManager ?? NostrRelayManager.shared
+        relayManager.sendEvent(event, routingGeohash: channel.geohash)
 
         // Mesh gateway uplink: with no working relay connection, hand the
         // locally signed event to a mesh peer advertising the gateway
@@ -383,7 +377,7 @@ final class GeohashSubscriptionManager {
             since: Date().addingTimeInterval(-TransportConfig.nostrGeohashSampleLookbackSeconds),
             limit: TransportConfig.nostrGeohashSampleLimit
         )
-        let subRelays = GeoRelayDirectory.shared.closestRelays(toGeohash: gh, count: 5)
+        let subRelays = GeoRelayDirectory.shared.routingRelays(toGeohash: gh, count: 5)
         NostrRelayManager.shared.subscribe(filter: filter, id: subID, relayUrls: subRelays) { [weak self] event in
             Task { @MainActor [weak self] in
                 self?.presence.subscribeNostrEvent(event, gh: gh)

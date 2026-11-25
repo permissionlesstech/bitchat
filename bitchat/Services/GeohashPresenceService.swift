@@ -87,7 +87,7 @@ final class GeohashPresenceService: ObservableObject {
         self.torIsForeground = { TorManager.shared.isForeground() }
         self.deriveIdentity = { try idBridge.deriveIdentity(forGeohash: $0) }
         self.relayLookup = { geohash, count in
-            GeoRelayDirectory.shared.closestRelays(toGeohash: geohash, count: count)
+            GeoRelayDirectory.shared.routingRelays(toGeohash: geohash, count: count)
         }
         self.relaySender = { event, relays in
             NostrRelayManager.shared.sendEvent(event, to: relays)

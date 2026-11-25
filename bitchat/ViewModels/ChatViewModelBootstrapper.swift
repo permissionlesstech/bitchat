@@ -341,7 +341,7 @@ private extension ChatViewModelBootstrapper {
         let gateway = GatewayService.shared
 
         gateway.publishToRelays = { event, geohash in
-            let relays = GeoRelayDirectory.shared.closestRelays(
+            let relays = GeoRelayDirectory.shared.routingRelays(
                 toGeohash: geohash,
                 count: TransportConfig.nostrGeoRelayCount
             )
@@ -421,7 +421,7 @@ private extension ChatViewModelBootstrapper {
         let idBridge = viewModel.idBridge
 
         bridge.publishToRelays = { event, cell in
-            let relays = GeoRelayDirectory.shared.closestRelays(
+            let relays = GeoRelayDirectory.shared.routingRelays(
                 toGeohash: cell,
                 count: TransportConfig.nostrGeoRelayCount
             )
@@ -433,7 +433,7 @@ private extension ChatViewModelBootstrapper {
         }
         bridge.openSubscription = { cells in
             guard let cell = cells.first else { return }
-            let relays = GeoRelayDirectory.shared.closestRelays(
+            let relays = GeoRelayDirectory.shared.routingRelays(
                 toGeohash: cell,
                 count: TransportConfig.nostrGeoRelayCount
             )

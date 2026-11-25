@@ -6,6 +6,321 @@ import XCTest
 final class NostrRelayManagerTests: XCTestCase {
     private let expectedDefaultRelayCount = 4
 
+    func test_composedGeoMessageWaitsForAnInitiallyEmptyDirectory() async throws {
+        let center = NotificationCenter()
+        var selected: [String] = []
+        let context = makeContext(permission: .denied, notificationCenter: center, geoRelayLookup: { _ in selected })
+        let chat = MockChatNostrContext()
+        chat.nostrRelayManager = context.manager
+        let coordinator = ChatNostrCoordinator(context: chat)
+        let identity = try NostrIdentity.generate()
+        let channel = GeohashChannel(level: .building, geohash: "s0000000")
+        let event = try NostrProtocol.createEphemeralGeohashEvent(
+            content: "synthetic queued composition", geohash: channel.geohash, senderIdentity: identity
+        )
+
+        coordinator.subscriptions.sendGeohash(context: (
+            channel: channel, event: event, identity: identity, teleported: false
+        ))
+
+        XCTAssertEqual(context.manager.debugPendingMessageQueueCount, 1)
+        XCTAssertTrue(context.sessionFactory.requestedURLs.isEmpty)
+        selected = ["wss://composed.example"]
+        center.post(name: .geoRelayDirectoryDidRefresh, object: nil)
+        let published = await waitUntil {
+            context.sessionFactory.latestConnection(for: selected[0])?.sentStrings.contains { $0.contains(event.id) } == true &&
+            context.manager.debugPendingMessageQueueCount == 0
+        }
+        XCTAssertTrue(published)
+        XCTAssertEqual(chat.recordedNostrEventIDs, [event.id])
+    }
+
+    func test_unsubscribingLastGeoOwnerCancelsRetries() async {
+        let url = "wss://retired-region.example"
+        let context = makeContext(permission: .denied, geoRelayLookup: { _ in [url] })
+        context.sessionFactory.pingErrorByURL[url] = URLError(.cannotFindHost)
+        context.manager.subscribe(filter: .geohashEphemeral("s0000000"), id: "retired-geo", handler: { _ in })
+        let failed = await waitUntil { context.scheduler.scheduled.count == 1 }
+        XCTAssertTrue(failed)
+
+        context.manager.unsubscribe(id: "retired-geo")
+        XCTAssertTrue(context.manager.relays.isEmpty)
+        context.scheduler.runNext()
+        await Task { @MainActor in }.value
+
+        XCTAssertEqual(context.sessionFactory.requestedURLs, [url])
+        XCTAssertTrue(context.scheduler.scheduled.isEmpty)
+    }
+
+    func test_unsubscribingWhileTorBootstrapsRemovesQueuedConnections() async {
+        let url = "wss://removed-during-bootstrap.example"
+        let context = makeContext(
+            permission: .denied, userTorEnabled: true, torEnforced: true, torIsReady: false,
+            geoRelayLookup: { _ in [url] }
+        )
+        context.manager.subscribe(filter: .geohashEphemeral("s0000000"), id: "bootstrap-geo", handler: { _ in })
+        XCTAssertEqual(context.torWaiter.awaitCallCount, 1)
+        context.manager.unsubscribe(id: "bootstrap-geo")
+        context.torWaiter.resolve(true)
+
+        XCTAssertTrue(context.manager.relays.isEmpty)
+        XCTAssertTrue(context.sessionFactory.requestedURLs.isEmpty)
+    }
+
+    func test_staleRetryCannotReconnectARecreatedRelayRow() async {
+        let url = "wss://new-lifetime.example"
+        let context = makeContext(permission: .denied, geoRelayLookup: { _ in [url] })
+        context.sessionFactory.pingErrorByURL[url] = URLError(.cannotFindHost)
+        context.manager.subscribe(filter: .geohashEphemeral("s0000000"), id: "old-owner", handler: { _ in })
+        let firstFailed = await waitUntil { context.scheduler.scheduled.count == 1 }
+        XCTAssertTrue(firstFailed)
+        context.manager.unsubscribe(id: "old-owner")
+        context.manager.subscribe(filter: .geohashEphemeral("s0000000"), id: "new-owner", handler: { _ in })
+        let replacementFailed = await waitUntil { context.scheduler.scheduled.count == 2 }
+        XCTAssertTrue(replacementFailed)
+
+        context.scheduler.runNext()
+        await Task { @MainActor in }.value
+        XCTAssertEqual(context.sessionFactory.requestedURLs, [url, url])
+        XCTAssertEqual(context.scheduler.scheduled.count, 1)
+    }
+
+    func test_healthCheckRetiresAnUnsubscribedLiveSocketWithoutRetrying() async {
+        let url = "wss://idle-region.example"
+        let context = makeContext(permission: .denied, geoRelayLookup: { _ in [url] }, healthCheckInterval: 30)
+        context.manager.subscribe(filter: .geohashEphemeral("s0000000"), id: "idle-geo", handler: { _ in })
+        let connected = await waitUntil { context.manager.isConnected && context.scheduler.scheduled.count == 1 }
+        XCTAssertTrue(connected)
+        let connection = context.sessionFactory.latestConnection(for: url)
+
+        context.manager.unsubscribe(id: "idle-geo")
+        context.scheduler.runNext()
+        let retired = await waitUntil { context.manager.relays.isEmpty }
+
+        XCTAssertTrue(retired)
+        XCTAssertEqual(connection?.cancelCallCount, 1)
+        XCTAssertEqual(connection?.pingCallCount, 1)
+        XCTAssertTrue(context.scheduler.scheduled.isEmpty)
+    }
+
+    func test_manualRetryDoesNotPinARelayAfterItsGeoOwnerUnsubscribes() async {
+        let url = "wss://manual-retry-region.example"
+        let context = makeContext(permission: .denied, geoRelayLookup: { _ in [url] })
+        context.sessionFactory.pingErrorByURL[url] = URLError(.cannotFindHost)
+        context.manager.subscribe(filter: .geohashEphemeral("s0000000"), id: "retry-owner", handler: { _ in })
+        let failed = await waitUntil { context.scheduler.scheduled.count == 1 }
+        XCTAssertTrue(failed)
+        context.manager.retryConnection(to: url)
+        let retried = await waitUntil { context.scheduler.scheduled.count == 2 }
+        XCTAssertTrue(retried)
+
+        context.manager.unsubscribe(id: "retry-owner")
+        XCTAssertTrue(context.manager.relays.isEmpty)
+        context.scheduler.runNext()
+        context.scheduler.runNext()
+        await Task { @MainActor in }.value
+        XCTAssertEqual(context.sessionFactory.requestedURLs, [url, url])
+        XCTAssertTrue(context.scheduler.scheduled.isEmpty)
+    }
+
+    func test_sharedSubscriptionAndDefaultsRetainFailedRelays() async {
+        let url = "wss://shared-region.example"
+        let context = makeContext(permission: .authorized, geoRelayLookup: { _ in [url] })
+        context.sessionFactory.pingErrorByURL[url] = URLError(.cannotFindHost)
+        context.manager.subscribe(filter: .geohashEphemeral("s0000000"), id: "geo-owner", handler: { _ in })
+        context.manager.subscribe(filter: makeFilter(), id: "private-owner", relayUrls: [url], handler: { _ in })
+        let failed = await waitUntil { context.scheduler.scheduled.count == 1 }
+        XCTAssertTrue(failed)
+
+        context.manager.unsubscribe(id: "geo-owner")
+        XCTAssertTrue(context.manager.relays.contains { $0.url == url })
+        context.manager.unsubscribe(id: "private-owner")
+        XCTAssertFalse(context.manager.relays.contains { $0.url == url })
+        XCTAssertEqual(context.manager.relays.count, expectedDefaultRelayCount)
+    }
+
+    func test_pendingGeoWriteRetainsRelayAfterUnsubscribeUntilRecovery() async throws {
+        let url = "wss://pending-region.example"
+        let context = makeContext(permission: .denied, geoRelayLookup: { _ in [url] })
+        context.sessionFactory.pingErrorByURL[url] = URLError(.cannotFindHost)
+        context.manager.subscribe(filter: .geohashEphemeral("s0000000"), id: "geo-owner", handler: { _ in })
+        let event = try makeSignedEvent(content: "retained pending write", geohash: "s0000000")
+        context.manager.sendEvent(event)
+        let failed = await waitUntil { context.scheduler.scheduled.count == 1 }
+        XCTAssertTrue(failed)
+
+        context.manager.unsubscribe(id: "geo-owner")
+        XCTAssertTrue(context.manager.relays.contains { $0.url == url })
+        context.sessionFactory.pingErrorByURL[url] = nil
+        context.scheduler.runNext()
+        let published = await waitUntil {
+            context.sessionFactory.latestConnection(for: url)?.sentStrings.contains { $0.contains(event.id) } == true &&
+            context.manager.debugPendingMessageQueueCount == 0
+        }
+        XCTAssertTrue(published)
+    }
+
+    func test_unsubscribeClosesReqBeforeItsWriteCompletionRuns() async {
+        let url = "wss://deferred-subscription.example"
+        let context = makeContext(permission: .denied, geoRelayLookup: { _ in [url] })
+        context.manager.subscribe(filter: makeFilter(), id: "shared-owner", relayUrls: [url], handler: { _ in })
+        let connected = await waitUntil { context.manager.isConnected }
+        XCTAssertTrue(connected)
+        let connection = context.sessionFactory.latestConnection(for: url)
+        connection?.deferSendCompletions = true
+
+        context.manager.subscribe(filter: .geohashEphemeral("s0000000"), id: "pending-close", handler: { _ in })
+        context.manager.unsubscribe(id: "pending-close")
+
+        XCTAssertTrue(connection?.sentStrings.contains { $0.contains("CLOSE") && $0.contains("pending-close") } == true)
+        XCTAssertEqual(connection?.cancelCallCount, 0)
+        connection?.flushDeferredSendCompletions()
+        await Task { @MainActor in }.value
+        XCTAssertEqual(context.manager.debugSubscriptionRequestCount, 1)
+    }
+
+    func test_refreshRetiresAlreadyWrittenGeoTargetsButKeepsSharedOwners() async throws {
+        for shared in [false, true] {
+            let center = NotificationCenter()
+            let written = "wss://already-written.example"
+            let failed = "wss://still-pending.example"
+            let replacement = "wss://refreshed.example"
+            var selected = [written, failed]
+            let context = makeContext(permission: .denied, notificationCenter: center, geoRelayLookup: { _ in selected })
+            context.sessionFactory.pingErrorByURL[failed] = URLError(.cannotFindHost)
+            if shared {
+                context.manager.subscribe(filter: makeFilter(), id: "shared-owner", relayUrls: [written], handler: { _ in })
+            }
+            let event = try makeSignedEvent(content: "partly delivered", geohash: "s0000000")
+            context.manager.sendEvent(event)
+            let partiallyDelivered = await waitUntil {
+                context.sessionFactory.latestConnection(for: written)?.sentStrings.contains { $0.contains(event.id) } == true &&
+                context.manager.relays.first(where: { $0.url == written })?.messagesSent == 1 &&
+                context.manager.debugPendingMessageQueueCount == 1
+            }
+            XCTAssertTrue(partiallyDelivered)
+            let oldConnection = context.sessionFactory.latestConnection(for: written)
+
+            selected = [replacement]
+            center.post(name: .geoRelayDirectoryDidRefresh, object: nil)
+            let migrated = await waitUntil {
+                context.sessionFactory.latestConnection(for: replacement)?.sentStrings.contains { $0.contains(event.id) } == true &&
+                context.manager.debugPendingMessageQueueCount == 0
+            }
+            XCTAssertTrue(migrated)
+            XCTAssertEqual(context.manager.relays.contains { $0.url == written }, shared)
+            XCTAssertEqual(oldConnection?.cancelCallCount, shared ? 0 : 1)
+            XCTAssertFalse(context.manager.relays.contains { $0.url == failed })
+        }
+    }
+
+    func test_allPrimaryRelaysDownStillPublishesAndSubscribesOnBackups() async throws {
+        let urls = (1...10).map { "wss://r\($0).example" }
+        let context = makeContext(permission: .denied, geoRelayLookup: { _ in urls })
+        for url in urls.prefix(5) { context.sessionFactory.pingErrorByURL[url] = URLError(.cannotFindHost) }
+        context.manager.subscribe(filter: .geohashEphemeral("s0000000"), id: "geo", handler: { _ in })
+        context.manager.sendEvent(try makeSignedEvent(content: "synthetic-outage", geohash: "s0000000"))
+        let reachedBackups = await waitUntil {
+            urls.suffix(5).allSatisfy { url in
+                let sent = context.sessionFactory.latestConnection(for: url)?.sentStrings ?? []
+                return sent.contains { $0.contains("REQ") && $0.contains("geo") } &&
+                       sent.contains { $0.contains("synthetic-outage") }
+            }
+        }
+        XCTAssertTrue(reachedBackups)
+        XCTAssertEqual(context.manager.relays.filter(\.isConnected).count, 5)
+        XCTAssertEqual(Set(context.sessionFactory.requestedURLs), Set(urls))
+    }
+
+    func test_healthyPeersAlsoPublishAndSubscribeOnTheSharedBackups() async throws {
+        let urls = (1...10).map { "wss://healthy-\($0).example" }
+        let context = makeContext(permission: .denied, geoRelayLookup: { _ in urls })
+        context.manager.subscribe(filter: .geohashEphemeral("s0000000"), id: "healthy", handler: { _ in })
+        context.manager.sendEvent(try makeSignedEvent(content: "synthetic-healthy", geohash: "s0000000"))
+        let allReached = await waitUntil {
+            urls.allSatisfy {
+                let sent = context.sessionFactory.latestConnection(for: $0)?.sentStrings ?? []
+                return sent.contains { $0.contains("REQ") } && sent.contains { $0.contains("synthetic-healthy") }
+            }
+        }
+        XCTAssertTrue(allReached)
+    }
+
+    func test_directoryRefreshMovesSubscriptionsAndPendingWritesWithTheSameIdentity() async throws {
+        let center = NotificationCenter()
+        var selected = ["wss://removed.example"]
+        let context = makeContext(permission: .denied, notificationCenter: center, geoRelayLookup: { _ in selected })
+        context.sessionFactory.pingErrorByURL[selected[0]] = URLError(.cannotConnectToHost)
+        context.manager.subscribe(filter: .geohashEphemeral("s0000000", limit: 7), id: "unchanged-id", handler: { _ in })
+        let event = try makeSignedEvent(content: "queued-before-refresh", geohash: "s0000000")
+        context.manager.sendEvent(event)
+        let failed = await waitUntil { context.manager.debugPendingMessageQueueCount == 1 && context.scheduler.scheduled.count == 1 }
+        XCTAssertTrue(failed)
+        selected = ["wss://replacement.example"]
+        center.post(name: .geoRelayDirectoryDidRefresh, object: nil)
+        let moved = await waitUntil {
+            let sent = context.sessionFactory.latestConnection(for: selected[0])?.sentStrings ?? []
+            return sent.contains { $0.contains("unchanged-id") && $0.contains("\"limit\":7") } &&
+                   sent.contains { $0.contains(event.id) && $0.contains(event.pubkey) }
+        }
+        XCTAssertTrue(moved)
+        XCTAssertEqual(context.manager.debugPendingMessageQueueCount, 0)
+        XCTAssertFalse(context.manager.relays.contains { $0.url == "wss://removed.example" })
+        context.scheduler.runNext() // The old scheduled retry must not recreate its socket.
+        let oldAttempts = context.sessionFactory.requestedURLs.filter { $0 == "wss://removed.example" }.count
+        XCTAssertEqual(oldAttempts, 1)
+    }
+
+    func test_emptyDirectoryRetainsGeoIntentUntilARefreshSuppliesRelays() async throws {
+        let center = NotificationCenter()
+        var selected: [String] = []
+        let context = makeContext(permission: .denied, notificationCenter: center, geoRelayLookup: { _ in selected })
+        context.manager.subscribe(filter: .geohashEphemeral("s0000000"), id: "waiting", handler: { _ in })
+        context.manager.sendEvent(try makeSignedEvent(content: "waiting-for-directory", geohash: "s0000000"))
+        XCTAssertTrue(context.sessionFactory.requestedURLs.isEmpty)
+        selected = ["wss://arrived.example"]
+        center.post(name: .geoRelayDirectoryDidRefresh, object: nil)
+        let recovered = await waitUntil {
+            let sent = context.sessionFactory.latestConnection(for: selected[0])?.sentStrings ?? []
+            return sent.contains { $0.contains("waiting-for-directory") } && sent.contains { $0.contains("waiting") && $0.contains("REQ") }
+        }
+        XCTAssertTrue(recovered)
+    }
+
+    func test_failedSocketWriteIsRetriedAfterReconnect() async throws {
+        let url = "wss://failed-write.example"
+        let context = makeContext(permission: .denied)
+        context.manager.ensureConnections(to: [url])
+        let connected = await waitUntil { context.manager.isConnected }
+        XCTAssertTrue(connected)
+        context.sessionFactory.latestConnection(for: url)?.sendError = URLError(.networkConnectionLost)
+        context.manager.sendEvent(try makeSignedEvent(content: "retry-this-write"), to: [url])
+        let retryScheduled = await waitUntil { context.scheduler.scheduled.count == 1 }
+        XCTAssertTrue(retryScheduled)
+        XCTAssertEqual(context.manager.debugPendingMessageQueueCount, 1)
+        context.scheduler.runNext()
+        let retried = await waitUntil {
+            context.sessionFactory.latestConnection(for: url)?.sentStrings.contains { $0.contains("retry-this-write") } == true &&
+            context.manager.debugPendingMessageQueueCount == 0
+        }
+        XCTAssertTrue(retried)
+    }
+
+    func test_healthCheckTimesOutASilentSocketAndSchedulesReconnect() async {
+        let url = "wss://silent.example"
+        let context = makeContext(permission: .denied, healthCheckInterval: 30)
+        context.manager.ensureConnections(to: [url])
+        let connected = await waitUntil { context.manager.isConnected && context.scheduler.scheduled.count == 1 }
+        XCTAssertTrue(connected)
+        context.sessionFactory.latestConnection(for: url)?.replyToPings = false
+        context.scheduler.runNext()
+        let deadlineScheduled = await waitUntil { context.scheduler.scheduled.first?.delay == 10 }
+        XCTAssertTrue(deadlineScheduled)
+        context.scheduler.runNext()
+        let failed = await waitUntil { !context.manager.isConnected && context.scheduler.scheduled.first?.delay == 1 }
+        XCTAssertTrue(failed)
+    }
+
     func test_connect_directMode_connectsExistingDefaultRelaysWhenActivationBecomesAllowed() async {
         let context = makeContext(permission: .authorized, activationAllowed: false)
 
@@ -1322,36 +1637,24 @@ final class NostrRelayManagerTests: XCTestCase {
         XCTAssertTrue(replayed)
     }
 
-    func test_permanentFailure_decaysAfterCooldownAndRetries() async {
-        let relayURL = "wss://cooldown.example"
+    func test_dnsAndLongOutagesKeepRetryingAtTheBackoffCeiling() async {
+        let relayURL = "wss://retry-forever.example"
         let context = makeContext(permission: .denied)
-        context.sessionFactory.pingErrorByURL[relayURL] = NSError(
-            domain: NSURLErrorDomain,
-            code: NSURLErrorCannotFindHost,
-            userInfo: [NSLocalizedDescriptionKey: "DNS failure"]
-        )
-
+        context.sessionFactory.pingErrorByURL[relayURL] = URLError(.cannotFindHost)
         context.manager.ensureConnections(to: [relayURL])
-        let failed = await waitUntil {
-            context.manager.relays.first(where: { $0.url == relayURL })?.reconnectAttempts == TransportConfig.nostrRelayMaxReconnectAttempts
+        for attempt in 1...15 {
+            let scheduled = await waitUntil { context.scheduler.scheduled.count == 1 }
+            XCTAssertTrue(scheduled)
+            let base = min(pow(2, Double(min(attempt, 10) - 1)), 300)
+            XCTAssertEqual(context.scheduler.scheduled.first?.delay, base)
+            context.scheduler.runNext()
         }
-        XCTAssertTrue(failed)
-
-        // Within the cooldown the relay is skipped.
-        let countBefore = context.sessionFactory.requestedURLs.count
-        context.manager.ensureConnections(to: [relayURL])
-        try? await Task.sleep(nanoseconds: 20_000_000)
-        XCTAssertEqual(context.sessionFactory.requestedURLs.count, countBefore)
-
-        // After the cooldown it gets another chance and recovers.
+        let stillRetrying = await waitUntil { context.scheduler.scheduled.count == 1 }
+        XCTAssertTrue(stillRetrying)
         context.sessionFactory.pingErrorByURL[relayURL] = nil
-        context.clock.now = context.clock.now.addingTimeInterval(TransportConfig.nostrRelayFailureCooldownSeconds + 1)
-        context.manager.ensureConnections(to: [relayURL])
-        let retried = await waitUntil {
-            context.sessionFactory.requestedURLs.count == countBefore + 1 &&
-            context.manager.relays.first(where: { $0.url == relayURL })?.isConnected == true
-        }
-        XCTAssertTrue(retried)
+        context.scheduler.runNext()
+        let recovered = await waitUntil { context.manager.isConnected }
+        XCTAssertTrue(recovered)
     }
 
     func test_receiveFailure_schedulesReconnectWithBackoff() async {
@@ -1583,42 +1886,21 @@ final class NostrRelayManagerTests: XCTestCase {
         XCTAssertTrue(flushed)
     }
 
-    func test_dnsPingFailure_marksRelayPermanentCallsEOSEImmediatelyAndManualRetryReconnects() async {
-        let relayURL = "wss://dns-failure.example"
+    func test_dnsFailureKeepsSubscriptionIntentAndManualRetryRestoresIt() async {
+        let relayURL = "wss://dns-recovery.example"
         let context = makeContext(permission: .denied)
-        context.sessionFactory.pingErrorByURL[relayURL] = NSError(
-            domain: NSURLErrorDomain,
-            code: NSURLErrorCannotFindHost,
-            userInfo: [NSLocalizedDescriptionKey: "DNS failure"]
-        )
-
+        context.sessionFactory.pingErrorByURL[relayURL] = URLError(.cannotFindHost)
         context.manager.subscribe(filter: makeFilter(), id: "dns-sub", relayUrls: [relayURL], handler: { _ in })
-        let permanentlyFailed = await waitUntil {
-            context.manager.relays.first(where: { $0.url == relayURL })?.reconnectAttempts == TransportConfig.nostrRelayMaxReconnectAttempts &&
-            context.scheduler.scheduled.isEmpty
-        }
-        XCTAssertTrue(permanentlyFailed)
-
-        var immediateEOSE = 0
-        context.manager.subscribe(
-            filter: makeFilter(),
-            id: "dns-eose",
-            relayUrls: [relayURL],
-            handler: { _ in },
-            onEOSE: { immediateEOSE += 1 }
-        )
-        XCTAssertEqual(immediateEOSE, 1)
-
+        let retryScheduled = await waitUntil { context.scheduler.scheduled.count == 1 }
+        XCTAssertTrue(retryScheduled)
+        XCTAssertEqual(context.manager.debugPendingSubscriptionCount(for: relayURL), 1)
         context.sessionFactory.pingErrorByURL[relayURL] = nil
-        let requestCountBeforeRetry = context.sessionFactory.requestedURLs.count
         context.manager.retryConnection(to: relayURL)
-
-        let reconnected = await waitUntil {
-            context.sessionFactory.requestedURLs.count == requestCountBeforeRetry + 1 &&
-            context.manager.relays.first(where: { $0.url == relayURL })?.isConnected == true &&
-            context.manager.relays.first(where: { $0.url == relayURL })?.reconnectAttempts == 0
+        let restored = await waitUntil {
+            context.manager.isConnected &&
+            context.sessionFactory.latestConnection(for: relayURL)?.sentStrings.contains { $0.contains("dns-sub") } == true
         }
-        XCTAssertTrue(reconnected)
+        XCTAssertTrue(restored)
     }
 
     func test_pendingSubscriptions_perRelayCapEvictsOldestByInsertionOrder() async {
@@ -1837,7 +2119,9 @@ final class NostrRelayManagerTests: XCTestCase {
         torIsForeground: Bool = true,
         notificationCenter: NotificationCenter = NotificationCenter(),
         customRelays: MutableRelayList = MutableRelayList(urls: []),
-        jitterUnit: @escaping () -> Double = { 0.5 } // 0.5 -> jitter factor 1.0 (no jitter)
+        jitterUnit: @escaping () -> Double = { 0.5 }, // 0.5 -> no jitter
+        geoRelayLookup: ((String) -> [String])? = nil,
+        healthCheckInterval: TimeInterval = 0
     ) -> RelayManagerTestContext {
         let permissionSubject = CurrentValueSubject<LocationChannelManager.PermissionState, Never>(permission)
         let favoritesSubject = CurrentValueSubject<Set<Data>, Never>(favorites)
@@ -1866,7 +2150,9 @@ final class NostrRelayManagerTests: XCTestCase {
                 now: { clock.now },
                 jitterUnit: jitterUnit,
                 notificationCenter: notificationCenter,
-                customRelays: { customRelays.urls }
+                customRelays: { customRelays.urls },
+                geoRelayLookup: geoRelayLookup,
+                healthCheckInterval: healthCheckInterval
             )
         )
         return RelayManagerTestContext(
@@ -1888,13 +2174,13 @@ final class NostrRelayManagerTests: XCTestCase {
         return filter
     }
 
-    private func makeSignedEvent(content: String) throws -> NostrEvent {
+    private func makeSignedEvent(content: String, geohash: String? = nil) throws -> NostrEvent {
         let identity = try NostrIdentity.generate()
         let event = NostrEvent(
             pubkey: identity.publicKeyHex,
             createdAt: Date(),
             kind: .textNote,
-            tags: [],
+            tags: geohash.map { [["g", $0]] } ?? [],
             content: content
         )
         return try event.sign(with: identity.schnorrSigningKey())
@@ -2041,11 +2327,13 @@ private final class MockRelaySessionFactory: NostrRelaySessionProtocol {
 }
 
 private final class MockRelayConnection: NostrRelayConnectionProtocol {
-    private let pingError: Error?
+    var pingError: Error?
+    var replyToPings = true
     var sendError: Error?
     private var receiveHandler: ((Result<URLSessionWebSocketTask.Message, Error>) -> Void)?
     private(set) var resumeCallCount = 0
     private(set) var cancelCallCount = 0
+    private(set) var pingCallCount = 0
     private(set) var sentMessages: [URLSessionWebSocketTask.Message] = []
 
     var sentStrings: [String] {
@@ -2100,7 +2388,8 @@ private final class MockRelayConnection: NostrRelayConnectionProtocol {
     }
 
     func sendPing(pongReceiveHandler: @escaping (Error?) -> Void) {
-        pongReceiveHandler(pingError)
+        pingCallCount += 1
+        if replyToPings { pongReceiveHandler(pingError) }
     }
 
     func fail(error: Error) {

@@ -161,7 +161,7 @@ final class BoardManager: ObservableObject {
     }
 
     private static func livePublishToNostr(content: String, geohash: String, nickname: String, expiresAtMs: UInt64, urgent: Bool) -> String? {
-        let relays = GeoRelayDirectory.shared.closestRelays(toGeohash: geohash, count: TransportConfig.nostrGeoRelayCount)
+        let relays = GeoRelayDirectory.shared.routingRelays(toGeohash: geohash, count: TransportConfig.nostrGeoRelayCount)
         guard !relays.isEmpty else {
             SecureLogger.debug("Board: no geo relays for \(geohash); skipping Nostr bridge", category: .session)
             return nil
@@ -185,12 +185,12 @@ final class BoardManager: ObservableObject {
     }
 
     private static func liveDeleteFromNostr(eventID: String, geohash: String) {
-        let relays = GeoRelayDirectory.shared.closestRelays(toGeohash: geohash, count: TransportConfig.nostrGeoRelayCount)
+        let relays = GeoRelayDirectory.shared.routingRelays(toGeohash: geohash, count: TransportConfig.nostrGeoRelayCount)
         guard !relays.isEmpty else { return }
         do {
             let identity = try NostrIdentityBridge().deriveIdentity(forGeohash: geohash)
             let deletion = try NostrProtocol.createDeleteEvent(ofEventID: eventID, senderIdentity: identity)
-            NostrRelayManager.shared.sendEvent(deletion, to: relays)
+            NostrRelayManager.shared.sendEvent(deletion, to: relays, routingGeohash: geohash)
         } catch {
             SecureLogger.error("Board: failed to delete bridged Nostr note: \(error)", category: .session)
         }

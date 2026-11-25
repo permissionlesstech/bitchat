@@ -5,6 +5,26 @@ import XCTest
 
 @MainActor
 final class GeoRelayDirectoryTests: XCTestCase {
+    func test_routingMatchesCrossClientGoldenVectors() throws {
+        struct Entry: Decodable { let host: String; let lat: Double; let lon: Double }
+        struct Vector: Decodable {
+            let geohash: String
+            let primaryCount: Int
+            let entries: [Entry]
+            let expected: [String]
+        }
+        struct Vectors: Decodable { let cases: [Vector] }
+        let url = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
+            .appendingPathComponent("Fixtures/geo-relay-routing-vectors.json")
+        let vectors = try JSONDecoder().decode(Vectors.self, from: Data(contentsOf: url))
+        for vector in vectors.cases {
+            let csv = "relay url,lat,lon\n" + vector.entries.map { "\($0.host),\($0.lat),\($0.lon)" }.joined(separator: "\n")
+            let harness = makeHarness(cacheCSV: csv)
+            let directory = GeoRelayDirectory(dependencies: harness.dependencies)
+            XCTAssertEqual(directory.routingRelays(toGeohash: vector.geohash, count: vector.primaryCount), vector.expected)
+        }
+    }
+
     private func parse(_ csv: String) -> [GeoRelayDirectory.Entry] {
         GeoRelayDirectory.validatedEntries(
             from: Data(csv.utf8),

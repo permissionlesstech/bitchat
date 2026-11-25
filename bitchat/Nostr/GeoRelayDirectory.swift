@@ -227,6 +227,13 @@ final class GeoRelayDirectory {
         return closestRelays(toLat: center.lat, lon: center.lon, count: count)
     }
 
+    /// Use the same bounded primary + backup set for reads and writes. Backups
+    /// stay subscribed and receive publications even while primaries work:
+    /// otherwise peers on opposite sides of a partial outage cannot rendezvous.
+    func routingRelays(toGeohash geohash: String, count: Int = 5) -> [String] {
+        closestRelays(toGeohash: geohash, count: min(max(count, 0), 5) * 2)
+    }
+
     /// Returns up to `count` relay URLs (wss://) closest to the given coordinate.
     /// Ties break by host so every device with the same directory picks the
     /// same relay set — publishers and subscribers must agree on relays.

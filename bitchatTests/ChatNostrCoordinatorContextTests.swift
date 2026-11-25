@@ -20,7 +20,7 @@ import BitFoundation
 /// inheritance, the component contexts) proving that the Nostr stack is
 /// testable without a `ChatViewModel`.
 @MainActor
-private final class MockChatNostrContext: ChatNostrContext {
+final class MockChatNostrContext: ChatNostrContext {
     // Channel & subscription state
     var activeChannel: ChannelID = .mesh
     var currentGeohash: String?
@@ -28,7 +28,7 @@ private final class MockChatNostrContext: ChatNostrContext {
     var geoDmSubscriptionID: String?
     var geoSamplingSubs: [String: String] = [:]
     var lastGeoNotificationAt: [String: Date] = [:]
-    var nostrRelayManager: NostrRelayManager? { nil }
+    var nostrRelayManager: NostrRelayManager?
 
     func setGeoChatSubscriptionID(_ id: String?) { geoSubscriptionID = id }
     func setGeoDmSubscriptionID(_ id: String?) { geoDmSubscriptionID = id }

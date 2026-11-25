@@ -437,12 +437,12 @@ struct LocationNotesManagerTests {
         #expect(manager.state == .connecting)
 
         // Relay still down: no retry.
-        manager.retryIfRelaysAvailable(relays: ["wss://relay.one"])
+        manager.retryIfRelaysAvailable()
         #expect(subscribeCount == 1)
 
         // Relay up: re-subscribes for a fresh initial fetch.
         relayUp = true
-        manager.retryIfRelaysAvailable(relays: ["wss://relay.one"])
+        manager.retryIfRelaysAvailable()
         #expect(subscribeCount == 2)
         #expect(manager.state == .loading)
     }
