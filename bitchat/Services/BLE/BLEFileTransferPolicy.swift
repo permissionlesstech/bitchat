@@ -98,97 +98,99 @@ enum AudioContainerValidator {
         }
 
         let reader = MemoryReader(data: data)
-        let clientData = Unmanaged.passUnretained(reader).toOpaque()
-        var audioFileID: AudioFileID?
+        return withExtendedLifetime(reader) {
+            let clientData = Unmanaged.passUnretained(reader).toOpaque()
+            var audioFileID: AudioFileID?
 
-        let openStatus = AudioFileOpenWithCallbacks(
-            clientData,
-            { inClientData, inPosition, requestCount, buffer, actualCount in
-                let reader = Unmanaged<MemoryReader>.fromOpaque(inClientData).takeUnretainedValue()
-                guard inPosition >= 0 else { return kAudioFilePositionError }
-                let total = Int64(reader.data.count)
-                if inPosition >= total {
-                    actualCount.pointee = 0
+            let openStatus = AudioFileOpenWithCallbacks(
+                clientData,
+                { inClientData, inPosition, requestCount, buffer, actualCount in
+                    let reader = Unmanaged<MemoryReader>.fromOpaque(inClientData).takeUnretainedValue()
+                    guard inPosition >= 0 else { return kAudioFilePositionError }
+                    let total = Int64(reader.data.count)
+                    if inPosition >= total {
+                        actualCount.pointee = 0
+                        return noErr
+                    }
+                    let available = Int(min(Int64(requestCount), total - inPosition))
+                    if available > 0 {
+                        let start = Int(inPosition)
+                        reader.data.copyBytes(
+                            to: buffer.assumingMemoryBound(to: UInt8.self),
+                            from: start..<(start + available)
+                        )
+                    }
+                    actualCount.pointee = UInt32(available)
                     return noErr
+                },
+                nil,
+                { inClientData in
+                    let reader = Unmanaged<MemoryReader>.fromOpaque(inClientData).takeUnretainedValue()
+                    return Int64(reader.data.count)
+                },
+                nil,
+                0,
+                &audioFileID
+            )
+
+            guard openStatus == noErr, let fileID = audioFileID else {
+                return "unparseable container (status \(openStatus))"
+            }
+            defer { AudioFileClose(fileID) }
+
+            var detectedFormat: AudioFileTypeID = 0
+            var formatSize = UInt32(MemoryLayout<AudioFileTypeID>.size)
+            let formatStatus = AudioFileGetProperty(fileID, kAudioFilePropertyFileFormat, &formatSize, &detectedFormat)
+            guard formatStatus == noErr, allowedFormats.contains(detectedFormat) else {
+                return "container format mismatch (\(detectedFormat))"
+            }
+
+            var asbd = AudioStreamBasicDescription()
+            var asbdSize = UInt32(MemoryLayout<AudioStreamBasicDescription>.size)
+            let asbdStatus = AudioFileGetProperty(fileID, kAudioFilePropertyDataFormat, &asbdSize, &asbd)
+            guard asbdStatus == noErr,
+                  asbd.mSampleRate.isFinite,
+                  asbd.mSampleRate > 0,
+                  asbd.mChannelsPerFrame > 0 else {
+                return "invalid audio stream description"
+            }
+
+            var estimatedDuration: TimeInterval = 0
+            var durationSize = UInt32(MemoryLayout<TimeInterval>.size)
+            let durationStatus = AudioFileGetProperty(
+                fileID,
+                kAudioFilePropertyEstimatedDuration,
+                &durationSize,
+                &estimatedDuration
+            )
+            if durationStatus == noErr {
+                guard estimatedDuration.isFinite,
+                      estimatedDuration >= 0,
+                      estimatedDuration <= WaveformCache.maxWaveformDurationSeconds else {
+                    return "duration out of bounds (\(estimatedDuration)s)"
                 }
-                let available = Int(min(Int64(requestCount), total - inPosition))
-                if available > 0 {
-                    let start = Int(inPosition)
-                    reader.data.copyBytes(
-                        to: buffer.assumingMemoryBound(to: UInt8.self),
-                        from: start..<(start + available)
-                    )
+            }
+
+            var packetCount: UInt64 = 0
+            var packetCountSize = UInt32(MemoryLayout<UInt64>.size)
+            let packetStatus = AudioFileGetProperty(
+                fileID,
+                kAudioFilePropertyAudioDataPacketCount,
+                &packetCountSize,
+                &packetCount
+            )
+            if packetStatus == noErr, asbd.mFramesPerPacket > 0 {
+                let (totalFrames, overflow) = packetCount.multipliedReportingOverflow(by: UInt64(asbd.mFramesPerPacket))
+                if overflow || totalFrames > UInt64(WaveformCache.maxWaveformFrames) {
+                    return "frame count out of bounds"
                 }
-                actualCount.pointee = UInt32(available)
-                return noErr
-            },
-            nil,
-            { inClientData in
-                let reader = Unmanaged<MemoryReader>.fromOpaque(inClientData).takeUnretainedValue()
-                return Int64(reader.data.count)
-            },
-            nil,
-            0,
-            &audioFileID
-        )
-
-        guard openStatus == noErr, let fileID = audioFileID else {
-            return "unparseable container (status \(openStatus))"
-        }
-        defer { AudioFileClose(fileID) }
-
-        var detectedFormat: AudioFileTypeID = 0
-        var formatSize = UInt32(MemoryLayout<AudioFileTypeID>.size)
-        let formatStatus = AudioFileGetProperty(fileID, kAudioFilePropertyFileFormat, &formatSize, &detectedFormat)
-        guard formatStatus == noErr, allowedFormats.contains(detectedFormat) else {
-            return "container format mismatch (\(detectedFormat))"
-        }
-
-        var asbd = AudioStreamBasicDescription()
-        var asbdSize = UInt32(MemoryLayout<AudioStreamBasicDescription>.size)
-        let asbdStatus = AudioFileGetProperty(fileID, kAudioFilePropertyDataFormat, &asbdSize, &asbd)
-        guard asbdStatus == noErr,
-              asbd.mSampleRate.isFinite,
-              asbd.mSampleRate > 0,
-              asbd.mChannelsPerFrame > 0 else {
-            return "invalid audio stream description"
-        }
-
-        var estimatedDuration: TimeInterval = 0
-        var durationSize = UInt32(MemoryLayout<TimeInterval>.size)
-        let durationStatus = AudioFileGetProperty(
-            fileID,
-            kAudioFilePropertyEstimatedDuration,
-            &durationSize,
-            &estimatedDuration
-        )
-        if durationStatus == noErr {
-            guard estimatedDuration.isFinite,
-                  estimatedDuration >= 0,
-                  estimatedDuration <= WaveformCache.maxWaveformDurationSeconds else {
-                return "duration out of bounds (\(estimatedDuration)s)"
+                if Double(totalFrames) / asbd.mSampleRate > WaveformCache.maxWaveformDurationSeconds {
+                    return "frame duration out of bounds"
+                }
             }
-        }
 
-        var packetCount: UInt64 = 0
-        var packetCountSize = UInt32(MemoryLayout<UInt64>.size)
-        let packetStatus = AudioFileGetProperty(
-            fileID,
-            kAudioFilePropertyAudioDataPacketCount,
-            &packetCountSize,
-            &packetCount
-        )
-        if packetStatus == noErr, asbd.mFramesPerPacket > 0 {
-            let (totalFrames, overflow) = packetCount.multipliedReportingOverflow(by: UInt64(asbd.mFramesPerPacket))
-            if overflow || totalFrames > UInt64(WaveformCache.maxWaveformFrames) {
-                return "frame count out of bounds"
-            }
-            if Double(totalFrames) / asbd.mSampleRate > WaveformCache.maxWaveformDurationSeconds {
-                return "frame duration out of bounds"
-            }
+            return nil
         }
-
-        return nil
     }
 
     private static func allowedFileFormats(for mime: MimeType) -> Set<AudioFileTypeID>? {
