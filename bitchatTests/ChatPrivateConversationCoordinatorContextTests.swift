@@ -944,16 +944,15 @@ struct ChatPrivateConversationCoordinatorContextTests {
     }
 
     @Test @MainActor
-    func migratePrivateChats_stillMovesAGeoDMThreadWithMyRepliesByThePeersRows() async {
-        // My replies are no evidence in a geo-DM thread, but they don't veto
-        // it either: the peer's own rows still take it to their mesh chat.
-        // (Received geo-DM rows carry a geo name today, so this pins the rule
-        // rather than a path that occurs.)
+    func migratePrivateChats_neverMigratesGeoDMThreadOnNicknameMatchWithMyReplies() async {
+        // Geo-DM threads are keyed by a Nostr pubkey with no cryptographic
+        // link to a mesh Noise key; a mesh sender claiming the same nickname
+        // must never inherit the geo-DM thread.
         let context = MockChatPrivateConversationContext()
         context.nickname = "alice"
         let coordinator = ChatPrivateConversationCoordinator(context: context)
         let theirThread = PeerID(nostr_: String(repeating: "44", count: 32))
-        let bobPeerID = PeerID(str: "8899aabbccddeeff")
+        let malloryPeerID = PeerID(str: "8899aabbccddeeff")
         context.privateChats[theirThread] = [
             makeIncomingMessage(
                 id: "bob-earlier",
@@ -974,25 +973,25 @@ struct ChatPrivateConversationCoordinatorContextTests {
                 deliveryStatus: .sent
             )
         ]
+        context.selectedPrivateChatPeer = theirThread
 
         coordinator.handlePrivateMessage(
-            makeIncomingMessage(id: "bob-1", sender: "bob", senderPeerID: bobPeerID, recipientNickname: "alice")
+            makeIncomingMessage(id: "mallory-1", sender: "bob", senderPeerID: malloryPeerID, recipientNickname: "alice")
         )
 
-        #expect(context.privateChats[theirThread] == nil)
-        #expect(context.privateChats[bobPeerID]?.map(\.id) == ["bob-earlier", "my-reply", "bob-1"])
-        #expect(context.migratedChats.map(\.from) == [theirThread])
+        #expect(context.privateChats[theirThread]?.map(\.id) == ["bob-earlier", "my-reply"])
+        #expect(context.privateChats[malloryPeerID]?.map(\.id) == ["mallory-1"])
+        #expect(context.migratedChats.isEmpty)
+        #expect(context.selectedPrivateChatPeer == theirThread)
     }
 
     @Test @MainActor
-    func migratePrivateChats_stillMovesAGeoDMThreadWithoutMyRowsByNickname() async {
-        // The skip is for threads holding my rows: a geo-DM thread of the
-        // peer's own rows still follows them to their mesh chat by name.
+    func migratePrivateChats_neverMigratesGeoDMThreadOnNicknameMatchWithoutMyRows() async {
         let context = MockChatPrivateConversationContext()
         context.nickname = "alice"
         let coordinator = ChatPrivateConversationCoordinator(context: context)
         let theirThread = PeerID(nostr_: String(repeating: "43", count: 32))
-        let bobPeerID = PeerID(str: "8899aabbccddeeff")
+        let malloryPeerID = PeerID(str: "8899aabbccddeeff")
         context.privateChats[theirThread] = [
             makeIncomingMessage(
                 id: "bob-earlier",
@@ -1004,30 +1003,32 @@ struct ChatPrivateConversationCoordinatorContextTests {
         ]
 
         coordinator.handlePrivateMessage(
-            makeIncomingMessage(id: "bob-1", sender: "bob", senderPeerID: bobPeerID, recipientNickname: "alice")
+            makeIncomingMessage(id: "mallory-1", sender: "bob", senderPeerID: malloryPeerID, recipientNickname: "alice")
         )
 
-        #expect(context.privateChats[theirThread] == nil)
-        #expect(context.privateChats[bobPeerID]?.map(\.id) == ["bob-earlier", "bob-1"])
-        #expect(context.migratedChats.map(\.from) == [theirThread])
+        #expect(context.privateChats[theirThread]?.map(\.id) == ["bob-earlier"])
+        #expect(context.privateChats[malloryPeerID]?.map(\.id) == ["mallory-1"])
+        #expect(context.migratedChats.isEmpty)
     }
 
     @Test @MainActor
-    func migratePrivateChats_stillMovesMyMeshThreadByNickname() async {
-        // Only geo-DM rows name me as their recipient. My mesh rows name the
-        // peer, so my thread with bob under his previous peer ID follows him
-        // to the new one.
+    func migratePrivateChats_neverHijacksMeshThreadOnNicknameMatchWhenFingerprintUnknown() async {
+        // Regression: Alice is out of range and her old thread has no entry in
+        // the sparse in-memory fingerprint map. Mallory announces the same
+        // nickname "bob" under a different key and sends a DM. The open thread
+        // must stay pinned to the original peer ID so the user's next reply is
+        // never redirected to Mallory.
         let context = MockChatPrivateConversationContext()
         context.nickname = "alice"
         let coordinator = ChatPrivateConversationCoordinator(context: context)
-        let previousPeerID = PeerID(str: "1122334455667788")
-        let bobPeerID = PeerID(str: "8899aabbccddeeff")
-        context.privateChats[previousPeerID] = [
+        let bobPeerID = PeerID(str: "1122334455667788")
+        let malloryPeerID = PeerID(str: "8899aabbccddeeff")
+        context.privateChats[bobPeerID] = [
             makeIncomingMessage(
                 id: "bob-earlier",
                 sender: "bob",
                 timestamp: Date().addingTimeInterval(-120),
-                senderPeerID: previousPeerID,
+                senderPeerID: bobPeerID,
                 recipientNickname: "alice"
             ),
             BitchatMessage(
@@ -1042,13 +1043,77 @@ struct ChatPrivateConversationCoordinatorContextTests {
                 deliveryStatus: .sent
             )
         ]
+        context.selectedPrivateChatPeer = bobPeerID
 
         coordinator.handlePrivateMessage(
-            makeIncomingMessage(id: "bob-1", sender: "bob", senderPeerID: bobPeerID, recipientNickname: "alice")
+            makeIncomingMessage(id: "mallory-1", sender: "bob", senderPeerID: malloryPeerID, recipientNickname: "alice")
         )
 
-        #expect(context.privateChats[previousPeerID] == nil)
-        #expect(context.privateChats[bobPeerID]?.map(\.id) == ["bob-earlier", "my-reply", "bob-1"])
+        #expect(context.privateChats[bobPeerID]?.map(\.id) == ["bob-earlier", "my-reply"])
+        #expect(context.privateChats[malloryPeerID]?.map(\.id) == ["mallory-1"])
+        #expect(context.migratedChats.isEmpty)
+        #expect(context.selectedPrivateChatPeer == bobPeerID)
+        #expect(context.unreadPrivateMessages == [malloryPeerID])
+        #expect(context.meshReadReceipts.isEmpty)
+    }
+
+    @Test @MainActor
+    func migratePrivateChats_migratesBetweenStableNoiseKeyAndDerivedShortIDWithoutCachedFingerprint() async {
+        // When an offline thread was re-keyed to the peer's 64-hex Noise key
+        // and the sparse in-memory fingerprint map is empty, a DM arriving from
+        // the exact derived 16-hex short ID still migrates cryptographically.
+        let context = MockChatPrivateConversationContext()
+        let coordinator = ChatPrivateConversationCoordinator(context: context)
+        let aliceNoiseKey = Data((0..<32).map { UInt8($0 + 1) })
+        let aliceStableID = PeerID(hexData: aliceNoiseKey)
+        let aliceShortID = PeerID(publicKey: aliceNoiseKey)
+        context.privateChats[aliceStableID] = [
+            makeIncomingMessage(
+                id: "alice-offline-1",
+                sender: "alice",
+                timestamp: Date().addingTimeInterval(-60),
+                senderPeerID: aliceStableID,
+                recipientNickname: "me"
+            )
+        ]
+        context.selectedPrivateChatPeer = aliceStableID
+
+        coordinator.migratePrivateChatsIfNeeded(for: aliceShortID, senderNickname: "renamed-alice")
+
+        #expect(context.privateChats[aliceStableID] == nil)
+        #expect(context.privateChats[aliceShortID]?.map(\.id) == ["alice-offline-1"])
+        #expect(context.selectedPrivateChatPeer == aliceShortID)
+        #expect(context.migratedChats.map(\.from) == [aliceStableID])
+        #expect(context.migratedChats.map(\.to) == [aliceShortID])
+    }
+
+    @Test @MainActor
+    func migratePrivateChats_neverMigratesStableNoiseKeyThreadToDifferentKeyWithSameNickname() async {
+        let context = MockChatPrivateConversationContext()
+        let coordinator = ChatPrivateConversationCoordinator(context: context)
+        let aliceNoiseKey = Data((0..<32).map { UInt8($0 + 1) })
+        let malloryNoiseKey = Data((0..<32).map { UInt8($0 + 99) })
+        let aliceStableID = PeerID(hexData: aliceNoiseKey)
+        let malloryShortID = PeerID(publicKey: malloryNoiseKey)
+        context.privateChats[aliceStableID] = [
+            makeIncomingMessage(
+                id: "alice-1",
+                sender: "alice",
+                timestamp: Date().addingTimeInterval(-60),
+                senderPeerID: aliceStableID,
+                recipientNickname: "me"
+            )
+        ]
+        context.selectedPrivateChatPeer = aliceStableID
+
+        coordinator.handlePrivateMessage(
+            makeIncomingMessage(id: "mallory-1", sender: "alice", senderPeerID: malloryShortID, recipientNickname: "me")
+        )
+
+        #expect(context.privateChats[aliceStableID]?.map(\.id) == ["alice-1"])
+        #expect(context.privateChats[malloryShortID]?.map(\.id) == ["mallory-1"])
+        #expect(context.selectedPrivateChatPeer == aliceStableID)
+        #expect(context.migratedChats.isEmpty)
     }
 
     @Test @MainActor

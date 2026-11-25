@@ -227,7 +227,7 @@ struct PrivateChatManagerTests {
     }
 
     @Test @MainActor
-    func consolidateMessages_movesTemporaryGeoDMHistoryByNickname() async {
+    func consolidateMessages_neverMovesTemporaryGeoDMHistoryByNickname() async {
         let transport = MockTransport()
         let (manager, store) = Self.makeManager(transport: transport)
         let peerID = PeerID(str: "0011223344556677")
@@ -250,12 +250,11 @@ struct PrivateChatManagerTests {
 
         let hadUnread = manager.consolidateMessages(for: peerID, peerNickname: "alice", persistedReadReceipts: [])
 
-        #expect(hadUnread)
-        #expect(manager.privateChats[tempPeerID] == nil)
-        #expect(manager.privateChats[peerID]?.count == 1)
-        #expect(manager.privateChats[peerID]?.first?.senderPeerID == peerID)
-        #expect(manager.unreadMessages.contains(peerID))
-        #expect(!manager.unreadMessages.contains(tempPeerID))
+        #expect(!hadUnread)
+        #expect(manager.privateChats[tempPeerID]?.map(\.id) == ["geo-msg"])
+        #expect(manager.privateChats[peerID] == nil)
+        #expect(manager.unreadMessages.contains(tempPeerID))
+        #expect(!manager.unreadMessages.contains(peerID))
     }
 
     @Test @MainActor
@@ -305,9 +304,9 @@ struct PrivateChatManagerTests {
     }
 
     @Test @MainActor
-    func consolidateMessages_stillMovesThePeersOwnGeoDMThreadBesideMine() async {
-        // Skipping my thread is per thread: the peer's own thread, with the
-        // same nickname, still folds into their chat.
+    func consolidateMessages_leavesBothGeoDMThreadsSeparateOnNicknameMatch() async {
+        // Neither a geo-DM thread with my rows nor one with only the peer's
+        // rows may fold into a mesh peer's chat on nickname match alone.
         let transport = MockTransport()
         transport.myPeerID = PeerID(str: "a1b2c3d4e5f60718")
         let (manager, store) = Self.makeManager(transport: transport)
@@ -346,11 +345,11 @@ struct PrivateChatManagerTests {
 
         let hadUnread = manager.consolidateMessages(for: peerID, peerNickname: "alice", persistedReadReceipts: [])
 
-        #expect(hadUnread)
-        #expect(manager.privateChats[theirThread] == nil)
-        #expect(manager.privateChats[peerID]?.map(\.id) == ["their-geo-dm"])
-        #expect(manager.privateChats[peerID]?.first?.senderPeerID == peerID)
-        #expect(manager.unreadMessages.contains(peerID))
+        #expect(!hadUnread)
+        #expect(manager.privateChats[theirThread]?.map(\.id) == ["their-geo-dm"])
+        #expect(manager.privateChats[peerID] == nil)
+        #expect(manager.unreadMessages.contains(theirThread))
+        #expect(!manager.unreadMessages.contains(peerID))
         #expect(manager.privateChats[myThread]?.map(\.id) == ["my-geo-dm"])
     }
 

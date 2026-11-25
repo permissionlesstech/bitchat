@@ -844,8 +844,8 @@ final class ChatPrivateConversationCoordinator {
         )
     }
 
-    func migratePrivateChatsIfNeeded(for peerID: PeerID, senderNickname: String) {
-        let currentFingerprint = context.getFingerprint(for: peerID)
+    func migratePrivateChatsIfNeeded(for peerID: PeerID, senderNickname _: String) {
+        let currentFingerprint = resolvedCryptographicFingerprint(for: peerID)
 
         if context.privateMessages(for: peerID).isEmpty {
             // Chats migrated wholesale go through the store's
@@ -856,62 +856,36 @@ final class ChatPrivateConversationCoordinator {
             var oldPeerIDsToRemove: [PeerID] = []
             var didMigrate = false
             let cutoffTime = Date().addingTimeInterval(-TransportConfig.uiMigrationCutoffSeconds)
-            let myPeerID = context.myPeerID
 
             for (oldPeerID, messages) in context.privateChats where oldPeerID != peerID {
-                let oldFingerprint = context.storedFingerprint(for: oldPeerID)
+                let oldFingerprint = resolvedCryptographicFingerprint(for: oldPeerID)
                 let recentMessages = messages.filter { $0.timestamp > cutoffTime }
                 guard !recentMessages.isEmpty else { continue }
 
-                if let currentFp = currentFingerprint,
-                   let oldFp = oldFingerprint,
-                   currentFp == oldFp {
-                    didMigrate = true
-                    if recentMessages.count == messages.count {
-                        oldPeerIDsToRemove.append(oldPeerID)
-                    } else {
-                        partiallyMigratedMessages.append(contentsOf: recentMessages)
-                        SecureLogger.info(
-                            "📦 Partially migrating \(recentMessages.count) of \(messages.count) messages from \(oldPeerID)",
-                            category: .session
-                        )
-                    }
+                guard Self.hasSameCryptographicIdentity(
+                    oldPeerID: oldPeerID,
+                    oldFingerprint: oldFingerprint,
+                    newPeerID: peerID,
+                    newFingerprint: currentFingerprint
+                ) else {
+                    continue
+                }
 
+                didMigrate = true
+                if recentMessages.count == messages.count {
+                    oldPeerIDsToRemove.append(oldPeerID)
+                } else {
+                    partiallyMigratedMessages.append(contentsOf: recentMessages)
                     SecureLogger.info(
-                        "📦 Migrating \(recentMessages.count) recent messages from old peer ID \(oldPeerID) to \(peerID) (fingerprint match)",
+                        "📦 Partially migrating \(recentMessages.count) of \(messages.count) messages from \(oldPeerID)",
                         category: .session
                     )
-                } else if currentFingerprint == nil || oldFingerprint == nil {
-                    // Which rows are mine goes by sender ID: after a rename my
-                    // older rows carry my previous name, and a stranger who
-                    // takes that name must not read as their author. My
-                    // geo-DM rows name me, not the peer, as their recipient
-                    // (sendGeohashDM), so they say nothing about who a geo-DM
-                    // thread is with: there only the peer's rows count.
-                    // Otherwise a namesake (or someone who took my old name)
-                    // would take the thread, and my next reply, along.
-                    let isGeoDMThread = oldPeerID.isGeoDM
-                    let isRelevantChat = recentMessages.contains { msg in
-                        if msg.isOwn(myPeerID: myPeerID, myGeoChatPeerID: nil) {
-                            return !isGeoDMThread && msg.recipientNickname == senderNickname
-                        }
-                        return msg.sender == senderNickname
-                    }
-
-                    if isRelevantChat {
-                        didMigrate = true
-                        if recentMessages.count == messages.count {
-                            oldPeerIDsToRemove.append(oldPeerID)
-                        } else {
-                            partiallyMigratedMessages.append(contentsOf: recentMessages)
-                        }
-
-                        SecureLogger.warning(
-                            "📦 Migrating \(recentMessages.count) recent messages from old peer ID \(oldPeerID) to \(peerID) (nickname match)",
-                            category: .session
-                        )
-                    }
                 }
+
+                SecureLogger.info(
+                    "📦 Migrating \(recentMessages.count) recent messages from old peer ID \(oldPeerID) to \(peerID) (cryptographic identity match)",
+                    category: .session
+                )
             }
 
             if !oldPeerIDsToRemove.isEmpty {
@@ -935,6 +909,50 @@ final class ChatPrivateConversationCoordinator {
                 context.notifyUIChanged()
             }
         }
+    }
+
+    private func resolvedCryptographicFingerprint(for peerID: PeerID) -> String? {
+        context.storedFingerprint(for: peerID)
+            ?? context.getFingerprint(for: peerID)
+            ?? peerID.noiseKey?.sha256Fingerprint()
+    }
+
+    /// Two private-chat peer IDs may be migrated together only when
+    /// cryptographic evidence proves they belong to the same Noise identity.
+    /// Unknown identities and nickname matches are always treated as a
+    /// mismatch so an impersonator cannot hijack an existing DM thread.
+    private static func hasSameCryptographicIdentity(
+        oldPeerID: PeerID,
+        oldFingerprint: String?,
+        newPeerID: PeerID,
+        newFingerprint: String?
+    ) -> Bool {
+        guard !oldPeerID.isGeoDM,
+              !oldPeerID.isGroup,
+              !newPeerID.isGeoDM,
+              !newPeerID.isGroup else {
+            return false
+        }
+
+        if let oldFingerprint, let newFingerprint {
+            return oldFingerprint == newFingerprint
+        }
+
+        // Allow exact 64-hex Noise static key <-> derived 16-hex short ID
+        // folding even if the in-memory fingerprint cache was not populated
+        // for the older thread.
+        if oldPeerID.noiseKey != nil,
+           newPeerID.prefix == .empty,
+           newPeerID.isShort {
+            return oldPeerID.toShort() == newPeerID
+        }
+        if newPeerID.noiseKey != nil,
+           oldPeerID.prefix == .empty,
+           oldPeerID.isShort {
+            return newPeerID.toShort() == oldPeerID
+        }
+
+        return false
     }
 
     func isMessageBlocked(_ message: BitchatMessage) -> Bool {
