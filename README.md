@@ -144,6 +144,12 @@ If `iPhone 17` is unavailable, choose an installed simulator from:
 xcodebuild -showdestinations -project bitchat.xcodeproj -scheme "bitchat (iOS)"
 ```
 
+The foldable iPhone Duo simulator needs the iOS 27.1 runtime
+(`xcodebuild -downloadPlatform iOS -architectureVariant arm64`); test on it with
+`-destination 'platform=iOS Simulator,name=iPhone Duo,OS=27.1'`. There is no
+`simctl` command for the hinge: fold and unfold with DeviceHub's Closed,
+Partially Open and Open buttons, and check both the outer and inner displays.
+
 ### Option 2: Using `just`
 
 ```bash

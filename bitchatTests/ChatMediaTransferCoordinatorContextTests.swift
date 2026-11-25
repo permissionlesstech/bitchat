@@ -41,7 +41,11 @@ private final class MockChatMediaTransferContext: ChatMediaTransferContext {
     }
 
     func currentPublicSender() -> (name: String, peerID: PeerID) {
-        (nickname, myPeerID)
+        // Like the real one: a geohash channel posts under its own identity.
+        if case .location = activeChannel {
+            return ("\(nickname)#beef", PeerID(nostr: "beefbeefbeefbeef"))
+        }
+        return (nickname, myPeerID)
     }
 
     // Message state
@@ -492,7 +496,7 @@ struct ChatMediaTransferCoordinatorContextTests {
             try? FileManager.default.removeItem(at: outputURL)
         }
 
-        coordinator.sendImage(from: sourceURL)
+        coordinator.sendImage(from: sourceURL, to: coordinator.currentMediaDestination)
         #expect(await TestHelpers.waitUntil(
             { preparer.hasStarted },
             timeout: TestConstants.longTimeout
@@ -544,7 +548,8 @@ struct ChatMediaTransferCoordinatorContextTests {
             try? FileManager.default.removeItem(at: outputURL)
         }
 
-        coordinator?.sendImage(from: sourceURL)
+        let destination = try #require(coordinator).currentMediaDestination
+        coordinator?.sendImage(from: sourceURL, to: destination)
         #expect(await TestHelpers.waitUntil(
             { preparer.hasStarted },
             timeout: TestConstants.longTimeout
@@ -674,7 +679,7 @@ struct ChatMediaTransferCoordinatorContextTests {
             )
         }
 
-        coordinator.sendVoiceNote(at: url)
+        coordinator.sendVoiceNote(at: url, to: coordinator.currentMediaDestination)
         #expect(await TestHelpers.waitUntil(
             { context.privateFileSends.count == 1 },
             timeout: TestConstants.longTimeout
@@ -756,7 +761,7 @@ struct ChatMediaTransferCoordinatorContextTests {
             .appendingPathComponent("voice-note-test-\(UUID().uuidString).m4a")
         try Data([0x01, 0x02]).write(to: url)
 
-        coordinator.sendVoiceNote(at: url)
+        coordinator.sendVoiceNote(at: url, to: coordinator.currentMediaDestination)
 
         #expect(!FileManager.default.fileExists(atPath: url.path))
         #expect(context.systemMessages == ["Voice notes are only available in mesh chats."])
@@ -776,7 +781,7 @@ struct ChatMediaTransferCoordinatorContextTests {
         try Data("voice".utf8).write(to: url)
         defer { try? FileManager.default.removeItem(at: url) }
 
-        coordinator.sendVoiceNote(at: url)
+        coordinator.sendVoiceNote(at: url, to: coordinator.currentMediaDestination)
 
         #expect(await TestHelpers.waitUntil(
             { context.privateFileSends.count == 1 },
@@ -800,7 +805,7 @@ struct ChatMediaTransferCoordinatorContextTests {
         let sourceURL = try makeCoordinatorTestImageURL()
         defer { try? FileManager.default.removeItem(at: sourceURL) }
 
-        coordinator.sendImage(from: sourceURL)
+        coordinator.sendImage(from: sourceURL, to: coordinator.currentMediaDestination)
 
         #expect(await TestHelpers.waitUntil(
             { context.privateFileSends.count == 1 },
@@ -837,7 +842,7 @@ struct ChatMediaTransferCoordinatorContextTests {
             try? FileManager.default.removeItem(at: outputURL)
         }
 
-        coordinator.sendImage(from: sourceURL)
+        coordinator.sendImage(from: sourceURL, to: coordinator.currentMediaDestination)
         #expect(await TestHelpers.waitUntil(
             { preparer.hasStarted },
             timeout: TestConstants.longTimeout
@@ -886,7 +891,7 @@ struct ChatMediaTransferCoordinatorContextTests {
             try? FileManager.default.removeItem(at: url)
         }
 
-        coordinator.sendVoiceNote(at: url)
+        coordinator.sendVoiceNote(at: url, to: coordinator.currentMediaDestination)
         #expect(await TestHelpers.waitUntil({ preparer.hasStarted }, timeout: TestConstants.longTimeout))
         let messageID = try #require(context.privateChats[peerID]?.first?.id)
         let transferId = try #require(coordinator.messageIDToTransferId[messageID])
@@ -920,7 +925,7 @@ struct ChatMediaTransferCoordinatorContextTests {
             try? FileManager.default.removeItem(at: url)
         }
 
-        coordinator.sendVoiceNote(at: url)
+        coordinator.sendVoiceNote(at: url, to: coordinator.currentMediaDestination)
         #expect(await TestHelpers.waitUntil({ preparer.hasStarted }, timeout: TestConstants.longTimeout))
         let messageID = try #require(context.appendedPublicMessages.first?.message.id)
         let transferId = try #require(coordinator.messageIDToTransferId[messageID])
@@ -954,7 +959,7 @@ struct ChatMediaTransferCoordinatorContextTests {
         try Data("voice".utf8).write(to: url)
         defer { try? FileManager.default.removeItem(at: url) }
 
-        coordinator.sendVoiceNote(at: url)
+        coordinator.sendVoiceNote(at: url, to: coordinator.currentMediaDestination)
         #expect(await TestHelpers.waitUntil(
             {
                 context.deliveryStatusUpdates.contains { update in
@@ -984,7 +989,7 @@ struct ChatMediaTransferCoordinatorContextTests {
         try (Data([0x00, 0x00, 0x00, 0x18]) + Data("ftypM4A voice".utf8)).write(to: url)
         defer { try? FileManager.default.removeItem(at: url) }
 
-        coordinator.sendVoiceNote(at: url)
+        coordinator.sendVoiceNote(at: url, to: coordinator.currentMediaDestination)
 
         let prompted = await TestHelpers.waitUntil(
             { context.legacyConsentRequests.count == 1 },
@@ -1013,7 +1018,7 @@ struct ChatMediaTransferCoordinatorContextTests {
         try Data("voice".utf8).write(to: url)
         defer { try? FileManager.default.removeItem(at: url) }
 
-        coordinator.sendVoiceNote(at: url)
+        coordinator.sendVoiceNote(at: url, to: coordinator.currentMediaDestination)
 
         let prompted = await TestHelpers.waitUntil(
             { context.legacyConsentRequests.count == 1 },
@@ -1037,7 +1042,7 @@ struct ChatMediaTransferCoordinatorContextTests {
         try Data("voice".utf8).write(to: url)
         defer { try? FileManager.default.removeItem(at: url) }
 
-        coordinator.sendVoiceNote(at: url)
+        coordinator.sendVoiceNote(at: url, to: coordinator.currentMediaDestination)
         let prompted = await TestHelpers.waitUntil(
             { context.legacyConsentRequests.count == 1 },
             timeout: TestConstants.longTimeout
@@ -1069,7 +1074,7 @@ struct ChatMediaTransferCoordinatorContextTests {
         try Data("voice".utf8).write(to: url)
         defer { try? FileManager.default.removeItem(at: url) }
 
-        coordinator.sendVoiceNote(at: url)
+        coordinator.sendVoiceNote(at: url, to: coordinator.currentMediaDestination)
         let prompted = await TestHelpers.waitUntil(
             { context.legacyConsentRequests.count == 1 },
             timeout: TestConstants.longTimeout
@@ -1099,7 +1104,7 @@ struct ChatMediaTransferCoordinatorContextTests {
         try Data("voice".utf8).write(to: url)
         defer { try? FileManager.default.removeItem(at: url) }
 
-        coordinator.sendVoiceNote(at: url)
+        coordinator.sendVoiceNote(at: url, to: coordinator.currentMediaDestination)
 
         let failed = await TestHelpers.waitUntil(
             { context.deliveryStatusUpdates.contains { update in
@@ -1136,7 +1141,7 @@ struct ChatMediaTransferCoordinatorContextTests {
             )
         }
 
-        coordinator.sendVoiceNote(at: url)
+        coordinator.sendVoiceNote(at: url, to: coordinator.currentMediaDestination)
         #expect(await TestHelpers.waitUntil(
             { context.privateFileSends.count == 1 },
             timeout: TestConstants.longTimeout
@@ -1212,7 +1217,7 @@ struct ChatMediaTransferCoordinatorContextTests {
             )
         }
 
-        coordinator.sendVoiceNote(at: url)
+        coordinator.sendVoiceNote(at: url, to: coordinator.currentMediaDestination)
         #expect(await TestHelpers.waitUntil(
             { context.privateFileSends.count == 1 },
             timeout: TestConstants.longTimeout
@@ -1270,7 +1275,7 @@ struct ChatMediaTransferCoordinatorContextTests {
             )
         }
 
-        coordinator.sendVoiceNote(at: url)
+        coordinator.sendVoiceNote(at: url, to: coordinator.currentMediaDestination)
         #expect(await TestHelpers.waitUntil(
             { context.privateFileSends.count == 1 },
             timeout: TestConstants.longTimeout
@@ -1313,7 +1318,7 @@ struct ChatMediaTransferCoordinatorContextTests {
             )
         }
 
-        coordinator.sendVoiceNote(at: url)
+        coordinator.sendVoiceNote(at: url, to: coordinator.currentMediaDestination)
         #expect(await TestHelpers.waitUntil(
             { context.legacyConsentRequests.count == 1 },
             timeout: TestConstants.longTimeout
@@ -1365,7 +1370,7 @@ struct ChatMediaTransferCoordinatorContextTests {
             )
         }
 
-        coordinator.sendVoiceNote(at: url)
+        coordinator.sendVoiceNote(at: url, to: coordinator.currentMediaDestination)
         #expect(await TestHelpers.waitUntil(
             { context.privateFileSends.count == 1 },
             timeout: TestConstants.longTimeout
@@ -1422,7 +1427,7 @@ struct ChatMediaTransferCoordinatorContextTests {
             )
         }
 
-        coordinator.sendVoiceNote(at: url)
+        coordinator.sendVoiceNote(at: url, to: coordinator.currentMediaDestination)
         #expect(await TestHelpers.waitUntil(
             { context.privateFileSends.count == 1 },
             timeout: TestConstants.longTimeout
@@ -1493,7 +1498,7 @@ struct ChatMediaTransferCoordinatorContextTests {
             )
         }
 
-        coordinator.sendVoiceNote(at: url)
+        coordinator.sendVoiceNote(at: url, to: coordinator.currentMediaDestination)
         #expect(await TestHelpers.waitUntil(
             { context.privateFileSends.count == 1 },
             timeout: TestConstants.longTimeout
@@ -1548,7 +1553,10 @@ struct ChatMediaTransferCoordinatorContextTests {
             )
         }
         let sendsBeforeTTL = context.privateFileSends.count
-        ttlCoordinator.sendVoiceNote(at: ttlURL)
+        ttlCoordinator.sendVoiceNote(
+            at: ttlURL,
+            to: ttlCoordinator.currentMediaDestination
+        )
         #expect(await TestHelpers.waitUntil(
             {
                 context.privateFileSends.count
@@ -1623,7 +1631,7 @@ struct ChatMediaTransferCoordinatorContextTests {
             )
             roots.append(url.deletingLastPathComponent())
             // The production preparer preserves this stable filename.
-            coordinator.sendVoiceNote(at: url)
+            coordinator.sendVoiceNote(at: url, to: coordinator.currentMediaDestination)
         }
         #expect(await TestHelpers.waitUntil(
             { context.privateFileSends.count == 3 },
@@ -1663,7 +1671,7 @@ struct ChatMediaTransferCoordinatorContextTests {
             )
         }
 
-        coordinator.sendVoiceNote(at: url)
+        coordinator.sendVoiceNote(at: url, to: coordinator.currentMediaDestination)
         #expect(await TestHelpers.waitUntil(
             { context.privateFileSends.count == 1 },
             timeout: TestConstants.longTimeout
@@ -1693,6 +1701,163 @@ struct ChatMediaTransferCoordinatorContextTests {
             return false
         })
     }
+
+    // MARK: Destination bound when the person commits
+
+    /// A classic note reaches the coordinator only after the recorder's
+    /// finalize padding. Leaving the DM in that window must not make it
+    /// public.
+    @Test @MainActor
+    func voiceNoteSenderDeliversToTheDMItWasReleasedIn() async throws {
+        let context = MockChatMediaTransferContext()
+        let peerID = PeerID(str: "1122334455667788")
+        context.selectedPrivateChatPeer = peerID
+        let fileName = "voice_0011aabbccddeeff.m4a"
+        let preparer = StaticVoiceNotePreparer(fileName: fileName)
+        let coordinator = ChatMediaTransferCoordinator(
+            context: context,
+            prepareVoiceNotePacket: { url in
+                try preparer.prepare(url)
+            }
+        )
+        let url = try makeCoordinatorVoiceURL(fileName: fileName)
+        defer {
+            try? FileManager.default.removeItem(
+                at: url.deletingLastPathComponent()
+            )
+        }
+
+        let sendVoiceNote = coordinator.makeVoiceNoteSender()
+        context.selectedPrivateChatPeer = nil
+        sendVoiceNote(url)
+
+        #expect(await TestHelpers.waitUntil(
+            { context.privateFileSends.count == 1 },
+            timeout: TestConstants.longTimeout
+        ))
+        #expect(context.privateFileSends.first?.peerID == peerID)
+        #expect(context.privateChats[peerID]?.count == 1)
+        #expect(context.appendedPublicMessages.isEmpty)
+        #expect(context.broadcastFileSends.isEmpty)
+    }
+
+    @Test @MainActor
+    func voiceNoteSenderPostsToTheChannelItWasReleasedIn() async throws {
+        let context = MockChatMediaTransferContext()
+        let fileName = "voice_2233aabbccddeeff.m4a"
+        let preparer = StaticVoiceNotePreparer(fileName: fileName)
+        let coordinator = ChatMediaTransferCoordinator(
+            context: context,
+            prepareVoiceNotePacket: { url in
+                try preparer.prepare(url)
+            }
+        )
+        let url = try makeCoordinatorVoiceURL(fileName: fileName)
+        defer {
+            try? FileManager.default.removeItem(
+                at: url.deletingLastPathComponent()
+            )
+        }
+
+        let sendVoiceNote = coordinator.makeVoiceNoteSender()
+        // A geohash channel takes no media.
+        context.activeChannel = .location(
+            GeohashChannel(level: .city, geohash: "u4pruy")
+        )
+        context.canSendMediaInCurrentContext = false
+        sendVoiceNote(url)
+
+        #expect(await TestHelpers.waitUntil(
+            { context.broadcastFileSends.count == 1 },
+            timeout: TestConstants.longTimeout
+        ))
+        #expect(context.appendedPublicMessages.count == 1)
+        let posted = try #require(context.appendedPublicMessages.first)
+        #expect(posted.conversationID == .mesh)
+        // Under the mesh identity it is broadcast with, not the geohash
+        // channel's.
+        #expect(posted.message.sender == context.nickname)
+        #expect(posted.message.senderPeerID == context.myPeerID)
+        #expect(context.systemMessages.isEmpty)
+        #expect(context.privateFileSends.isEmpty)
+    }
+
+    @Test @MainActor
+    func imageSentToABoundDMIgnoresTheSelectionChange() async throws {
+        let context = MockChatMediaTransferContext()
+        let peerID = PeerID(str: "99aabbccddeeff00")
+        context.selectedPrivateChatPeer = peerID
+        let sourceURL = try makeCoordinatorTestImageURL()
+        let outputURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("bound-image-\(UUID().uuidString).jpg")
+        let preparer = PausedImagePreparer(outputURL: outputURL)
+        preparer.release()
+        let coordinator = ChatMediaTransferCoordinator(
+            context: context,
+            prepareImagePacket: { url in try preparer.prepare(url) }
+        )
+        defer {
+            try? FileManager.default.removeItem(at: sourceURL)
+            try? FileManager.default.removeItem(at: outputURL)
+        }
+
+        let destination = coordinator.currentMediaDestination
+        context.selectedPrivateChatPeer = nil
+        coordinator.sendImage(from: sourceURL, to: destination)
+
+        #expect(await TestHelpers.waitUntil(
+            { context.privateFileSends.count == 1 },
+            timeout: TestConstants.longTimeout
+        ))
+        #expect(context.privateFileSends.first?.peerID == peerID)
+        #expect(context.privateChats[peerID]?.count == 1)
+        #expect(context.appendedPublicMessages.isEmpty)
+        #expect(context.broadcastFileSends.isEmpty)
+    }
+
+    /// The pick commits the photo; it is processed off the main actor long
+    /// enough for the person to leave the DM it was picked in.
+    @Test @MainActor
+    func pickedImageGoesToTheDMItWasPickedIn() async throws {
+        let context = MockChatMediaTransferContext()
+        let peerID = PeerID(str: "8899aabbccddeeff")
+        context.selectedPrivateChatPeer = peerID
+        let pickedURL = try makeCoordinatorTestImageURL()
+        let outputURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("picked-image-\(UUID().uuidString).jpg")
+        let preparer = PausedImagePreparer(outputURL: outputURL)
+        preparer.release()
+        let coordinator = ChatMediaTransferCoordinator(
+            context: context,
+            prepareImagePacket: { url in try preparer.prepare(url) }
+        )
+        defer {
+            // processThenSendImage writes the processed photo first.
+            for processedURL in preparer.sourceURLs {
+                try? FileManager.default.removeItem(at: processedURL)
+            }
+            try? FileManager.default.removeItem(at: pickedURL)
+            try? FileManager.default.removeItem(at: outputURL)
+        }
+
+        #if os(iOS)
+        coordinator.processThenSendImage(
+            UIImage(contentsOfFile: pickedURL.path)
+        )
+        #else
+        coordinator.processThenSendImage(from: pickedURL)
+        #endif
+        context.selectedPrivateChatPeer = nil
+
+        #expect(await TestHelpers.waitUntil(
+            { context.privateFileSends.count == 1 },
+            timeout: TestConstants.longTimeout
+        ))
+        #expect(context.privateFileSends.first?.peerID == peerID)
+        #expect(context.privateChats[peerID]?.count == 1)
+        #expect(context.appendedPublicMessages.isEmpty)
+        #expect(context.broadcastFileSends.isEmpty)
+    }
 }
 
 private func makeCoordinatorVoiceURL(
@@ -1719,6 +1884,7 @@ private final class PausedImagePreparer: @unchecked Sendable {
     private var started = false
     private var released = false
     private var finished = false
+    private var sources: [URL] = []
 
     init(outputURL: URL) {
         self.outputURL = outputURL
@@ -1736,8 +1902,17 @@ private final class PausedImagePreparer: @unchecked Sendable {
         return finished
     }
 
-    func prepare(_ _: URL) throws -> ChatPreparedImage {
+    /// What it was handed; after `processThenSendImage`, the processed photo
+    /// a test has to clean up.
+    var sourceURLs: [URL] {
         condition.lock()
+        defer { condition.unlock() }
+        return sources
+    }
+
+    func prepare(_ sourceURL: URL) throws -> ChatPreparedImage {
+        condition.lock()
+        sources.append(sourceURL)
         started = true
         condition.broadcast()
         while !released {

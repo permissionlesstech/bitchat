@@ -349,7 +349,7 @@ struct ConversationUIModelTests {
     // With no nickname fallback, a send path that forgets to stamp the sender
     // ID turns my own row into a stranger's. Each test below sends the way the
     // composer does, through the UI model's `sendMessage(_:)` and
-    // `sendVoiceNote(at:)`, and asks the UI model about the row that send
+    // `makeVoiceNoteSender()`, and asks the UI model about the row that send
     // produced.
 
     @MainActor
@@ -442,7 +442,7 @@ struct ConversationUIModelTests {
         let note = try Self.makeVoiceNote()
         defer { try? FileManager.default.removeItem(at: note) }
 
-        uiModel.sendVoiceNote(at: note)
+        uiModel.makeVoiceNoteSender()(note)
 
         // The row is enqueued at once; wait out the detached preparation so
         // the send has finished before the test does.
@@ -461,7 +461,7 @@ struct ConversationUIModelTests {
         defer { try? FileManager.default.removeItem(at: note) }
 
         viewModel.startPrivateChat(with: Self.peerID)
-        uiModel.sendVoiceNote(at: note)
+        uiModel.makeVoiceNoteSender()(note)
 
         #expect(await TestHelpers.waitUntil({ transport.sentPrivateFiles.count == 1 }, timeout: TestConstants.settleTimeout))
         let sent = try #require(Self.privateRow("[voice] \(note.lastPathComponent)", with: Self.peerID, of: viewModel))

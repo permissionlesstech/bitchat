@@ -100,6 +100,20 @@ struct ContentPeopleSheetView: View {
         )
     }
 
+    private var imagePreviewBinding: Binding<Bool> {
+        Binding(
+            get: {
+                imagePreviewURL != nil
+                    && (showSidebar || privateConversationModel.selectedPeerID != nil)
+            },
+            set: { isPresented in
+                if !isPresented {
+                    imagePreviewURL = nil
+                }
+            }
+        )
+    }
+
     /// Voice recording happens inside this sheet, so its error alert must
     /// present from here as well: the root copy defers whenever this sheet
     /// is up, exactly like the Bluetooth alert above. Presenting from the
@@ -123,7 +137,6 @@ struct ContentPeopleSheetView: View {
     }
 
     var body: some View {
-        let legacyConsentRequest = conversationUIModel.legacyPrivateMediaConsentRequest
         NavigationStack {
             Group {
                 if privateConversationModel.selectedPeerID != nil {
@@ -198,63 +211,7 @@ struct ContentPeopleSheetView: View {
         }
         .themedSheetBackground()
         .foregroundColor(palette.primary)
-        .confirmationDialog(
-            String(
-                localized: "content.private_media.legacy_warning.title",
-                defaultValue: "Send without end-to-end encryption?",
-                comment: "Title warning before sending private media to an older client in a clear signed envelope"
-            ),
-            isPresented: Binding(
-                get: { legacyConsentRequest != nil },
-                set: { isPresented in
-                    if !isPresented, let requestID = legacyConsentRequest?.id {
-                        conversationUIModel.resolveLegacyPrivateMediaConsent(
-                            requestID: requestID,
-                            approved: false
-                        )
-                    }
-                }
-            ),
-            titleVisibility: .visible
-        ) {
-            Button(
-                String(
-                    localized: "content.private_media.legacy_warning.send",
-                    defaultValue: "send visible file",
-                    comment: "Destructive confirmation action for one legacy clear private-media send"
-                ),
-                role: .destructive
-            ) {
-                if let requestID = legacyConsentRequest?.id {
-                    conversationUIModel.resolveLegacyPrivateMediaConsent(
-                        requestID: requestID,
-                        approved: true
-                    )
-                }
-            }
-            Button("common.cancel", role: .cancel) {
-                if let requestID = legacyConsentRequest?.id {
-                    conversationUIModel.resolveLegacyPrivateMediaConsent(
-                        requestID: requestID,
-                        approved: false
-                    )
-                }
-            }
-        } message: {
-            if let request = legacyConsentRequest {
-                Text(
-                    String(
-                        format: String(
-                            localized: "content.private_media.legacy_warning.message",
-                            defaultValue: "%@'s client does not advertise encrypted private media. This file will be signed but not end-to-end encrypted, so mesh relays can see it. Send this file anyway?",
-                            comment: "Warning explaining the confidentiality loss for one legacy private-media send; parameter is the peer name"
-                        ),
-                        locale: .current,
-                        request.peerName
-                    )
-                )
-            }
-        }
+        .modifier(LegacyPrivateMediaConsentDialog())
         #if os(macOS)
         .frame(minWidth: 420, minHeight: 520)
         #endif
@@ -279,6 +236,21 @@ struct ContentPeopleSheetView: View {
             MacImagePickerView { url in
                 showMacImagePicker = false
                 conversationUIModel.processSelectedImage(from: url)
+            }
+        }
+        #endif
+        // Image taps in the DM: the root presenter defers to this sheet, which
+        // it cannot present over.
+        #if os(iOS)
+        .fullScreenCover(isPresented: imagePreviewBinding) {
+            if let url = imagePreviewURL {
+                ImagePreviewView(url: url)
+            }
+        }
+        #else
+        .sheet(isPresented: imagePreviewBinding) {
+            if let url = imagePreviewURL {
+                ImagePreviewView(url: url)
             }
         }
         #endif
@@ -309,6 +281,144 @@ struct ContentPeopleSheetView: View {
     }
 }
 
+#if os(iOS)
+/// The people list or the open DM as a column beside the public timeline
+/// (regular width, e.g. the iPhone Duo's inner display). It lives in
+/// ContentView's own tree, so it inherits every environment object and
+/// presents through the root: none of the sheet's NavigationStack, close
+/// buttons, banner mirror, alert copies or backdrop come along.
+struct ContentPeopleColumnView: View {
+    @EnvironmentObject private var privateConversationModel: PrivateConversationModel
+
+    @Binding var showSidebar: Bool
+    @Binding var showVerifySheet: Bool
+    @Binding var messageText: String
+    @Binding var selectedMessageSender: String?
+    @Binding var selectedMessageSenderID: PeerID?
+    @Binding var imagePreviewURL: URL?
+    @Binding var windowCountPublic: Int
+    @Binding var windowCountPrivate: [PeerID: Int]
+    @Binding var isAtBottomPrivate: Bool
+    var isTextFieldFocused: FocusState<Bool>.Binding
+    @ObservedObject var voiceRecordingVM: VoiceRecordingViewModel
+    @Binding var autocompleteDebounceTimer: Timer?
+    @Binding var showImagePicker: Bool
+    @Binding var imagePickerSourceType: UIImagePickerController.SourceType
+
+    let headerHeight: CGFloat
+    /// How far a rounded display corner reaches into the top rows from the
+    /// trailing edge (TopCornerClearance); each row pads by what its own
+    /// content inset leaves uncovered.
+    let trailingCornerReach: CGFloat
+    let onSendMessage: () -> Void
+
+    var body: some View {
+        Group {
+            if privateConversationModel.selectedPeerID != nil {
+                ContentPrivateChatSheetView(
+                    showSidebar: $showSidebar,
+                    messageText: $messageText,
+                    selectedMessageSender: $selectedMessageSender,
+                    selectedMessageSenderID: $selectedMessageSenderID,
+                    imagePreviewURL: $imagePreviewURL,
+                    windowCountPublic: $windowCountPublic,
+                    windowCountPrivate: $windowCountPrivate,
+                    isAtBottomPrivate: $isAtBottomPrivate,
+                    isTextFieldFocused: isTextFieldFocused,
+                    voiceRecordingVM: voiceRecordingVM,
+                    autocompleteDebounceTimer: $autocompleteDebounceTimer,
+                    headerHeight: headerHeight,
+                    onSendMessage: onSendMessage,
+                    showImagePicker: $showImagePicker,
+                    imagePickerSourceType: $imagePickerSourceType,
+                    isInline: true,
+                    trailingCornerReach: trailingCornerReach
+                )
+            } else {
+                // Keeps hosting its own QR sheet, as in the people sheet.
+                ContentPeopleListView(
+                    showSidebar: $showSidebar,
+                    showVerifySheet: $showVerifySheet,
+                    isInline: true,
+                    headerHeight: headerHeight,
+                    trailingCornerReach: trailingCornerReach
+                )
+            }
+        }
+        .modifier(LegacyPrivateMediaConsentDialog())
+    }
+}
+#endif
+
+/// Consent before one private-media send to a legacy client goes out in a
+/// clear signed envelope. Applied by the view that shows the DM, so a
+/// pending request always has a presenter; dismissing it denies the send.
+private struct LegacyPrivateMediaConsentDialog: ViewModifier {
+    @EnvironmentObject private var conversationUIModel: ConversationUIModel
+
+    func body(content: Content) -> some View {
+        let legacyConsentRequest = conversationUIModel.legacyPrivateMediaConsentRequest
+        content
+            .confirmationDialog(
+                String(
+                    localized: "content.private_media.legacy_warning.title",
+                    defaultValue: "Send without end-to-end encryption?",
+                    comment: "Title warning before sending private media to an older client in a clear signed envelope"
+                ),
+                isPresented: Binding(
+                    get: { legacyConsentRequest != nil },
+                    set: { isPresented in
+                        if !isPresented, let requestID = legacyConsentRequest?.id {
+                            conversationUIModel.resolveLegacyPrivateMediaConsent(
+                                requestID: requestID,
+                                approved: false
+                            )
+                        }
+                    }
+                ),
+                titleVisibility: .visible
+            ) {
+                Button(
+                    String(
+                        localized: "content.private_media.legacy_warning.send",
+                        defaultValue: "send visible file",
+                        comment: "Destructive confirmation action for one legacy clear private-media send"
+                    ),
+                    role: .destructive
+                ) {
+                    if let requestID = legacyConsentRequest?.id {
+                        conversationUIModel.resolveLegacyPrivateMediaConsent(
+                            requestID: requestID,
+                            approved: true
+                        )
+                    }
+                }
+                Button("common.cancel", role: .cancel) {
+                    if let requestID = legacyConsentRequest?.id {
+                        conversationUIModel.resolveLegacyPrivateMediaConsent(
+                            requestID: requestID,
+                            approved: false
+                        )
+                    }
+                }
+            } message: {
+                if let request = legacyConsentRequest {
+                    Text(
+                        String(
+                            format: String(
+                                localized: "content.private_media.legacy_warning.message",
+                                defaultValue: "%@'s client does not advertise encrypted private media. This file will be signed but not end-to-end encrypted, so mesh relays can see it. Send this file anyway?",
+                                comment: "Warning explaining the confidentiality loss for one legacy private-media send; parameter is the peer name"
+                            ),
+                            locale: .current,
+                            request.peerName
+                        )
+                    )
+                }
+            }
+    }
+}
+
 private struct ContentPeopleListView: View {
     @EnvironmentObject private var appChromeModel: AppChromeModel
     @EnvironmentObject private var privateConversationModel: PrivateConversationModel
@@ -317,10 +427,16 @@ private struct ContentPeopleListView: View {
     @EnvironmentObject private var locationChannelsModel: LocationChannelsModel
     @EnvironmentObject private var peerListModel: PeerListModel
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.appTheme) private var theme
     @ThemedPalette private var palette
 
     @Binding var showSidebar: Bool
     @Binding var showVerifySheet: Bool
+    /// Shown in the people column rather than the sheet: no close button,
+    /// and a title row as tall as the main header beside it.
+    var isInline = false
+    var headerHeight: CGFloat = 0
+    var trailingCornerReach: CGFloat = 0
 
     var body: some View {
         VStack(spacing: 0) {
@@ -345,15 +461,18 @@ private struct ContentPeopleListView: View {
                             String(localized: "content.help.verification", comment: "Help text for verification button")
                         )
                     }
-                    SheetCloseButton {
-                        withAnimation(.easeInOut(duration: TransportConfig.uiAnimationMediumSeconds)) {
-                            dismiss()
-                            showSidebar = false
-                            showVerifySheet = false
-                            privateConversationModel.endConversation()
+                    if !isInline {
+                        SheetCloseButton {
+                            withAnimation(.easeInOut(duration: TransportConfig.uiAnimationMediumSeconds)) {
+                                dismiss()
+                                showSidebar = false
+                                showVerifySheet = false
+                                privateConversationModel.endConversation()
+                            }
                         }
                     }
                 }
+                .frame(minHeight: isInline ? headerHeight : nil)
 
                 // The mesh sheet titles its sections inline (#mesh / across
                 // the bridge / groups) — no subtitle or count up here.
@@ -365,8 +484,15 @@ private struct ContentPeopleListView: View {
                 }
             }
             .padding(.horizontal, 16)
-            .padding(.top, 16)
-            .padding(.bottom, 12)
+            // Inline, level with the main header, which glass floats as a
+            // panel 4pt below the top (themedChromePanel).
+            .padding(.top, isInline ? (theme.usesGlassChrome ? 4 : 0) : 16)
+            .padding(.bottom, isInline ? 0 : 12)
+            // The content sits 16pt in; themedSurface adds no inset.
+            .padding(.trailing, TopCornerClearance.padding(
+                forReach: trailingCornerReach,
+                contentInset: 16
+            ))
             .themedSurface()
 
             ScrollView {
@@ -494,6 +620,18 @@ private struct ContentPrivateChatSheetView: View {
     @Binding var showMacImagePicker: Bool
     #endif
 
+    /// Shown in the people column rather than the sheet: the back chevron
+    /// and swipe-to-leave return to the list there, so there is no close
+    /// button, and the header lines up with the main header beside it.
+    var isInline = false
+    var trailingCornerReach: CGFloat = 0
+
+    /// Inline, the bar is as tall as the main header beside it, which
+    /// Dynamic Type below Large makes shorter than 44pt.
+    private var backButtonHeight: CGFloat {
+        isInline ? min(44, headerHeight) : 44
+    }
+
     var body: some View {
         VStack(spacing: 0) {
             if let headerState = privateConversationModel.selectedHeaderState {
@@ -506,8 +644,9 @@ private struct ContentPrivateChatSheetView: View {
                         Image(systemName: "chevron.left")
                             .font(.bitchatSystem(size: 12))
                             .foregroundColor(palette.primary)
-                            .frame(width: 44, height: 44)
-                            .contentShape(Rectangle())
+                            .frame(width: 44, height: backButtonHeight)
+                            // Still a 44pt target where the bar is shorter.
+                            .contentShape(Rectangle().inset(by: (backButtonHeight - 44) / 2))
                     }
                     .buttonStyle(.plain)
                     .accessibilityLabel(
@@ -545,10 +684,18 @@ private struct ContentPrivateChatSheetView: View {
 
                     Spacer(minLength: 0)
 
-                    SheetCloseButton {
-                        withAnimation(.easeInOut(duration: TransportConfig.uiAnimationMediumSeconds)) {
-                            privateConversationModel.endConversation()
-                            showSidebar = true
+                    if isInline {
+                        // Holds the close button's place so the name stays
+                        // centred as in the sheet.
+                        Color.clear
+                            .frame(width: 32, height: 32)
+                            .accessibilityHidden(true)
+                    } else {
+                        SheetCloseButton {
+                            withAnimation(.easeInOut(duration: TransportConfig.uiAnimationMediumSeconds)) {
+                                privateConversationModel.endConversation()
+                                showSidebar = true
+                            }
                         }
                     }
                 }
@@ -556,8 +703,14 @@ private struct ContentPrivateChatSheetView: View {
                 // bar instead of clipping inside it.
                 .frame(minHeight: headerHeight)
                 .padding(.horizontal, 16)
-                .padding(.top, 10)
-                .padding(.bottom, 12)
+                .padding(.top, isInline ? 0 : 10)
+                .padding(.bottom, isInline ? 0 : 12)
+                // The content sits 16pt in, and glass floats the bar as a
+                // panel another 8pt in (PrivateHeaderChrome).
+                .padding(.trailing, TopCornerClearance.padding(
+                    forReach: trailingCornerReach,
+                    contentInset: theme.usesGlassChrome ? 24 : 16
+                ))
                 .modifier(PrivateHeaderChrome())
             }
 
@@ -608,7 +761,13 @@ private struct ContentPrivateChatSheetView: View {
             )
             #endif
         }
-        .themedSheetBackground()
+        .background {
+            // Inline, the root backdrop already spans both columns; a second
+            // glass gradient would restart its glows at the column edge.
+            if !isInline {
+                ThemedRootBackground()
+            }
+        }
         .foregroundColor(palette.primary)
     }
 

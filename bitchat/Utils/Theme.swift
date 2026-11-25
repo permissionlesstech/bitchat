@@ -201,7 +201,9 @@ struct ThemedRootBackground: View {
             // as a view, a backdrop stops at the safe area (a bare Color
             // passed as a ShapeStyle would not). In a sheet, the sheet's own
             // background (#1C1C1E in dark mode) then shows through the
-            // home-indicator inset and under the navigation bar.
+            // home-indicator inset and under the navigation bar, and iPhone
+            // Duo's outer display shows the system background in its
+            // trailing status-bar column.
             palette.background
                 .ignoresSafeArea()
         }

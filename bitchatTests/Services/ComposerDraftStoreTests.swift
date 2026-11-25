@@ -61,6 +61,36 @@ struct ComposerDraftStoreTests {
         #expect(withoutFP == .privateChat(stableID: peer.id))
     }
 
+    /// A disconnect hands an open DM from the short ID to the 64-hex Noise
+    /// key, which the fingerprint lookup only knows for favorites.
+    @Test func keyFromNoiseKeyPeerMatchesItsShortIDsFingerprint() {
+        let noiseKey = Data((0..<32).map { UInt8($0) })
+        let fingerprint = noiseKey.sha256Fingerprint()
+        let shortID = PeerID(publicKey: noiseKey)
+        let stableID = PeerID(hexData: noiseKey)
+
+        let shortKey = ComposerDraftStore.Key.from(
+            peerID: shortID,
+            fingerprint: fingerprint,
+            channel: .mesh
+        )
+        let stableKey = ComposerDraftStore.Key.from(
+            peerID: stableID,
+            fingerprint: nil,
+            channel: .mesh
+        )
+        #expect(stableKey == shortKey)
+        #expect(stableKey == .privateChat(stableID: fingerprint))
+
+        // A short ID before its fingerprint is known still keys by itself.
+        let shortWithoutFP = ComposerDraftStore.Key.from(
+            peerID: shortID,
+            fingerprint: nil,
+            channel: .mesh
+        )
+        #expect(shortWithoutFP == .privateChat(stableID: shortID.id))
+    }
+
     @Test func longDraftsAreTruncated() {
         withCleanStore {
             let long = String(repeating: "a", count: ComposerDraftStore.maxDraftLength + 50)

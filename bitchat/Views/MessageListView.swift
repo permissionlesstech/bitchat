@@ -190,8 +190,10 @@ struct MessageListView: View {
                                     // mentioning the only other participant is noise, and "DM"
                                     // would just reopen the conversation that is already open.
                                     if privatePeer == nil {
-                                        Button("content.actions.mention") {
-                                            insertMention(message.sender)
+                                        if actionsTargetThisList {
+                                            Button("content.actions.mention") {
+                                                insertMention(message.sender)
+                                            }
                                         }
                                         if let peerID = message.senderPeerID {
                                             Button("content.actions.direct_message") {
@@ -202,11 +204,13 @@ struct MessageListView: View {
                                             }
                                         }
                                     }
-                                    Button("content.actions.hug") {
-                                        conversationUIModel.sendHug(to: message.sender)
-                                    }
-                                    Button("content.actions.slap") {
-                                        conversationUIModel.sendSlap(to: message.sender)
+                                    if actionsTargetThisList {
+                                        Button("content.actions.hug") {
+                                            conversationUIModel.sendHug(to: message.sender)
+                                        }
+                                        Button("content.actions.slap") {
+                                            conversationUIModel.sendSlap(to: message.sender)
+                                        }
                                     }
                                 }
                                 Button("content.message.copy") {
@@ -253,9 +257,18 @@ struct MessageListView: View {
                     jumpToLatestPill(proxy: proxy)
                 }
             }
-            .onOpenURL(perform: handleOpenURL)
+            // External deep links (notifications, shared #geohash invites).
+            // Every list on screen receives them, so sender links, which only
+            // in-app text produces, are left to the list that drew them (see
+            // the openURL action below).
+            .onOpenURL { url in
+                guard url.host != "user" else { return }
+                handleOpenURL(url)
+            }
             .onTapGesture(count: 3) {
-                showClearConfirmation = true
+                if actionsTargetThisList {
+                    showClearConfirmation = true
+                }
             }
             .confirmationDialog(
                 "content.clear.confirm_title",
@@ -281,14 +294,24 @@ struct MessageListView: View {
             .onChange(of: TimelineSignature(privatePeer: privatePeer, contextKey: contextKey, messages: messages)) { signature in
                 onTimelineChange(signature, proxy: proxy)
             }
+            .onChange(of: geometry.size.width) { _ in
+                // Rows reflow at a new width (fold, unfold, the people column
+                // appearing), so the same offset lands in older history.
+                guard isAtBottom else { return }
+                DispatchQueue.main.async {
+                    scrollToBottom(on: proxy, privatePeer: privatePeer)
+                }
+            }
             .confirmationDialog(
                 selectedMessageSender.map { "@\($0)" } ?? String(localized: "content.actions.title", comment: "Fallback title for the message action sheet"),
                 isPresented: $showMessageActions,
                 titleVisibility: .visible
             ) {
-                Button("content.actions.mention") {
-                    if let sender = selectedMessageSender {
-                        insertMention(sender)
+                if actionsTargetThisList {
+                    Button("content.actions.mention") {
+                        if let sender = selectedMessageSender {
+                            insertMention(sender)
+                        }
                     }
                 }
 
@@ -301,15 +324,17 @@ struct MessageListView: View {
                     }
                 }
 
-                Button("content.actions.hug") {
-                    if let sender = selectedMessageSender {
-                        conversationUIModel.sendHug(to: sender)
+                if actionsTargetThisList {
+                    Button("content.actions.hug") {
+                        if let sender = selectedMessageSender {
+                            conversationUIModel.sendHug(to: sender)
+                        }
                     }
-                }
 
-                Button("content.actions.slap") {
-                    if let sender = selectedMessageSender {
-                        conversationUIModel.sendSlap(to: sender)
+                    Button("content.actions.slap") {
+                        if let sender = selectedMessageSender {
+                            conversationUIModel.sendSlap(to: sender)
+                        }
                     }
                 }
 
@@ -354,6 +379,14 @@ struct MessageListView: View {
                 // On non-iOS platforms, let the system handle or ignore
                 return .systemAction
                 #endif
+            }
+            // Sender and #geohash links drawn by this list act here. Handed
+            // to the system they came back through every visible list's
+            // onOpenURL, so a name tapped in the public timeline could also
+            // raise the open DM's action dialog.
+            if url.scheme == "bitchat", url.host == "user" || url.host == "geohash" {
+                handleOpenURL(url)
+                return .handled
             }
             return .systemAction
         })
@@ -425,6 +458,14 @@ private extension MessageListView {
     func isLandedRow(_ rowID: String) -> Bool {
         guard let landedContextKey = timelineMark?.contextKey else { return false }
         return MessageListScrollPolicy.isRow(rowID, inContext: landedContextKey)
+    }
+
+    /// /clear, hug/slap and mentions act on the selected conversation (the
+    /// command processor and the shared composer draft), not on the list
+    /// they were triggered from. On the split layout the public timeline
+    /// sits beside an open DM, so it must not offer them while one is open.
+    var actionsTargetThisList: Bool {
+        privatePeer != nil || privateConversationModel.selectedPeerID == nil
     }
 
     /// Tappable strip above the mesh timeline while notes are pinned at this

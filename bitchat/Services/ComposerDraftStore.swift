@@ -61,6 +61,14 @@ enum ComposerDraftStore {
                 if let fingerprint, !fingerprint.isEmpty {
                     return .privateChat(stableID: fingerprint)
                 }
+                // A 64-hex peer ID is the Noise static key, whose SHA-256 is
+                // the fingerprint its short ID resolves to. A disconnect hands
+                // an open DM to that ID, which the fingerprint lookup only
+                // knows for favorites; it is still the same person's draft,
+                // and the same conversation for a held mic.
+                if let noiseKey = peerID.noiseKey {
+                    return .privateChat(stableID: noiseKey.sha256Fingerprint())
+                }
                 return .privateChat(stableID: peerID.id)
             }
             switch channel {
