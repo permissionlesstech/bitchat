@@ -297,6 +297,15 @@ final class AppRuntime: ObservableObject {
 
 private extension AppRuntime {
     func bindRuntimeObservers() {
+        NetworkActivationService.shared.$activationAllowed
+            .removeDuplicates()
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] allowed in
+                guard allowed, self?.chatViewModel.networkActivationAllowed == true else { return }
+                GeoRelayDirectory.shared.prefetchIfNeeded()
+            }
+            .store(in: &cancellables)
+
         NostrRelayManager.shared.$isConnected
             .receive(on: DispatchQueue.main)
             .sink { [weak self] isConnected in

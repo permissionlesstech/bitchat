@@ -13,7 +13,10 @@ final class NetworkActivationServiceTests: XCTestCase {
 
         XCTAssertFalse(context.service.activationAllowed)
         XCTAssertEqual(context.torController.autoStartAllowedValues, [false])
-        XCTAssertEqual(context.proxyController.proxyModes, [false])
+        // Proxy mode tracks userTorEnabled (default true) even while the
+        // network gate is closed so callers fail closed on the SOCKS port
+        // instead of falling back to clearnet.
+        XCTAssertEqual(context.proxyController.proxyModes, [true])
         XCTAssertEqual(context.torController.startIfNeededCallCount, 0)
         XCTAssertEqual(context.torController.shutdownCompletelyCallCount, 1)
         XCTAssertEqual(context.relayController.connectCallCount, 0)
@@ -107,7 +110,10 @@ final class NetworkActivationServiceTests: XCTestCase {
         XCTAssertFalse(context.service.activationAllowed)
         XCTAssertEqual(context.reachability.stopCallCount, 1)
         XCTAssertEqual(context.torController.autoStartAllowedValues.last, false)
-        XCTAssertEqual(context.proxyController.proxyModes.last, false)
+        // Must remain fail-closed (true) when userTorEnabled is true so no
+        // in-flight request can leak over clearnet during panic teardown.
+        XCTAssertEqual(context.proxyController.proxyModes.last, true)
+        XCTAssertFalse(context.proxyController.proxyModes.contains(false))
         XCTAssertGreaterThanOrEqual(
             context.torController.shutdownCompletelyCallCount,
             1
@@ -124,6 +130,26 @@ final class NetworkActivationServiceTests: XCTestCase {
             context.torController.startIfNeededCallCount,
             startCountAfterStop
         )
+    }
+
+    func test_deactivation_neverSwitchesProxyToClearnetWhileTorPreferenceIsOn() async {
+        let channelSubject = CurrentValueSubject<ChannelID, Never>(
+            .location(GeohashChannel(level: .city, geohash: "u4pruy"))
+        )
+        let context = makeService(
+            permission: .denied,
+            favorites: [],
+            selectedChannelSubject: channelSubject
+        )
+
+        context.service.start()
+        XCTAssertTrue(context.service.activationAllowed)
+
+        channelSubject.send(.mesh)
+        let deactivated = await waitUntil { !context.service.activationAllowed }
+        XCTAssertTrue(deactivated)
+
+        XCTAssertFalse(context.proxyController.proxyModes.contains(false))
     }
 
     func test_start_afterPanicStop_reestablishesSubscriptions() {
