@@ -66,6 +66,9 @@ pub extern "C" fn arti_start(data_dir: *const c_char, socks_port: u16) -> c_int 
     }
 
     // Parse data directory
+    if data_dir.is_null() {
+        return -2;
+    }
     let data_path = match unsafe { CStr::from_ptr(data_dir) }.to_str() {
         Ok(s) => PathBuf::from(s),
         Err(_) => return -2,
@@ -255,14 +258,8 @@ async fn run_arti(
 
     update_summary("Configuring...");
 
-    // Build Arti configuration with custom directories
-    let cache_dir = data_dir.join("cache");
-    let state_dir = data_dir.join("state");
-
-    // Use from_directories which sets up storage correctly
-    use arti_client::config::TorClientConfigBuilder;
-    let config = TorClientConfigBuilder::from_directories(state_dir, cache_dir)
-        .build()?;
+    // Build Arti configuration with custom directories and onion-service routing enabled
+    let config = build_tor_config(&data_dir)?;
 
     update_summary("Bootstrapping...");
 
@@ -312,4 +309,46 @@ async fn run_arti(
 
     update_summary("Shutting down...");
     Ok(())
+}
+
+fn build_tor_config(
+    data_dir: &std::path::Path,
+) -> Result<arti_client::TorClientConfig, arti_client::config::ConfigBuildError> {
+    use arti_client::config::TorClientConfigBuilder;
+
+    let cache_dir = data_dir.join("cache");
+    let state_dir = data_dir.join("state");
+
+    let mut builder = TorClientConfigBuilder::from_directories(state_dir, cache_dir);
+    builder.address_filter().allow_onion_addrs(true);
+    builder.build()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use arti_client::IntoTorAddr;
+
+    #[test]
+    fn tor_config_enables_onion_addresses() {
+        let dir = std::env::temp_dir().join("arti-bitchat-onion-config-test");
+        let config = build_tor_config(&dir).expect("TorClientConfig should build");
+        let debug = format!("{config:?}");
+        assert!(
+            debug.contains("allow_onion_addrs: true"),
+            "onion addresses must be allowed for custom .onion Nostr relays; got: {debug}"
+        );
+    }
+
+    #[test]
+    fn onion_v3_relay_address_parses_as_tor_addr() {
+        // Synthetic valid-syntax v3 onion hostname (56 base32 chars).
+        let addr = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.onion:443";
+        assert!(addr.into_tor_addr().is_ok());
+    }
+
+    #[test]
+    fn arti_start_rejects_null_data_dir() {
+        assert_eq!(arti_start(std::ptr::null(), 39050), -2);
+    }
 }

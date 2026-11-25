@@ -8,10 +8,11 @@ rust-version = "1.90"
 crate-type = ["staticlib"]
 
 [dependencies]
-# Arti core - minimal features for client-only SOCKS proxy
+# Arti core - minimal features for client-only SOCKS proxy + .onion relays
 arti-client = { version = "0.38", default-features = false, features = [
     "tokio",
     "rustls",
+    "onion-service-client",
 ] }
 
 # Async runtime
