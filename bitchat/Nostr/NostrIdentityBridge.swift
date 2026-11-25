@@ -2,11 +2,22 @@ import BitFoundation
 import Foundation
 import CryptoKit
 
+enum NostrIdentityBridgeError: Error, Equatable {
+    case identityReadUnavailable
+    case invalidStoredIdentity
+    case identityPersistenceFailed
+}
+
 /// Bridge between Noise and Nostr identities
 final class NostrIdentityBridge {
     private let keychainService = "chat.bitchat.nostr"
     private let currentIdentityKey = "nostr-current-identity"
     private let deviceSeedKey = "nostr-device-seed"
+    // Multiple production owners construct their own bridge. Creation and
+    // panic deletion of the shared current-identity keychain item must still
+    // be one process-wide lifecycle, or concurrent bridges can return
+    // different keys or an in-flight save can resurrect a wiped identity.
+    private static let identityLifecycleLock = NSLock()
     // In-memory cache to avoid transient keychain access issues
     private var deviceSeedCache: Data?
     // Cache derived identities to avoid repeated crypto during view rendering
@@ -21,10 +32,26 @@ final class NostrIdentityBridge {
     
     /// Get or create the current Nostr identity
     func getCurrentNostrIdentity() throws -> NostrIdentity? {
-        // Check if we already have a Nostr identity
-        if let existingData = keychain.load(key: currentIdentityKey, service: keychainService),
-           let identity = try? JSONDecoder().decode(NostrIdentity.self, from: existingData) {
+        Self.identityLifecycleLock.lock()
+        defer { Self.identityLifecycleLock.unlock() }
+
+        switch keychain.loadWithResult(
+            key: currentIdentityKey,
+            service: keychainService
+        ) {
+        case .success(let existingData):
+            guard let identity = try? JSONDecoder().decode(
+                NostrIdentity.self,
+                from: existingData
+            ) else {
+                throw NostrIdentityBridgeError.invalidStoredIdentity
+            }
             return identity
+        case .itemNotFound:
+            break
+        case .accessDenied, .deviceLocked, .authenticationFailed,
+                .otherError:
+            throw NostrIdentityBridgeError.identityReadUnavailable
         }
         
         // Generate new Nostr identity
@@ -33,8 +60,21 @@ final class NostrIdentityBridge {
         // Store it
         let data = try JSONEncoder().encode(nostrIdentity)
         keychain.save(key: currentIdentityKey, data: data, service: keychainService, accessible: nil)
-        
-        return nostrIdentity
+        guard case .success(let persistedData) = keychain.loadWithResult(
+            key: currentIdentityKey,
+            service: keychainService
+        ),
+            persistedData == data,
+            let persistedIdentity = try? JSONDecoder().decode(
+                NostrIdentity.self,
+                from: persistedData
+            ),
+            persistedIdentity.publicKeyHex == nostrIdentity.publicKeyHex
+        else {
+            throw NostrIdentityBridgeError.identityPersistenceFailed
+        }
+
+        return persistedIdentity
     }
     
     /// Get Nostr public key associated with a Noise public key
@@ -49,6 +89,9 @@ final class NostrIdentityBridge {
     
     /// Clear all Nostr identity associations and current identity
     func clearAllAssociations() {
+        Self.identityLifecycleLock.lock()
+        defer { Self.identityLifecycleLock.unlock() }
+
         // Must go through the injected keychain, not raw SecItem calls:
         // under test that keychain is in-memory, and a direct delete here
         // would wipe the developer's real Nostr identity on every test run.

@@ -19,3 +19,7 @@ retain_swift_ui_previews: true
 retain_codable_properties: true
 relative_results: true
 baseline: .periphery.baseline.json
+# UniFFI emits its complete interface and conversion helpers. Keep the
+# generated file intact; build-apple.sh verifies its pinned digest.
+report_exclude:
+  - localPackages/NdrFfi/Sources/NdrFfi/NdrFfi.swift

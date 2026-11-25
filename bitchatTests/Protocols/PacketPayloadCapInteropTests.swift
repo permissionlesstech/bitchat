@@ -44,14 +44,16 @@ struct PacketPayloadCapInteropTests {
         let packet = makePacket(type: .fileTransfer, payload: inner, version: 2)
 
         // 469 B: Android's MAX_FRAGMENT_SIZE and the iOS default chunk.
-        // 482 B: the largest iOS chunk, from a 524-byte BLE link limit.
+        // 481 B: the largest iOS chunk, from a 524-byte BLE link limit.
         // 500 B: the chunk both platforms used before mid-2025.
-        let chunkSizes = [
-            TransportConfig.bleDefaultFragmentSize,
-            BLEOutboundPacketPolicy.fragmentChunkSize(forLinkLimit: 524),
-            500
+        // Give each synthetic sender a link budget that admits its chunks;
+        // receive compatibility does not depend on our current outbound cap.
+        let senderProfiles = [
+            (chunkSize: TransportConfig.bleDefaultFragmentSize, linkLimit: 512),
+            (chunkSize: BLEOutboundPacketPolicy.fragmentChunkSize(forLinkLimit: 524), linkLimit: 524),
+            (chunkSize: 500, linkLimit: 543)
         ]
-        for chunkSize in chunkSizes {
+        for (chunkSize, linkLimit) in senderProfiles {
             let request = BLEOutboundFragmentTransferRequest(
                 packet: packet,
                 pad: false,
@@ -61,8 +63,8 @@ struct PacketPayloadCapInteropTests {
             )
             let plan = try #require(BLEOutboundFragmentPlanner.makePlan(
                 for: request,
-                defaultChunkSize: TransportConfig.bleDefaultFragmentSize,
-                bleMaxMTU: 512
+                defaultChunkSize: chunkSize,
+                bleMaxMTU: linkLimit
             ))
             #expect(plan.fragmentPackets.map(\.payload.count).max() == 13 + chunkSize)
 

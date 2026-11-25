@@ -94,9 +94,14 @@ enum BLEOutboundFragmentPlanner {
             calculatedChunk = max(minimumChunkSize, bleMaxMTU - overhead)
         }
 
+        let linkBoundedChunk = min(
+            requestedMaxChunk ?? calculatedChunk,
+            calculatedChunk
+        )
+
         return (
             fragmentVersion: fragmentVersion,
-            chunkSize: max(minimumChunkSize, requestedMaxChunk ?? calculatedChunk)
+            chunkSize: max(minimumChunkSize, linkBoundedChunk)
         )
     }
 

@@ -34,14 +34,16 @@ extension ChatViewModel {
         senderPubkey: String,
         convKey: PeerID,
         id: NostrIdentity,
-        messageTimestamp: Date
+        messageTimestamp: Date,
+        source: NostrPrivateMessageSource = .legacy1059
     ) {
         privateConversationCoordinator.handlePrivateMessage(
             payload,
             senderPubkey: senderPubkey,
             convKey: convKey,
             id: id,
-            messageTimestamp: messageTimestamp
+            messageTimestamp: messageTimestamp,
+            source: source
         )
     }
 

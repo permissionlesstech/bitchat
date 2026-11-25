@@ -81,3 +81,9 @@ build.log
 # Local configs
 Local.xcconfig
 *.profraw
+
+# Built from the pinned nostr-double-ratchet submodule; never commit native crypto.
+localPackages/NdrFfi/Frameworks/NdrFfi.xcframework/
+
+# Rebuilt and verified against the pinned UniFFI source.
+/localPackages/NdrFfi/Sources/NdrFfi/NdrFfi.swift
