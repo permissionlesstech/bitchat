@@ -47,14 +47,8 @@ public final class TorURLSession: @unchecked Sendable {
             return
         }
         useTorProxy = useTor
-        let oldDefault = defaultSession
-        let oldTor = torSession
-        defaultSession = TorURLSession.makeDefaultSession()
-        torSession = TorURLSession.makeTorSession()
         lock.unlock()
-
-        oldDefault.finishTasksAndInvalidate()
-        oldTor.finishTasksAndInvalidate()
+        rebuild()
     }
 
     private static func makeTorSession() -> URLSession {
