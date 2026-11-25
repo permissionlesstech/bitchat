@@ -196,15 +196,20 @@ final class NoiseCipherState {
                 // Clear entire window - shift is too large
                 replayWindow = Array(repeating: 0, count: Self.REPLAY_WINDOW_BYTES)
             } else {
-                // Shift window right by `shift` bits
+                // Age every recorded nonce by `shift`. Bit `offset % 8` of byte
+                // `offset / 8` marks the nonce `offset` below the highest one
+                // (see isValidNonce), so a growing offset moves its bit left
+                // within a byte and carries into the low end of the next byte.
+                // Shifting the other way files each nonce under the wrong
+                // offset: recent replays pass and late packets are refused.
                 for i in stride(from: Self.REPLAY_WINDOW_BYTES - 1, through: 0, by: -1) {
                     let sourceByteIndex = i - shift / 8
                     var newByte: UInt8 = 0
                     
                     if sourceByteIndex >= 0 {
-                        newByte = replayWindow[sourceByteIndex] >> (shift % 8)
+                        newByte = replayWindow[sourceByteIndex] << (shift % 8)
                         if sourceByteIndex > 0 && shift % 8 != 0 {
-                            newByte |= replayWindow[sourceByteIndex - 1] << (8 - shift % 8)
+                            newByte |= replayWindow[sourceByteIndex - 1] >> (8 - shift % 8)
                         }
                     }
                     
@@ -216,6 +221,9 @@ final class NoiseCipherState {
             replayWindow[0] |= 1  // Mark most recent bit as seen
         } else {
             let offset = Int(highestReceivedNonce - receivedNonce)
+            // isValidNonce refuses anything a full window behind before this
+            // runs; never index past the window if that stops being true.
+            guard offset < Self.REPLAY_WINDOW_SIZE else { return }
             let byteIndex = offset / 8
             let bitIndex = offset % 8
             replayWindow[byteIndex] |= (1 << bitIndex)

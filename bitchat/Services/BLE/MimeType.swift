@@ -135,10 +135,11 @@ enum MimeType: CaseIterable, Hashable {
                    data[0] == 0x52 && data[1] == 0x49 && data[2] == 0x46 && data[3] == 0x46 &&
                    data[8] == 0x57 && data[9] == 0x45 && data[10] == 0x42 && data[11] == 0x50
 
-        case .m4a, .mp4Audio, .aac:
-            // AVAudioRecorder output varies by platform - be lenient
-            // Security: size already capped + sandboxed execution
-            return data.count > 100
+        case .m4a, .mp4Audio:
+            return Self.matchesISOBMFF(data)
+
+        case .aac:
+            return Self.matchesADTSAAC(data) || Self.matchesISOBMFF(data)
 
         case .mpeg, .mp3:
             if data.count >= 3 && data[0] == 0x49 && data[1] == 0x44 && data[2] == 0x33 {
@@ -185,6 +186,30 @@ enum MimeType: CaseIterable, Hashable {
         }
 
         return nil
+    }
+
+    /// ISO Base Media File Format (`ftyp` box) used by `.m4a` and `.mp4` audio.
+    private static func matchesISOBMFF(_ data: Data) -> Bool {
+        guard data.count >= 12 else { return false }
+        guard data[4] == 0x66 && data[5] == 0x74 && data[6] == 0x79 && data[7] == 0x70 else {
+            return false
+        }
+        let boxSize = (UInt32(data[0]) << 24)
+            | (UInt32(data[1]) << 16)
+            | (UInt32(data[2]) << 8)
+            | UInt32(data[3])
+        // Standard 32-bit ftyp box size (>= 12 and within payload) or 64-bit extended size (1).
+        return (boxSize >= 12 && Int(boxSize) <= data.count) || (boxSize == 1 && data.count >= 16)
+    }
+
+    /// ADTS-framed AAC: 12-bit syncword (0xFFF) with MPEG layer bits == 00 and frame length >= 7.
+    private static func matchesADTSAAC(_ data: Data) -> Bool {
+        guard data.count >= 7 else { return false }
+        guard data[0] == 0xFF && (data[1] & 0xF6) == 0xF0 else { return false }
+        let frameLength = ((Int(data[3]) & 0x03) << 11)
+            | (Int(data[4]) << 3)
+            | ((Int(data[5]) & 0xE0) >> 5)
+        return frameLength >= 7 && frameLength <= data.count
     }
 }
 

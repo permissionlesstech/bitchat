@@ -1,3 +1,4 @@
+import AudioToolbox
 import BitFoundation
 import Foundation
 
@@ -39,6 +40,7 @@ enum BLEIncomingFileRejection: Error, Equatable {
     case payloadTooLarge(bytes: Int)
     case unsupportedMime(mimeType: String?, bytes: Int)
     case magicMismatch(mime: MimeType, bytes: Int, prefixHex: String)
+    case invalidAudio(mime: MimeType, bytes: Int, reason: String)
 }
 
 enum BLEIncomingFileValidator {
@@ -66,6 +68,143 @@ enum BLEIncomingFileValidator {
             ))
         }
 
+        if mime.category == .audio,
+           let failureReason = AudioContainerValidator.validate(data: filePacket.content, mime: mime) {
+            return .failure(.invalidAudio(
+                mime: mime,
+                bytes: filePacket.content.count,
+                reason: failureReason
+            ))
+        }
+
         return .success(BLEIncomingFileAcceptance(filePacket: filePacket, mime: mime))
+    }
+}
+
+/// Inspects incoming audio payloads in memory with CoreAudio before they are
+/// persisted or tracked for gossip sync. Blocks container spoofing (e.g., CAF
+/// disguised as M4A) and crafted headers claiming absurd durations or frame
+/// counts.
+enum AudioContainerValidator {
+    private final class MemoryReader {
+        let data: Data
+        init(data: Data) { self.data = data }
+    }
+
+    static func validate(data: Data, mime: MimeType) -> String? {
+        guard let allowedFormats = allowedFileFormats(for: mime) else {
+            // Formats CoreAudio does not parse (e.g., Ogg) rely on magic + size checks.
+            return nil
+        }
+
+        let reader = MemoryReader(data: data)
+        return withExtendedLifetime(reader) {
+            let clientData = Unmanaged.passUnretained(reader).toOpaque()
+            var audioFileID: AudioFileID?
+
+            let openStatus = AudioFileOpenWithCallbacks(
+                clientData,
+                { inClientData, inPosition, requestCount, buffer, actualCount in
+                    let reader = Unmanaged<MemoryReader>.fromOpaque(inClientData).takeUnretainedValue()
+                    guard inPosition >= 0 else { return kAudioFilePositionError }
+                    let total = Int64(reader.data.count)
+                    if inPosition >= total {
+                        actualCount.pointee = 0
+                        return noErr
+                    }
+                    let available = Int(min(Int64(requestCount), total - inPosition))
+                    if available > 0 {
+                        let start = Int(inPosition)
+                        reader.data.copyBytes(
+                            to: buffer.assumingMemoryBound(to: UInt8.self),
+                            from: start..<(start + available)
+                        )
+                    }
+                    actualCount.pointee = UInt32(available)
+                    return noErr
+                },
+                nil,
+                { inClientData in
+                    let reader = Unmanaged<MemoryReader>.fromOpaque(inClientData).takeUnretainedValue()
+                    return Int64(reader.data.count)
+                },
+                nil,
+                0,
+                &audioFileID
+            )
+
+            guard openStatus == noErr, let fileID = audioFileID else {
+                return "unparseable container (status \(openStatus))"
+            }
+            defer { AudioFileClose(fileID) }
+
+            var detectedFormat: AudioFileTypeID = 0
+            var formatSize = UInt32(MemoryLayout<AudioFileTypeID>.size)
+            let formatStatus = AudioFileGetProperty(fileID, kAudioFilePropertyFileFormat, &formatSize, &detectedFormat)
+            guard formatStatus == noErr, allowedFormats.contains(detectedFormat) else {
+                return "container format mismatch (\(detectedFormat))"
+            }
+
+            var asbd = AudioStreamBasicDescription()
+            var asbdSize = UInt32(MemoryLayout<AudioStreamBasicDescription>.size)
+            let asbdStatus = AudioFileGetProperty(fileID, kAudioFilePropertyDataFormat, &asbdSize, &asbd)
+            guard asbdStatus == noErr,
+                  asbd.mSampleRate.isFinite,
+                  asbd.mSampleRate > 0,
+                  asbd.mChannelsPerFrame > 0 else {
+                return "invalid audio stream description"
+            }
+
+            var estimatedDuration: TimeInterval = 0
+            var durationSize = UInt32(MemoryLayout<TimeInterval>.size)
+            let durationStatus = AudioFileGetProperty(
+                fileID,
+                kAudioFilePropertyEstimatedDuration,
+                &durationSize,
+                &estimatedDuration
+            )
+            if durationStatus == noErr {
+                guard estimatedDuration.isFinite,
+                      estimatedDuration >= 0,
+                      estimatedDuration <= WaveformCache.maxWaveformDurationSeconds else {
+                    return "duration out of bounds (\(estimatedDuration)s)"
+                }
+            }
+
+            var packetCount: UInt64 = 0
+            var packetCountSize = UInt32(MemoryLayout<UInt64>.size)
+            let packetStatus = AudioFileGetProperty(
+                fileID,
+                kAudioFilePropertyAudioDataPacketCount,
+                &packetCountSize,
+                &packetCount
+            )
+            if packetStatus == noErr, asbd.mFramesPerPacket > 0 {
+                let (totalFrames, overflow) = packetCount.multipliedReportingOverflow(by: UInt64(asbd.mFramesPerPacket))
+                if overflow || totalFrames > UInt64(WaveformCache.maxWaveformFrames) {
+                    return "frame count out of bounds"
+                }
+                if Double(totalFrames) / asbd.mSampleRate > WaveformCache.maxWaveformDurationSeconds {
+                    return "frame duration out of bounds"
+                }
+            }
+
+            return nil
+        }
+    }
+
+    private static func allowedFileFormats(for mime: MimeType) -> Set<AudioFileTypeID>? {
+        switch mime {
+        case .m4a, .mp4Audio:
+            return [kAudioFileM4AType, kAudioFileMPEG4Type, kAudioFile3GPType, kAudioFile3GP2Type]
+        case .aac:
+            return [kAudioFileAAC_ADTSType, kAudioFileM4AType, kAudioFileMPEG4Type]
+        case .mp3, .mpeg:
+            return [kAudioFileMP3Type, kAudioFileMP2Type, kAudioFileMP1Type]
+        case .wav, .xWav:
+            return [kAudioFileWAVEType]
+        default:
+            return nil
+        }
     }
 }

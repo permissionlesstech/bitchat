@@ -28,7 +28,7 @@ struct AppInfoView: View {
     @ObservedObject private var locationManager = LocationChannelManager.shared
     /// Sticky across opens: first-ever open lands on Info (the gentler
     /// introduction), and afterwards the sheet reopens wherever it was left.
-    @AppStorage("appInfo.selectedPane") private var selectedPane: Pane = .info
+    @AppStorage(AppInfoView.selectedPaneStorageKey) private var selectedPane: Pane = .info
     /// Read here only so the privacy-pane row can describe the gesture; the
     /// setting itself lives in PanicDangerZoneSection.
     @AppStorage(PanicGestureSettings.storageKey) private var panicGestureRawValue = PanicGestureSettings.installDefault.rawValue
@@ -37,9 +37,19 @@ struct AppInfoView: View {
     /// start, so surface the restart hint.
     @State private var showLanguageRestartNote = false
 
-    private enum Pane: String {
+    enum Pane: String {
         case settings
         case info
+    }
+
+    private static let selectedPaneStorageKey = "appInfo.selectedPane"
+
+    /// Overwrites the remembered pane so the next presentation opens there.
+    /// `selectedPane` is sticky by design; a caller whose control names a
+    /// specific pane (the header gear says "settings") uses this so the
+    /// sheet doesn't land first-time users on the Info default instead.
+    static func setSelectedPane(_ pane: Pane) {
+        UserDefaults.standard.set(pane.rawValue, forKey: selectedPaneStorageKey)
     }
 
     private var selectedTheme: AppTheme {

@@ -14,14 +14,15 @@ final class VoiceNotePlaybackController: NSObject, ObservableObject, AVAudioPlay
 
     /// rounded so 4.9s shows "00:05"
     var roundedDuration: Int {
-        guard duration.isFinite else { return 0 }
-        return Int(duration.rounded())
+        guard duration.isFinite, duration >= 0 else { return 0 }
+        return Int(min(duration, Double(Int.max / 2)).rounded())
     }
 
     /// ceil so "00:01" stays visible until playback ends, capped to rounded duration
     var remainingSeconds: Int {
+        guard duration.isFinite, currentTime.isFinite else { return 0 }
         let remaining = max(0, duration - currentTime)
-        return min(roundedDuration, Int(ceil(remaining)))
+        return min(roundedDuration, Int(ceil(min(remaining, Double(Int.max / 2)))))
     }
 
     private var player: AVAudioPlayer?

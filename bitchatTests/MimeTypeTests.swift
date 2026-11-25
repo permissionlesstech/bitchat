@@ -58,6 +58,13 @@ struct MimeTypeTests {
                          0x57, 0x45, 0x42, 0x50]),             // "RIFF....WEBP"
 
         // === Audio types ===
+        (MimeType.mp4Audio, [0x00, 0x00, 0x00, 0x18, 0x66, 0x74, 0x79, 0x70,
+                             0x4D, 0x34, 0x41, 0x20, 0x00, 0x00, 0x00, 0x00,
+                             0x4D, 0x34, 0x41, 0x20, 0x6D, 0x70, 0x34, 0x32]), // ISO BMFF ftypM4A
+        (MimeType.m4a, [0x00, 0x00, 0x00, 0x14, 0x66, 0x74, 0x79, 0x70,
+                        0x69, 0x73, 0x6F, 0x6D, 0x00, 0x00, 0x02, 0x00,
+                        0x69, 0x73, 0x6F, 0x6D]),                              // ISO BMFF ftypisom
+        (MimeType.aac, [0xFF, 0xF1, 0x5C, 0x40, 0x01, 0x1F, 0xFC, 0x00]),      // ADTS AAC (frame len 8)
         (MimeType.mp3, [0x49, 0x44, 0x33]),                   // "ID3"
         (MimeType.wav, [0x52, 0x49, 0x46, 0x46, 0x00, 0x00, 0x00, 0x00,
                          0x57, 0x41, 0x56, 0x45]),             // "RIFF....WAVE"
@@ -78,6 +85,18 @@ struct MimeTypeTests {
         for mime in MimeType.allCases where mime != .octetStream {
             #expect(!mime.matches(data: badData),
                     "Unexpectedly matched \(mime.mimeString) with zeroed data")
+        }
+    }
+
+    @Test func cafContainerAndArbitraryPaddingRejectedForAudioMimes() throws {
+        // Previously audio/mp4, audio/m4a, and audio/aac only checked data.count > 100,
+        // letting a 268-byte CAF file pass as an M4A voice note.
+        let cafPrefix = Data("caff".utf8) + Data(repeating: 0x00, count: 264)
+        let arbitrary = Data(repeating: 0x41, count: 268)
+
+        for mime in [MimeType.mp4Audio, .m4a, .aac, .mp3, .mpeg, .wav, .xWav, .ogg] {
+            #expect(!mime.matches(data: cafPrefix), "CAF should not match \(mime.mimeString)")
+            #expect(!mime.matches(data: arbitrary), "Arbitrary bytes should not match \(mime.mimeString)")
         }
     }
 

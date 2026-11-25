@@ -106,6 +106,7 @@ struct VoiceNoteView: View {
         .task {
             // Defer loading to let UI settle after view appears
             try? await Task.sleep(nanoseconds: 100_000_000) // 0.1s
+            guard !Task.isCancelled else { return }
             playback.loadDuration()
             await withCheckedContinuation { continuation in
                 WaveformCache.shared.waveform(for: url, completion: { bins in
