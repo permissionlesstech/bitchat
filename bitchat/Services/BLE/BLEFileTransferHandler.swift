@@ -226,6 +226,8 @@ final class BLEFileTransferHandler {
             SecureLogger.warning("🚫 MIME REJECT: '\(mimeType ?? "<empty>")' not supported. Size=\(bytes)b from \(peerID.id.prefix(8))...", category: .security)
         case .failure(.magicMismatch(let mime, let bytes, let prefixHex)):
             SecureLogger.warning("🚫 MAGIC REJECT: MIME='\(mime)' size=\(bytes)b prefix=[\(prefixHex)] from \(peerID.id.prefix(8))...", category: .security)
+        case .failure(.invalidAudio(let mime, let bytes, let reason)):
+            SecureLogger.warning("🚫 AUDIO REJECT: MIME='\(mime)' size=\(bytes)b reason='\(reason)' from \(peerID.id.prefix(8))...", category: .security)
         }
         return nil
     }

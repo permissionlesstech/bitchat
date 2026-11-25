@@ -1,3 +1,4 @@
+import AVFoundation
 import BitFoundation
 import Combine
 import CoreBluetooth
@@ -1104,10 +1105,7 @@ struct PrivateMediaEndToEndTests {
     @Test
     func finalizedPrivateM4AIsOpaqueBeforeFragmentationAndDelivers() async throws {
         let marker = Data("M4A_PRIVATE_MARKER_e0cd431b61fb4a6c".utf8)
-        let content = Data([0x00, 0x00, 0x00, 0x18])
-            + Data("ftypM4A ".utf8)
-            + marker
-            + Data(repeating: 0x4D, count: 6 * 1024)
+        let content = try makeValidM4APayload(embedding: marker, extraPaddingBytes: 6 * 1024)
         try await assertPrivateMediaRoundTrip(
             fileName: "voice_0011223344556677.m4a",
             mimeType: "audio/mp4",
@@ -1115,6 +1113,33 @@ struct PrivateMediaEndToEndTests {
             marker: marker,
             expectedMessagePrefix: "[voice]"
         )
+    }
+
+    /// Generates a real AAC `.m4a` container and appends a spec-compliant ISO BMFF
+    /// `free` box carrying `marker` + padding so wire-opacity and fragmentation
+    /// assertions run against an audio payload that passes ingest validation.
+    private func makeValidM4APayload(embedding marker: Data, extraPaddingBytes: Int) throws -> Data {
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("e2e-voice-\(UUID().uuidString).m4a")
+        defer { try? FileManager.default.removeItem(at: url) }
+
+        let format = try #require(PTTAudioFormat.pcmFormat)
+        let frameCount: AVAudioFrameCount = 1_600
+        let buffer = try #require(AVAudioPCMBuffer(pcmFormat: format, frameCapacity: frameCount))
+        buffer.frameLength = frameCount
+        do {
+            // Releasing AVAudioFile finalizes the .m4a moov atom on disk.
+            let file = try AVAudioFile(forWriting: url, settings: PTTAudioFormat.voiceNoteFileSettings)
+            try file.write(from: buffer)
+        }
+
+        var data = try Data(contentsOf: url)
+        let freeBody = marker + Data(repeating: 0x4D, count: extraPaddingBytes)
+        var boxSize = UInt32(8 + freeBody.count).bigEndian
+        withUnsafeBytes(of: &boxSize) { data.append(contentsOf: $0) }
+        data.append(contentsOf: Array("free".utf8))
+        data.append(freeBody)
+        return data
     }
 
     @Test
