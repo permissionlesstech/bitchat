@@ -1090,9 +1090,9 @@ struct PrivateMediaEndToEndTests {
     @Test
     func privateJPEGIsOpaqueBeforeFragmentationAndDelivers() async throws {
         let marker = Data("JPEG_PRIVATE_MARKER_7f5e5eacb86f4b9a".utf8)
-        let content = Data([0xFF, 0xD8, 0xFF, 0xE0])
-            + marker
-            + Data(repeating: 0x4A, count: 6 * 1024)
+        let content = TestImageFixtures.makeJPEG(
+            comment: marker + Data(repeating: 0x4A, count: 6 * 1024)
+        )
         try await assertPrivateMediaRoundTrip(
             fileName: "img_20260725_120000_11111111-1111-1111-1111-111111111111.jpg",
             mimeType: "image/jpeg",

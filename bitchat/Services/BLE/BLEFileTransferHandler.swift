@@ -228,6 +228,8 @@ final class BLEFileTransferHandler {
             SecureLogger.warning("🚫 MAGIC REJECT: MIME='\(mime)' size=\(bytes)b prefix=[\(prefixHex)] from \(peerID.id.prefix(8))...", category: .security)
         case .failure(.invalidAudio(let mime, let bytes, let reason)):
             SecureLogger.warning("🚫 AUDIO REJECT: MIME='\(mime)' size=\(bytes)b reason='\(reason)' from \(peerID.id.prefix(8))...", category: .security)
+        case .failure(.invalidImage(let mime, let bytes, let reason)):
+            SecureLogger.warning("🚫 IMAGE REJECT: MIME='\(mime)' size=\(bytes)b reason='\(reason)' from \(peerID.id.prefix(8))...", category: .security)
         }
         return nil
     }

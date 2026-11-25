@@ -76,12 +76,12 @@ struct ImagePreviewView: View {
     }
 
     private func loadImage() {
+        let imageURL = url
         DispatchQueue.global(qos: .userInitiated).async {
-            #if os(iOS)
-            guard let image = UIImage(contentsOfFile: url.path) else { return }
-            #else
-            guard let image = NSImage(contentsOf: url) else { return }
-            #endif
+            guard let image = ImageDownsampler.loadDownsampledImage(
+                from: imageURL,
+                maxPixelSize: ImageDownsampler.fullScreenMaxPixelSize
+            ) else { return }
             DispatchQueue.main.async {
                 self.platformImage = image
             }

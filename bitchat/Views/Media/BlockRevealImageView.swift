@@ -23,6 +23,8 @@ struct BlockRevealImageView: View {
     @State private var isBlurred: Bool = false
     @State private var showDeleteConfirmation = false
     @State private var loadFailed = false
+    @State private var loadGeneration: Int = 0
+    @State private var loadedMaxPixelSize: Int = 0
 
     private enum Strings {
         static let tapToReveal = String(localized: "media.image.tap_to_reveal", comment: "Caption on a blurred incoming image inviting a tap to reveal it")
@@ -94,11 +96,17 @@ struct BlockRevealImageView: View {
         .simultaneousGesture(hideSwipe)
         .onAppear {
             isBlurred = initiallyBlurred
-            loadImage()
+            loadImage(maxPixelSize: initiallyBlurred ? ImageDownsampler.blurredPreviewMaxPixelSize : ImageDownsampler.inlineMaxPixelSize)
         }
         .onChange(of: url) { _ in
             isBlurred = initiallyBlurred
-            loadImage()
+            loadedMaxPixelSize = 0
+            loadImage(maxPixelSize: initiallyBlurred ? ImageDownsampler.blurredPreviewMaxPixelSize : ImageDownsampler.inlineMaxPixelSize)
+        }
+        .onChange(of: isBlurred) { blurred in
+            if !blurred && loadedMaxPixelSize < ImageDownsampler.inlineMaxPixelSize {
+                loadImage(maxPixelSize: ImageDownsampler.inlineMaxPixelSize)
+            }
         }
         .contextMenu {
             if isSending {
@@ -227,20 +235,24 @@ struct BlockRevealImageView: View {
         return isBlurred ? Strings.revealHint : Strings.openHint
     }
 
-    private func loadImage() {
+    private func loadImage(maxPixelSize: Int) {
         loadFailed = false
+        loadGeneration &+= 1
+        let generation = loadGeneration
+        let imageURL = url
         DispatchQueue.global(qos: .userInitiated).async {
-            #if os(iOS)
-            let image = UIImage(contentsOfFile: url.path)
-            #else
-            let image = NSImage(contentsOf: url)
-            #endif
+            let image = ImageDownsampler.loadDownsampledImage(
+                from: imageURL,
+                maxPixelSize: maxPixelSize
+            )
             DispatchQueue.main.async {
+                guard self.loadGeneration == generation else { return }
                 guard let image else {
                     self.loadFailed = true
                     return
                 }
                 self.platformImage = image
+                self.loadedMaxPixelSize = maxPixelSize
                 self.aspectRatio = image.size.height > 0 ? image.size.width / image.size.height : 1
             }
         }
