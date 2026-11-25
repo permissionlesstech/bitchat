@@ -36,6 +36,7 @@ extension ChatViewModel {
         id: NostrIdentity,
         messageTimestamp: Date
     ) {
+        guard networkActivationAllowed else { return }
         privateConversationCoordinator.handlePrivateMessage(
             payload,
             senderPubkey: senderPubkey,
@@ -176,6 +177,7 @@ extension ChatViewModel {
 
     @MainActor
     func handlePrivateMessage(_ message: BitchatMessage) {
+        guard networkActivationAllowed else { return }
         // A finalized voice note whose burst already streamed in live swaps
         // into the existing bubble instead of appearing (and notifying) twice.
         if liveVoiceCoordinator.absorbFinalizedVoiceNote(message) { return }

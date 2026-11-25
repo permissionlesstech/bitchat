@@ -257,3 +257,43 @@ struct ChatOutgoingCoordinatorContextTests {
                 == context.appendedPublicMessages.map(\.message.id))
     }
 }
+
+
+struct OutgoingPanicBoundaryTests {
+    @Test(arguments: [false, true]) @MainActor
+    func completionFromOldMiningCannotEchoSendOrReportError(_ failMining: Bool) async throws {
+        let context = MockChatOutgoingContext()
+        context.activeChannel = .location(GeohashChannel(level: .city, geohash: "u4pruydq"))
+        var release: CheckedContinuation<Void, Never>?
+        let coordinator = ChatOutgoingCoordinator(context: context, buildGeohashEvent: { content, geohash, identity, nickname, teleported in
+            let event = try await NostrProtocol.createMinedEphemeralGeohashEvent(
+                content: content, geohash: geohash, senderIdentity: identity,
+                nickname: nickname, teleported: teleported)
+            await withCheckedContinuation { release = $0 }
+            if failMining { throw MockChatOutgoingContext.IdentityUnavailable() }
+            return event
+        })
+        coordinator.sendMessage("old mining")
+        let task = try #require(coordinator.geohashMiningTask)
+        for _ in 0..<100 where release == nil { try await Task.sleep(nanoseconds: 10_000_000) }
+        let resume = try #require(release)
+        coordinator.resetForPanic()
+        resume.resume()
+        await task.value
+        #expect(context.appendedPublicMessages.isEmpty)
+        #expect(context.sentGeohashContexts.isEmpty)
+        #expect(context.recordedActivityKeys.isEmpty)
+        #expect(context.systemMessages.isEmpty)
+    }
+
+    @Test @MainActor
+    func panicInvalidatesDeferredCommandsButAllowsFreshCommands() async {
+        let context = MockChatOutgoingContext()
+        let coordinator = ChatOutgoingCoordinator(context: context)
+        coordinator.sendMessage("/who old")
+        coordinator.resetForPanic()
+        coordinator.sendMessage("/who fresh")
+        await drainMainActorTasks()
+        #expect(context.handledCommands == ["/who fresh"])
+    }
+}

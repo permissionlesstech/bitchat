@@ -135,15 +135,18 @@ final class GossipSyncManager {
     // sender while the owner is away.
     private var latestPrekeyBundleByPeer: [PeerID: (id: String, packet: BitchatPacket)] = [:]
     private var archiveDirty = false
+    private var stoppedForPanic = false
 
     // Timer
     private var periodicTimer: DispatchSourceTimer?
-    private let queue = DispatchQueue(label: "mesh.sync", qos: .utility)
+    private let queue: DispatchQueue
     private var lastStalePeerCleanup: Date = .distantPast
     private var syncSchedules: [SyncSchedule] = []
     private var responseRateLimiter: SyncResponseRateLimiter
 
-    init(myPeerID: PeerID, config: Config = Config(), requestSyncManager: RequestSyncManager, archive: GossipMessageArchive? = nil) {
+    init(myPeerID: PeerID, config: Config = Config(), requestSyncManager: RequestSyncManager, archive: GossipMessageArchive? = nil,
+         queue: DispatchQueue = DispatchQueue(label: "mesh.sync", qos: .utility)) {
+        self.queue = queue
         self.myPeerID = myPeerID
         self.config = config
         self.requestSyncManager = requestSyncManager
@@ -197,6 +200,31 @@ final class GossipSyncManager {
 
     func stop() {
         periodicTimer?.cancel(); periodicTimer = nil
+    }
+
+    /// Retire this owner after its earlier persistence finishes.
+    /// The panic controller deletes the archive after this method returns.
+    func stopForPanic() {
+        stop()
+        queue.sync {
+            stoppedForPanic = true
+        }
+    }
+
+    /// Retires persistence in queue order without blocking the caller.
+    @MainActor
+    func stopForPanicAsync() async {
+        stop()
+        await withCheckedContinuation { continuation in
+            enqueuePanicRetirement { continuation.resume() }
+        }
+    }
+
+    private func enqueuePanicRetirement(_ completion: @escaping () -> Void) {
+        queue.async { [self] in
+            stoppedForPanic = true
+            completion()
+        }
     }
 
     func scheduleInitialSyncToPeer(_ peerID: PeerID, delaySeconds: TimeInterval = 5.0) {
@@ -685,6 +713,7 @@ final class GossipSyncManager {
     }
 
     private func persistArchiveIfDirty() {
+        guard !stoppedForPanic else { return }
         guard archiveDirty, let archive else { return }
         archiveDirty = false
         let packets = messages.allPackets(isFresh: isPacketFresh)

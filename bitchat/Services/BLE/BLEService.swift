@@ -724,7 +724,7 @@ final class BLEService: NSObject {
     func suspendForPanicReset() {
         setPanicSuspended(true)
         noisePacketHandler.resetForPanic()
-        gossipSyncManager?.stop()
+        gossipSyncManager?.stopForPanic()
         gossipSyncManager = nil
         // Stop the radio and drain CoreBluetooth's delegate queue first. A
         // callback may already have passed its initial suspension check; the
@@ -740,6 +740,28 @@ final class BLEService: NSObject {
             noisePacketHandler.resetForPanic()
         }
         clearEmergencySessionState()
+    }
+
+    #if DEBUG
+    func _test_replaceGossipManager(_ manager: GossipSyncManager) {
+        gossipSyncManager?.stop()
+        gossipSyncManager = manager
+    }
+    #endif
+
+    /// Close admission and stop radio activity before yielding for gossip retirement.
+    @MainActor
+    func beginPanicReset() -> Task<Void, Never> {
+        setPanicSuspended(true)
+        let retiringGossip = gossipSyncManager
+        gossipSyncManager = nil
+        noisePacketHandler.resetForPanic()
+        stopServicesImmediatelyForPanic()
+        return Task { @MainActor [self] in
+            await retiringGossip?.stopForPanicAsync()
+            onEngine { noisePacketHandler.resetForPanic() }
+            clearEmergencySessionState()
+        }
     }
 
     /// Reopen the radio only after media deletion and recovery-marker commit.
@@ -760,7 +782,7 @@ final class BLEService: NSObject {
         currentNickname: String,
         restartServices: Bool = true
     ) {
-        gossipSyncManager?.stop()
+        gossipSyncManager?.stopForPanic()
         gossipSyncManager = nil
         // Discard deferred pre-panic ciphertext behind any in-flight receive
         // handlers so none can repopulate the handler's bounded queue.
@@ -1040,7 +1062,7 @@ final class BLEService: NSObject {
 
     /// Panic cannot spend its security boundary sending a signed LEAVE or
     /// pumping the main run loop. Close the radio and timers immediately;
-    /// the identity/session cleanup follows synchronously.
+    /// the caller completes the remaining identity/session cleanup.
     private func stopServicesImmediatelyForPanic() {
         bleQueue.sync {
             pendingNotifications.removeAll()
@@ -2929,12 +2951,9 @@ final class BLEService: NSObject {
 
 // MARK: - GossipSyncManager Delegate
 extension BLEService: GossipSyncManager.Delegate {
-    // Gossip calls arrive on the manager's own serial queue; sends read
-    // the engine-owned bindings, so they enter an engine slot. The sync
-    // hop is safe: mesh.sync sits above the engine in the sync order —
-    // production engine code only ever queue.async's into the manager
-    // (the queue.sync helpers are DEBUG test entry points that run on
-    // test threads), so no reverse edge exists.
+    // Gossip delegate calls synchronously enter the engine. Engine callers
+    // must enqueue manager work asynchronously to avoid reversing that order.
+    // Keep the synchronous panic-retirement drain outside the engine queue.
     func sendPacket(_ packet: BitchatPacket) {
         onEngine {
             broadcastPacket(packet)

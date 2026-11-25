@@ -11,6 +11,7 @@ import Foundation
 /// true dependencies explicit.
 @MainActor
 protocol ChatTransportEventContext: AnyObject {
+    var networkActivationAllowed: Bool { get }
     // MARK: Connection & chat state
     var isConnected: Bool { get set }
     var nickname: String { get }
@@ -84,6 +85,10 @@ protocol ChatTransportEventContext: AnyObject {
     func handleGroupInvitePayload(from peerID: PeerID, payload: Data)
     func handleGroupKeyUpdatePayload(from peerID: PeerID, payload: Data)
     func handleVouchPayload(from peerID: PeerID, payload: Data)
+}
+
+extension ChatTransportEventContext {
+    var networkActivationAllowed: Bool { true }
 }
 
 extension ChatViewModel: ChatTransportEventContext {
@@ -268,6 +273,7 @@ final class ChatTransportEventCoordinator {
 
     @MainActor
     func didConnectToPeerSynchronously(_ peerID: PeerID) {
+        guard context.networkActivationAllowed else { return }
         SecureLogger.debug("🤝 Peer connected: \(peerID)", category: .session)
 
         context.isConnected = true
@@ -291,6 +297,7 @@ final class ChatTransportEventCoordinator {
 
     @MainActor
     func didDisconnectFromPeerSynchronously(_ peerID: PeerID) {
+        guard context.networkActivationAllowed else { return }
         SecureLogger.debug("👋 Peer disconnected: \(peerID)", category: .session)
 
         context.removeEphemeralSession(peerID: peerID)
@@ -332,6 +339,7 @@ private extension ChatTransportEventCoordinator {
         messageID: String?,
         in context: any ChatTransportEventContext
     ) {
+        guard context.networkActivationAllowed else { return }
         let normalized = content.trimmed
         let mentions = context.parseMentions(from: normalized)
         let message = BitchatMessage(
@@ -358,6 +366,7 @@ private extension ChatTransportEventCoordinator {
         _ message: BitchatMessage,
         in context: any ChatTransportEventContext
     ) -> Bool {
+        guard context.networkActivationAllowed else { return false }
         guard !context.isMessageBlocked(message) else { return false }
         guard !message.content.trimmed.isEmpty || message.isPrivate else { return false }
 
@@ -374,7 +383,7 @@ private extension ChatTransportEventCoordinator {
 
     func runOnMain(_ action: @escaping @MainActor (any ChatTransportEventContext) -> Void) {
         Task { @MainActor [weak context = self.context] in
-            guard let context else { return }
+            guard let context, context.networkActivationAllowed else { return }
             action(context)
         }
     }
@@ -429,6 +438,7 @@ private extension ChatTransportEventCoordinator {
         timestamp: Date,
         in context: any ChatTransportEventContext
     ) {
+        guard context.networkActivationAllowed else { return }
         switch type {
         case .privateMessage:
             guard let packet = PrivateMessagePacket.decode(from: payload) else { return }

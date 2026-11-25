@@ -27,6 +27,8 @@ final class AppChromeModel: ObservableObject {
     /// that did not commit must be visible, not just logged — the person who
     /// triggered it needs to know data may remain on the device.
     @Published private(set) var panicWipeBlocked = false
+    @Published private(set) var panicInProgress = false
+    private(set) var panicTask: Task<Void, Never>?
 
     private let chatViewModel: ChatViewModel
     private let onPanicWipe: () -> Void
@@ -134,6 +136,8 @@ final class AppChromeModel: ObservableObject {
     }
 
     func panicClearAllData() {
+        guard !panicInProgress else { return }
+        panicInProgress = true
         // A wipe invalidates everything on screen, and its outcome must be
         // visible: the success message and the failed-wipe banner both live
         // on the root timeline, so a sheet left up (the App Info danger-zone
@@ -146,7 +150,11 @@ final class AppChromeModel: ObservableObject {
 
         prepareForPanic?()
         onPanicWipe()
-        chatViewModel.panicClearAllData()
+        let cleanup = chatViewModel.beginPanicClearAllData()
+        panicTask = Task { @MainActor [self] in
+            _ = await cleanup?.value
+            panicInProgress = chatViewModel.isPanicResetting
+        }
     }
 
     private func bind(privateInboxModel: PrivateInboxModel) {
@@ -180,6 +188,9 @@ final class AppChromeModel: ObservableObject {
         chatViewModel.$torBlocked
             .receive(on: DispatchQueue.main)
             .assign(to: &$torBlocked)
+
+        chatViewModel.$isPanicResetting
+            .assign(to: &$panicInProgress)
 
         chatViewModel.$panicRecoveryBlocked
             .receive(on: DispatchQueue.main)

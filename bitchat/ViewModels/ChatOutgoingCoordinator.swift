@@ -83,9 +83,24 @@ final class ChatOutgoingCoordinator {
     /// the message still goes out at the difficulty already reached.
     /// (Read access is internal so tests can await the send's completion.)
     private(set) var geohashMiningTask: Task<Void, Never>?
+    private var wipeGeneration: UInt64 = 0
 
-    init(context: any ChatOutgoingContext) {
+    /// Panic abandons pending sends; ordinary cancellation still expedites mining.
+    func resetForPanic() {
+        wipeGeneration &+= 1
+        geohashMiningTask?.cancel()
+        geohashMiningTask = nil
+    }
+
+    typealias GeohashEventBuilder = (String, String, NostrIdentity, String, Bool) async throws -> NostrEvent
+    private let buildGeohashEvent: GeohashEventBuilder
+
+    init(context: any ChatOutgoingContext, buildGeohashEvent: @escaping GeohashEventBuilder = {
+        try await NostrProtocol.createMinedEphemeralGeohashEvent(
+            content: $0, geohash: $1, senderIdentity: $2, nickname: $3, teleported: $4)
+    }) {
         self.context = context
+        self.buildGeohashEvent = buildGeohashEvent
     }
 
     /// Finish any in-flight geohash PoW mining early (the pending message
@@ -98,7 +113,9 @@ final class ChatOutgoingCoordinator {
         guard let trimmed = content.trimmedOrNilIfEmpty else { return }
 
         if content.hasPrefix("/") {
-            Task { @MainActor [weak context = self.context] in
+            let generation = wipeGeneration
+            Task { @MainActor [weak self, weak context = self.context] in
+                guard let self, self.wipeGeneration == generation else { return }
                 context?.handleCommand(content)
             }
             return
@@ -184,26 +201,23 @@ private extension ChatOutgoingCoordinator {
         // delays or blocks a send beyond `NostrPoW.miningTimeCap`.
         let previousSend = geohashMiningTask
         previousSend?.cancel()
-        geohashMiningTask = Task { @MainActor [weak context = self.context] in
+        let generation = wipeGeneration
+        geohashMiningTask = Task { @MainActor [weak self, weak context = self.context] in
             await previousSend?.value
+            guard let self, self.wipeGeneration == generation else { return }
 
             let event: NostrEvent
             do {
-                event = try await NostrProtocol.createMinedEphemeralGeohashEvent(
-                    content: trimmed,
-                    geohash: channel.geohash,
-                    senderIdentity: identity,
-                    nickname: nickname,
-                    teleported: teleported
-                )
+                event = try await self.buildGeohashEvent(trimmed, channel.geohash, identity, nickname, teleported)
             } catch {
+                guard self.wipeGeneration == generation else { return }
                 SecureLogger.error("❌ Failed to prepare geohash message: \(error)", category: .session)
                 context?.addSystemMessage(
                     String(localized: "system.location.send_failed", comment: "System message when a location channel send fails")
                 )
                 return
             }
-            guard let context else { return }
+            guard self.wipeGeneration == generation, let context else { return }
 
             let message = BitchatMessage(
                 id: event.id,

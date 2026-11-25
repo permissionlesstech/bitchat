@@ -21,10 +21,20 @@ protocol BluetoothStateReporting: AnyObject {
 protocol PanicResettingTransport: AnyObject {
     /// Quiesces the radio and drains in-flight work ahead of a panic wipe.
     func suspendForPanicReset()
+    @MainActor
+    func beginPanicReset() -> Task<Void, Never>
     /// Finishes a panic wipe, optionally restarting services.
     func completePanicReset(restartServices: Bool)
     /// Rotates the transport identity as part of a panic reset.
     func resetIdentityForPanic(currentNickname: String, restartServices: Bool)
+}
+
+extension PanicResettingTransport {
+    @MainActor
+    func beginPanicReset() -> Task<Void, Never> {
+        suspendForPanicReset()
+        return Task {}
+    }
 }
 
 /// File and private-media transfer over a mesh transport, including the

@@ -3,7 +3,10 @@ import Testing
 @testable import bitchat
 import BitFoundation
 
+// Keep synchronous store assertions on the same actor as panic reset.
+// Suite serialization alone does not exclude panic tests in other suites.
 @Suite(.serialized)
+@MainActor
 struct ComposerDraftStoreTests {
     /// Isolate each test from leftover in-memory drafts.
     private func withCleanStore(_ body: () -> Void) {

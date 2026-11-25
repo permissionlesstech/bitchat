@@ -74,6 +74,14 @@ final class PublicMessagePipeline {
         buffer.contains { $0.message.id == messageID }
     }
 
+    func resetForPanic() {
+        timer?.invalidate()
+        timer = nil
+        buffer.removeAll(keepingCapacity: false)
+        recentBatchSizes.removeAll(keepingCapacity: false)
+        dynamicFlushInterval = baseFlushInterval
+    }
+
     func flushIfNeeded() {
         flushBuffer()
     }
