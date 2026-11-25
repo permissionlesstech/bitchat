@@ -107,7 +107,7 @@ enum ImageContainerValidator {
 
     static func validate(data: Data, mime: MimeType) -> String? {
         guard let expectedUTI = expectedTypeIdentifier(for: mime) else {
-            return "unsupported image MIME \(mime.rawValue)"
+            return "unsupported image MIME \(mime)"
         }
 
         guard let source = CGImageSourceCreateWithData(data as CFData, metadataOptions) else {
@@ -117,7 +117,7 @@ enum ImageContainerValidator {
         guard let detectedUTI = CGImageSourceGetType(source) as String?,
               detectedUTI == expectedUTI else {
             let detected = (CGImageSourceGetType(source) as String?) ?? "unknown"
-            return "image container UTI \(detected) does not match \(mime.rawValue)"
+            return "image container UTI \(detected) does not match \(mime)"
         }
 
         return validateDimensions(of: source)
@@ -155,7 +155,7 @@ enum ImageContainerValidator {
 
     private static func expectedTypeIdentifier(for mime: MimeType) -> String? {
         switch mime {
-        case .jpeg:
+        case .jpeg, .jpg:
             return "public.jpeg"
         case .png:
             return "public.png"
