@@ -6,6 +6,12 @@ import BitLogger
 final class WaveformCache {
     static let shared = WaveformCache()
 
+    /// Hard bounds on decoded waveform work so a crafted audio header cannot
+    /// overflow `AVAudioFrameCount` or allocate an unbounded PCM buffer.
+    static let maxWaveformDurationSeconds: TimeInterval = 600
+    static let maxWaveformFrames: Int64 = 30_000_000
+    private static let chunkFrameCapacity: AVAudioFrameCount = 8_192
+
     private let queue = DispatchQueue(label: "com.bitchat.waveform-cache", attributes: .concurrent)
     private var cache: [URL: (waveform: [Float], lastAccess: Date)] = [:]
     private let maxCacheSize = 20  // Limit cache to prevent unbounded memory growth
@@ -29,7 +35,7 @@ final class WaveformCache {
                 return
             }
 
-            guard let computed = self.computeWaveform(url: url, bins: bins) else {
+            guard let computed = Self.computeWaveform(url: url, bins: bins) else {
                 DispatchQueue.main.async { completion([]) }
                 return
             }
@@ -56,42 +62,73 @@ final class WaveformCache {
         }
     }
 
-    private func computeWaveform(url: URL, bins: Int) -> [Float]? {
+    static func computeWaveform(url: URL, bins: Int) -> [Float]? {
         guard bins > 0 else { return nil }
         // Use autoreleasepool to manage memory from audio buffer allocations
         return autoreleasepool {
             do {
                 let audioFile = try AVAudioFile(forReading: url)
-                let length = Int(audioFile.length)
-                guard length > 0 else { return nil }
-
-                guard let buffer = AVAudioPCMBuffer(pcmFormat: audioFile.processingFormat, frameCapacity: AVAudioFrameCount(length)) else {
+                let format = audioFile.processingFormat
+                let channelCount = Int(format.channelCount)
+                let sampleRate = format.sampleRate
+                guard channelCount > 0, sampleRate.isFinite, sampleRate > 0 else {
                     return nil
                 }
-                try audioFile.read(into: buffer, frameCount: AVAudioFrameCount(length))
-                guard let channelData = buffer.floatChannelData else { return nil }
 
-                let channelCount = Int(audioFile.processingFormat.channelCount)
-                let frameLength = Int(buffer.frameLength)
-                let samplesPerBin = max(1, frameLength / bins)
+                let rawLength = audioFile.length
+                guard rawLength > 0,
+                      rawLength <= maxWaveformFrames,
+                      Double(rawLength) / sampleRate <= maxWaveformDurationSeconds,
+                      let totalFrames = AVAudioFrameCount(exactly: rawLength) else {
+                    SecureLogger.warning(
+                        "Waveform rejected audio with out-of-range length (\(rawLength) frames at \(sampleRate) Hz) for \(url.lastPathComponent)",
+                        category: .security
+                    )
+                    return nil
+                }
 
-                var magnitudes: [Float] = Array(repeating: 0, count: bins)
-                for bin in 0..<bins {
-                    let start = bin * samplesPerBin
-                    let end = min(frameLength, start + samplesPerBin)
-                    if start >= end { break }
+                let bufferCapacity = min(totalFrames, chunkFrameCapacity)
+                guard let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: bufferCapacity) else {
+                    return nil
+                }
 
-                    var sum: Float = 0
-                    var sampleCount = 0
-                    for frame in start..<end {
+                let totalFrameCount = Int(totalFrames)
+                let samplesPerBin = max(1, totalFrameCount / bins)
+                var binSums = Array(repeating: Double(0), count: bins)
+                var binCounts = Array(repeating: 0, count: bins)
+                var frameCursor = 0
+
+                while frameCursor < totalFrameCount {
+                    let remaining = totalFrameCount - frameCursor
+                    let framesToRead = min(chunkFrameCapacity, AVAudioFrameCount(remaining))
+                    buffer.frameLength = 0
+                    try audioFile.read(into: buffer, frameCount: framesToRead)
+
+                    let readFrames = Int(buffer.frameLength)
+                    guard readFrames > 0, let channelData = buffer.floatChannelData else {
+                        break
+                    }
+
+                    let invChannels = 1.0 / Double(channelCount)
+                    for localFrame in 0..<readFrames {
+                        let globalFrame = frameCursor + localFrame
+                        let bin = min(bins - 1, globalFrame / samplesPerBin)
                         var sampleValue: Float = 0
                         for channel in 0..<channelCount {
-                            sampleValue += fabsf(channelData[channel][frame])
+                            sampleValue += fabsf(channelData[channel][localFrame])
                         }
-                        sum += sampleValue / Float(channelCount)
-                        sampleCount += 1
+                        binSums[bin] += Double(sampleValue) * invChannels
+                        binCounts[bin] += 1
                     }
-                    magnitudes[bin] = sampleCount > 0 ? sum / Float(sampleCount) : 0
+
+                    frameCursor += readFrames
+                }
+
+                guard frameCursor > 0 else { return nil }
+
+                var magnitudes: [Float] = Array(repeating: 0, count: bins)
+                for bin in 0..<bins where binCounts[bin] > 0 {
+                    magnitudes[bin] = Float(binSums[bin] / Double(binCounts[bin]))
                 }
 
                 if let maxMagnitude = magnitudes.max(), maxMagnitude > 0 {
