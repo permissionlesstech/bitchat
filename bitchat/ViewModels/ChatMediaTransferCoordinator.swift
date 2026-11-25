@@ -657,6 +657,35 @@ final class ChatMediaTransferCoordinator {
             }
         }
     }
+
+    /// Sends the images that the user dropped into the chat. It loads them in
+    /// drop order, and each image then goes through the picked-photo path.
+    func processThenSendDroppedImages(_ providers: [NSItemProvider]) {
+        guard context.canSendMediaInCurrentContext else {
+            SecureLogger.info("Image drop blocked outside mesh/private context", category: .session)
+            context.addSystemMessage(String(localized: "Images are only available in mesh chats.", comment: "System message when an image send is attempted outside mesh chats"))
+            return
+        }
+        let imageProviders = DroppedImageLoader.imageProviders(in: providers)
+        guard !imageProviders.isEmpty else { return }
+
+        // A panic wipe while an image loads must stop the send.
+        let generation = imagePreparationBarrier.currentGeneration
+        let barrier = imagePreparationBarrier
+        Task { [weak self, barrier] in
+            for provider in imageProviders {
+                do {
+                    let image = try await DroppedImageLoader.loadImage(from: provider)
+                    guard let self, barrier.isCurrent(generation) else { return }
+                    self.processThenSendImage(image)
+                } catch {
+                    SecureLogger.error("Dropped image load failed: \(error)", category: .session)
+                    guard let self, barrier.isCurrent(generation) else { return }
+                    self.context.addSystemMessage("Failed to prepare image for sending.")
+                }
+            }
+        }
+    }
     #elseif os(macOS)
     func processThenSendImage(from url: URL?) {
         guard let url else { return }

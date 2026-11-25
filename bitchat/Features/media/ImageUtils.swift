@@ -47,6 +47,29 @@ enum ImageUtils {
     }
 
     #if os(iOS)
+    /// Decodes an image file at a reduced size. ImageIO decodes straight to
+    /// the small size, so a huge source never sits in memory at full size.
+    /// Use it for images from other apps, such as drag and drop.
+    static func downsampledImage(at url: URL, maxPixelSize: CGFloat) throws -> UIImage {
+        try validateImageSource(at: url)
+
+        let sourceOptions = [kCGImageSourceShouldCache: false] as CFDictionary
+        guard let source = CGImageSourceCreateWithURL(url as CFURL, sourceOptions) else {
+            throw ImageUtilsError.invalidImage
+        }
+        let thumbnailOptions: [CFString: Any] = [
+            kCGImageSourceCreateThumbnailFromImageAlways: true,
+            // Applies the EXIF orientation, so the pixels come out upright.
+            kCGImageSourceCreateThumbnailWithTransform: true,
+            kCGImageSourceShouldCacheImmediately: true,
+            kCGImageSourceThumbnailMaxPixelSize: maxPixelSize
+        ]
+        guard let cgImage = CGImageSourceCreateThumbnailAtIndex(source, 0, thumbnailOptions as CFDictionary) else {
+            throw ImageUtilsError.invalidImage
+        }
+        return UIImage(cgImage: cgImage)
+    }
+
     static func processImage(_ image: UIImage, maxDimension: CGFloat = 448, outputDirectory: URL? = nil) throws -> URL {
         return try autoreleasepool {
             // Scale the image first

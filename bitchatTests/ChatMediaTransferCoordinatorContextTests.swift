@@ -1693,6 +1693,97 @@ struct ChatMediaTransferCoordinatorContextTests {
             return false
         })
     }
+
+    // MARK: - Dropped images
+
+    #if os(iOS)
+    @Test @MainActor
+    func droppedImageIsBroadcastOnMesh() async throws {
+        let context = MockChatMediaTransferContext()
+        let coordinator = ChatMediaTransferCoordinator(context: context)
+        let provider = try makeDroppedImageProvider(size: CGSize(width: 32, height: 32))
+
+        coordinator.processThenSendDroppedImages([provider])
+
+        #expect(await TestHelpers.waitUntil(
+            { context.broadcastFileSends.count == 1 },
+            timeout: TestConstants.longTimeout
+        ))
+        #expect(context.systemMessages.isEmpty)
+        let message = try #require(context.appendedPublicMessages.first?.message)
+        coordinator.cleanupLocalFile(forMessage: message)
+    }
+
+    @Test @MainActor
+    func droppedImageGoesToTheOpenPrivateChat() async throws {
+        let context = MockChatMediaTransferContext()
+        let coordinator = ChatMediaTransferCoordinator(context: context)
+        let peerID = PeerID(str: "99aabbccddeeff00")
+        context.selectedPrivateChatPeer = peerID
+        let provider = try makeDroppedImageProvider(size: CGSize(width: 32, height: 32))
+
+        coordinator.processThenSendDroppedImages([provider])
+
+        #expect(await TestHelpers.waitUntil(
+            { context.privateFileSends.count == 1 },
+            timeout: TestConstants.longTimeout
+        ))
+        #expect(context.privateFileSends.first?.peerID == peerID)
+        #expect(context.broadcastFileSends.isEmpty)
+        let message = try #require(context.privateChats[peerID]?.first)
+        coordinator.cleanupLocalFile(forMessage: message)
+    }
+
+    @Test @MainActor
+    func droppedImageIsRefusedWhereMediaIsBlocked() throws {
+        let context = MockChatMediaTransferContext()
+        context.canSendMediaInCurrentContext = false
+        let coordinator = ChatMediaTransferCoordinator(context: context)
+        let provider = try makeDroppedImageProvider(size: CGSize(width: 32, height: 32))
+
+        coordinator.processThenSendDroppedImages([provider])
+
+        // The guard runs before any load starts, so the refusal is immediate.
+        #expect(context.systemMessages.count == 1)
+        #expect(context.broadcastFileSends.isEmpty)
+        #expect(context.appendedPublicMessages.isEmpty)
+    }
+
+    @Test @MainActor
+    func droppedItemThatIsNotAnImageReportsFailure() async throws {
+        let context = MockChatMediaTransferContext()
+        let coordinator = ChatMediaTransferCoordinator(context: context)
+        let provider = NSItemProvider(
+            item: Data("not-an-image".utf8) as NSData,
+            typeIdentifier: "public.png"
+        )
+
+        coordinator.processThenSendDroppedImages([provider])
+
+        #expect(await TestHelpers.waitUntil(
+            { context.systemMessages.count == 1 },
+            timeout: TestConstants.longTimeout
+        ))
+        #expect(context.broadcastFileSends.isEmpty)
+        #expect(context.appendedPublicMessages.isEmpty)
+    }
+
+    @Test @MainActor
+    func panicWhileDroppedImageLoadsStopsTheSend() async throws {
+        let context = MockChatMediaTransferContext()
+        let coordinator = ChatMediaTransferCoordinator(context: context)
+        let provider = try makeDroppedImageProvider(size: CGSize(width: 32, height: 32))
+
+        coordinator.processThenSendDroppedImages([provider])
+        // The load runs off the main actor, so the reset lands before it ends.
+        coordinator.resetForPanic()
+
+        try await Task.sleep(nanoseconds: 500_000_000)
+        #expect(context.broadcastFileSends.isEmpty)
+        #expect(context.appendedPublicMessages.isEmpty)
+        #expect(context.systemMessages.isEmpty)
+    }
+    #endif
 }
 
 private func makeCoordinatorVoiceURL(

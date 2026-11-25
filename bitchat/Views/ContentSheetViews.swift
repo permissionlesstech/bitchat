@@ -608,6 +608,9 @@ private struct ContentPrivateChatSheetView: View {
             )
             #endif
         }
+        #if os(iOS)
+        .chatImageDropTarget(isActive: privateConversationModel.selectedPeerID != nil)
+        #endif
         .themedSheetBackground()
         .foregroundColor(palette.primary)
     }

@@ -13393,6 +13393,192 @@
         }
       }
     },
+    "content.drop.image_hint" : {
+      "comment" : "Label shown over the chat while the user drags an image over it",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "أفلت لإرسال الصورة"
+          }
+        },
+        "bn" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "ছবি পাঠাতে এখানে ছাড়ুন"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "loslassen, um das bild zu senden"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "drop to send image"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "suelta para enviar la imagen"
+          }
+        },
+        "fa" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "برای ارسال تصویر رها کنید"
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "bitawan para ipadala ang larawan"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "déposez pour envoyer l'image"
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "שחררו כדי לשלוח את התמונה"
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "छवि भेजने के लिए छोड़ें"
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "lepaskan untuk mengirim gambar"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "rilascia per inviare l'immagine"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "ドロップして画像を送信"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "놓아서 이미지 보내기"
+          }
+        },
+        "ms" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "lepaskan untuk menghantar imej"
+          }
+        },
+        "ne" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "तस्बिर पठाउन छोड"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "loslaten om de afbeelding te versturen"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "upuść, aby wysłać obraz"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "largue para enviar a imagem"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "solte para enviar a imagem"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "отпустите, чтобы отправить изображение"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "släpp för att skicka bilden"
+          }
+        },
+        "ta" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "படத்தை அனுப்ப இங்கே விடவும்"
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "วางเพื่อส่งรูปภาพ"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "resmi göndermek için bırak"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "відпустіть, щоб надіслати зображення"
+          }
+        },
+        "ur" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "تصویر بھیجنے کے لیے چھوڑیں"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "thả để gửi ảnh"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "松开以发送图片"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "放開以傳送圖片"
+          }
+        }
+      }
+    },
     "image_picker.none_selected" : {
       "comment" : "Placeholder shown in the image picker before a selection",
       "extractionState" : "manual",

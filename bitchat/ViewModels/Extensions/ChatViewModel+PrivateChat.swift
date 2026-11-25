@@ -125,6 +125,10 @@ extension ChatViewModel {
     func processThenSendImage(_ image: UIImage?) {
         mediaTransferCoordinator.processThenSendImage(image)
     }
+
+    func processThenSendDroppedImages(_ providers: [NSItemProvider]) {
+        mediaTransferCoordinator.processThenSendDroppedImages(providers)
+    }
     #elseif os(macOS)
     func processThenSendImage(from url: URL?) {
         mediaTransferCoordinator.processThenSendImage(from: url)

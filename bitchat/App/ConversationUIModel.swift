@@ -223,6 +223,10 @@ final class ConversationUIModel: ObservableObject {
     func processSelectedImage(_ image: UIImage?) {
         chatViewModel.processThenSendImage(image)
     }
+
+    func sendDroppedImages(_ providers: [NSItemProvider]) {
+        chatViewModel.processThenSendDroppedImages(providers)
+    }
     #endif
 
     func processSelectedImage(from url: URL?) {
