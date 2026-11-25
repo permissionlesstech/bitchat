@@ -50,7 +50,7 @@ final class PanicWipeCoverageTests: XCTestCase {
         var closedSubscriptions = 0
         var enabledNotifications: [Bool] = []
         let service = BridgeService(defaults: defaults)
-        service.currentCell = { "u4pruy" }
+        service.locationCell = { "u4pruy" }
         service.closeSubscription = { closedSubscriptions += 1 }
         service.onEnabledChanged = { enabledNotifications.append($0) }
 
