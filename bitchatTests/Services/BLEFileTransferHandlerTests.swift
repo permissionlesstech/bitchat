@@ -431,7 +431,7 @@ struct BLEFileTransferHandlerTests {
         let recorder = Recorder()
         recorder.peers = [remotePeerID: makePeerInfo(remotePeerID, nickname: "Alice", isVerified: true)]
         let handler = makeHandler(recorder: recorder)
-        let content = Data([0xFF, 0xD8, 0xFF]) + Data(repeating: 0x41, count: 128)
+        let content = TestImageFixtures.makeJPEG()
         let fileName = "img_20260725_105708_1CC2760D-76AA-40C3-8013-C7FAA6C2EF99.jpg"
         let file = BitchatFilePacket(
             fileName: fileName,
@@ -500,7 +500,7 @@ struct BLEFileTransferHandlerTests {
             store.finishIncomingFileDelivery(at: $0)
         }
 
-        let content = Data([0xFF, 0xD8, 0xFF, 0xD9])
+        let content = TestImageFixtures.makeJPEG()
         let fileName =
             "img_20260725_105708_1CC2760D-76AA-40C3-8013-C7FAA6C2EF99.jpg"
         let file = BitchatFilePacket(
@@ -541,7 +541,7 @@ struct BLEFileTransferHandlerTests {
         )]
         recorder.signatureVerifies = true
         let handler = makeHandler(recorder: recorder)
-        let content = Data([0xFF, 0xD8, 0xFF, 0xD9])
+        let content = TestImageFixtures.makeJPEG()
         let packet = try makeFileTransferPacket(
             sender: remotePeerID,
             mimeType: "image/jpeg",
@@ -572,7 +572,7 @@ struct BLEFileTransferHandlerTests {
         let packet = try makeFileTransferPacket(
             sender: remotePeerID,
             mimeType: "image/jpeg",
-            content: Data([0xFF, 0xD8, 0xFF, 0xD9]),
+            content: TestImageFixtures.makeJPEG(),
             recipientID: Data(hexString: localPeerID.id),
             fileName: "raw-rejected.jpg"
         )
@@ -599,7 +599,7 @@ struct BLEFileTransferHandlerTests {
         let packet = try makeFileTransferPacket(
             sender: remotePeerID,
             mimeType: "image/jpeg",
-            content: Data([0xFF, 0xD8, 0xFF, 0xD9]),
+            content: TestImageFixtures.makeJPEG(),
             recipientID: Data(hexString: localPeerID.id),
             fileName: "plain-delegate.jpg"
         )
@@ -620,7 +620,7 @@ struct BLEFileTransferHandlerTests {
         let recorder = Recorder()
         recorder.peers = [remotePeerID: makePeerInfo(remotePeerID, nickname: "Alice", isVerified: true)]
         let handler = makeHandler(recorder: recorder)
-        let content = Data([0xFF, 0xD8, 0xFF]) + Data(repeating: 0x41, count: 128)
+        let content = TestImageFixtures.makeJPEG()
         let file = BitchatFilePacket(
             fileName: "photo.jpg",
             fileSize: UInt64(content.count),
@@ -650,7 +650,7 @@ struct BLEFileTransferHandlerTests {
         let recorder = Recorder()
         recorder.peers = [remotePeerID: makePeerInfo(remotePeerID, nickname: "Alice", isVerified: true)]
         let handler = makeHandler(recorder: recorder)
-        let content = Data([0xFF, 0xD8, 0xFF]) + Data(repeating: 0x41, count: 128)
+        let content = TestImageFixtures.makeJPEG()
         let fileName = "img_20260725_105708_1CC2760D-76AA-40C3-8013-C7FAA6C2EF99.jpg"
         let file = BitchatFilePacket(
             fileName: fileName,
@@ -700,7 +700,7 @@ struct BLEFileTransferHandlerTests {
         )
         defer { try? FileManager.default.removeItem(at: root) }
         let store = BLEIncomingFileStore(baseDirectory: root)
-        let content = Data([0xFF, 0xD8, 0xFF, 0xD9])
+        let content = TestImageFixtures.makeJPEG()
         let file = BitchatFilePacket(
             fileName: "img_20260725_105708_1CC2760D-76AA-40C3-8013-C7FAA6C2EF99.jpg",
             fileSize: UInt64(content.count),
@@ -772,7 +772,7 @@ struct BLEFileTransferHandlerTests {
     func inFlightStableDuplicateIsNotAcknowledgedAndFailedSaveRemainsRetryable() throws {
         let recorder = Recorder()
         recorder.peers = [remotePeerID: makePeerInfo(remotePeerID, nickname: "Alice", isVerified: true)]
-        let content = Data([0xFF, 0xD8, 0xFF]) + Data(repeating: 0x41, count: 128)
+        let content = TestImageFixtures.makeJPEG()
         let file = BitchatFilePacket(
             fileName: "img_20260725_105708_1CC2760D-76AA-40C3-8013-C7FAA6C2EF99.jpg",
             fileSize: UInt64(content.count),
@@ -838,7 +838,7 @@ struct BLEFileTransferHandlerTests {
         ))
         recorder.receiptStates[messageID] = .unavailable
         let handler = makeHandler(recorder: recorder)
-        let content = Data([0xFF, 0xD8, 0xFF, 0xD9])
+        let content = TestImageFixtures.makeJPEG()
         let payload = try #require(BitchatFilePacket(
             fileName: fileName,
             fileSize: UInt64(content.count),
@@ -868,7 +868,7 @@ struct BLEFileTransferHandlerTests {
         )]
         recorder.receiptCommitSucceeds = false
         let handler = makeHandler(recorder: recorder)
-        let content = Data([0xFF, 0xD8, 0xFF, 0xD9])
+        let content = TestImageFixtures.makeJPEG()
         let payload = try #require(BitchatFilePacket(
             fileName: "img_20260725_105708_1CC2760D-76AA-40C3-8013-C7FAA6C2EF99.jpg",
             fileSize: UInt64(content.count),
@@ -895,7 +895,7 @@ struct BLEFileTransferHandlerTests {
         recorder.blockedPeers = [remotePeerID]
         recorder.peers = [remotePeerID: makePeerInfo(remotePeerID, nickname: "Alice", isVerified: true)]
         let handler = makeHandler(recorder: recorder)
-        let content = Data([0xFF, 0xD8, 0xFF]) + Data(repeating: 0x41, count: 128)
+        let content = TestImageFixtures.makeJPEG()
         let file = BitchatFilePacket(
             fileName: "img_20260725_105708_1CC2760D-76AA-40C3-8013-C7FAA6C2EF99.jpg",
             fileSize: UInt64(content.count),

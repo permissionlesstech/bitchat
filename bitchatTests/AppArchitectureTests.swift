@@ -459,6 +459,49 @@ struct AppArchitectureTests {
         #expect(chromeModel.showingFingerprintFor == nil)
     }
 
+    @Test("App Info pane routing: a promised pane overrides the sticky memory, a plain present never touches it")
+    @MainActor
+    func presentAppInfoPaneRouting() {
+        let viewModel = makeArchitectureViewModel()
+        let privateInboxModel = PrivateInboxModel(conversations: ConversationStore())
+        let chromeModel = AppChromeModel(chatViewModel: viewModel, privateInboxModel: privateInboxModel)
+
+        // The sticky pane lives in standard defaults (@AppStorage's store);
+        // restore whatever was there so this test can't leak state.
+        let key = "appInfo.selectedPane"
+        let defaults = UserDefaults.standard
+        let original = defaults.string(forKey: key)
+        defer {
+            if let original {
+                defaults.set(original, forKey: key)
+            } else {
+                defaults.removeObject(forKey: key)
+            }
+        }
+
+        // First-ever open: the logo tap passes no pane, and the absent key is
+        // what lands new users on the gentler Info default — a plain present
+        // must not create it.
+        defaults.removeObject(forKey: key)
+        chromeModel.presentAppInfo()
+        #expect(defaults.string(forKey: key) == nil)
+        #expect(chromeModel.isAppInfoPresented)
+
+        // Later opens: the logo tap keeps whatever pane the sheet was left on.
+        chromeModel.isAppInfoPresented = false
+        defaults.set(AppInfoView.Pane.info.rawValue, forKey: key)
+        chromeModel.presentAppInfo()
+        #expect(defaults.string(forKey: key) == AppInfoView.Pane.info.rawValue)
+        #expect(chromeModel.isAppInfoPresented)
+
+        // Controls that promise a pane (the header gear and the gateway globe
+        // both say "settings") must land there even against sticky memory.
+        chromeModel.isAppInfoPresented = false
+        chromeModel.presentAppInfo(pane: .settings)
+        #expect(defaults.string(forKey: key) == AppInfoView.Pane.settings.rawValue)
+        #expect(chromeModel.isAppInfoPresented)
+    }
+
     @Test("Triple-tap panic entry point only raises the confirmation dialog")
     @MainActor
     func requestPanicWipeAsksBeforeDestroying() {
@@ -648,7 +691,7 @@ struct AppArchitectureTests {
         #expect(conversationModel.selectedHeaderState == nil)
     }
 
-    @Test("ConversationUIModel mirrors composer state and forwards sends")
+    @Test("ConversationUIModel and ComposerAutocompleteModel mirror composer state and forward sends")
     @MainActor
     func conversationUIModelMirrorsComposerStateAndForwardsSends() async {
         let locationManager = makeArchitectureLocationManager()
@@ -670,6 +713,7 @@ struct AppArchitectureTests {
             privateConversationModel: privateConversationModel,
             conversations: viewModel.conversations
         )
+        let autocompleteModel = ComposerAutocompleteModel(chatViewModel: viewModel)
         let geohashChannel = ChannelID.location(GeohashChannel(level: .city, geohash: "9q8yy"))
         defer {
             locationManager.select(.mesh)
@@ -682,15 +726,15 @@ struct AppArchitectureTests {
         await waitUntil {
             viewModel.activeChannel == geohashChannel &&
             uiModel.currentNickname == "builder" &&
-            uiModel.showAutocomplete &&
-            uiModel.autocompleteSuggestions == ["alice"] &&
+            autocompleteModel.showAutocomplete &&
+            autocompleteModel.autocompleteSuggestions == ["alice"] &&
             !uiModel.canSendMediaInCurrentContext
         }
 
         #expect(viewModel.activeChannel == geohashChannel)
         #expect(uiModel.currentNickname == "builder")
-        #expect(uiModel.showAutocomplete)
-        #expect(uiModel.autocompleteSuggestions == ["alice"])
+        #expect(autocompleteModel.showAutocomplete)
+        #expect(autocompleteModel.autocompleteSuggestions == ["alice"])
         #expect(!uiModel.canSendMediaInCurrentContext)
 
         locationChannelsModel.select(ChannelID.mesh)
@@ -711,7 +755,7 @@ struct AppArchitectureTests {
         #expect(transport.sentMessages.last?.content == "hello mesh")
     }
 
-    @Test("ConversationUIModel republishes only changed composer state")
+    @Test("Autocomplete changes do not invalidate ConversationUIModel and ComposerAutocompleteModel skips duplicates")
     @MainActor
     func conversationUIModelSkipsUnchangedComposerState() async {
         let viewModel = makeArchitectureViewModel()
@@ -726,27 +770,119 @@ struct AppArchitectureTests {
             privateConversationModel: privateConversationModel,
             conversations: viewModel.conversations
         )
+        let autocompleteModel = ComposerAutocompleteModel(chatViewModel: viewModel)
 
         // Bindings deliver on the main queue in FIFO order: once this change
         // lands, every initial value delivered before it has landed too.
         viewModel.selectedAutocompleteIndex = 1
-        await waitUntil { uiModel.selectedAutocompleteIndex == 1 }
+        await waitUntil { autocompleteModel.selectedAutocompleteIndex == 1 }
 
-        var publishCount = 0
-        let cancellable = uiModel.objectWillChange.sink { publishCount += 1 }
-        defer { cancellable.cancel() }
+        var uiPublishCount = 0
+        let uiCancellable = uiModel.objectWillChange.sink { uiPublishCount += 1 }
+        defer { uiCancellable.cancel() }
+
+        var autocompletePublishCount = 0
+        let autocompleteCancellable = autocompleteModel.objectWillChange.sink { autocompletePublishCount += 1 }
+        defer { autocompleteCancellable.cancel() }
 
         // Re-sent equal values (what every typing pause used to produce) ...
         viewModel.showAutocomplete = viewModel.showAutocomplete
         viewModel.autocompleteSuggestions = viewModel.autocompleteSuggestions
         viewModel.selectedAutocompleteIndex = 1
         viewModel.activePublicVoiceTalker = viewModel.activePublicVoiceTalker
-        // ... are dropped: only the real change queued behind them publishes.
+        // ... are dropped, and real autocomplete updates only publish on
+        // ComposerAutocompleteModel — never on ConversationUIModel.
+        viewModel.autocompleteSuggestions = ["alice", "bob"]
+        viewModel.showAutocomplete = true
         viewModel.selectedAutocompleteIndex = 2
-        await waitUntil { uiModel.selectedAutocompleteIndex == 2 }
+        await waitUntil { autocompleteModel.selectedAutocompleteIndex == 2 }
 
-        #expect(uiModel.selectedAutocompleteIndex == 2)
+        #expect(autocompleteModel.selectedAutocompleteIndex == 2)
+        #expect(autocompletePublishCount == 3)
+        #expect(uiPublishCount == 0)
+    }
+
+    @Test("PrivateConversationModel skips redundant publishes when selection and header are unchanged")
+    @MainActor
+    func privateConversationModelSkipsUnchangedRefreshes() async {
+        let viewModel = makeArchitectureViewModel()
+        let locationChannelsModel = LocationChannelsModel(manager: makeArchitectureLocationManager())
+        let privateConversationModel = PrivateConversationModel(
+            chatViewModel: viewModel,
+            conversations: viewModel.conversations,
+            locationChannelsModel: locationChannelsModel
+        )
+
+        // Drain initial main-queue Combine deliveries before counting.
+        try? await Task.sleep(nanoseconds: 50_000_000)
+
+        var publishCount = 0
+        let cancellable = privateConversationModel.objectWillChange.sink { publishCount += 1 }
+        defer { cancellable.cancel() }
+
+        let peerID = PeerID(str: "0011223344556677")
+        viewModel.allPeers = [
+            BitchatPeer(
+                peerID: peerID,
+                noisePublicKey: Data(repeating: 0x11, count: 32),
+                nickname: "alice",
+                isConnected: true,
+                isReachable: true
+            )
+        ]
+        viewModel.peerIdentityStore.setEncryptionStatus(.noiseSecured, for: peerID)
+        NotificationCenter.default.post(name: Notification.Name("peerStatusUpdated"), object: nil)
+        try? await Task.sleep(nanoseconds: 50_000_000)
+
+        // No DM is open, so unrelated peer/status refreshes must not publish.
+        #expect(publishCount == 0)
+    }
+
+    @Test("PeerIdentityStore skips redundant publishes for unchanged encryption and verification state")
+    @MainActor
+    func peerIdentityStoreSkipsNoOpPublishes() {
+        let store = PeerIdentityStore()
+        let peerID = PeerID(str: "0011223344556677")
+
+        store.setEncryptionStatus(.noiseSecured, for: peerID)
+        store.setVerified("fp-1", verified: true)
+
+        var publishCount = 0
+        let cancellable = store.objectWillChange.sink { publishCount += 1 }
+        defer { cancellable.cancel() }
+
+        store.setEncryptionStatus(.noiseSecured, for: peerID)
+        store.setVerified("fp-1", verified: true)
+        store.setVerifiedFingerprints(["fp-1"])
+
+        #expect(publishCount == 0)
+
+        store.setEncryptionStatus(.noiseVerified, for: peerID)
         #expect(publishCount == 1)
+    }
+
+    @Test("ComposerDraftModel manages mentions, sends, and panic reset")
+    @MainActor
+    func composerDraftModelBehavior() {
+        let draftModel = ComposerDraftModel()
+        draftModel.insertMention("alice")
+        #expect(draftModel.messageText == "@alice ")
+
+        draftModel.insertMention("bob")
+        #expect(draftModel.messageText == "@alice @bob ")
+
+        draftModel.replaceText("hello")
+        draftModel.insertMention("carol")
+        #expect(draftModel.messageText == "hello @carol ")
+
+        let sent = draftModel.takeMessageToSend()
+        #expect(sent == "hello @carol")
+        #expect(draftModel.messageText.isEmpty)
+
+        draftModel.replaceText("secret")
+        draftModel.resetForPanic()
+        #expect(draftModel.messageText.isEmpty)
+        #expect(draftModel.activeDraftKey == .mesh)
     }
 
     @Test("VerificationModel bridges selected conversation and fingerprint actions")

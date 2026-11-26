@@ -561,6 +561,109 @@ final class SecureIdentityStateManagerTests: XCTestCase {
         XCTAssertFalse(reloaded.isFavorite(fingerprint: fingerprint))
     }
 
+    func test_upsertCryptographicIdentity_skipsRedundantKeychainWritesWhenUnchanged() async {
+        let keychain = FailingCacheSaveKeychain(shouldFailCacheSave: false)
+        let manager = SecureIdentityStateManager(keychain)
+        let noisePublicKey = Data(repeating: 0x42, count: 32)
+        let signingPublicKey = Data(repeating: 0x43, count: 32)
+        let fingerprint = noisePublicKey.sha256Fingerprint()
+
+        manager.upsertCryptographicIdentity(
+            fingerprint: fingerprint,
+            noisePublicKey: noisePublicKey,
+            signingPublicKey: signingPublicKey,
+            claimedNickname: "Alice"
+        )
+        let savedInitial = await waitUntil { keychain.cacheSaveCount == 1 }
+        XCTAssertTrue(savedInitial)
+
+        // Repeated identical periodic announces must not re-encrypt and flush the Keychain cache.
+        for _ in 0..<5 {
+            manager.upsertCryptographicIdentity(
+                fingerprint: fingerprint,
+                noisePublicKey: noisePublicKey,
+                signingPublicKey: signingPublicKey,
+                claimedNickname: "Alice"
+            )
+        }
+        // Fence barrier writes with a synchronous read.
+        XCTAssertEqual(manager.getSocialIdentity(for: fingerprint)?.claimedNickname, "Alice")
+        XCTAssertEqual(keychain.cacheSaveCount, 1)
+
+        // A real mutation (nickname update) still persists.
+        manager.upsertCryptographicIdentity(
+            fingerprint: fingerprint,
+            noisePublicKey: noisePublicKey,
+            signingPublicKey: signingPublicKey,
+            claimedNickname: "Alice2"
+        )
+        let savedUpdate = await waitUntil { keychain.cacheSaveCount == 2 }
+        XCTAssertTrue(savedUpdate)
+    }
+
+    func test_upsertCryptographicIdentity_retriesFailedKeychainWriteOnIdenticalAnnounce() async {
+        let keychain = FailingCacheSaveKeychain(shouldFailCacheSave: true)
+        let manager = SecureIdentityStateManager(keychain)
+        let noisePublicKey = Data(repeating: 0x52, count: 32)
+        let signingPublicKey = Data(repeating: 0x53, count: 32)
+        let fingerprint = noisePublicKey.sha256Fingerprint()
+        let peerID = PeerID(publicKey: noisePublicKey)
+
+        // First write fails transiently.
+        manager.upsertCryptographicIdentity(
+            fingerprint: fingerprint,
+            noisePublicKey: noisePublicKey,
+            signingPublicKey: signingPublicKey,
+            claimedNickname: "Bob"
+        )
+        let attemptedInitial = await waitUntil { keychain.cacheSaveCount == 1 }
+        XCTAssertTrue(attemptedInitial)
+
+        // Keychain recovers; an identical periodic announce must retry and persist.
+        keychain.setShouldFailCacheSave(false)
+        manager.upsertCryptographicIdentity(
+            fingerprint: fingerprint,
+            noisePublicKey: noisePublicKey,
+            signingPublicKey: signingPublicKey,
+            claimedNickname: "Bob"
+        )
+        let retried = await waitUntil { keychain.cacheSaveCount == 2 }
+        XCTAssertTrue(retried)
+
+        let reloaded = SecureIdentityStateManager(keychain)
+        XCTAssertEqual(
+            reloaded.getCryptoIdentitiesByPeerIDPrefix(peerID).first?.signingPublicKey,
+            signingPublicKey
+        )
+        XCTAssertEqual(reloaded.getSocialIdentity(for: fingerprint)?.claimedNickname, "Bob")
+    }
+
+    func test_clearAllIdentityData_clearsPendingSaveAfterFailedWrite() async {
+        let keychain = FailingCacheSaveKeychain(shouldFailCacheSave: true)
+        let manager = SecureIdentityStateManager(keychain)
+        let noisePublicKey = Data(repeating: 0x62, count: 32)
+        let signingPublicKey = Data(repeating: 0x63, count: 32)
+        let fingerprint = noisePublicKey.sha256Fingerprint()
+
+        manager.upsertCryptographicIdentity(
+            fingerprint: fingerprint,
+            noisePublicKey: noisePublicKey,
+            signingPublicKey: signingPublicKey,
+            claimedNickname: "Carol"
+        )
+        let attemptedInitial = await waitUntil { keychain.cacheSaveCount == 1 }
+        XCTAssertTrue(attemptedInitial)
+
+        // Panic wipe while a failed save is still pending must not let a later
+        // flush recreate the cache item in Keychain.
+        manager.clearAllIdentityData()
+        keychain.setShouldFailCacheSave(false)
+        manager.forceSave()
+
+        XCTAssertEqual(keychain.cacheSaveCount, 1)
+        XCTAssertNil(keychain.getIdentityKey(forKey: "bitchat.identityCache.v2"))
+    }
+
     private func waitUntil(
         timeout: TimeInterval = TestConstants.settleTimeout,
         condition: @escaping () -> Bool
@@ -577,12 +680,37 @@ final class SecureIdentityStateManagerTests: XCTestCase {
 }
 
 private final class FailingCacheSaveKeychain: KeychainManagerProtocol {
+    private let lock = NSLock()
+    private var _shouldFailCacheSave: Bool
+    private var _cacheSaveCount = 0
     private var storage: [String: Data] = [:]
     private var serviceStorage: [String: [String: Data]] = [:]
 
+    init(shouldFailCacheSave: Bool = true) {
+        self._shouldFailCacheSave = shouldFailCacheSave
+    }
+
+    func setShouldFailCacheSave(_ value: Bool) {
+        lock.lock()
+        _shouldFailCacheSave = value
+        lock.unlock()
+    }
+
+    var cacheSaveCount: Int {
+        lock.lock()
+        defer { lock.unlock() }
+        return _cacheSaveCount
+    }
+
     func saveIdentityKey(_ keyData: Data, forKey key: String) -> Bool {
         if key == "bitchat.identityCache.v2" {
-            return false
+            lock.lock()
+            _cacheSaveCount += 1
+            let shouldFail = _shouldFailCacheSave
+            lock.unlock()
+            if shouldFail {
+                return false
+            }
         }
         storage[key] = keyData
         return true

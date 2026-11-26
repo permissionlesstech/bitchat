@@ -704,6 +704,7 @@ private final class PerfNostrContext: ChatNostrContext {
     var processedEventCount: Int { processedNostrEventIDs.count }
     func hasProcessedNostrEvent(_ eventID: String) -> Bool { processedNostrEventIDs.contains(eventID) }
     func recordProcessedNostrEvent(_ eventID: String) { processedNostrEventIDs.insert(eventID) }
+    func recordProcessedEphemeralNostrEvent(_ eventID: String) { processedNostrEventIDs.insert(eventID) }
     func clearProcessedNostrEvents() { processedNostrEventIDs.removeAll() }
 
     var geoNicknames: [String: String] = [:]

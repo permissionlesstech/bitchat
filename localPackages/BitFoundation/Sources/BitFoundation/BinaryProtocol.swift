@@ -183,9 +183,8 @@ public struct BinaryProtocol {
         data.append(packet.type)
         data.append(packet.ttl)
 
-        for shift in stride(from: 56, through: 0, by: -8) {
-            data.append(UInt8((packet.timestamp >> UInt64(shift)) & 0xFF))
-        }
+        var tsBE = packet.timestamp.bigEndian
+        withUnsafeBytes(of: &tsBE) { data.append($0.bindMemory(to: UInt8.self)) }
 
         var flags: UInt8 = 0
         if packet.recipientID != nil { flags |= Flags.hasRecipient }
@@ -197,27 +196,24 @@ public struct BinaryProtocol {
         data.append(flags)
         
         if version == 2 {
-            let length = UInt32(payloadDataSize)
-            for shift in stride(from: 24, through: 0, by: -8) {
-                data.append(UInt8((length >> UInt32(shift)) & 0xFF))
-            }
+            var lengthBE = UInt32(payloadDataSize).bigEndian
+            withUnsafeBytes(of: &lengthBE) { data.append($0.bindMemory(to: UInt8.self)) }
         } else {
-            let length = UInt16(payloadDataSize)
-            data.append(UInt8((length >> 8) & 0xFF))
-            data.append(UInt8(length & 0xFF))
+            var lengthBE = UInt16(payloadDataSize).bigEndian
+            withUnsafeBytes(of: &lengthBE) { data.append($0.bindMemory(to: UInt8.self)) }
         }
 
         let senderBytes = packet.senderID.prefix(senderIDSize)
         data.append(senderBytes)
         if senderBytes.count < senderIDSize {
-            data.append(Data(repeating: 0, count: senderIDSize - senderBytes.count))
+            data.count += senderIDSize - senderBytes.count
         }
 
         if let recipientID = packet.recipientID {
             let recipientBytes = recipientID.prefix(recipientIDSize)
             data.append(recipientBytes)
             if recipientBytes.count < recipientIDSize {
-                data.append(Data(repeating: 0, count: recipientIDSize - recipientBytes.count))
+                data.count += recipientIDSize - recipientBytes.count
             }
         }
 
@@ -230,14 +226,11 @@ public struct BinaryProtocol {
 
         if isCompressed, let originalSize = originalPayloadSize {
             if version == 2 {
-                let value = UInt32(originalSize)
-                for shift in stride(from: 24, through: 0, by: -8) {
-                    data.append(UInt8((value >> UInt32(shift)) & 0xFF))
-                }
+                var valueBE = UInt32(originalSize).bigEndian
+                withUnsafeBytes(of: &valueBE) { data.append($0.bindMemory(to: UInt8.self)) }
             } else {
-                let value = UInt16(originalSize)
-                data.append(UInt8((value >> 8) & 0xFF))
-                data.append(UInt8(value & 0xFF))
+                var valueBE = UInt16(originalSize).bigEndian
+                withUnsafeBytes(of: &valueBE) { data.append($0.bindMemory(to: UInt8.self)) }
             }
         }
         data.append(payload)
@@ -291,6 +284,14 @@ public struct BinaryProtocol {
                 offset += 4
                 return value
             }
+            func read64() -> UInt64? {
+                guard require(8) else { return nil }
+                let ptr = base.advanced(by: offset).assumingMemoryBound(to: UInt8.self)
+                let hi = (UInt64(ptr[0]) << 56) | (UInt64(ptr[1]) << 48) | (UInt64(ptr[2]) << 40) | (UInt64(ptr[3]) << 32)
+                let lo = (UInt64(ptr[4]) << 24) | (UInt64(ptr[5]) << 16) | (UInt64(ptr[6]) << 8) | UInt64(ptr[7])
+                offset += 8
+                return hi | lo
+            }
             func readData(_ n: Int) -> Data? {
                 guard require(n) else { return nil }
                 let ptr = base.advanced(by: offset)
@@ -305,13 +306,7 @@ public struct BinaryProtocol {
             let minimumRequired = headerSize + senderIDSize
             guard raw.count >= minimumRequired else { return nil }
 
-            guard let type = read8(), let ttl = read8() else { return nil }
-
-            var timestamp: UInt64 = 0
-            for _ in 0..<8 {
-                guard let byte = read8() else { return nil }
-                timestamp = (timestamp << 8) | UInt64(byte)
-            }
+            guard let type = read8(), let ttl = read8(), let timestamp = read64() else { return nil }
 
             guard let flags = read8() else { return nil }
             let hasRecipient = (flags & Flags.hasRecipient) != 0

@@ -319,7 +319,45 @@ struct NoiseProtocolTests {
             try bobSession.decrypt(ciphertext)
         }
     }
-    
+
+    @Test func replayOfEarlierMessagesIsRejectedAfterLaterOnesArrive() throws {
+        try performHandshake(initiator: aliceSession, responder: bobSession)
+
+        let ciphertexts = try (0..<12).map { try aliceSession.encrypt(Data("message \($0)".utf8)) }
+        for ciphertext in ciphertexts {
+            _ = try bobSession.decrypt(ciphertext)
+        }
+
+        // Not only the newest message: every earlier one must stay rejected
+        // once later messages have advanced the replay window.
+        for ciphertext in ciphertexts {
+            #expect(throws: NoiseError.replayDetected) {
+                try bobSession.decrypt(ciphertext)
+            }
+        }
+    }
+
+    @Test func reorderedMessagesAreEachAcceptedExactlyOnce() throws {
+        try performHandshake(initiator: aliceSession, responder: bobSession)
+
+        let plaintexts = (0..<24).map { Data("message \($0)".utf8) }
+        let ciphertexts = try plaintexts.map { try aliceSession.encrypt($0) }
+
+        // Every third message arrives on time and advances the window. The two
+        // after each of them then turn up late, between 1 and 20 behind the
+        // newest, and the last two advance the window again.
+        let onTime = Array(stride(from: 0, to: 24, by: 3))
+        let arrivalOrder = onTime + ciphertexts.indices.filter { $0 % 3 != 0 }
+        for index in arrivalOrder {
+            #expect(try bobSession.decrypt(ciphertexts[index]) == plaintexts[index])
+        }
+        for ciphertext in ciphertexts {
+            #expect(throws: NoiseError.replayDetected) {
+                try bobSession.decrypt(ciphertext)
+            }
+        }
+    }
+
     @Test func sessionIsolation() throws {
         // Create two separate session pairs
         let aliceSession1 = NoiseSession(

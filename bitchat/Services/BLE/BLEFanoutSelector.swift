@@ -202,7 +202,7 @@ enum BLEFanoutSelector {
         return (keptPeripheralIDs, keptCentralIDs)
     }
 
-    private static func shouldSubset(packetType: UInt8, directedPeerHint: PeerID?) -> Bool {
+    static func shouldSubset(packetType: UInt8, directedPeerHint: PeerID?) -> Bool {
         directedPeerHint == nil
             && packetType != MessageType.fragment.rawValue
             && packetType != MessageType.announce.rawValue
@@ -222,25 +222,40 @@ enum BLEFanoutSelector {
         return min(count, max(1, bits + 1))
     }
 
+    private static let separatorBytes: [UInt8] = [UInt8(ascii: ":"), UInt8(ascii: ":")]
+
     private static func deterministicSubset(ids: [String], k: Int, seed: String) -> Set<String> {
         guard k > 0 && ids.count > k else { return Set(ids) }
 
-        var scored: [(score: [UInt8], id: String)] = []
+        // Pre-hash `seed + "::"` once instead of allocating a concatenated Data per link.
+        var baseHasher = SHA256()
+        var seedCopy = seed
+        seedCopy.withUTF8 { baseHasher.update(bufferPointer: UnsafeRawBufferPointer($0)) }
+        separatorBytes.withUnsafeBytes { baseHasher.update(bufferPointer: $0) }
+
+        var scored: [(digest: SHA256.Digest, id: String)] = []
+        scored.reserveCapacity(ids.count)
         for id in ids {
-            let data = (seed + "::" + id).data(using: .utf8) ?? Data()
-            let digest = Array(SHA256.hash(data: data))
-            scored.append((digest, id))
+            var hasher = baseHasher
+            var idCopy = id
+            idCopy.withUTF8 { hasher.update(bufferPointer: UnsafeRawBufferPointer($0)) }
+            scored.append((hasher.finalize(), id))
         }
 
         scored.sort { lhs, rhs in
-            for index in 0..<min(lhs.score.count, rhs.score.count) {
-                if lhs.score[index] != rhs.score[index] {
-                    return lhs.score[index] < rhs.score[index]
+            let cmp: Int32 = lhs.digest.withUnsafeBytes { lRaw in
+                rhs.digest.withUnsafeBytes { rRaw in
+                    memcmp(lRaw.baseAddress!, rRaw.baseAddress!, SHA256.byteCount)
                 }
             }
+            if cmp != 0 { return cmp < 0 }
             return lhs.id < rhs.id
         }
 
-        return Set(scored.prefix(k).map(\.id))
+        var result = Set<String>(minimumCapacity: k)
+        for i in 0..<k {
+            result.insert(scored[i].id)
+        }
+        return result
     }
 }

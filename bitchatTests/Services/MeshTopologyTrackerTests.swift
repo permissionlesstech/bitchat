@@ -116,6 +116,25 @@ struct MeshTopologyTrackerTests {
         #expect(tracker.computeRoute(from: a, to: d) == nil)
     }
 
+    @Test func hasRemoteNodesIgnoresSelfEntry() throws {
+        let tracker = MeshTopologyTracker()
+        let local = try hex("0102030405060708")
+        let remote = try hex("1112131415161718")
+
+        #expect(!tracker.hasRemoteNodes(excluding: local))
+
+        // Only our own local topology entry should not keep idle reconciliation active.
+        tracker.updateNeighbors(for: local, neighbors: [])
+        #expect(!tracker.hasRemoteNodes(excluding: local))
+
+        // A remote peer makes it true until removed/pruned.
+        tracker.updateNeighbors(for: remote, neighbors: [local])
+        #expect(tracker.hasRemoteNodes(excluding: local))
+
+        tracker.removePeer(remote)
+        #expect(!tracker.hasRemoteNodes(excluding: local))
+    }
+
     /// Build a confirmed line topology n0 - n1 - ... - n(count-1).
     private func makeLine(_ tracker: MeshTopologyTracker, count: Int) throws -> [Data] {
         let nodes = try (0..<count).map { try hex(String(format: "%016x", $0 + 1)) }

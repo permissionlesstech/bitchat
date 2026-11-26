@@ -263,6 +263,25 @@ struct ContentNormalizerTests {
         let key2 = ContentNormalizer.normalizedKey(content2)
         #expect(key1 == key2)
     }
+
+    @Test func normalizedKey_combiningMarkAfterCollapsedWhitespaceAtPrefixBoundary() {
+        // 255 ASCII chars + newline + combining mark: after collapsing whitespace,
+        // the space and combining mark form grapheme cluster #256 and must not collide.
+        let base = String(repeating: "a", count: TransportConfig.contentKeyPrefixLength - 1)
+        let acute = base + "\n\u{0301}"
+        let grave = base + "\n\u{0300}"
+        #expect(ContentNormalizer.normalizedKey(acute) != ContentNormalizer.normalizedKey(grave))
+    }
+
+    @Test func normalizedKey_trimsBoundaryZeroWidthSpacesLikeFoundation() {
+        let plain = ContentNormalizer.normalizedKey("hello mesh")
+        let leading = ContentNormalizer.normalizedKey("\u{200B}hello mesh")
+        let trailing = ContentNormalizer.normalizedKey("hello mesh\u{200B}")
+        let both = ContentNormalizer.normalizedKey("\u{200B} hello mesh \u{200B}")
+        #expect(leading == plain)
+        #expect(trailing == plain)
+        #expect(both == plain)
+    }
 }
 
 // MARK: - Message Deduplication Service Tests
@@ -356,6 +375,80 @@ struct MessageDeduplicationServiceTests {
         service.recordNostrEvent("event123")
 
         #expect(service.hasProcessedNostrEvent("event123"))
+    }
+
+    @Test func recordNostrEvent_ephemeralDoesNotPersistToDisk() {
+        let fileURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("nostr-ephemeral-\(UUID().uuidString).json")
+        defer { try? FileManager.default.removeItem(at: fileURL) }
+
+        let store = NostrProcessedEventStore(fileURL: fileURL)
+        let service = MessageDeduplicationService(
+            contentCapacity: 100,
+            nostrEventCapacity: 100,
+            nostrEventStore: store
+        )
+
+        service.recordNostrEvent("ephemeral-geo-event", persist: false)
+
+        #expect(service.hasProcessedNostrEvent("ephemeral-geo-event"))
+        #expect(!FileManager.default.fileExists(atPath: fileURL.path))
+        #expect(store.load().isEmpty)
+    }
+
+    @Test func nostrProcessedEventStore_recoversAfterTransientReadFailure() throws {
+        let fileURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("nostr-transient-\(UUID().uuidString).json")
+        defer { try? FileManager.default.removeItem(at: fileURL) }
+
+        let initial = try JSONEncoder().encode(["old1", "old2"])
+        try initial.write(to: fileURL, options: [.atomic])
+
+        let lock = NSLock()
+        var failReads = true
+        let store = NostrProcessedEventStore(fileURL: fileURL) { url in
+            lock.lock()
+            let shouldFail = failReads
+            lock.unlock()
+            if shouldFail {
+                throw NSError(domain: NSCocoaErrorDomain, code: NSFileReadNoPermissionError)
+            }
+            return try Data(contentsOf: url)
+        }
+
+        // Transient failure during initial load must not poison the cache.
+        #expect(store.load().isEmpty)
+        store.append(["while-locked"], cap: 100)
+
+        lock.lock()
+        failReads = false
+        lock.unlock()
+
+        store.append(["after-unlock"], cap: 100)
+        // `load()` runs on `ioQueue.sync`, draining prior async appends.
+        #expect(store.load() == ["old1", "old2", "while-locked", "after-unlock"])
+
+        let reopened = NostrProcessedEventStore(fileURL: fileURL)
+        #expect(reopened.load() == ["old1", "old2", "while-locked", "after-unlock"])
+    }
+
+    @Test func nostrIdentityBridge_retriesAfterTransientKeychainFailure() throws {
+        let keychain = MockKeychain()
+        let firstBridge = NostrIdentityBridge(keychain: keychain)
+        let original = try #require(try firstBridge.getCurrentNostrIdentity())
+
+        let secondBridge = NostrIdentityBridge(keychain: keychain)
+        keychain.simulatedGenericReadError = .deviceLocked
+        #expect(try secondBridge.getCurrentNostrIdentity() == nil)
+
+        keychain.simulatedGenericReadError = nil
+        let recovered = try #require(try secondBridge.getCurrentNostrIdentity())
+        #expect(recovered.publicKeyHex == original.publicKeyHex)
+
+        let loadsAfterRecovery = keychain.loadCallCount
+        let cached = try #require(try secondBridge.getCurrentNostrIdentity())
+        #expect(cached.publicKeyHex == original.publicKeyHex)
+        #expect(keychain.loadCallCount == loadsAfterRecovery)
     }
 
     @Test func hasProcessedNostrEvent_falseForUnseen() {

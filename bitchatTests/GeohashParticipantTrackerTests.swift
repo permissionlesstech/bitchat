@@ -456,6 +456,20 @@ struct GeohashParticipantTrackerTests {
         _ = cancellable
     }
 
+    @Test func objectWillChange_firesOncePerNewActiveParticipant() async {
+        let tracker = GeohashParticipantTracker()
+        let context = MockParticipantContext()
+        tracker.configure(context: context)
+        tracker.setActiveGeohash("abc123")
+
+        var changes = 0
+        let cancellable = tracker.objectWillChange.sink { _ in changes += 1 }
+        tracker.recordParticipant(pubkeyHex: "pubkey1")
+
+        #expect(changes == 1)
+        _ = cancellable
+    }
+
     // MARK: - GeoPerson Tests
 
     @Test func geoPerson_identifiable() async {

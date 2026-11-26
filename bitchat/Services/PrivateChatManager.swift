@@ -47,6 +47,10 @@ final class PrivateChatManager: ObservableObject {
         bindSelectionMirror() // didSet does not fire during init
     }
 
+    func resetForPanic() {
+        sentReadReceipts.removeAll(keepingCapacity: false)
+    }
+
     /// Keeps `selectedPeer` in lock-step with the store's selection axis
     /// (including store-internal handoffs such as conversation migration).
     private func bindSelectionMirror() {
@@ -83,19 +87,16 @@ final class PrivateChatManager: ObservableObject {
 
     // MARK: - Message Consolidation
 
-    /// Consolidates messages from different peer ID representations into a single chat.
-    /// This ensures messages from stable Noise keys and temporary Nostr peer IDs are merged.
+    /// Consolidates history stored under the peer's known Noise key into its chat.
     /// - Parameters:
     ///   - peerID: The target peer ID to consolidate messages into
-    ///   - peerNickname: The peer's display name (lowercased for matching)
     ///   - persistedReadReceipts: The persisted read receipts set from ChatViewModel (UserDefaults-backed)
     /// - Returns: True if any unread messages were found during consolidation
     @MainActor
-    func consolidateMessages(for peerID: PeerID, peerNickname: String, persistedReadReceipts: Set<String>) -> Bool {
+    func consolidateMessages(for peerID: PeerID, persistedReadReceipts: Set<String>) -> Bool {
         guard let meshService = meshService, let store = conversationStore else { return false }
         var hasUnreadMessages = false
 
-        // 1. Consolidate from stable Noise key (64-char hex)
         if let peer = unifiedPeerService?.getPeer(by: peerID) {
             let noiseKeyHex = PeerID(hexData: peer.noisePublicKey)
             let nostrMessages = messages(for: noiseKeyHex)
@@ -140,73 +141,6 @@ final class PrivateChatManager: ObservableObject {
             }
         }
 
-        // 2. Consolidate from temporary Nostr peer IDs (nostr_* prefixed)
-        let normalizedNickname = peerNickname.lowercased()
-        let myPeerID = meshService.myPeerID
-        var tempPeerIDsToConsolidate: [PeerID] = []
-
-        for (storedPeerID, messages) in privateChats {
-            if storedPeerID.isGeoDM && storedPeerID != peerID {
-                // Only the peer's own rows say who a thread is with. Mine
-                // carry my plain nickname (sendGeohashDM), so next to a mesh
-                // peer who shares it they would match as well: my thread with
-                // a geohash stranger would fold into the namesake's chat, a
-                // reply typed there would reach the namesake, and the
-                // stranger's next reply would open a fresh thread.
-                let containsMyRows = messages.contains { $0.senderPeerID == myPeerID }
-                let nicknamesMatch = messages.allSatisfy { $0.sender.lowercased() == normalizedNickname }
-                if !containsMyRows && nicknamesMatch && !messages.isEmpty {
-                    tempPeerIDsToConsolidate.append(storedPeerID)
-                }
-            }
-        }
-
-        if !tempPeerIDsToConsolidate.isEmpty {
-            var consolidatedCount = 0
-            var hadUnreadTemp = false
-            let unreadPeerIDs = unreadMessages
-
-            for tempPeerID in tempPeerIDsToConsolidate {
-                if unreadPeerIDs.contains(tempPeerID) {
-                    hadUnreadTemp = true
-                }
-
-                for message in messages(for: tempPeerID) {
-                    let updatedMessage = BitchatMessage(
-                        id: message.id,
-                        sender: message.sender,
-                        content: message.content,
-                        timestamp: message.timestamp,
-                        isRelay: message.isRelay,
-                        originalSender: message.originalSender,
-                        isPrivate: message.isPrivate,
-                        recipientNickname: message.recipientNickname,
-                        // Defense in depth: threads holding my rows are
-                        // skipped above, so every row here is the peer's and
-                        // moves to `peerID`. Were one of mine to get through,
-                        // it would keep my ID, as in the stable-key branch.
-                        senderPeerID: message.senderPeerID == meshService.myPeerID ? meshService.myPeerID : peerID,
-                        mentions: message.mentions,
-                        deliveryStatus: message.deliveryStatus
-                    )
-                    if store.append(updatedMessage, to: .directPeer(peerID)) {
-                        consolidatedCount += 1
-                    }
-                }
-                store.removeConversation(.directPeer(tempPeerID))
-            }
-
-            if hadUnreadTemp {
-                store.markUnread(.directPeer(peerID))
-                hasUnreadMessages = true
-                SecureLogger.debug("📬 Transferred unread status from temp peer IDs to \(peerID)", category: .session)
-            }
-
-            if consolidatedCount > 0 {
-                SecureLogger.info("📥 Consolidated \(consolidatedCount) Nostr messages from temporary peer IDs to \(peerNickname)", category: .session)
-            }
-        }
-
         return hasUnreadMessages
     }
 
@@ -217,17 +151,20 @@ final class PrivateChatManager: ObservableObject {
     @MainActor
     func syncReadReceiptsForSentMessages(peerID: PeerID, externalReceipts: inout Set<String>) {
         guard let myPeerID = meshService?.myPeerID else { return }
+        var syncedIDs: [String] = []
         for message in messages(for: peerID) {
             if message.isOwn(myPeerID: myPeerID, myGeoChatPeerID: nil) {
                 switch message.deliveryStatus {
                 case .read, .delivered:
-                    externalReceipts.insert(message.id)
-                    sentReadReceipts.insert(message.id)
+                    syncedIDs.append(message.id)
                 case .notSentYet, .failed, .partiallyDelivered, .sending, .sent, .carried:
                     break
                 }
             }
         }
+        guard !syncedIDs.isEmpty else { return }
+        externalReceipts.formUnion(syncedIDs)
+        sentReadReceipts.formUnion(syncedIDs)
     }
 
     /// Start a private chat with a peer. Selection is mutated through the
@@ -255,8 +192,11 @@ final class PrivateChatManager: ObservableObject {
         conversationStore?.markRead(.directPeer(peerID))
 
         // Send read receipts for unread messages that haven't been sent yet
+        // A courier join preserves the mesh rows' short sender IDs.
+        let shortPeerID = peerID.toShort()
         for message in messages(for: peerID) {
-            if message.senderPeerID == peerID && !message.isRelay && !sentReadReceipts.contains(message.id) {
+            if (message.senderPeerID == peerID || message.senderPeerID == shortPeerID)
+                && !message.isRelay && !sentReadReceipts.contains(message.id) {
                 sendReadReceipt(for: message)
             }
         }

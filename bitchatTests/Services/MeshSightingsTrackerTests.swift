@@ -78,4 +78,26 @@ struct MeshSightingsTrackerTests {
         let reloaded = MeshSightingsTracker(defaults: defaults, now: { self.noon })
         #expect(reloaded.todayCount == 0)
     }
+
+    @Test
+    func recordsBatchedSightingsOnceAndDeduplicatesAcrossRepeatCalls() {
+        let defaults = makeDefaults()
+        let tracker = MeshSightingsTracker(defaults: defaults, now: { self.noon })
+
+        let peerA = PeerID(str: "aaaa111122223333")
+        let peerB = PeerID(str: "bbbb444455556666")
+        let peerC = PeerID(str: "cccc777788889999")
+
+        tracker.recordSightings([peerA, peerB, peerA])
+        #expect(tracker.todayCount == 2)
+        #expect(tracker.lastSightingAt == noon)
+
+        tracker.recordSightings([peerA, peerB, peerC])
+        #expect(tracker.todayCount == 3)
+
+        let reloaded = MeshSightingsTracker(defaults: defaults, now: { self.noon.addingTimeInterval(30) })
+        #expect(reloaded.todayCount == 3)
+        reloaded.recordSightings([peerA, peerB, peerC])
+        #expect(reloaded.todayCount == 3)
+    }
 }

@@ -112,10 +112,15 @@ final class GeohashParticipantTracker: ObservableObject {
         let wasActive = previous.map { $0 >= cutoff } ?? false
         guard !wasActive else { return true }
         // Someone newly counts as present here: participant counts for
-        // this geohash changed (sampled channels included).
-        objectWillChange.send()
+        // this geohash changed (sampled channels included). When this is the
+        // active geohash, `refresh()` publishes `visiblePeople` (which already
+        // emits `objectWillChange`), avoiding a double invalidation per join.
         if activeGeohash == geohash {
-            refresh()
+            if !refresh() {
+                objectWillChange.send()
+            }
+        } else {
+            objectWillChange.send()
         }
         return true
     }
@@ -176,11 +181,14 @@ final class GeohashParticipantTracker: ObservableObject {
     /// Refresh the visible people list. Publishes only when what the roster
     /// shows changed — who is present or how they're named — so subscribers
     /// (the people sheet, the bootstrapper's prune) don't rebuild on
-    /// activity that only moved timestamps.
-    func refresh() {
+    /// activity that only moved timestamps. Returns whether `visiblePeople`
+    /// was published.
+    @discardableResult
+    func refresh() -> Bool {
         let people = getVisiblePeople()
-        guard Self.rosterKey(people) != Self.rosterKey(visiblePeople) else { return }
+        guard Self.rosterKey(people) != Self.rosterKey(visiblePeople) else { return false }
         publishVisiblePeople(people)
+        return true
     }
 
     private static func rosterKey(_ people: [GeoPerson]) -> [String: String] {
@@ -199,12 +207,14 @@ final class GeohashParticipantTracker: ObservableObject {
     /// Start the periodic refresh timer: expires people who went quiet.
     func startRefreshTimer(interval: TimeInterval = 30.0) {
         stopRefreshTimer()
-        refreshTimer = Timer.scheduledTimer(withTimeInterval: interval, repeats: true) { [weak self] _ in
+        let timer = Timer.scheduledTimer(withTimeInterval: interval, repeats: true) { [weak self] _ in
             Task { @MainActor in
                 self?.pruneExpired()
                 self?.refresh()
             }
         }
+        timer.tolerance = min(5.0, interval * 0.2)
+        refreshTimer = timer
     }
 
     /// Stop the periodic refresh timer

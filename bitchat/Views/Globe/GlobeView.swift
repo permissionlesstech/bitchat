@@ -34,6 +34,7 @@ struct GlobeColors: Equatable {
 /// crosshair at the screen center.
 struct GlobeView: View {
     @ObservedObject var state: GlobeState
+    @ObservedObject private var camera: GlobeCameraState
     let colors: GlobeColors
     let world: GlobeWorldData
 
@@ -45,6 +46,13 @@ struct GlobeView: View {
     @State private var selectionFeedback = UISelectionFeedbackGenerator()
     #endif
 
+    init(state: GlobeState, colors: GlobeColors, world: GlobeWorldData) {
+        self.state = state
+        self._camera = ObservedObject(wrappedValue: state.camera)
+        self.colors = colors
+        self.world = world
+    }
+
     var body: some View {
         GeometryReader { proxy in
             ZStack {
@@ -53,10 +61,10 @@ struct GlobeView: View {
                     .equatable()
 
                 let renderer = GlobeRenderer(
-                    centerLat: state.centerLat,
-                    centerLon: state.centerLon,
+                    centerLat: camera.centerLat,
+                    centerLon: camera.centerLon,
                     radius: state.globeRadius,
-                    zoom: state.zoom,
+                    zoom: camera.zoom,
                     selectedGeohash: state.selectedGeohash,
                     detail: state.frameDetail,
                     colors: colors,
@@ -70,7 +78,7 @@ struct GlobeView: View {
 
                 GlobeTouchLayer(state: state)
 
-                // Isolated so its pulse does not redraw the globe geometry.
+                // Isolated so its GPU opacity pulse never redraws the globe geometry.
                 GlobeCrosshair(color: colors.accent, isInMotion: state.isInMotion)
                     .allowsHitTesting(false)
             }
@@ -155,37 +163,58 @@ private struct GlobeStarfield: View, Equatable {
 private struct GlobeCrosshair: View {
     let color: Color
     let isInMotion: Bool
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.scenePhase) private var scenePhase
+    @State private var isLowPowerMode = ProcessInfo.processInfo.isLowPowerModeEnabled
+    @State private var pulseDimmed = false
+
+    private var isPaused: Bool {
+        isInMotion || reduceMotion || scenePhase != .active || isLowPowerMode
+    }
 
     var body: some View {
-        TimelineView(.animation(minimumInterval: nil, paused: isInMotion)) { timeline in
-            Canvas { context, size in
-                let alpha = isInMotion ? 0.9 : Self.pulse(at: timeline.date)
-                let shading = GraphicsContext.Shading.color(color.opacity(alpha))
-                let cx = size.width / 2
-                let cy = size.height / 2
-                let gap: CGFloat = 5
-                let len: CGFloat = 9
-                var path = Path()
-                path.move(to: CGPoint(x: cx - gap - len, y: cy))
-                path.addLine(to: CGPoint(x: cx - gap, y: cy))
-                path.move(to: CGPoint(x: cx + gap, y: cy))
-                path.addLine(to: CGPoint(x: cx + gap + len, y: cy))
-                path.move(to: CGPoint(x: cx, y: cy - gap - len))
-                path.addLine(to: CGPoint(x: cx, y: cy - gap))
-                path.move(to: CGPoint(x: cx, y: cy + gap))
-                path.addLine(to: CGPoint(x: cx, y: cy + gap + len))
-                context.stroke(path, with: shading, lineWidth: 1.6)
-                context.fill(Path(ellipseIn: CGRect(x: cx - 1.8, y: cy - 1.8, width: 3.6, height: 3.6)), with: shading)
-            }
+        // Static vector geometry + Core Animation opacity pulse runs entirely on the
+        // compositor with zero CPU/SwiftUI redraw ticks while idle.
+        Canvas { context, size in
+            let shading = GraphicsContext.Shading.color(color)
+            let cx = size.width / 2
+            let cy = size.height / 2
+            let gap: CGFloat = 5
+            let len: CGFloat = 9
+            var path = Path()
+            path.move(to: CGPoint(x: cx - gap - len, y: cy))
+            path.addLine(to: CGPoint(x: cx - gap, y: cy))
+            path.move(to: CGPoint(x: cx + gap, y: cy))
+            path.addLine(to: CGPoint(x: cx + gap + len, y: cy))
+            path.move(to: CGPoint(x: cx, y: cy - gap - len))
+            path.addLine(to: CGPoint(x: cx, y: cy - gap))
+            path.move(to: CGPoint(x: cx, y: cy + gap))
+            path.addLine(to: CGPoint(x: cx, y: cy + gap + len))
+            context.stroke(path, with: shading, lineWidth: 1.6)
+            context.fill(Path(ellipseIn: CGRect(x: cx - 1.8, y: cy - 1.8, width: 3.6, height: 3.6)), with: shading)
+        }
+        .opacity(isPaused ? 0.9 : (pulseDimmed ? 0.45 : 1.0))
+        .onAppear { syncPulseAnimation() }
+        .onChange(of: isPaused) { _ in syncPulseAnimation() }
+        .onReceive(
+            NotificationCenter.default.publisher(for: .NSProcessInfoPowerStateDidChange)
+                .receive(on: RunLoop.main)
+        ) { _ in
+            isLowPowerMode = ProcessInfo.processInfo.isLowPowerModeEnabled
         }
     }
 
-    /// 0.45 → 1 → 0.45 over 2.2s, eased like the Android picker's reversing tween.
-    private static func pulse(at date: Date) -> Double {
-        let period = 1.1
-        let phase = date.timeIntervalSinceReferenceDate.truncatingRemainder(dividingBy: period * 2) / period
-        let t = phase <= 1 ? phase : 2 - phase
-        return 0.45 + 0.55 * GlobeEasing.fastOutSlowIn(t)
+    private func syncPulseAnimation() {
+        if isPaused {
+            withAnimation(.linear(duration: 0.12)) {
+                pulseDimmed = false
+            }
+        } else {
+            pulseDimmed = false
+            withAnimation(.easeInOut(duration: 1.1).repeatForever(autoreverses: true)) {
+                pulseDimmed = true
+            }
+        }
     }
 }
 
@@ -207,6 +236,25 @@ private struct GlobeRenderer {
 
     private typealias DiscPoint = GlobeGeometry.DiscPoint
 
+    /// Precomputed trigonometric terms for graticule parallels and meridians at each
+    /// motion detail step (4°, 8°, 10°), avoiding ~1,600 sin/cos calls per frame.
+    private static let graticuleCurvesByStep: [Int: [[GlobeMath.Terms]]] = [
+        4: buildGraticuleCurves(step: 4),
+        8: buildGraticuleCurves(step: 8),
+        10: buildGraticuleCurves(step: 10)
+    ]
+
+    private static func buildGraticuleCurves(step: Double) -> [[GlobeMath.Terms]] {
+        var curves: [[GlobeMath.Terms]] = []
+        for lat in stride(from: -75.0, through: 75.0, by: 15) {
+            curves.append(stride(from: -180.0, through: 180.0, by: step).map { GlobeMath.Terms(lat: lat, lon: $0) })
+        }
+        for lon in stride(from: -180.0, to: 180.0, by: 15) {
+            curves.append(stride(from: -90.0, through: 90.0, by: step).map { GlobeMath.Terms(lat: $0, lon: lon) })
+        }
+        return curves
+    }
+
     func draw(in context: inout GraphicsContext, size: CGSize) {
         guard radius > 0, size.width > 0, size.height > 0 else { return }
         let cx = Double(size.width) / 2
@@ -214,6 +262,7 @@ private struct GlobeRenderer {
         let r = radius
         let center = CGPoint(x: cx, y: cy)
         let projector = GlobeMath.PreparedProjector(centerLat: centerLat, centerLon: centerLon)
+        let inversionSamples = GlobeGeometry.unprojectInversionSamples(centerLat: centerLat, centerLon: centerLon)
         let clip = GlobeGeometry.ClipRect(size: size)
         let screenRect = CGRect(origin: .zero, size: size)
         // Once the disc covers the screen, the sphere-wide gradients are constant across
@@ -257,13 +306,27 @@ private struct GlobeRenderer {
             context.fill(Path(screenRect), with: .color(colors.oceanCenter))
         }
 
-        drawGraticule(in: &context, cx: cx, cy: cy, r: r, clip: clip)
+        drawGraticule(in: &context, projector: projector, cx: cx, cy: cy, r: r, clip: clip)
 
-        // Fill every landmass first. Coastlines are drawn in a separate final pass so a
-        // large continent fill can never cover an island outline drawn earlier.
+        // Fill every landmass first. Non-inverted rings are batched into one CG path
+        // fill; coastlines are drawn in a separate final pass so a large continent fill
+        // can never cover an island outline drawn earlier.
+        var landFill = Path()
         var coastlines = Path()
         for ring in world.land {
-            drawLand(ring, in: &context, projector: projector, cx: cx, cy: cy, r: r, clip: clip, coastlines: &coastlines)
+            drawLand(
+                ring,
+                in: &context,
+                projector: projector,
+                inversionSamples: inversionSamples,
+                cx: cx, cy: cy, r: r,
+                clip: clip,
+                landFill: &landFill,
+                coastlines: &coastlines
+            )
+        }
+        if !landFill.isEmpty {
+            context.fill(landFill, with: .color(colors.land))
         }
         context.stroke(coastlines, with: .color(colors.coastline), lineWidth: 1.4 * pixel)
 
@@ -342,13 +405,20 @@ private struct GlobeRenderer {
         }
     }
 
-    private func drawGraticule(in context: inout GraphicsContext, cx: Double, cy: Double, r: Double, clip: GlobeGeometry.ClipRect) {
-        let step = detail.graticuleStepDegrees
+    private func drawGraticule(
+        in context: inout GraphicsContext,
+        projector: GlobeMath.PreparedProjector,
+        cx: Double, cy: Double, r: Double,
+        clip: GlobeGeometry.ClipRect
+    ) {
+        let stepKey = Int(detail.graticuleStepDegrees.rounded())
+        let curves = Self.graticuleCurvesByStep[stepKey] ?? Self.buildGraticuleCurves(step: detail.graticuleStepDegrees)
         var path = Path()
-        func trace(_ points: [(lat: Double, lon: Double)]) {
+        for curve in curves {
             var prev: GlobeMath.Projection?
-            for point in points {
-                if let p = GlobeMath.project(lat: point.lat, lon: point.lon, centerLat: centerLat, centerLon: centerLon), p.cosC > 0.02 {
+            for terms in curve {
+                let p = projector.project(terms)
+                if p.cosC > 0.02 {
                     if let pp = prev, let segment = GlobeGeometry.clipSegment(
                         CGPoint(x: cx + pp.x * r, y: cy + pp.y * r),
                         CGPoint(x: cx + p.x * r, y: cy + p.y * r),
@@ -363,14 +433,6 @@ private struct GlobeRenderer {
                 }
             }
         }
-        // Latitude lines
-        for lat in stride(from: -75.0, through: 75.0, by: 15) {
-            trace(stride(from: -180.0, through: 180.0, by: step).map { (lat, $0) })
-        }
-        // Longitude lines
-        for lon in stride(from: -180.0, to: 180.0, by: 15) {
-            trace(stride(from: -90.0, through: 90.0, by: step).map { ($0, lon) })
-        }
         context.stroke(path, with: .color(colors.graticule), lineWidth: pixel)
     }
 
@@ -378,8 +440,10 @@ private struct GlobeRenderer {
         _ ring: GlobeRing,
         in context: inout GraphicsContext,
         projector: GlobeMath.PreparedProjector,
+        inversionSamples: [GlobeGeometry.UnprojectedSample],
         cx: Double, cy: Double, r: Double,
         clip: GlobeGeometry.ClipRect,
+        landFill: inout Path,
         coastlines: inout Path
     ) {
         let pointStride = ring.count >= 64 ? detail.landPointStride : 1
@@ -398,31 +462,26 @@ private struct GlobeRenderer {
         guard anyFront else { return }
 
         appendRuns(GlobeGeometry.frontRuns(pts), to: &coastlines, cx: cx, cy: cy, r: r, clip: clip)
-        let polygon = GlobeGeometry.fillPolygon(pts, cx: cx, cy: cy, r: r)
-        let invert = anyBack && GlobeGeometry.projectedFillNeedsInversion(
-            polygon: polygon, ring: ring, cx: cx, cy: cy, r: r, centerLat: centerLat, centerLon: centerLon
-        )
-        fill(pts, polygon: polygon, color: colors.land, in: &context, cx: cx, cy: cy, r: r, clip: clip, invert: invert)
-    }
-
-    private func fill(
-        _ pts: [DiscPoint],
-        polygon: [CGPoint]? = nil,
-        color: Color,
-        in context: inout GraphicsContext,
-        cx: Double, cy: Double, r: Double,
-        clip: GlobeGeometry.ClipRect,
-        invert: Bool = false
-    ) {
         guard pts.contains(where: \.front) else { return }
-        let poly = polygon ?? GlobeGeometry.fillPolygon(pts, cx: cx, cy: cy, r: r)
-        guard poly.count >= 3 else { return }
-        let clipped = GlobeGeometry.clipPolygon(poly, to: clip)
+        let polygon = GlobeGeometry.fillPolygon(pts, cx: cx, cy: cy, r: r)
+        guard polygon.count >= 3 else { return }
+        let invert = anyBack && GlobeGeometry.projectedFillNeedsInversion(
+            polygon: polygon,
+            ring: ring,
+            cx: cx,
+            cy: cy,
+            r: r,
+            centerLat: centerLat,
+            centerLon: centerLon,
+            samples: inversionSamples
+        )
+        let clipped = GlobeGeometry.clipPolygon(polygon, to: clip)
         guard clipped.count >= 3 else { return }
-        var path = Path()
+
         if invert {
             // Even-odd filling with the globe disc flips the one ring whose horizon
             // closure the projection put on the wrong side.
+            var path = Path()
             let clipBounds = CGRect(x: clip.left, y: clip.top, width: clip.right - clip.left, height: clip.bottom - clip.top)
             let discRect = CGRect(x: cx - r, y: cy - r, width: r * 2, height: r * 2)
             if discRect.contains(clipBounds) {
@@ -430,10 +489,31 @@ private struct GlobeRenderer {
             } else {
                 path.addEllipse(in: discRect)
             }
+            path.addLines(clipped)
+            path.closeSubpath()
+            context.fill(path, with: .color(colors.land), style: FillStyle(eoFill: true))
+        } else {
+            landFill.addLines(clipped)
+            landFill.closeSubpath()
         }
+    }
+
+    private func fill(
+        _ pts: [DiscPoint],
+        color: Color,
+        in context: inout GraphicsContext,
+        cx: Double, cy: Double, r: Double,
+        clip: GlobeGeometry.ClipRect
+    ) {
+        guard pts.contains(where: \.front) else { return }
+        let poly = GlobeGeometry.fillPolygon(pts, cx: cx, cy: cy, r: r)
+        guard poly.count >= 3 else { return }
+        let clipped = GlobeGeometry.clipPolygon(poly, to: clip)
+        guard clipped.count >= 3 else { return }
+        var path = Path()
         path.addLines(clipped)
         path.closeSubpath()
-        context.fill(path, with: .color(color), style: FillStyle(eoFill: invert))
+        context.fill(path, with: .color(color))
     }
 
     private func drawCities(
@@ -454,7 +534,19 @@ private struct GlobeRenderer {
         }
         let width = Double(size.width)
         let height = Double(size.height)
-        for city in world.cities where city.rank <= maxRank {
+
+        // Batch city dots into 4 quantized opacity bands per color so dozens of visible
+        // cities become at most 8 fill calls instead of one CG fill per dot.
+        let alphaBands: [Double] = [0.35, 0.58, 0.80, 1.0]
+        var capitalPaths = Array(repeating: Path(), count: alphaBands.count)
+        var cityPaths = Array(repeating: Path(), count: alphaBands.count)
+        var labels: [(name: String, point: CGPoint, alpha: Double)] = []
+        let canShowLabels = detail.showCityLabels && zoom >= 2.5
+
+        // `world.cities` is sorted by `rank` ascending, so we can stop as soon as we
+        // pass `maxRank`.
+        for city in world.cities {
+            if city.rank > maxRank { break }
             let p = projector.project(city.terms)
             guard p.cosC >= 0.03 else { continue }
             let sx = cx + p.x * r
@@ -464,24 +556,39 @@ private struct GlobeRenderer {
             let alpha = min(max(p.cosC, 0.25), 1)
             let important = city.capital || city.megacity
             let dotRadius = important ? 2.6 : 1.8
-            let dotColor = city.capital ? colors.accent.opacity(alpha) : colors.label.opacity(alpha * 0.85)
-            context.fill(
-                Path(ellipseIn: CGRect(x: sx - dotRadius, y: sy - dotRadius, width: dotRadius * 2, height: dotRadius * 2)),
-                with: .color(dotColor)
-            )
-
-            if detail.showCityLabels && (zoom >= 6 || (important && zoom >= 2.5)) {
-                drawLabel(
-                    city.name,
-                    at: CGPoint(x: sx + dotRadius + 3, y: sy),
-                    anchor: .leading,
-                    size: 10,
-                    weight: .medium,
-                    color: colors.label.opacity(200 / 255 * alpha),
-                    halo: colors.labelHalo.opacity(140 / 255 * alpha),
-                    in: &context
-                )
+            let dotRect = CGRect(x: sx - dotRadius, y: sy - dotRadius, width: dotRadius * 2, height: dotRadius * 2)
+            let band = min(alphaBands.count - 1, Int(((alpha - 0.25) / 0.75) * Double(alphaBands.count)))
+            if city.capital {
+                capitalPaths[band].addEllipse(in: dotRect)
+            } else {
+                cityPaths[band].addEllipse(in: dotRect)
             }
+
+            if canShowLabels && (zoom >= 6 || important) {
+                labels.append((city.name, CGPoint(x: sx + dotRadius + 3, y: sy), alpha))
+            }
+        }
+
+        for band in alphaBands.indices {
+            if !cityPaths[band].isEmpty {
+                context.fill(cityPaths[band], with: .color(colors.label.opacity(alphaBands[band] * 0.85)))
+            }
+            if !capitalPaths[band].isEmpty {
+                context.fill(capitalPaths[band], with: .color(colors.accent.opacity(alphaBands[band])))
+            }
+        }
+
+        for label in labels {
+            drawLabel(
+                label.name,
+                at: label.point,
+                anchor: .leading,
+                size: 10,
+                weight: .medium,
+                color: colors.label.opacity(200 / 255 * label.alpha),
+                halo: colors.labelHalo.opacity(140 / 255 * label.alpha),
+                in: &context
+            )
         }
     }
 
@@ -544,7 +651,7 @@ private struct GlobeRenderer {
     }
 
     /// Text with a thin halo in the background color so labels stay legible over land,
-    /// grid lines and the limb shading.
+    /// grid lines and the limb shading. Uses 4 cardinal halo offsets (5 draws total vs 9).
     private func drawLabel(
         _ string: String,
         at point: CGPoint,
@@ -560,7 +667,7 @@ private struct GlobeRenderer {
         )
         resolved.shading = .color(halo)
         let w = size * 0.09
-        for (dx, dy) in [(-w, 0), (w, 0), (0, -w), (0, w), (-w, -w), (w, -w), (-w, w), (w, w)] {
+        for (dx, dy) in [(-w, 0), (w, 0), (0, -w), (0, w)] {
             context.draw(resolved, at: CGPoint(x: point.x + dx, y: point.y + dy), anchor: anchor)
         }
         resolved.shading = .color(color)

@@ -8,16 +8,16 @@ import AppKit
 
 struct ContentComposerView: View {
     @EnvironmentObject private var conversationUIModel: ConversationUIModel
+    @EnvironmentObject private var autocompleteModel: ComposerAutocompleteModel
     @EnvironmentObject private var privateConversationModel: PrivateConversationModel
     @EnvironmentObject private var locationChannelsModel: LocationChannelsModel
     @ObservedObject private var bridgeService = BridgeService.shared
     @Environment(\.appTheme) private var theme
     @ThemedPalette private var palette
 
-    @Binding var messageText: String
+    @ObservedObject var draftModel: ComposerDraftModel
     var isTextFieldFocused: FocusState<Bool>.Binding
     @ObservedObject var voiceRecordingVM: VoiceRecordingViewModel
-    @Binding var autocompleteDebounceTimer: Timer?
 
     let onSendMessage: () -> Void
 
@@ -30,11 +30,11 @@ struct ContentComposerView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            if conversationUIModel.showAutocomplete && !conversationUIModel.autocompleteSuggestions.isEmpty {
+            if autocompleteModel.showAutocomplete && !autocompleteModel.autocompleteSuggestions.isEmpty {
                 VStack(alignment: .leading, spacing: 0) {
-                    ForEach(Array(conversationUIModel.autocompleteSuggestions.prefix(4).enumerated()), id: \.element) { index, suggestion in
+                    ForEach(Array(autocompleteModel.autocompleteSuggestions.prefix(4).enumerated()), id: \.element) { index, suggestion in
                         Button(action: {
-                            _ = conversationUIModel.completeNickname(suggestion, in: &messageText)
+                            _ = autocompleteModel.completeNickname(suggestion, in: &draftModel.messageText)
                         }) {
                             HStack {
                                 Text(suggestion)
@@ -47,7 +47,7 @@ struct ContentComposerView: View {
                             .padding(.vertical, 3)
                             .frame(maxWidth: .infinity, alignment: .leading)
                             .background(
-                                index == conversationUIModel.selectedAutocompleteIndex
+                                index == autocompleteModel.selectedAutocompleteIndex
                                     ? palette.secondary.opacity(0.15)
                                     : Color.clear
                             )
@@ -59,7 +59,7 @@ struct ContentComposerView: View {
                 .padding(.horizontal, 12)
             }
 
-            CommandSuggestionsView(messageText: $messageText)
+            CommandSuggestionsView(messageText: $draftModel.messageText)
 
             if voiceRecordingVM.state.isActive {
                 recordingIndicator
@@ -68,7 +68,7 @@ struct ContentComposerView: View {
             HStack(alignment: .center, spacing: 4) {
                 TextField(
                     "",
-                    text: $messageText,
+                    text: $draftModel.messageText,
                     prompt: Text(placeholderText)
                         .foregroundColor(palette.secondary.opacity(0.6))
                 )
@@ -82,25 +82,25 @@ struct ContentComposerView: View {
                 #endif
                 .submitLabel(.send)
                 .modifier(AutocompleteKeyboardNavigationModifier(
-                    isActive: { conversationUIModel.showAutocomplete
-                        && !conversationUIModel.autocompleteSuggestions.isEmpty },
+                    isActive: { autocompleteModel.showAutocomplete
+                        && !autocompleteModel.autocompleteSuggestions.isEmpty },
                     onMove: { delta in
-                        conversationUIModel.moveAutocompleteSelection(by: delta)
+                        autocompleteModel.moveAutocompleteSelection(by: delta)
                     },
                     onAccept: {
-                        conversationUIModel.completeSelectedSuggestion(in: &messageText)
+                        autocompleteModel.completeSelectedSuggestion(in: &draftModel.messageText)
                     },
                     onDismiss: {
-                        conversationUIModel.dismissAutocomplete()
+                        autocompleteModel.dismissAutocomplete()
                     }
                 ))
                 // Return while the mention panel is open completes the
                 // highlight instead of sending — matches command suggestions
                 // (#1504) and keeps Tab/Return/Escape on one convention.
                 .onSubmit {
-                    if conversationUIModel.showAutocomplete,
-                       !conversationUIModel.autocompleteSuggestions.isEmpty,
-                       conversationUIModel.completeSelectedSuggestion(in: &messageText) {
+                    if autocompleteModel.showAutocomplete,
+                       !autocompleteModel.autocompleteSuggestions.isEmpty,
+                       autocompleteModel.completeSelectedSuggestion(in: &draftModel.messageText) {
                         return
                     }
                     onSendMessage()
@@ -115,14 +115,8 @@ struct ContentComposerView: View {
                 .themedInputBackground()
                 .modifier(FocusEffectDisabledModifier())
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .onChange(of: messageText) { newValue in
-                    autocompleteDebounceTimer?.invalidate()
-                    autocompleteDebounceTimer = Timer.scheduledTimer(withTimeInterval: 0.15, repeats: false) { _ in
-                        let cursorPosition = newValue.count
-                        Task { @MainActor in
-                            conversationUIModel.updateAutocomplete(for: newValue, cursorPosition: cursorPosition)
-                        }
-                    }
+                .onChange(of: draftModel.messageText) { newValue in
+                    draftModel.scheduleAutocompleteUpdate(for: newValue, in: autocompleteModel)
                 }
 
                 HStack(alignment: .center, spacing: 4) {
@@ -143,7 +137,7 @@ struct ContentComposerView: View {
         .padding(.bottom, 8)
         .themedChromePanel(edge: .bottom)
         .onDisappear {
-            autocompleteDebounceTimer?.invalidate()
+            draftModel.cancelAutocompleteDebounce()
         }
     }
 }
@@ -300,7 +294,7 @@ private extension ContentComposerView {
 
     @ViewBuilder
     var sendOrMicButton: some View {
-        let hasText = !messageText.trimmed.isEmpty
+        let hasText = !draftModel.messageText.trimmed.isEmpty
         if conversationUIModel.canSendMediaInCurrentContext {
             ZStack {
                 micButtonView

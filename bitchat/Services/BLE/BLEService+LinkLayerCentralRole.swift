@@ -157,6 +157,7 @@ extension BLEService: CBCentralManagerDelegate {
 
         // Update state to connected
         linkStateStore.markConnected(peripheral)
+        wakeMaintenanceCadenceIfNeeded()
         
         // Reset backoff state on success
         radio.recordConnectionSuccess(peripheralID: peripheralID)

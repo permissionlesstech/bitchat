@@ -29,12 +29,18 @@ enum ChatMediaPreparation {
             mimeType: "audio/mp4",
             content: data
         )
-        guard packet.encode() != nil else { throw ChatMediaPreparationError.encodingFailed }
+        guard packet.canEncode else { throw ChatMediaPreparationError.encodingFailed }
         return packet
     }
 
     static func prepareImagePacket(from sourceURL: URL) throws -> ChatPreparedImage {
         let outputURL = try ImageUtils.processImage(at: sourceURL)
+        return try prepareProcessedImagePacket(at: outputURL)
+    }
+
+    /// Packages an image file already processed by `ImageUtils.processImage`
+    /// without decoding and re-encoding JPEG a second time.
+    static func prepareProcessedImagePacket(at outputURL: URL) throws -> ChatPreparedImage {
         do {
             let data = try Data(contentsOf: outputURL)
             guard data.count <= FileTransferLimits.maxImageBytes else {
@@ -47,7 +53,7 @@ enum ChatMediaPreparation {
                 mimeType: "image/jpeg",
                 content: data
             )
-            guard packet.encode() != nil else { throw ChatMediaPreparationError.encodingFailed }
+            guard packet.canEncode else { throw ChatMediaPreparationError.encodingFailed }
             return ChatPreparedImage(outputURL: outputURL, packet: packet)
         } catch {
             try? FileManager.default.removeItem(at: outputURL)

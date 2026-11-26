@@ -31,6 +31,7 @@ struct MeshEmptyStateView: View {
     @ObservedObject private var sightingsTracker = MeshSightingsTracker.shared
     @ObservedObject private var nearbyNotes = NearbyNotesCounter.shared
 
+    @Environment(\.scenePhase) private var scenePhase
     @ThemedPalette private var palette
 
     /// The activity window is evaluated at render time; without new events
@@ -38,7 +39,13 @@ struct MeshEmptyStateView: View {
     /// hint could linger. A slow tick keeps the hints and relative times
     /// honest.
     @State private var refreshTick = 0
-    private let refreshTimer = Timer.publish(every: 60, on: .main, in: .common).autoconnect()
+    private let refreshTimer = Timer.publish(every: 60, tolerance: 10, on: .main, in: .common).autoconnect()
+
+    private static let relativeTimeFormatter: RelativeDateTimeFormatter = {
+        let formatter = RelativeDateTimeFormatter()
+        formatter.unitsStyle = .abbreviated
+        return formatter
+    }()
 
     private enum Strings {
         static let meshIntro = String(localized: "content.empty.mesh_intro", comment: "First line of the empty mesh timeline explaining what the mesh channel is")
@@ -118,6 +125,7 @@ struct MeshEmptyStateView: View {
         }
         .frame(minHeight: compact ? 0 : fillHeight, alignment: .top)
         .onReceive(refreshTimer) { _ in
+            guard scenePhase == .active else { return }
             refreshTick += 1
             // Roll the tally over if the local day changed while idle.
             sightingsTracker.refreshForDisplay()
@@ -199,9 +207,7 @@ private extension MeshEmptyStateView {
         if content.count > maxLen {
             content = String(content.prefix(maxLen)) + "…"
         }
-        let formatter = RelativeDateTimeFormatter()
-        formatter.unitsStyle = .abbreviated
-        let ago = formatter.localizedString(for: message.timestamp, relativeTo: Date())
+        let ago = Self.relativeTimeFormatter.localizedString(for: message.timestamp, relativeTo: Date())
         return "<\(message.senderName)> \(content) · \(ago)"
     }
 

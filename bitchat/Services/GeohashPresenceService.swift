@@ -68,6 +68,7 @@ final class GeohashPresenceService: ObservableObject {
     // Per-broadcast decorrelation delay range in seconds
     private let burstMinDelay: TimeInterval
     private let burstMaxDelay: TimeInterval
+    private let clearIdentityCache: () -> Void
 
     // Privacy: Only broadcast to these levels
     private let allowedPrecisions: Set<Int> = [
@@ -77,7 +78,7 @@ final class GeohashPresenceService: ObservableObject {
     ]
 
     private init() {
-        let idBridge = NostrIdentityBridge()
+        let idBridge = NostrIdentityBridge.shared
         self.availableChannelsProvider = { LocationStateManager.shared.availableChannels }
         self.locationChanges = LocationStateManager.shared.$availableChannels.eraseToAnyPublisher()
         self.torReadyPublisher = NotificationCenter.default.publisher(for: .TorDidBecomeReady)
@@ -86,6 +87,7 @@ final class GeohashPresenceService: ObservableObject {
         self.torIsReady = { TorManager.shared.isReady }
         self.torIsForeground = { TorManager.shared.isForeground() }
         self.deriveIdentity = { try idBridge.deriveIdentity(forGeohash: $0) }
+        self.clearIdentityCache = { idBridge.clearInMemoryCaches() }
         self.relayLookup = { geohash, count in
             GeoRelayDirectory.shared.closestRelays(toGeohash: geohash, count: count)
         }
@@ -95,15 +97,19 @@ final class GeohashPresenceService: ObservableObject {
         self.sleeper = { nanoseconds in
             try? await Task.sleep(nanoseconds: nanoseconds)
         }
+        let loopMinInterval: TimeInterval = 40.0
+        let loopMaxInterval: TimeInterval = 80.0
         self.scheduleTimer = { interval, action in
-            GeohashPresenceTimerAdapter(
-                base: Timer.scheduledTimer(withTimeInterval: interval, repeats: false) { _ in
-                    action()
-                }
-            )
+            let timer = Timer.scheduledTimer(withTimeInterval: interval, repeats: false) { _ in
+                action()
+            }
+            // Keep scheduled delay + tolerance within the documented [40s, 80s] range.
+            let headroom = max(0.0, loopMaxInterval - interval)
+            timer.tolerance = min(5.0, min(interval * 0.1, headroom))
+            return GeohashPresenceTimerAdapter(base: timer)
         }
-        self.loopMinInterval = 40.0
-        self.loopMaxInterval = 80.0
+        self.loopMinInterval = loopMinInterval
+        self.loopMaxInterval = loopMaxInterval
         self.burstMinDelay = 2.0
         self.burstMaxDelay = 5.0
         setupObservers()
@@ -116,6 +122,7 @@ final class GeohashPresenceService: ObservableObject {
         torIsReady: @escaping () -> Bool,
         torIsForeground: @escaping () -> Bool,
         deriveIdentity: @escaping (String) throws -> NostrIdentity,
+        clearIdentityCache: @escaping () -> Void = {},
         relayLookup: @escaping (String, Int) -> [String],
         relaySender: @escaping (NostrEvent, [String]) -> Void,
         sleeper: @escaping (UInt64) async -> Void = { nanoseconds in try? await Task.sleep(nanoseconds: nanoseconds) },
@@ -137,6 +144,7 @@ final class GeohashPresenceService: ObservableObject {
         self.torIsReady = torIsReady
         self.torIsForeground = torIsForeground
         self.deriveIdentity = deriveIdentity
+        self.clearIdentityCache = clearIdentityCache
         self.relayLookup = relayLookup
         self.relaySender = relaySender
         self.sleeper = sleeper
@@ -167,6 +175,7 @@ final class GeohashPresenceService: ObservableObject {
         heartbeatTimer = nil
         pendingBroadcastTasks.values.forEach { $0.cancel() }
         pendingBroadcastTasks.removeAll(keepingCapacity: false)
+        clearIdentityCache()
     }
 
     private func setupObservers() {

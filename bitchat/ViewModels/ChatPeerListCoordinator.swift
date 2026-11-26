@@ -65,9 +65,7 @@ extension ChatViewModel: ChatPeerListContext {
     }
 
     func recordMeshSightings(peerIDs: [PeerID]) {
-        for peerID in peerIDs {
-            MeshSightingsTracker.shared.recordSighting(peerID: peerID)
-        }
+        MeshSightingsTracker.shared.recordSightings(peerIDs)
     }
 }
 
@@ -204,11 +202,13 @@ private extension ChatPeerListCoordinator {
     @MainActor
     func scheduleNetworkResetTimer() {
         networkResetTimer?.invalidate()
-        networkResetTimer = Timer.scheduledTimer(withTimeInterval: networkResetGraceSeconds, repeats: false) { [weak self] _ in
+        let timer = Timer.scheduledTimer(withTimeInterval: networkResetGraceSeconds, repeats: false) { [weak self] _ in
             MainActor.assumeIsolated { [weak self] in
                 self?.handleNetworkResetTimerFired()
             }
         }
+        timer.tolerance = min(2.0, networkResetGraceSeconds * 0.1)
+        networkResetTimer = timer
     }
 
     @MainActor
@@ -233,7 +233,7 @@ private extension ChatPeerListCoordinator {
     func scheduleNetworkEmptyTimer() {
         guard networkEmptyTimer == nil else { return }
 
-        networkEmptyTimer = Timer.scheduledTimer(
+        let timer = Timer.scheduledTimer(
             withTimeInterval: TransportConfig.uiMeshEmptyConfirmationSeconds,
             repeats: false
         ) { [weak self] _ in
@@ -241,6 +241,8 @@ private extension ChatPeerListCoordinator {
                 self?.handleNetworkEmptyTimerFired()
             }
         }
+        timer.tolerance = min(2.0, TransportConfig.uiMeshEmptyConfirmationSeconds * 0.1)
+        networkEmptyTimer = timer
 
         SecureLogger.debug("⏳ Mesh empty — waiting before resetting notification state", category: .session)
     }

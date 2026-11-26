@@ -55,6 +55,14 @@ struct GlobeWorldData: Sendable {
         self.land = land
         self.borders = borders
         self.cities = cities
+            .enumerated()
+            .sorted { lhs, rhs in
+                if lhs.element.rank != rhs.element.rank {
+                    return lhs.element.rank < rhs.element.rank
+                }
+                return lhs.offset < rhs.offset
+            }
+            .map(\.element)
     }
 
     private init(bundle: Bundle) {

@@ -286,6 +286,40 @@ final class BridgeService: ObservableObject {
         onEnabledChanged?(enabled)
     }
 
+    /// Panic-wipe hook: disable bridge mode, clear its persisted toggle, drop
+    /// queued uplinks/downlinks, forget the active cell and remote participants,
+    /// and reset all loop-prevention caches.
+    func resetForPanic() {
+        if activeCell != nil || !subscribedCells.isEmpty {
+            closeSubscription?()
+        }
+        isEnabled = false
+        defaults.removeObject(forKey: Self.enabledKey)
+        activeCell = nil
+        subscribedCells = []
+        queuedUplinks.removeAll(keepingCapacity: false)
+        pendingDownlinks.removeAll(keepingCapacity: false)
+        downlinkDrainScheduled = false
+        presenceTimerArmed = false
+        lastPresenceAt = .distantPast
+        uplinkDepositTimes.removeAll(keepingCapacity: false)
+        downlinkSendTimes.removeAll(keepingCapacity: false)
+        inboundEventTimes.removeAll(keepingCapacity: false)
+        inboundEventTimesBySigner.removeAll(keepingCapacity: false)
+        signatureVerificationTokens = Double(Limits.signatureVerificationAttemptsPerMinute)
+        signatureVerificationLastRefillAt = nil
+        participants.removeAll(keepingCapacity: false)
+        bridgedPeerCount = 0
+        bridgedParticipants = []
+        meshBroadcastEventIDs = BoundedIDSet(capacity: Limits.maxTrackedEventIDs)
+        publishedEventIDs = BoundedIDSet(capacity: Limits.maxTrackedEventIDs)
+        rebroadcastEventIDs = BoundedIDSet(capacity: Limits.maxTrackedEventIDs)
+        injectedMessageIDs = BoundedIDSet(capacity: Limits.maxTrackedEventIDs)
+        receivedEventIDs = BoundedIDSet(capacity: Limits.maxTrackedEventIDs)
+        observedRadioMessageIDs = BoundedIDSet(capacity: Limits.maxTrackedEventIDs)
+        onEnabledChanged?(false)
+    }
+
     /// Recomputes the active cell and (re)opens or closes the subscription.
     /// Call on toggle changes, location updates, and relay connectivity
     /// changes; idempotent.
@@ -429,7 +463,7 @@ final class BridgeService: ObservableObject {
     /// Entry point for every event the rendezvous subscription delivers.
     /// Handles presence accounting, timeline injection, and — when acting as
     /// the island's gateway — downlink rebroadcast.
-    func handleRendezvousEvent(_ event: NostrEvent) {
+    func handleRendezvousEvent(_ event: NostrEvent, signatureAlreadyVerified: Bool = false) {
         guard isEnabled else { return }
         // The subscription spans our cell + neighbors; trust only the
         // event's own signed `r` tag, and only within that ring.
@@ -449,7 +483,7 @@ final class BridgeService: ObservableObject {
             publishedEventIDs.insert(event.id) // never downlink it either
             return
         }
-        guard allowSignatureVerificationAttempt(), verifyEventSignature(event) else { return }
+        guard signatureAlreadyVerified || (allowSignatureVerificationAttempt() && verifyEventSignature(event)) else { return }
         guard receivedEventIDs.insert(event.id), allowInboundEvent(from: event.pubkey) else { return }
         guard let kind = classify(event, cell: cell) else { return }
 

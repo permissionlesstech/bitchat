@@ -36,10 +36,10 @@ protocol ChatPeerIdentityContext: AnyObject {
     func addSystemMessage(_ content: String)
 
     // MARK: Private chat session lifecycle
-    /// Merges messages stored under alternate peer-ID representations into `peerID`'s chat.
+    /// Merges history stored under the peer's known Noise key into `peerID`'s chat.
     /// Returns `true` when unread messages were discovered during consolidation.
     @discardableResult
-    func consolidatePrivateMessages(for peerID: PeerID, peerNickname: String) -> Bool
+    func consolidatePrivateMessages(for peerID: PeerID) -> Bool
     /// Marks read receipts as sent for own messages already delivered/read in
     /// `peerID`'s chat. (Single mutation path into the owner's
     /// `sentReadReceipts`; this coordinator never touches the raw set.)
@@ -116,10 +116,9 @@ extension ChatViewModel: ChatPeerIdentityContext {
     // flatten nested service accesses into intent-named calls.
 
     @discardableResult
-    func consolidatePrivateMessages(for peerID: PeerID, peerNickname: String) -> Bool {
+    func consolidatePrivateMessages(for peerID: PeerID) -> Bool {
         privateChatManager.consolidateMessages(
             for: peerID,
-            peerNickname: peerNickname,
             persistedReadReceipts: sentReadReceipts
         )
     }
@@ -270,14 +269,12 @@ final class ChatPeerIdentityCoordinator {
         let unreadContext = ChatUnreadPeerContext(
             peerID: peerID,
             noiseKeyPeerID: noiseKeyPeerID,
-            nostrPeerID: nostrPeerID,
-            nickname: context.peerNickname(for: peerID)
+            nostrPeerID: nostrPeerID
         )
 
         return ChatUnreadStateResolver.hasUnreadMessages(
             for: unreadContext,
-            unreadPrivateMessages: context.unreadPrivateMessages,
-            privateChats: context.privateChats
+            unreadPrivateMessages: context.unreadPrivateMessages
         )
     }
 
@@ -352,7 +349,7 @@ final class ChatPeerIdentityCoordinator {
         // offline non-mutual favorite is still worth writing to — the router
         // decides what delivery looks like, not chat entry.
 
-        _ = context.consolidatePrivateMessages(for: peerID, peerNickname: peerNickname)
+        _ = context.consolidatePrivateMessages(for: peerID)
 
         if !peerID.isGeoDM && !peerID.isGeoChat {
             switch context.noiseSessionState(for: peerID) {

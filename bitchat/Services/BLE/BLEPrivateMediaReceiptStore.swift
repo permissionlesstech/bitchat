@@ -72,6 +72,9 @@ final class BLEPrivateMediaReceiptStore: @unchecked Sendable {
         /// other record keeps serving.
         var quarantined: Set<String> = []
         var deletionJournal: [String: DeletionJournalEntry]?
+        var cachedFilesRoot: URL?
+        var cachedIncomingDirectoryPaths: Set<String> = []
+        var cachedReservedPayloadPaths: Set<String>?
     }
 
     private let fileManager: FileManager
@@ -120,6 +123,9 @@ final class BLEPrivateMediaReceiptStore: @unchecked Sendable {
         runtime.records = nil
         runtime.quarantined.removeAll(keepingCapacity: false)
         runtime.deletionJournal = nil
+        runtime.cachedFilesRoot = nil
+        runtime.cachedIncomingDirectoryPaths.removeAll(keepingCapacity: false)
+        runtime.cachedReservedPayloadPaths = nil
         runtime.lock.unlock()
     }
 
@@ -182,6 +188,7 @@ final class BLEPrivateMediaReceiptStore: @unchecked Sendable {
             }
             records.removeValue(forKey: messageID)
             runtime.records = records
+            runtime.cachedReservedPayloadPaths = nil
             return .absent
         }
 
@@ -202,6 +209,7 @@ final class BLEPrivateMediaReceiptStore: @unchecked Sendable {
                 }
                 records.removeValue(forKey: messageID)
                 runtime.records = records
+                runtime.cachedReservedPayloadPaths = nil
                 return .absent
             }
             return .accepted(existingURL)
@@ -212,14 +220,17 @@ final class BLEPrivateMediaReceiptStore: @unchecked Sendable {
     /// roll the payload back and withhold UI delivery/ACK when this returns
     /// false.
     func commitAccepted(messageID: String, storedURL: URL) -> Bool {
-        guard PrivateMediaMessageIdentity.isStableID(messageID),
-              validExistingPayload(storedURL) != nil,
-              let relativePath = relativePath(for: storedURL) else {
+        guard PrivateMediaMessageIdentity.isStableID(messageID) else {
             return false
         }
 
         runtime.lock.lock()
         defer { runtime.lock.unlock() }
+
+        guard validExistingPayload(storedURL) != nil,
+              let relativePath = relativePath(for: storedURL) else {
+            return false
+        }
 
         let date = now()
         guard let directory = resolvedReceiptDirectory(),
@@ -275,6 +286,7 @@ final class BLEPrivateMediaReceiptStore: @unchecked Sendable {
             removeRecord(messageID: victim, from: directory)
         }
         runtime.records = records
+        runtime.cachedReservedPayloadPaths = nil
         return true
     }
 
@@ -385,6 +397,7 @@ final class BLEPrivateMediaReceiptStore: @unchecked Sendable {
         }
 
         runtime.deletionJournal = journal
+        runtime.cachedReservedPayloadPaths = nil
         _ = recoverDeletionJournal(in: directory)
         return true
     }
@@ -465,12 +478,26 @@ final class BLEPrivateMediaReceiptStore: @unchecked Sendable {
               let records = runtime.records else {
             return nil
         }
-        let recordPaths = records.values.compactMap(\.relativePath)
-        let journalPaths = journal.values.flatMap(\.relativePaths)
-        return Set((recordPaths + journalPaths).compactMap { relativePath in
-            candidatePayload(relativePath: relativePath)?
-                .standardizedFileURL.path
-        })
+        if let cached = runtime.cachedReservedPayloadPaths {
+            return cached
+        }
+        var reserved: Set<String> = []
+        reserved.reserveCapacity(records.count + journal.count)
+        for record in records.values {
+            if let relativePath = record.relativePath,
+               let path = candidatePayload(relativePath: relativePath)?.standardizedFileURL.path {
+                reserved.insert(path)
+            }
+        }
+        for entry in journal.values {
+            for relativePath in entry.relativePaths {
+                if let path = candidatePayload(relativePath: relativePath)?.standardizedFileURL.path {
+                    reserved.insert(path)
+                }
+            }
+        }
+        runtime.cachedReservedPayloadPaths = reserved
+        return reserved
     }
 
     private func scrubLegacyTombstone(
@@ -501,6 +528,7 @@ final class BLEPrivateMediaReceiptStore: @unchecked Sendable {
         }
         records[messageID] = pathless
         runtime.records = records
+        runtime.cachedReservedPayloadPaths = nil
         return true
     }
 
@@ -710,6 +738,7 @@ final class BLEPrivateMediaReceiptStore: @unchecked Sendable {
         runtime.records = records
         runtime.quarantined = quarantined
         runtime.deletionJournal = journal
+        runtime.cachedReservedPayloadPaths = nil
         return true
     }
 
@@ -794,6 +823,7 @@ final class BLEPrivateMediaReceiptStore: @unchecked Sendable {
         }
 
         runtime.records = records
+        runtime.cachedReservedPayloadPaths = nil
         guard remaining != journal else { return false }
 
         if remaining.isEmpty {
@@ -804,6 +834,7 @@ final class BLEPrivateMediaReceiptStore: @unchecked Sendable {
             }
         }
         runtime.deletionJournal = remaining
+        runtime.cachedReservedPayloadPaths = nil
         return remaining.isEmpty
     }
 
@@ -1100,22 +1131,12 @@ final class BLEPrivateMediaReceiptStore: @unchecked Sendable {
     }
 
     private func isInsideIncomingMediaDirectory(_ url: URL) -> Bool {
-        guard let filesRoot = try? filesDirectory().standardizedFileURL else {
+        guard (try? filesDirectory()) != nil else {
             return false
         }
         let parentPath = url.standardizedFileURL
             .deletingLastPathComponent().path
-        return [
-            "voicenotes/incoming",
-            "images/incoming",
-            "files/incoming"
-        ].contains { relativeDirectory in
-            filesRoot.appendingPathComponent(
-                relativeDirectory,
-                isDirectory: true
-            )
-            .standardizedFileURL.path == parentPath
-        }
+        return runtime.cachedIncomingDirectoryPaths.contains(parentPath)
     }
 
     private func resolvedReceiptDirectory() -> URL? {
@@ -1126,6 +1147,9 @@ final class BLEPrivateMediaReceiptStore: @unchecked Sendable {
     }
 
     private func filesDirectory() throws -> URL {
+        if let cached = runtime.cachedFilesRoot {
+            return cached
+        }
         let root = try baseDirectory ?? fileManager.url(
             for: .applicationSupportDirectory,
             in: .userDomainMask,
@@ -1138,6 +1162,17 @@ final class BLEPrivateMediaReceiptStore: @unchecked Sendable {
             withIntermediateDirectories: true,
             attributes: nil
         )
-        return files
+        let standardizedFiles = files.standardizedFileURL
+        runtime.cachedFilesRoot = standardizedFiles
+        runtime.cachedIncomingDirectoryPaths = Set([
+            "voicenotes/incoming",
+            "images/incoming",
+            "files/incoming"
+        ].map {
+            standardizedFiles
+                .appendingPathComponent($0, isDirectory: true)
+                .standardizedFileURL.path
+        })
+        return standardizedFiles
     }
 }

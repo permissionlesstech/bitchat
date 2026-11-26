@@ -5,14 +5,12 @@ struct ChatUnreadPeerContext {
     let peerID: PeerID
     let noiseKeyPeerID: PeerID?
     let nostrPeerID: PeerID?
-    let nickname: String?
 }
 
 enum ChatUnreadStateResolver {
     static func hasUnreadMessages(
         for context: ChatUnreadPeerContext,
-        unreadPrivateMessages: Set<PeerID>,
-        privateChats: [PeerID: [BitchatMessage]]
+        unreadPrivateMessages: Set<PeerID>
     ) -> Bool {
         if unreadPrivateMessages.contains(context.peerID) {
             return true
@@ -28,16 +26,7 @@ enum ChatUnreadStateResolver {
             return true
         }
 
-        guard let peerNickname = context.nickname?.lowercased(), !peerNickname.isEmpty else {
-            return false
-        }
+        return false
 
-        return unreadPrivateMessages.contains { unreadPeerID in
-            guard unreadPeerID.isGeoDM,
-                  let firstMessage = privateChats[unreadPeerID]?.first else {
-                return false
-            }
-            return firstMessage.sender.lowercased() == peerNickname
-        }
     }
 }

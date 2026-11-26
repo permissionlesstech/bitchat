@@ -316,6 +316,10 @@ final class BLEService: NSObject {
     // 5. Fragment Reassembly (necessary for messages > MTU)
     private var fragmentAssemblyBuffer = BLEFragmentAssemblyBuffer()
     private var outboundFragmentTransfers = BLEOutboundFragmentTransferScheduler()
+    /// bleQueue-confined tokens holding scanning paused while outbound
+    /// fragment trains are active, preventing overlapping transfers from
+    /// prematurely restarting scanning.
+    private var fragmentScanPauseTokens = Set<UUID>()
     private lazy var privateMediaTransferAdmissions = BLEPrivateMediaTransferAdmissionRegistry { [weak self] transferId in
         self?.handlePrivateMediaAdmissionExpiry(transferId)
     }
@@ -380,6 +384,10 @@ final class BLEService: NSObject {
     let engineScheduler: BLEEngineScheduling
     let bleQueue = DispatchQueue(label: "mesh.bluetooth", qos: .userInitiated)
     private let bleQueueKey = DispatchSpecificKey<Void>()
+
+    var isOnBLEQueue: Bool {
+        DispatchQueue.getSpecific(key: bleQueueKey) != nil
+    }
 
     /// Runs `body` exclusively with respect to all engine-owned state.
     /// Executes inline when already on the engine queue; otherwise blocks
@@ -464,6 +472,7 @@ final class BLEService: NSObject {
     
     private var maintenanceTimer: DispatchSourceTimer?  // Single timer for all maintenance tasks
     private var maintenanceCounter = 0  // Track maintenance cycles
+    private var maintenanceIntervalSeconds: TimeInterval = TransportConfig.bleMaintenanceInterval
     private var lastMaintenanceAt = Date.distantPast  // bleQueue-confined; drives background-wake catch-up passes
     /// Whether real CoreBluetooth managers were initialized. When false (unit
     /// tests), periodic mesh background work is not started — the maintenance
@@ -575,6 +584,14 @@ final class BLEService: NSObject {
         // Link state is owned exclusively by bleQueue; debug builds trap
         // any access from another queue (cross-queue reads use readLinkState).
         linkStateStore.assumeOwnership(of: bleQueue)
+
+        // Immediately refresh BLE scan options and idle cadence when Low Power Mode toggles.
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(powerStateDidChange),
+            name: .NSProcessInfoPowerStateDidChange,
+            object: nil
+        )
 
         if !startSuspendedForPanicRecovery {
             initializeBluetoothManagersIfNeeded()
@@ -924,22 +941,81 @@ final class BLEService: NSObject {
     // MARK: Lifecycle
     
     /// Creates and starts the periodic maintenance timer if it is not already
-    /// running. Idempotent so it can be called from both `init` and
-    /// `startServices()` — the latter matters after a panic reset, where
-    /// `stopServices()` cancels and nils the timer.
+    /// running. Serialized onto `bleQueue` so `maintenanceTimer` and
+    /// `maintenanceIntervalSeconds` stay strictly bleQueue-confined across
+    /// start, cadence updates, and shutdown.
     private func startMaintenanceTimer() {
-        guard !isPanicSuspended,
-              meshBackgroundEnabled,
-              maintenanceTimer == nil else { return }
-        let timer = DispatchSource.makeTimerSource(queue: bleQueue)
-        timer.schedule(deadline: .now() + TransportConfig.bleMaintenanceInterval,
-                       repeating: TransportConfig.bleMaintenanceInterval,
-                       leeway: .seconds(TransportConfig.bleMaintenanceLeewaySeconds))
-        timer.setEventHandler { [weak self] in
-            self?.performMaintenance()
+        let start = { [weak self] in
+            guard let self,
+                  !self.isPanicSuspended,
+                  self.meshBackgroundEnabled,
+                  self.maintenanceTimer == nil else { return }
+            let timer = DispatchSource.makeTimerSource(queue: self.bleQueue)
+            self.maintenanceIntervalSeconds = TransportConfig.bleMaintenanceInterval
+            timer.schedule(deadline: .now() + TransportConfig.bleMaintenanceInterval,
+                           repeating: TransportConfig.bleMaintenanceInterval,
+                           leeway: .seconds(TransportConfig.bleMaintenanceLeewaySeconds))
+            timer.setEventHandler { [weak self] in
+                self?.performMaintenance()
+            }
+            timer.resume()
+            self.maintenanceTimer = timer
         }
-        timer.resume()
-        maintenanceTimer = timer
+        if isOnBLEQueue {
+            start()
+        } else {
+            bleQueue.sync(execute: start)
+        }
+    }
+
+    /// Stretches the maintenance timer when completely idle (no active links,
+    /// no known peers, no queued candidates, no pending buffers) and snaps
+    /// back to the standard active cadence as soon as peers, candidates, or
+    /// traffic return so fragment stall recovery and retries stay unchanged.
+    /// Must run on `bleQueue`.
+    private func updateMaintenanceCadence(isIdle: Bool) {
+        guard let timer = maintenanceTimer else { return }
+        let isLowPower = ProcessInfo.processInfo.isLowPowerModeEnabled
+        let targetInterval: TimeInterval
+        let targetLeeway: DispatchTimeInterval
+        if isIdle {
+            targetInterval = isLowPower ? 20.0 : 15.0
+            targetLeeway = .seconds(3)
+        } else {
+            targetInterval = TransportConfig.bleMaintenanceInterval
+            targetLeeway = .seconds(TransportConfig.bleMaintenanceLeewaySeconds)
+        }
+        guard targetInterval != maintenanceIntervalSeconds else { return }
+        maintenanceIntervalSeconds = targetInterval
+        timer.schedule(deadline: .now() + targetInterval, repeating: targetInterval, leeway: targetLeeway)
+    }
+
+    /// Shared idle predicate (bleQueue-confined): true only when no physical links,
+    /// known peers, queued candidates, or pending outbound buffers remain.
+    private func isCompletelyIdle(hasActiveLinks: Bool, hasNoPeers: Bool) -> Bool {
+        !hasActiveLinks
+            && hasNoPeers
+            && radio.candidateCount == 0
+            && pendingNotifications.isEmpty
+            && pendingPeripheralWrites.isEmpty
+    }
+
+    /// Snaps maintenance cadence back to active when a link comes online on `bleQueue`.
+    func wakeMaintenanceCadenceIfNeeded() {
+        updateMaintenanceCadence(isIdle: false)
+    }
+
+    @objc private func powerStateDidChange() {
+        bleQueue.async { [weak self] in
+            guard let self, !self.isPanicSuspended else { return }
+            let (connectedCount, hasNoPeers) = self.peerRegistry.read { ($0.connectedCount, $0.isEmpty) }
+            self.radio.updateScanningDutyCycle(connectedCount: connectedCount)
+            let isIdle = self.isCompletelyIdle(
+                hasActiveLinks: self.linkStateStore.hasActiveLinks,
+                hasNoPeers: hasNoPeers
+            )
+            self.updateMaintenanceCadence(isIdle: isIdle)
+        }
     }
 
     func startServices() {
@@ -1018,15 +1094,14 @@ final class BLEService: NSObject {
             RunLoop.current.run(until: Date().addingTimeInterval(0.01))
         }
 
-        // Clear pending notifications
+        // Clear pending notifications and stop timers/duty-cycle on bleQueue
+        // so shutdown cannot race an in-flight scan-resume item.
         bleQueue.sync {
             pendingNotifications.removeAll()
+            maintenanceTimer?.cancel()
+            maintenanceTimer = nil
+            radio.stopDutyCycle()
         }
-
-        // Stop timer
-        maintenanceTimer?.cancel()
-        maintenanceTimer = nil
-        radio.stopDutyCycle()
 
         centralManager?.stopScan()
         peripheralManager?.stopAdvertising()
@@ -1044,11 +1119,10 @@ final class BLEService: NSObject {
     private func stopServicesImmediatelyForPanic() {
         bleQueue.sync {
             pendingNotifications.removeAll()
+            maintenanceTimer?.cancel()
+            maintenanceTimer = nil
+            radio.stopDutyCycle()
         }
-
-        maintenanceTimer?.cancel()
-        maintenanceTimer = nil
-        radio.stopDutyCycle()
 
         centralManager?.stopScan()
         peripheralManager?.stopAdvertising()
@@ -1966,9 +2040,13 @@ final class BLEService: NSObject {
         SecureLogger.debug("↩️ Dropping BLE self-loopback packet type \(packetType) from \(linkDescription)", category: .session)
     }
 
-    private func recordIngressIfNew(_ packet: BitchatPacket, link: BLEIngressLinkID, peerID: PeerID) -> Bool {
+    private func recordIngressIfNew(
+        messageID: String,
+        link: BLEIngressLinkID,
+        peerID: PeerID
+    ) -> Bool {
         ingressLinks.recordIfNew(
-            packet,
+            messageID: messageID,
             link: link,
             peerID: peerID,
             lifetime: TransportConfig.bleIngressRecordLifetimeSeconds
@@ -1980,7 +2058,8 @@ final class BLEService: NSObject {
     private func broadcastPacket(
         _ packet: BitchatPacket,
         transferId: String? = nil,
-        requiresPrivateMediaAdmission: Bool = false
+        requiresPrivateMediaAdmission: Bool = false,
+        precomputedMessageID: String? = nil
     ) {
         guard !isPanicSuspended else {
             if requiresPrivateMediaAdmission, let transferId {
@@ -2118,21 +2197,22 @@ final class BLEService: NSObject {
             return
         }
         if packetToSend.type == MessageType.noiseEncrypted.rawValue {
-            sendEncrypted(packetToSend, data: data, pad: padForBLE)
+            sendEncrypted(packetToSend, data: data, pad: padForBLE, precomputedMessageID: precomputedMessageID)
             return
         }
-        sendGenericBroadcast(packetToSend, data: data, pad: padForBLE)
+        sendGenericBroadcast(packetToSend, data: data, pad: padForBLE, precomputedMessageID: precomputedMessageID)
     }
 
-    private func sendEncrypted(_ packet: BitchatPacket, data: Data, pad: Bool) {
+    private func sendEncrypted(_ packet: BitchatPacket, data: Data, pad: Bool, precomputedMessageID: String? = nil) {
         guard let recipientPeerID = PeerID(hexData: packet.recipientID) else { return }
         var sentEncrypted = false
 
         let outboundPriority = BLEOutboundPacketPolicy.priority(for: packet, data: data)
 
-        // Per-link limits for the specific peer
-        let directPeripheralState = snapshotDirectPeripheralState(for: recipientPeerID)
-        let recipientCentral = snapshotSubscribedCentrals().central(for: recipientPeerID)
+        // Per-link limits for the specific peer (single bleQueue.sync hop)
+        let directLinks = snapshotDirectLinks(for: recipientPeerID)
+        let directPeripheralState = directLinks.peripheralState
+        let recipientCentral = directLinks.central
 
         if let peripheralMaxLen = directPeripheralState?.peripheral.maximumWriteValueLength(for: .withoutResponse),
            data.count > peripheralMaxLen {
@@ -2167,12 +2247,24 @@ final class BLEService: NSObject {
 
         if !sentEncrypted {
             // Flood as last resort with recipient set; link aware
-            sendOnAllLinks(packet: packet, data: data, pad: pad, directedOnlyPeer: recipientPeerID)
+            sendOnAllLinks(
+                packet: packet,
+                data: data,
+                pad: pad,
+                directedOnlyPeer: recipientPeerID,
+                precomputedMessageID: precomputedMessageID
+            )
         }
     }
 
-    private func sendGenericBroadcast(_ packet: BitchatPacket, data: Data, pad: Bool) {
-        sendOnAllLinks(packet: packet, data: data, pad: pad, directedOnlyPeer: nil)
+    private func sendGenericBroadcast(_ packet: BitchatPacket, data: Data, pad: Bool, precomputedMessageID: String? = nil) {
+        sendOnAllLinks(
+            packet: packet,
+            data: data,
+            pad: pad,
+            directedOnlyPeer: nil,
+            precomputedMessageID: precomputedMessageID
+        )
     }
 
     private func enqueuePendingNotification(data: Data, centrals: [CBCentral]?, context: String, attempt: Int = 0) {
@@ -2277,10 +2369,48 @@ final class BLEService: NSObject {
         pad: Bool,
         directedOnlyPeer: PeerID?,
         requireDirectPeerLink: Bool = false,
-        requireNoiseAuthenticatedPeerLink: Bool = false
+        requireNoiseAuthenticatedPeerLink: Bool = false,
+        precomputedMessageID: String? = nil
     ) -> Bool {
         guard !isPanicSuspended else { return false }
-        let ingressRecord = ingressLinks.record(for: packet)
+
+        let allLinks = snapshotAllLinks()
+        let states = allLinks.peripheralStates
+        // A link without a discovered characteristic cannot be written to
+        // (the write loop below skips it); offering it to the planner only
+        // wastes fanout slots — and a peer's single collapsed copy would be
+        // silently dropped if its bound link is still mid-rediscovery.
+        let connectedStates = states.filter { $0.isConnected && $0.characteristic != nil }
+        let centralSnapshot = allLinks.centralSnapshot
+        let subscribedCentrals = characteristic == nil ? [] : centralSnapshot.centrals
+
+        // Fast path when no physical links are active: skip ingress SHA-256,
+        // binding dictionaries, and fanout planning; delegate the spooling
+        // decision to the planner so both paths share the exact same rule.
+        if connectedStates.isEmpty && subscribedCentrals.isEmpty {
+            if !requireNoiseAuthenticatedPeerLink {
+                let directedPeerHint = BLEOutboundLinkPlanner.directedPeerHint(for: packet, explicitPeer: directedOnlyPeer)
+                let emptySelection = BLEFanoutSelection(peripheralIDs: [], centralIDs: [])
+                if let only = directedPeerHint,
+                   BLEOutboundLinkPlanner.shouldSpoolDirectedPacket(
+                       directedPeerHint: directedPeerHint,
+                       selectedLinks: emptySelection,
+                       packetType: packet.type
+                   ) {
+                    spoolDirectedPacket(packet, recipientPeerID: only, precomputedMessageID: precomputedMessageID)
+                }
+            }
+            return false
+        }
+
+        let ingressRecord: BLEIngressLinkRecord?
+        if ingressLinks.isEmpty {
+            ingressRecord = nil
+        } else if let precomputedMessageID {
+            ingressRecord = ingressLinks.record(forMessageID: precomputedMessageID)
+        } else {
+            ingressRecord = ingressLinks.record(for: packet)
+        }
         var excludedPeerLinks = links(to: ingressRecord?.peerID)
         if requireNoiseAuthenticatedPeerLink {
             guard let directedOnlyPeer else { return false }
@@ -2291,14 +2421,6 @@ final class BLEService: NSObject {
         }
         let outboundPriority = BLEOutboundPacketPolicy.priority(for: packet, data: data)
 
-        let states = snapshotPeripheralStates()
-        // A link without a discovered characteristic cannot be written to
-        // (the write loop below skips it); offering it to the planner only
-        // wastes fanout slots — and a peer's single collapsed copy would be
-        // silently dropped if its bound link is still mid-rediscovery.
-        let connectedStates = states.filter { $0.isConnected && $0.characteristic != nil }
-        let centralSnapshot = snapshotSubscribedCentrals()
-        let subscribedCentrals = characteristic == nil ? [] : centralSnapshot.centrals
         let connectedPeripheralIDs = connectedStates.map { $0.peripheral.identifier.uuidString }
         let centralIDs = subscribedCentrals.map { $0.identifier.uuidString }
         let peripheralPeerBindings = Dictionary(uniqueKeysWithValues: connectedStates.compactMap { state -> (String, PeerID)? in
@@ -2319,7 +2441,8 @@ final class BLEService: NSObject {
             preferredPeripheralPerPeer: linkBindings.preferredPeripheralBindings,
             directAnnounceTTL: messageTTL,
             directedOnlyPeer: directedOnlyPeer,
-            requireDirectPeerLink: requireDirectPeerLink || requireNoiseAuthenticatedPeerLink
+            requireDirectPeerLink: requireDirectPeerLink || requireNoiseAuthenticatedPeerLink,
+            precomputedMessageID: precomputedMessageID
         )
 
         if let chunk = plan.fragmentChunkSize {
@@ -2339,7 +2462,7 @@ final class BLEService: NSObject {
         // If directed and we currently have no links to forward on, spool for a short window
         if let only = plan.directedPeerHint,
            plan.shouldSpoolDirectedPacket {
-            spoolDirectedPacket(packet, recipientPeerID: only)
+            spoolDirectedPacket(packet, recipientPeerID: only, precomputedMessageID: precomputedMessageID)
         }
 
         var acceptedByPhysicalLink = false
@@ -2412,10 +2535,9 @@ final class BLEService: NSObject {
     }
 
     // MARK: - Directed store-and-forward
-    private func spoolDirectedPacket(_ packet: BitchatPacket, recipientPeerID: PeerID) {
-        let msgID = BLEOutboundPacketPolicy.messageID(for: packet)
-        messageQueue.async { [weak self] in
-            guard let self = self else { return }
+    private func spoolDirectedPacket(_ packet: BitchatPacket, recipientPeerID: PeerID, precomputedMessageID: String? = nil) {
+        let msgID = precomputedMessageID ?? BLEOutboundPacketPolicy.messageID(for: packet)
+        onEngine {
             if self.pendingDirectedRelays.enqueue(
                 packet: packet,
                 recipient: recipientPeerID,
@@ -2968,6 +3090,10 @@ extension BLEService: GossipSyncManager.Delegate {
             peerRegistry.connectedPeerIDs
         }
     }
+
+    func hasSyncTargets() -> Bool {
+        readLinkState(\.hasActiveLinks)
+    }
 }
 
 // MARK: - Radio controller integration
@@ -2990,6 +3116,10 @@ extension BLEService: BLERadioControllerDelegate {
         // retirement via the port.
         discardPeripheralLinkPhysical(peripheralID)
         emitLinkEvent(.peripheralLinkEnded(peripheralID: peripheralID, runPeerBookkeeping: false))
+    }
+
+    func radioDidQueueConnectionCandidate() {
+        wakeMaintenanceCadenceIfNeeded()
     }
 
     /// bleQueue half of a peripheral-link teardown: the link's write
@@ -3040,21 +3170,6 @@ extension BLEService: BLERadioControllerDelegate {
         return BLEDirectLinkState(
             hasPeripheral: hasPeripheral,
             hasCentral: linkBindings.hasCentral(boundTo: peerID)
-        )
-    }
-
-    /// The peer's preferred peripheral link state, when physically present.
-    /// Engine-confined.
-    func directPeripheralState(for peerID: PeerID) -> BLEPeripheralLinkState? {
-        linkBindings.preferredPeripheralUUID(for: peerID)
-            .flatMap { uuid in readLinkState { $0.state(forPeripheralID: uuid) } }
-    }
-
-    /// Subscribed centrals with their bindings, one view. Engine-confined.
-    func subscribedCentralSnapshot() -> BLESubscribedCentralSnapshot {
-        BLESubscribedCentralSnapshot(
-            centrals: readLinkState(\.subscribedCentrals),
-            peerIDsByCentralUUID: linkBindings.centralPeersByUUID
         )
     }
 }
@@ -3200,7 +3315,11 @@ extension BLEService {
     }
 
     func _test_recordIngressIfNew(packet: BitchatPacket, linkID: String) -> Bool {
-        recordIngressIfNew(packet, link: .central(linkID), peerID: PeerID(hexData: packet.senderID))
+        recordIngressIfNew(
+            messageID: BLEIngressLinkRegistry.messageID(for: packet),
+            link: .central(linkID),
+            peerID: PeerID(hexData: packet.senderID)
+        )
     }
 
     func _test_bindCentral(_ centralUUID: String, to peerID: PeerID) {
@@ -3630,6 +3749,7 @@ extension BLEService {
     }
 
     private func scheduleBluetoothStatusSample(after delay: TimeInterval, context: String) {
+        #if DEBUG
         #if os(iOS)
         // Sample the main-actor background budget first (async hop, never a
         // sync wait), then log from bleQueue off the cache — bleQueue must
@@ -3643,6 +3763,7 @@ extension BLEService {
         bleQueue.asyncAfter(deadline: .now() + delay) { [weak self] in
             self?.captureBluetoothStatus(context: context)
         }
+        #endif
         #endif
     }
 
@@ -4737,14 +4858,17 @@ extension BLEService {
         let store = courierStore
         let policy = courierDepositPolicy
         let metrics = sfMetrics
-        notifyUI {
+        notifyUI { [weak self] in
+            guard let self else { return }
             guard let tier = policy(depositorKey, isVerifiedPeer) else {
                 SecureLogger.debug("📦 Courier deposit from \(peerID.id.prefix(8))… rejected (neither favorite nor verified)", category: .session)
                 return
             }
-            if store.deposit(envelope, from: depositorKey, tier: tier) {
-                SecureLogger.debug("📦 Carrying courier envelope deposited by \(peerID.id.prefix(8))… (\(tier.rawValue))", category: .session)
-                metrics?.record(.courierAccepted)
+            self.messageQueue.async {
+                if store.deposit(envelope, from: depositorKey, tier: tier) {
+                    SecureLogger.debug("📦 Carrying courier envelope deposited by \(peerID.id.prefix(8))… (\(tier.rawValue))", category: .session)
+                    metrics?.record(.courierAccepted)
+                }
             }
         }
     }
@@ -4817,11 +4941,14 @@ extension BLEService {
             }
         }
         let policy = courierDepositPolicy
-        notifyUI {
+        notifyUI { [weak self] in
+            guard let self else { return }
             // Same trust gate as deposits: don't hand mail to a peer who
             // would reject it from us.
             guard policy(noiseKey, isVerifiedPeer) != nil else { return }
-            sendSpray()
+            self.messageQueue.async {
+                sendSpray()
+            }
         }
     }
 
@@ -5062,16 +5189,35 @@ extension BLEService {
         }
     }
 
-    private func snapshotDirectPeripheralState(for peerID: PeerID) -> BLEPeripheralLinkState? {
-        directPeripheralState(for: peerID)
+    /// Snapshots both physical link tables in a single `bleQueue.sync` hop
+    /// alongside the engine's central-UUID bindings. Engine-confined.
+    private func snapshotAllLinks() -> (peripheralStates: [BLEPeripheralLinkState], centralSnapshot: BLESubscribedCentralSnapshot) {
+        let (peripherals, centrals) = readLinkState { ($0.peripheralStates, $0.subscribedCentrals) }
+        return (
+            peripheralStates: peripherals,
+            centralSnapshot: BLESubscribedCentralSnapshot(
+                centrals: centrals,
+                peerIDsByCentralUUID: linkBindings.centralPeersByUUID
+            )
+        )
     }
 
-    private func snapshotPeripheralStates() -> [BLEPeripheralLinkState] {
-        readLinkState(\.peripheralStates)
-    }
-
-    private func snapshotSubscribedCentrals() -> BLESubscribedCentralSnapshot {
-        subscribedCentralSnapshot()
+    /// Snapshots a single peer's preferred peripheral and subscribed central
+    /// in a single `bleQueue.sync` hop. Engine-confined.
+    private func snapshotDirectLinks(for peerID: PeerID) -> (peripheralState: BLEPeripheralLinkState?, central: CBCentral?) {
+        let preferredPeripheralUUID = linkBindings.preferredPeripheralUUID(for: peerID)
+        let centralPeerBindings = linkBindings.centralPeersByUUID
+        let (peripheralState, centrals) = readLinkState { store in
+            (
+                preferredPeripheralUUID.flatMap { store.state(forPeripheralID: $0) },
+                store.subscribedCentrals
+            )
+        }
+        let centralSnapshot = BLESubscribedCentralSnapshot(
+            centrals: centrals,
+            peerIDsByCentralUUID: centralPeerBindings
+        )
+        return (peripheralState, centralSnapshot.central(for: peerID))
     }
     
     // MARK: Helpers: IDs, selection, and write backpressure
@@ -5193,11 +5339,13 @@ extension BLEService {
 
     /// Periodically try to drain pending notifications as a backup mechanism
     private func drainPendingNotificationsIfPossible() {
+        guard !pendingNotifications.isEmpty else { return }
         drainPendingNotifications(logPrefix: "🔄 Periodic drain: sent")
     }
 
     /// Periodically try to drain pending writes for all connected peripherals
     private func drainAllPendingWrites() {
+        guard !pendingPeripheralWrites.isEmpty else { return }
         let uuids = pendingPeripheralWrites.peripheralIDs
         for uuid in uuids {
             guard let state = linkStateStore.state(forPeripheralID: uuid), state.isConnected else { continue }
@@ -5211,12 +5359,14 @@ extension BLEService {
     @objc private func appDidBecomeActive() {
         isAppActive = true
         refreshCachedBackgroundTimeRemaining()
-        // Restart scanning with allow duplicates when app becomes active
-        if centralManager?.state == .poweredOn {
-            centralManager?.stopScan()
-            radio.startScanning()
+        // Restart scanning and refresh link-layer state on bleQueue so
+        // BLERadioController state stays strictly bleQueue-confined.
+        bleQueue.async { [weak self] in
+            guard let self else { return }
+            self.radio.restartScanning()
+            self.radio.cancelStalePendingConnects()
+            self.updateMaintenanceCadence(isIdle: false)
         }
-        radio.cancelStalePendingConnects()
         logBluetoothStatus("became-active")
         scheduleBluetoothStatusSample(after: 5.0, context: "active-5s")
         // No Local Name; nothing to refresh for advertising policy
@@ -5225,10 +5375,17 @@ extension BLEService {
     @objc private func appDidEnterBackground() {
         isAppActive = false
         refreshCachedBackgroundTimeRemaining()
-        // Restart scanning without allow duplicates in background
-        if centralManager?.state == .poweredOn {
-            centralManager?.stopScan()
-            radio.startScanning()
+        // Stop foreground duty-cycle timer; background scanning uses OS coalescing.
+        bleQueue.async { [weak self] in
+            guard let self else { return }
+            self.radio.stopDutyCycle()
+            self.radio.restartScanning()
+            let hasNoPeers = self.peerRegistry.read(\.isEmpty)
+            let isIdle = self.isCompletelyIdle(
+                hasActiveLinks: self.linkStateStore.hasActiveLinks,
+                hasNoPeers: hasNoPeers
+            )
+            self.updateMaintenanceCadence(isIdle: isIdle)
         }
         radio.armPendingBackgroundConnects()
         // Backgrounding may precede a kill; flush the public-history archive
@@ -5535,15 +5692,22 @@ extension BLEService {
         }
 
         // Lightweight pacing to reduce floods and allow BLE buffers to drain
-        // Also briefly pause scanning during long fragment trains to save battery
+        // Also pause scanning during long fragment trains to save battery and
+        // keep it paused until overlapping transfers finish.
         if plan.shouldPauseScanning {
+            let pauseToken = UUID()
+            let totalFragments = plan.totalFragments
+            let expectedMs = min(TransportConfig.bleExpectedWriteMaxMs, totalFragments * TransportConfig.bleExpectedWritePerFragmentMs)
             bleQueue.async { [weak self] in
                 guard let self = self, let c = self.centralManager, c.state == .poweredOn else { return }
+                self.fragmentScanPauseTokens.insert(pauseToken)
                 if c.isScanning { c.stopScan() }
-                let totalFragments = plan.totalFragments
-                let expectedMs = min(TransportConfig.bleExpectedWriteMaxMs, totalFragments * TransportConfig.bleExpectedWritePerFragmentMs)
                 self.bleQueue.asyncAfter(deadline: .now() + .milliseconds(expectedMs)) { [weak self] in
-                    self?.radio.startScanning()
+                    guard let self else { return }
+                    self.fragmentScanPauseTokens.remove(pauseToken)
+                    if self.fragmentScanPauseTokens.isEmpty {
+                        self.radio.startScanning()
+                    }
                 }
             }
         }
@@ -5653,6 +5817,13 @@ extension BLEService {
             }
 
             if !self.outboundFragmentTransfers.isActive(transferId) {
+                if self.outboundFragmentTransfers.activeCount == 0 && self.outboundFragmentTransfers.pendingCount == 0 {
+                    self.bleQueue.async { [weak self] in
+                        guard let self, !self.fragmentScanPauseTokens.isEmpty else { return }
+                        self.fragmentScanPauseTokens.removeAll()
+                        self.radio.startScanning()
+                    }
+                }
                 self.messageQueue.async { [weak self] in
                     self?.startNextPendingTransferIfNeeded()
                 }
@@ -5883,14 +6054,19 @@ extension BLEService {
             }
         }
 
-        guard recordIngressIfNew(packet, link: link, peerID: context.receivedFromPeerID) else {
+        let messageID = BLEIngressLinkRegistry.messageID(for: packet)
+        guard recordIngressIfNew(messageID: messageID, link: link, peerID: context.receivedFromPeerID) else {
             return
         }
 
-        handleReceivedPacket(packet, from: context.receivedFromPeerID)
+        handleReceivedPacket(packet, from: context.receivedFromPeerID, precomputedMessageID: messageID)
     }
 
-    private func handleReceivedPacket(_ packet: BitchatPacket, from peerID: PeerID) {
+    private func handleReceivedPacket(
+        _ packet: BitchatPacket,
+        from peerID: PeerID,
+        precomputedMessageID: String? = nil
+    ) {
         let isNoisePacket = packet.type == MessageType.noiseHandshake.rawValue
             || packet.type == MessageType.noiseEncrypted.rawValue
 
@@ -5916,7 +6092,7 @@ extension BLEService {
                 #if DEBUG
                 self._test_onReceivePacketHandoff?()
                 #endif
-                self.handleReceivedPacketOnQueue(packet, from: peerID)
+                self.handleReceivedPacketOnQueue(packet, from: peerID, precomputedMessageID: precomputedMessageID)
             }
             return
         }
@@ -5933,18 +6109,23 @@ extension BLEService {
                       ) else {
                     return
                 }
-                self.handleReceivedPacketOnQueue(packet, from: peerID)
+                self.handleReceivedPacketOnQueue(packet, from: peerID, precomputedMessageID: precomputedMessageID)
             }
         } else {
-            handleReceivedPacketOnQueue(packet, from: peerID)
+            handleReceivedPacketOnQueue(packet, from: peerID, precomputedMessageID: precomputedMessageID)
         }
     }
 
     private func handleReceivedPacketOnQueue(
         _ packet: BitchatPacket,
-        from peerID: PeerID
+        from peerID: PeerID,
+        precomputedMessageID: String? = nil
     ) {
-        let context = BLEReceivePipeline.context(for: packet, localPeerID: myPeerID)
+        let context = BLEReceivePipeline.context(
+            for: packet,
+            localPeerID: myPeerID,
+            precomputedMessageID: precomputedMessageID
+        )
         let senderID = context.senderID
         let messageID = context.messageID
         
@@ -5959,13 +6140,9 @@ extension BLEService {
         // Update peer info without verbose logging - update the peer we received from, not the original sender
         updatePeerLastSeen(peerID)
 
-        // Track recent traffic timestamps for adaptive behavior; the same
-        // barrier hop confirms route health for the packet's originator.
-        messageQueue.async { [weak self] in
-            guard let self = self else { return }
-            self.recentTrafficTracker.recordPacket(at: Date())
-            self.sourceRouteFailures.noteInboundActivity(from: senderID)
-        }
+        // Already executing on the serial engine queue; record traffic and route health inline.
+        recentTrafficTracker.recordPacket(at: Date())
+        sourceRouteFailures.noteInboundActivity(from: senderID)
 
         // Per-peer protocol version: originated source routes only use hops
         // observed speaking v2 (a v1-only node cannot decode v2 frames).
@@ -6077,9 +6254,7 @@ extension BLEService {
 
         let connectedCount = peerRegistry.connectedCount
         if BLEReceivePipeline.shouldCancelScheduledRelayForDuplicate(connectedPeerCount: connectedCount) {
-            messageQueue.async { [weak self] in
-                self?.scheduledRelays.cancel(messageID: messageID)
-            }
+            scheduledRelays.cancel(messageID: messageID)
         }
 
         return true
@@ -6098,17 +6273,15 @@ extension BLEService {
 
         let work = DispatchWorkItem { [weak self] in
             guard let self = self else { return }
-            messageQueue.async { [weak self] in
-                self?.scheduledRelays.remove(messageID: messageID)
+            _ = self.onEngine {
+                self.scheduledRelays.remove(messageID: messageID)
             }
             var relayPacket = packet
             relayPacket.ttl = decision.newTTL
-            self.broadcastPacket(relayPacket)
+            self.broadcastPacket(relayPacket, precomputedMessageID: messageID)
         }
 
-        messageQueue.async { [weak self] in
-            self?.scheduledRelays.schedule(work, messageID: messageID)
-        }
+        scheduledRelays.schedule(work, messageID: messageID)
         engineScheduler.schedule(after: Double(decision.delayMs) / 1_000, execute: work)
     }
     
@@ -7007,13 +7180,13 @@ extension BLEService {
     private func performMaintenance() {
         guard !isPanicSuspended else { return }
         maintenanceCounter += 1
-        lastMaintenanceAt = Date()
-
         let now = Date()
-        let connectedCount = peerRegistry.connectedCount
+        lastMaintenanceAt = now
+
+        let hasActiveLinks = linkStateStore.hasActiveLinks
+        let (connectedCount, hasNoPeers) = peerRegistry.read { ($0.connectedCount, $0.isEmpty) }
         let elapsed = announceThrottle.elapsed(since: now)
         let recentSeen = recentTrafficTracker.hasTraffic(within: 5.0, now: now)
-        let hasNoPeers = peerRegistry.isEmpty
         let plan = BLEMaintenancePolicy.plan(
             cycle: maintenanceCounter,
             connectedCount: connectedCount,
@@ -7022,7 +7195,10 @@ extension BLEService {
             hasRecentTraffic: recentSeen
         )
 
-        if plan.shouldSendAnnounce {
+        // Announces travel over GATT writes/notifications; when no physical
+        // peripheral or subscribed central exists, skip signing and encoding.
+        // New connections immediately trigger a forced announce on subscribe.
+        if plan.shouldSendAnnounce && hasActiveLinks {
             sendAnnounce(forceSend: true)
         }
 
@@ -7037,34 +7213,38 @@ extension BLEService {
         radio.updateScanningDutyCycle(connectedCount: connectedCount)
         radio.updateRSSIThreshold(connectedCount: connectedCount)
 
-        // Drain the connection candidate queue. Weak-RSSI discoveries are
-        // enqueued rather than connected immediately, and the event-driven
-        // drains (disconnect/failure/timeout) never fire when we're idle —
-        // without this, an isolated node surrounded only by weak (distant)
-        // peers would queue them all and never connect to anyone.
-        radio.tryConnectFromQueue()
+        // Drain the connection candidate queue only when candidates exist.
+        if radio.candidateCount > 0 {
+            radio.tryConnectFromQueue()
+        }
         
-        // Check peer connectivity every cycle for snappier UI updates
-        checkPeerConnectivity()
+        // Check peer connectivity only when peers or remote topology nodes exist
+        // (ignoring our own self-entry so idle maintenance stops dispatching after
+        // the last peer expires).
+        if !hasNoPeers || meshTopology.hasRemoteNodes(excluding: myPeerID.routingData) {
+            checkPeerConnectivity()
+        }
         
-        // Every 30 seconds (3 cycles): Cleanup
+        // Every 3 cycles (~15s active): cleanup & fragment stall recovery.
         if plan.shouldRunCleanup {
             performCleanup()
         }
 
-        // Attempt to flush any spooled directed messages periodically (~every 5 seconds)
-        if plan.shouldFlushDirectedSpool {
+        // Attempt to flush any spooled directed messages periodically when links exist.
+        if plan.shouldFlushDirectedSpool && hasActiveLinks {
             flushDirectedSpool()
         }
 
         // Periodically attempt to drain pending notifications and writes as backup
-        // in case callbacks are missed or delayed (every maintenance cycle = 5 seconds)
+        // in case callbacks are missed or delayed.
         drainPendingNotificationsIfPossible()
         drainAllPendingWrites()
 
-        // No rotating alias: nothing to refresh
+        // Adapt maintenance wakeup cadence to idle vs active mesh state.
+        let isIdle = isCompletelyIdle(hasActiveLinks: hasActiveLinks, hasNoPeers: hasNoPeers)
+        updateMaintenanceCadence(isIdle: isIdle)
         
-        // Reset counter to prevent overflow (every 60 seconds)
+        // Reset counter to prevent overflow
         if plan.shouldResetCounter {
             maintenanceCounter = 0
         }
@@ -7093,12 +7273,17 @@ extension BLEService {
     private func checkPeerConnectivityOnEngine() {
         let now = Date()
         let peerIDsForLinkState: [PeerID] = peerRegistry.peerIDs
+        let connectedPeripheralIDs = readLinkState { store in
+            Set(store.peripherals.compactMap { $0.value.isConnected ? $0.key : nil })
+        }
         var cachedLinkStates: [PeerID: BLEPeerLinkPresence] = [:]
+        cachedLinkStates.reserveCapacity(peerIDsForLinkState.count)
         for peerID in peerIDsForLinkState {
-            let state = linkState(for: peerID)
+            let hasPeripheral = linkBindings.preferredPeripheralUUID(for: peerID)
+                .map { connectedPeripheralIDs.contains($0) } ?? false
             cachedLinkStates[peerID] = BLEPeerLinkPresence(
-                hasPeripheral: state.hasPeripheral,
-                hasCentral: state.hasCentral
+                hasPeripheral: hasPeripheral,
+                hasCentral: linkBindings.hasCentral(boundTo: peerID)
             )
         }
         
@@ -7144,55 +7329,44 @@ extension BLEService {
         // Clean old processed messages efficiently
         messageDeduplicator.cleanup()
         
-        // Clean old fragments (> configured seconds old), then ask peers for
-        // the specific fragment streams whose reassembly has stalled instead
-        // of waiting for the next periodic GCS fragment round.
-        messageQueue.async { [weak self] in
-            guard let self else { return }
-            let cutoff = now.addingTimeInterval(-TransportConfig.bleFragmentLifetimeSeconds)
-            self.fragmentAssemblyBuffer.removeExpired(before: cutoff)
-            self.sourceRouteFailures.prune(now: now)
-            let stalledFragmentIDs = self.fragmentAssemblyBuffer.stalledBroadcastFragmentIDs(
-                stalledAfter: TransportConfig.bleFragmentResyncStallSeconds,
-                retryAfter: TransportConfig.bleFragmentResyncRetrySeconds,
-                now: now
-            )
-            if !stalledFragmentIDs.isEmpty {
-                // GossipSyncManager serializes on its own internal queue.
-                self.gossipSyncManager?.requestMissingFragments(fragmentIDs: stalledFragmentIDs)
-            }
-        }
-
         // Clean old connection timeout backoff entries (> window)
         let timeoutCutoff = now.addingTimeInterval(-TransportConfig.bleConnectTimeoutBackoffWindowSeconds)
         radio.pruneConnectionTimeouts(before: timeoutCutoff)
 
-        // Clean up stale scheduled relays that somehow persisted (> 2s)
+        // Consolidate all engine-owned cleanup into a single messageQueue dispatch
+        // instead of four separate async hops per cleanup cycle.
         messageQueue.async { [weak self] in
-            guard let self = self else { return }
-            // Nothing to compare times to; just cap the size defensively
-            self.scheduledRelays.removeAllIfOverCapacity(512)
-        }
-
-        // Clean ingress link records older than configured seconds
-        messageQueue.async { [weak self] in
-            guard let self = self else { return }
-            let cutoff = now.addingTimeInterval(-TransportConfig.bleIngressRecordLifetimeSeconds)
-            if !self.ingressLinks.isEmpty {
-                self.ingressLinks.prune(before: cutoff)
+            guard let self else { return }
+            if !self.fragmentAssemblyBuffer.isEmpty {
+                let fragmentCutoff = now.addingTimeInterval(-TransportConfig.bleFragmentLifetimeSeconds)
+                self.fragmentAssemblyBuffer.removeExpired(before: fragmentCutoff)
+                let stalledFragmentIDs = self.fragmentAssemblyBuffer.stalledBroadcastFragmentIDs(
+                    stalledAfter: TransportConfig.bleFragmentResyncStallSeconds,
+                    retryAfter: TransportConfig.bleFragmentResyncRetrySeconds,
+                    now: now
+                )
+                if !stalledFragmentIDs.isEmpty {
+                    // GossipSyncManager serializes on its own internal queue.
+                    self.gossipSyncManager?.requestMissingFragments(fragmentIDs: stalledFragmentIDs)
+                }
             }
-            // Clean expired directed spooled items
+
+            self.sourceRouteFailures.prune(now: now)
+            self.scheduledRelays.removeAllIfOverCapacity(512)
+
+            if !self.ingressLinks.isEmpty {
+                let ingressCutoff = now.addingTimeInterval(-TransportConfig.bleIngressRecordLifetimeSeconds)
+                self.ingressLinks.prune(before: ingressCutoff)
+            }
             self.pendingDirectedRelays.pruneExpired(
                 now: now,
                 window: TransportConfig.bleDirectedSpoolWindowSeconds
             )
-        }
 
-        messageQueue.async { [weak self] in
-            guard let self = self else { return }
-            guard !self.selfBroadcastTracker.isEmpty else { return }
-            let cutoff = now.addingTimeInterval(-TransportConfig.messageDedupMaxAgeSeconds)
-            self.selfBroadcastTracker.prune(before: cutoff)
+            if !self.selfBroadcastTracker.isEmpty {
+                let dedupCutoff = now.addingTimeInterval(-TransportConfig.messageDedupMaxAgeSeconds)
+                self.selfBroadcastTracker.prune(before: dedupCutoff)
+            }
         }
     }
 

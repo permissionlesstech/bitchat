@@ -78,7 +78,41 @@ enum CashuTokenDecoder {
     /// fallback: the token must cleanly decode to a known version *and* carry
     /// a positive amount, otherwise this returns nil. This stops base64 junk
     /// and truncated V4 tokens from being relayed as if they were valid money.
+    private final class DecodeCacheEntry: NSObject {
+        let info: TokenInfo?
+        init(_ info: TokenInfo?) { self.info = info }
+    }
+
+    private final class PermissiveDecodeCache: @unchecked Sendable {
+        private let cache: NSCache<NSString, DecodeCacheEntry> = {
+            let c = NSCache<NSString, DecodeCacheEntry>()
+            c.countLimit = 256
+            return c
+        }()
+
+        func entry(for key: String) -> DecodeCacheEntry? {
+            cache.object(forKey: key as NSString)
+        }
+
+        func store(_ info: TokenInfo?, for key: String) {
+            cache.setObject(DecodeCacheEntry(info), forKey: key as NSString)
+        }
+    }
+
+    private static let permissiveCache = PermissiveDecodeCache()
+
     static func decode(_ raw: String, strict: Bool = false) -> TokenInfo? {
+        if !strict, let cached = permissiveCache.entry(for: raw) {
+            return cached.info
+        }
+        let decoded = decodeUncached(raw, strict: strict)
+        if !strict {
+            permissiveCache.store(decoded, for: raw)
+        }
+        return decoded
+    }
+
+    private static func decodeUncached(_ raw: String, strict: Bool) -> TokenInfo? {
         guard let token = bareToken(from: raw) else { return nil }
         let version = String(token[token.index(token.startIndex, offsetBy: 5)])
         guard let payload = base64URLDecode(String(token.dropFirst(6))), !payload.isEmpty else {

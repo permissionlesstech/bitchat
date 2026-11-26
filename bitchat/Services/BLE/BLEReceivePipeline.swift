@@ -10,15 +10,18 @@ struct BLEReceivedPacketContext: Equatable {
 }
 
 struct BLEReceivePipeline {
-    static func context(for packet: BitchatPacket, localPeerID: PeerID) -> BLEReceivedPacketContext {
+    static func context(
+        for packet: BitchatPacket,
+        localPeerID: PeerID,
+        precomputedMessageID: String? = nil
+    ) -> BLEReceivedPacketContext {
         let senderID = PeerID(hexData: packet.senderID)
         // Include a payload digest so that distinct packets sharing the same
         // sender/timestamp(ms)/type are not collapsed as duplicates. The
         // post-handshake flush sends queued messages, delivery and read receipts
         // back-to-back within a single millisecond; without the digest every
         // packet after the first would be silently dropped.
-        let digestPrefix = packet.payload.sha256Hash().prefix(4).hexEncodedString()
-        let messageID = "\(senderID)-\(packet.timestamp)-\(packet.type)-\(digestPrefix)"
+        let messageID = precomputedMessageID ?? BLEIngressLinkRegistry.messageID(for: packet)
         let messageType = MessageType(rawValue: packet.type)
         let allowSelfSyncReplay = packet.ttl == 0 && senderID == localPeerID
         let shouldDeduplicate = messageType != .fragment && !allowSelfSyncReplay
@@ -99,13 +102,15 @@ final class BLERecentTrafficMonitor: @unchecked Sendable {
 
 struct BLERecentTrafficTracker: Equatable {
     private var packetTimestamps: [Date] = []
+    private var head: Int = 0
 
     var count: Int {
-        packetTimestamps.count
+        packetTimestamps.count - head
     }
 
     mutating func removeAll() {
         packetTimestamps.removeAll()
+        head = 0
     }
 
     mutating func recordPacket(at now: Date) {
@@ -114,15 +119,39 @@ struct BLERecentTrafficTracker: Equatable {
     }
 
     func hasTraffic(within seconds: TimeInterval, now: Date) -> Bool {
+        let activeCount = packetTimestamps.count - head
+        guard activeCount > 0 else { return false }
         let cutoff = now.addingTimeInterval(-seconds)
-        return packetTimestamps.contains { $0 >= cutoff }
+        // Fast path: timestamps are appended chronologically, so the newest entry
+        // answers in O(1) without scanning the window.
+        if let newest = packetTimestamps.last, newest >= cutoff {
+            return true
+        }
+        // Fallback if timestamps were recorded out of order (e.g. tests).
+        for idx in stride(from: packetTimestamps.count - 2, through: head, by: -1) {
+            if packetTimestamps[idx] >= cutoff {
+                return true
+            }
+        }
+        return false
     }
 
     private mutating func prune(at now: Date) {
         let cutoff = now.addingTimeInterval(-TransportConfig.bleRecentPacketWindowSeconds)
-        if packetTimestamps.count > TransportConfig.bleRecentPacketWindowMaxCount {
-            packetTimestamps.removeFirst(packetTimestamps.count - TransportConfig.bleRecentPacketWindowMaxCount)
+        let maxCount = TransportConfig.bleRecentPacketWindowMaxCount
+        if packetTimestamps.count - head > maxCount {
+            head = packetTimestamps.count - maxCount
         }
-        packetTimestamps.removeAll { $0 < cutoff }
+        while head < packetTimestamps.count && packetTimestamps[head] < cutoff {
+            head += 1
+        }
+        if head > 0 && (head >= packetTimestamps.count || head >= maxCount) {
+            packetTimestamps.removeFirst(head)
+            head = 0
+        }
+    }
+
+    static func == (lhs: BLERecentTrafficTracker, rhs: BLERecentTrafficTracker) -> Bool {
+        lhs.packetTimestamps[lhs.head...].elementsEqual(rhs.packetTimestamps[rhs.head...])
     }
 }

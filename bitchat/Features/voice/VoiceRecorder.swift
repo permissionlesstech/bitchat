@@ -1,3 +1,4 @@
+import BitLogger
 import Foundation
 import AVFoundation
 
@@ -246,19 +247,24 @@ actor VoiceRecorder {
         currentURL = nil
     }
 
-    /// Panic is a synchronous security boundary: the caller must know the
-    /// microphone, audio-session lease, and partial file are gone before it
-    /// rotates identities or deletes the media tree. VoiceRecorder is an
-    /// independent actor and this cleanup path never hops to MainActor, so a
-    /// short semaphore join is safe even when invoked by the UI actor.
+    /// Panic is a synchronous security boundary: the caller wants the
+    /// microphone, audio-session lease, and partial file closed before rotating
+    /// identities or deleting the media tree, but must never deadlock the main
+    /// thread if AVFoundation blocks waiting for main. Use a detached task and
+    /// a bounded wait so panic wipe always proceeds.
     nonisolated
     func panicCancelSynchronously(owner: RecordingOwner) {
         let finished = DispatchSemaphore(value: 0)
-        Task {
-            await cancelRecording(owner: owner)
+        Task.detached(priority: .userInitiated) {
+            await self.cancelRecording(owner: owner)
             finished.signal()
         }
-        finished.wait()
+        if finished.wait(timeout: .now() + .seconds(2)) == .timedOut {
+            SecureLogger.warning(
+                "VoiceRecorder: panicCancelSynchronously timed out after 2s; proceeding with panic wipe",
+                category: .security
+            )
+        }
     }
 
     /// The audio session was interrupted (call, Siri) or reconfigured: stop

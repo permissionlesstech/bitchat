@@ -29,14 +29,18 @@ final class FavoritesPersistenceService: ObservableObject {
     private static let keychainService = "chat.bitchat.favorites"
     private let keychain: KeychainManagerProtocol
     
-    @Published private(set) var favorites: [Data: FavoriteRelationship] = [:] // Noise pubkey -> relationship
+    @Published private(set) var favorites: [Data: FavoriteRelationship] = [:] { // Noise pubkey -> relationship
+        didSet { rebuildNostrKeyIndex() }
+    }
     @Published private(set) var mutualFavorites: Set<Data> = []
+    private var noiseKeyByNostrKey: [String: Data] = [:] // npub and lowercase hex -> Noise pubkey
     
     static let shared = FavoritesPersistenceService()
 
     init(keychain: KeychainManagerProtocol = KeychainManager.makeDefault()) {
         self.keychain = keychain
         loadFavorites()
+        rebuildNostrKeyIndex()
         
         // Update mutual favorites when favorites change
         $favorites
@@ -44,6 +48,29 @@ final class FavoritesPersistenceService: ObservableObject {
                 Set(favorites.compactMap { $0.value.isMutual ? $0.key : nil })
             }
             .assign(to: &$mutualFavorites)
+    }
+
+    /// O(1) reverse lookup from a Nostr pubkey (either `npub1...` or 64-char hex)
+    /// to the peer's Noise static public key.
+    func noisePublicKey(forNostrPubkey nostrPubkey: String) -> Data? {
+        noiseKeyByNostrKey[nostrPubkey] ?? noiseKeyByNostrKey[nostrPubkey.lowercased()]
+    }
+
+    private func rebuildNostrKeyIndex() {
+        var index: [String: Data] = [:]
+        index.reserveCapacity(favorites.count * 2)
+        for (noiseKey, relationship) in favorites {
+            guard let storedKey = relationship.peerNostrPublicKey, !storedKey.isEmpty else { continue }
+            index[storedKey] = noiseKey
+            if storedKey.hasPrefix("npub"),
+               let (hrp, data) = try? Bech32.decode(storedKey),
+               hrp == "npub" {
+                index[data.hexEncodedString().lowercased()] = noiseKey
+            } else {
+                index[storedKey.lowercased()] = noiseKey
+            }
+        }
+        noiseKeyByNostrKey = index
     }
     
     /// Add or update a favorite

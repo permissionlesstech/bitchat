@@ -629,64 +629,61 @@ final class ChatMediaTransferCoordinator {
     #if os(iOS)
     func processThenSendImage(_ image: UIImage?) {
         guard let image else { return }
+        guard context.canSendMediaInCurrentContext else {
+            SecureLogger.info("Image send blocked outside mesh/private context", category: .session)
+            context.addSystemMessage(String(localized: "Images are only available in mesh chats.", comment: "System message when an image send is attempted outside mesh chats"))
+            return
+        }
+        let targetPeer = context.selectedPrivateChatPeer
         let generation = imagePreparationBarrier.currentGeneration
         let barrier = imagePreparationBarrier
         Task.detached(priority: .userInitiated) { [weak self, barrier] in
             do {
-                let processedURL = try await runBlockingMediaPreparation {
+                let prepared = try await runBlockingMediaPreparation {
                     try barrier.performIfCurrent(
                         generation: generation,
                         operation: {
-                            try ImageUtils.processImage(image)
+                            let processedURL = try ImageUtils.processImage(image)
+                            return try ChatMediaPreparation.prepareProcessedImagePacket(at: processedURL)
                         }
                     )
                 }
-                guard let processedURL else {
+                guard let prepared else {
                     return
                 }
                 await MainActor.run { [weak self, barrier] in
                     guard let self,
                           barrier.isCurrent(generation) else {
-                        try? FileManager.default.removeItem(at: processedURL)
+                        try? FileManager.default.removeItem(at: prepared.outputURL)
                         return
                     }
-                    self.sendImage(from: processedURL)
+                    self.enqueuePreparedImage(prepared, targetPeer: targetPeer)
+                }
+            } catch ChatMediaPreparationError.imageTooLarge(let size) {
+                SecureLogger.warning("Processed image exceeds size limit (\(size) bytes)", category: .session)
+                await MainActor.run { [weak self, barrier] in
+                    guard let self,
+                          barrier.isCurrent(generation) else {
+                        return
+                    }
+                    self.context.addSystemMessage("Image is too large to send.")
                 }
             } catch {
                 SecureLogger.error("Image processing failed: \(error)", category: .session)
+                await MainActor.run { [weak self, barrier] in
+                    guard let self,
+                          barrier.isCurrent(generation) else {
+                        return
+                    }
+                    self.context.addSystemMessage("Failed to prepare image for sending.")
+                }
             }
         }
     }
     #elseif os(macOS)
     func processThenSendImage(from url: URL?) {
         guard let url else { return }
-        let generation = imagePreparationBarrier.currentGeneration
-        let barrier = imagePreparationBarrier
-        Task.detached(priority: .userInitiated) { [weak self, barrier] in
-            do {
-                let processedURL = try await runBlockingMediaPreparation {
-                    try barrier.performIfCurrent(
-                        generation: generation,
-                        operation: {
-                            try ImageUtils.processImage(at: url)
-                        }
-                    )
-                }
-                guard let processedURL else {
-                    return
-                }
-                await MainActor.run { [weak self, barrier] in
-                    guard let self,
-                          barrier.isCurrent(generation) else {
-                        try? FileManager.default.removeItem(at: processedURL)
-                        return
-                    }
-                    self.sendImage(from: processedURL)
-                }
-            } catch {
-                SecureLogger.error("Image processing failed: \(error)", category: .session)
-            }
-        }
+        sendImage(from: url)
     }
     #endif
 
@@ -700,15 +697,6 @@ final class ChatMediaTransferCoordinator {
 
         let targetPeer = context.selectedPrivateChatPeer
         let generation = imagePreparationBarrier.currentGeneration
-
-        do {
-            try ImageUtils.validateImageSource(at: sourceURL)
-        } catch {
-            SecureLogger.error("Image send preparation failed: \(error)", category: .session)
-            context.addSystemMessage("Failed to prepare image for sending.")
-            return
-        }
-
         let prepareImagePacket = self.prepareImagePacket
         let barrier = imagePreparationBarrier
         Task.detached(priority: .userInitiated) { [weak self, barrier] in
@@ -717,7 +705,8 @@ final class ChatMediaTransferCoordinator {
                     try barrier.performIfCurrent(
                         generation: generation,
                         operation: {
-                            try prepareImagePacket(sourceURL)
+                            try ImageUtils.validateImageSource(at: sourceURL)
+                            return try prepareImagePacket(sourceURL)
                         }
                     )
                 }
@@ -731,31 +720,7 @@ final class ChatMediaTransferCoordinator {
                         try? FileManager.default.removeItem(at: prepared.outputURL)
                         return
                     }
-                    let privateMessageID = targetPeer.flatMap { peerID in
-                        PrivateMediaMessageIdentity.stableID(
-                            for: prepared.packet,
-                            senderPeerID: self.context.myPeerID,
-                            recipientPeerID: peerID
-                        )
-                    }
-                    let message = self.enqueueMediaMessage(
-                        content: "\(MimeType.Category.image.messagePrefix)\(prepared.outputURL.lastPathComponent)",
-                        targetPeer: targetPeer,
-                        messageID: privateMessageID
-                    )
-                    let messageID = message.id
-                    let transferId = self.makeTransferID(messageID: messageID)
-                    self.registerTransfer(transferId: transferId, messageID: messageID)
-                    if let peerID = targetPeer {
-                        self.beginPrivateMediaSend(
-                            prepared.packet,
-                            to: peerID,
-                            transferId: transferId,
-                            messageID: messageID
-                        )
-                    } else {
-                        self.context.sendFileBroadcast(prepared.packet, transferId: transferId)
-                    }
+                    self.enqueuePreparedImage(prepared, targetPeer: targetPeer)
                 }
             } catch ChatMediaPreparationError.imageTooLarge(let size) {
                 SecureLogger.warning("Processed image exceeds size limit (\(size) bytes)", category: .session)
@@ -776,6 +741,34 @@ final class ChatMediaTransferCoordinator {
                     self.context.addSystemMessage("Failed to prepare image for sending.")
                 }
             }
+        }
+    }
+
+    private func enqueuePreparedImage(_ prepared: ChatPreparedImage, targetPeer: PeerID?) {
+        let privateMessageID = targetPeer.flatMap { peerID in
+            PrivateMediaMessageIdentity.stableID(
+                for: prepared.packet,
+                senderPeerID: context.myPeerID,
+                recipientPeerID: peerID
+            )
+        }
+        let message = enqueueMediaMessage(
+            content: "\(MimeType.Category.image.messagePrefix)\(prepared.outputURL.lastPathComponent)",
+            targetPeer: targetPeer,
+            messageID: privateMessageID
+        )
+        let messageID = message.id
+        let transferId = makeTransferID(messageID: messageID)
+        registerTransfer(transferId: transferId, messageID: messageID)
+        if let peerID = targetPeer {
+            beginPrivateMediaSend(
+                prepared.packet,
+                to: peerID,
+                transferId: transferId,
+                messageID: messageID
+            )
+        } else {
+            context.sendFileBroadcast(prepared.packet, transferId: transferId)
         }
     }
 

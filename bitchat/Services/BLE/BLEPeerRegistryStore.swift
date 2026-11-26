@@ -30,7 +30,6 @@ final class BLEPeerRegistryStore: @unchecked Sendable {
 
     // MARK: - Single-question reads
 
-    var isEmpty: Bool { read { $0.isEmpty } }
     var peerIDs: [PeerID] { read { $0.peerIDs } }
     var connectedCount: Int { read { $0.connectedCount } }
     var connectedPeerIDs: [PeerID] { read { $0.connectedPeerIDs } }

@@ -89,6 +89,39 @@ final class ChatLiveVoiceCoordinator {
         let burstID: Data
     }
 
+    /// Serializes ADTS file writes off `@MainActor` while keeping `finalize`/`cancel`
+    /// able to flush and close deterministically before promoting or deleting the file.
+    private final class LiveCaptureFileWriter: @unchecked Sendable {
+        private let queue: DispatchQueue
+        private var handle: FileHandle?
+
+        init(handle: FileHandle, queue: DispatchQueue) {
+            self.handle = handle
+            self.queue = queue
+        }
+
+        func write(_ data: Data) {
+            guard !data.isEmpty else { return }
+            queue.async { [self] in
+                guard let handle else { return }
+                do {
+                    try handle.write(contentsOf: data)
+                } catch {
+                    SecureLogger.error("PTT: incoming burst write failed: \(error)", category: .session)
+                    try? handle.close()
+                    self.handle = nil
+                }
+            }
+        }
+
+        func closeSynchronously() {
+            queue.sync {
+                try? handle?.close()
+                handle = nil
+            }
+        }
+    }
+
     private final class Assembly {
         let burstID: Data
         let peerID: PeerID
@@ -98,7 +131,7 @@ final class ChatLiveVoiceCoordinator {
         var messageID: String { message.id }
         var messageTimestamp: Date { message.timestamp }
         let fileURL: URL
-        var fileHandle: FileHandle?
+        var fileWriter: LiveCaptureFileWriter?
         /// Data packets buffered ahead of `nextSeq` (seq -> frames).
         var buffered: [UInt16: [Data]] = [:]
         /// Next data-packet seq to deliver (seq 0 is START).
@@ -111,20 +144,32 @@ final class ChatLiveVoiceCoordinator {
         /// `ChatLiveVoiceCoordinator.gapSkipSeconds` the gap is skipped.
         var gapSince: Date?
         var player: PTTBurstPlayer?
-        var idleTimeout: Task<Void, Never>?
+        var idleTimer: DispatchSourceTimer?
         var gapRedrain: Task<Void, Never>?
 
         var key: AssemblyKey { AssemblyKey(peerID: peerID, scope: scope, burstID: burstID) }
 
-        init(burstID: Data, peerID: PeerID, scope: VoiceBurstScope, nickname: String, message: BitchatMessage, fileURL: URL, fileHandle: FileHandle) {
+        init(
+            burstID: Data,
+            peerID: PeerID,
+            scope: VoiceBurstScope,
+            nickname: String,
+            message: BitchatMessage,
+            fileURL: URL,
+            fileWriter: LiveCaptureFileWriter
+        ) {
             self.burstID = burstID
             self.peerID = peerID
             self.scope = scope
             self.nickname = nickname
             self.message = message
             self.fileURL = fileURL
-            self.fileHandle = fileHandle
+            self.fileWriter = fileWriter
             self.firstPacketAt = Date()
+        }
+
+        deinit {
+            idleTimer?.cancel()
         }
     }
 
@@ -143,6 +188,8 @@ final class ChatLiveVoiceCoordinator {
 
     private unowned let context: any ChatLiveVoiceContext
     private let fileStore: BLEIncomingFileStore
+    private let asyncQuotaEnforcement: Bool
+    private let ioQueue = DispatchQueue(label: "chat.bitchat.ptt.live-io", qos: .utility)
     /// Captures live in the store's directories, so file operations go
     /// through the store's (injectable) file manager.
     private var fileManager: FileManager { fileStore.fileManager }
@@ -158,15 +205,32 @@ final class ChatLiveVoiceCoordinator {
     /// `sweepsOnInit` exists for tests whose coordinator shares the real
     /// application-support directory: they pass `false` so parallel test
     /// runs never sweep each other's in-flight capture files.
-    init(context: any ChatLiveVoiceContext, fileStore: BLEIncomingFileStore = BLEIncomingFileStore(), sweepsOnInit: Bool = true) {
+    /// `asyncStartupSweep` moves the disk sweep off the main actor for cold launch.
+    /// `asyncQuotaEnforcement` offloads the incoming-media directory scan onto
+    /// `ioQueue` in production while keeping synchronous unit tests deterministic.
+    init(
+        context: any ChatLiveVoiceContext,
+        fileStore: BLEIncomingFileStore = BLEIncomingFileStore(),
+        sweepsOnInit: Bool = true,
+        asyncStartupSweep: Bool = false,
+        asyncQuotaEnforcement: Bool = false
+    ) {
         self.context = context
         self.fileStore = fileStore
+        self.asyncQuotaEnforcement = asyncQuotaEnforcement
         // Orphaned partial captures from a previous session (live-only bursts
         // whose finalized note never arrived) are dead weight the quota can
         // never reclaim (eviction skips voice_live_* by design) — sweep them
         // on startup.
         if sweepsOnInit {
-            sweepStaleLiveCaptures()
+            if asyncStartupSweep {
+                let store = fileStore
+                Task.detached(priority: .utility) {
+                    Self.sweepStaleLiveCaptures(in: store)
+                }
+            } else {
+                Self.sweepStaleLiveCaptures(in: fileStore)
+            }
         }
     }
 
@@ -205,8 +269,9 @@ final class ChatLiveVoiceCoordinator {
         // START from another peer opens its own assembly instead of
         // capturing this one's frames.
         let key = AssemblyKey(peerID: peerID, scope: scope, burstID: packet.burstID)
+        let payloadByteCount = payload.count
         if let assembly = assemblies[key] {
-            apply(packet, to: assembly)
+            apply(packet, payloadByteCount: payloadByteCount, to: assembly)
             return
         }
 
@@ -221,7 +286,7 @@ final class ChatLiveVoiceCoordinator {
             guard let assembly = makeAssembly(burstID: packet.burstID, peerID: peerID, scope: scope, nickname: nickname, timestamp: timestamp) else { return }
             assemblies[key] = assembly
             updatePublicTalkerIndicator()
-            apply(packet, to: assembly)
+            apply(packet, payloadByteCount: payloadByteCount, to: assembly)
         case .end, .canceled:
             // Control packet for a burst we never saw — nothing to do.
             break
@@ -352,7 +417,14 @@ final class ChatLiveVoiceCoordinator {
         // finalized transfers; reserve the burst's worst case up front.
         // Eviction skips voice_live_* names, so partials still streaming in
         // are safe no matter which caller triggers enforcement.
-        fileStore.enforceQuota(reservingBytes: TransportConfig.pttMaxBurstBytes)
+        if asyncQuotaEnforcement {
+            let store = fileStore
+            ioQueue.async {
+                store.enforceQuota(reservingBytes: TransportConfig.pttMaxBurstBytes)
+            }
+        } else {
+            fileStore.enforceQuota(reservingBytes: TransportConfig.pttMaxBurstBytes)
+        }
         fileManager.createFile(
             atPath: fileURL.path,
             contents: nil,
@@ -383,7 +455,7 @@ final class ChatLiveVoiceCoordinator {
             nickname: nickname,
             message: message,
             fileURL: fileURL,
-            fileHandle: handle
+            fileWriter: LiveCaptureFileWriter(handle: handle, queue: ioQueue)
         )
 
         // DM bubbles ride the full inbound pipeline (store append, unread,
@@ -418,8 +490,8 @@ final class ChatLiveVoiceCoordinator {
         context.setActivePublicVoiceTalker(talker)
     }
 
-    private func apply(_ packet: VoiceBurstPacket, to assembly: Assembly) {
-        assembly.receivedBytes += packet.encode().count
+    private func apply(_ packet: VoiceBurstPacket, payloadByteCount: Int, to assembly: Assembly) {
+        assembly.receivedBytes += payloadByteCount
         let elapsed = Date().timeIntervalSince(assembly.firstPacketAt)
         // Flood guards: a real burst arrives at ~2 KB/s.
         guard assembly.receivedBytes <= TransportConfig.pttInboundMaxBytesPerSecond * Int(elapsed + 2),
@@ -483,13 +555,14 @@ final class ChatLiveVoiceCoordinator {
     }
 
     private func deliver(_ frames: [Data], to assembly: Assembly) {
-        for frame in frames {
-            do {
-                try assembly.fileHandle?.write(contentsOf: ADTSFramer.frame(frame))
-            } catch {
-                SecureLogger.error("PTT: incoming burst write failed: \(error)", category: .session)
-                assembly.fileHandle = nil
+        if let writer = assembly.fileWriter, !frames.isEmpty {
+            let totalBytes = frames.reduce(0) { $0 + $1.count + 7 }
+            var batch = Data()
+            batch.reserveCapacity(totalBytes)
+            for frame in frames {
+                batch.append(ADTSFramer.frame(frame))
             }
+            writer.write(batch)
         }
         assembly.deliveredFrames += frames.count
         assembly.player?.enqueue(frames)
@@ -506,7 +579,8 @@ final class ChatLiveVoiceCoordinator {
     }
 
     private func finalize(_ assembly: Assembly) {
-        assembly.idleTimeout?.cancel()
+        assembly.idleTimer?.cancel()
+        assembly.idleTimer = nil
         assembly.gapRedrain?.cancel()
         // Deliver whatever is decodable past any remaining holes.
         while !assembly.buffered.isEmpty, let smallest = assembly.buffered.keys.min() {
@@ -516,8 +590,8 @@ final class ChatLiveVoiceCoordinator {
                 assembly.nextSeq &+= 1
             }
         }
-        try? assembly.fileHandle?.close()
-        assembly.fileHandle = nil
+        assembly.fileWriter?.closeSynchronously()
+        assembly.fileWriter = nil
         assemblies.removeValue(forKey: assembly.key)
         updatePublicTalkerIndicator()
 
@@ -621,11 +695,12 @@ final class ChatLiveVoiceCoordinator {
     }
 
     private func cancelAssembly(_ assembly: Assembly) {
-        assembly.idleTimeout?.cancel()
+        assembly.idleTimer?.cancel()
+        assembly.idleTimer = nil
         assembly.gapRedrain?.cancel()
         assembly.player?.stop()
-        try? assembly.fileHandle?.close()
-        assembly.fileHandle = nil
+        assembly.fileWriter?.closeSynchronously()
+        assembly.fileWriter = nil
         assemblies.removeValue(forKey: assembly.key)
         updatePublicTalkerIndicator()
         removeBubble(of: assembly)
@@ -637,14 +712,23 @@ final class ChatLiveVoiceCoordinator {
     // MARK: - Timers
 
     private func rescheduleIdleTimeout(for assembly: Assembly) {
-        assembly.idleTimeout?.cancel()
-        let key = assembly.key
-        assembly.idleTimeout = Task { @MainActor [weak self] in
-            try? await Task.sleep(nanoseconds: UInt64(TransportConfig.pttBurstEndTimeoutSeconds * 1_000_000_000))
-            guard !Task.isCancelled, let self, let assembly = self.assemblies[key] else { return }
-            // Talker went silent/out of range without an END.
-            self.finalize(assembly)
+        let deadline = DispatchTime.now() + TransportConfig.pttBurstEndTimeoutSeconds
+        if let timer = assembly.idleTimer {
+            timer.schedule(deadline: deadline)
+            return
         }
+        let key = assembly.key
+        let timer = DispatchSource.makeTimerSource(queue: .main)
+        timer.schedule(deadline: deadline)
+        timer.setEventHandler { [weak self] in
+            MainActor.assumeIsolated {
+                guard let self, let assembly = self.assemblies[key] else { return }
+                // Talker went silent/out of range without an END.
+                self.finalize(assembly)
+            }
+        }
+        assembly.idleTimer = timer
+        timer.resume()
     }
 
     private func scheduleGapRedrain(for assembly: Assembly) {
@@ -679,7 +763,7 @@ final class ChatLiveVoiceCoordinator {
         return Data(hexString: hex)
     }
 
-    private static let incomingSubdirectory = "\(MimeType.Category.audio.mediaDir)/incoming"
+    nonisolated private static let incomingSubdirectory = "\(MimeType.Category.audio.mediaDir)/incoming"
 
     /// The peer ID and scope in the name mirror the assembly key: colliding
     /// burst IDs from different senders — or from the same sender across DM
@@ -700,7 +784,8 @@ final class ChatLiveVoiceCoordinator {
     /// only (ConversationStore never persists; the gossip archive replays
     /// `MessageType.message` packets only), so no row from a previous
     /// process can reference the file.
-    private func sweepStaleLiveCaptures() {
+    nonisolated private static func sweepStaleLiveCaptures(in fileStore: BLEIncomingFileStore) {
+        let fileManager = fileStore.fileManager
         guard let directory = try? fileStore.incomingDirectory(subdirectory: Self.incomingSubdirectory),
               let contents = try? fileManager.contentsOfDirectory(
                   at: directory,

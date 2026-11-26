@@ -19,6 +19,18 @@ final class MeshTopologyTracker {
     // Routes computed using stale topology can fail when the network has changed
     private static let routeFreshnessThreshold: TimeInterval = 60 // 60 seconds
 
+    func hasRemoteNodes(excluding localData: Data?) -> Bool {
+        let local = sanitize(localData)
+        return queue.sync {
+            if let local {
+                return claims.keys.contains { $0 != local }
+                    || lastSeen.keys.contains { $0 != local }
+                    || observedVersions.keys.contains { $0 != local }
+            }
+            return !claims.isEmpty || !lastSeen.isEmpty || !observedVersions.isEmpty
+        }
+    }
+
     func reset() {
         queue.sync(flags: .barrier) {
             self.claims.removeAll()

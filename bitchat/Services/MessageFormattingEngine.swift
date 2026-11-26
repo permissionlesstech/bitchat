@@ -160,6 +160,7 @@ final class MessageFormattingEngine {
 
     /// Extracts mentions from message content
     static func extractMentions(from content: String) -> [String] {
+        guard content.contains("@") else { return [] }
         let nsContent = content as NSString
         let range = NSRange(location: 0, length: nsContent.length)
         let matches = Patterns.mention.matches(in: content, options: [], range: range)
@@ -174,6 +175,7 @@ final class MessageFormattingEngine {
 
     /// Checks if content contains a Cashu token
     static func containsCashuToken(_ content: String) -> Bool {
+        guard content.utf8.count >= 46, content.contains("cashu") else { return false }
         let nsContent = content as NSString
         let range = NSRange(location: 0, length: nsContent.length)
         return Patterns.quickCashuPresence.numberOfMatches(in: content, options: [], range: range) > 0
@@ -221,18 +223,102 @@ final class MessageFormattingEngine {
         }
 
         // Build: "<@baseName#suffix> "
-        result.append(AttributedString("<@").mergingAttributes(senderStyle))
-        result.append(AttributedString(baseName).mergingAttributes(senderStyle))
-
-        if !suffix.isEmpty {
-            var suffixStyle = senderStyle
-            suffixStyle.foregroundColor = baseColor.opacity(0.6)
-            result.append(AttributedString(suffix).mergingAttributes(suffixStyle))
+        if suffix.isEmpty {
+            return AttributedString("<@\(baseName)> ").mergingAttributes(senderStyle)
         }
 
+        result.append(AttributedString("<@\(baseName)").mergingAttributes(senderStyle))
+        var suffixStyle = senderStyle
+        suffixStyle.foregroundColor = baseColor.opacity(0.6)
+        result.append(AttributedString(suffix).mergingAttributes(suffixStyle))
         result.append(AttributedString("> ").mergingAttributes(senderStyle))
 
         return result
+    }
+
+    private struct ContentHints {
+        var hasMentions = false
+        var hasHashtags = false
+        var hasURLs = false
+        var hasLightning = false
+        var hasCashu = false
+
+        var any: Bool {
+            hasMentions || hasHashtags || hasURLs || hasLightning || hasCashu
+        }
+    }
+
+    /// Single-pass UTF-8 scanner that detects candidate rich tokens without
+    /// allocating lowercased copies or bridging to NSString.
+    private static func scanContentHints(in content: String) -> ContentHints {
+        if let hints = content.utf8.withContiguousStorageIfAvailable({ scanContentHintsBuffer($0) }) {
+            return hints
+        }
+        return Array(content.utf8).withUnsafeBufferPointer { scanContentHintsBuffer($0) }
+    }
+
+    private static func scanContentHintsBuffer(_ utf8: UnsafeBufferPointer<UInt8>) -> ContentHints {
+        var hints = ContentHints()
+        let count = utf8.count
+        var i = 0
+        while i < count {
+            let b = utf8[i]
+            switch b {
+            case UInt8(ascii: "@"):
+                hints.hasMentions = true
+            case UInt8(ascii: "#"):
+                hints.hasHashtags = true
+            case UInt8(ascii: ":"):
+                if !hints.hasURLs && i + 2 < count
+                    && utf8[i + 1] == UInt8(ascii: "/")
+                    && utf8[i + 2] == UInt8(ascii: "/") {
+                    hints.hasURLs = true
+                }
+            case UInt8(ascii: "w"):
+                if !hints.hasURLs && i + 3 < count
+                    && utf8[i + 1] == UInt8(ascii: "w")
+                    && utf8[i + 2] == UInt8(ascii: "w")
+                    && utf8[i + 3] == UInt8(ascii: ".") {
+                    hints.hasURLs = true
+                }
+            case UInt8(ascii: "h"):
+                if !hints.hasURLs && i + 3 < count
+                    && utf8[i + 1] == UInt8(ascii: "t")
+                    && utf8[i + 2] == UInt8(ascii: "t")
+                    && utf8[i + 3] == UInt8(ascii: "p") {
+                    hints.hasURLs = true
+                }
+            case UInt8(ascii: "l"), UInt8(ascii: "L"):
+                if !hints.hasLightning {
+                    if i + 1 < count && (utf8[i + 1] | 0x20) == UInt8(ascii: "n") {
+                        hints.hasLightning = true
+                    } else if i + 9 < count
+                        && (utf8[i + 1] | 0x20) == UInt8(ascii: "i")
+                        && (utf8[i + 2] | 0x20) == UInt8(ascii: "g")
+                        && (utf8[i + 3] | 0x20) == UInt8(ascii: "h")
+                        && (utf8[i + 4] | 0x20) == UInt8(ascii: "t")
+                        && (utf8[i + 5] | 0x20) == UInt8(ascii: "n")
+                        && (utf8[i + 6] | 0x20) == UInt8(ascii: "i")
+                        && (utf8[i + 7] | 0x20) == UInt8(ascii: "n")
+                        && (utf8[i + 8] | 0x20) == UInt8(ascii: "g")
+                        && utf8[i + 9] == UInt8(ascii: ":") {
+                        hints.hasLightning = true
+                    }
+                }
+            case UInt8(ascii: "c"), UInt8(ascii: "C"):
+                if !hints.hasCashu && i + 4 < count
+                    && (utf8[i + 1] | 0x20) == UInt8(ascii: "a")
+                    && (utf8[i + 2] | 0x20) == UInt8(ascii: "s")
+                    && (utf8[i + 3] | 0x20) == UInt8(ascii: "h")
+                    && (utf8[i + 4] | 0x20) == UInt8(ascii: "u") {
+                    hints.hasCashu = true
+                }
+            default:
+                break
+            }
+            i += 1
+        }
+        return hints
     }
 
     private static func formatContent(
@@ -247,8 +333,18 @@ final class MessageFormattingEngine {
             return formatPlainContent(content, baseColor: baseColor, isSelf: isSelf)
         }
 
+        // Fast path: plain messages (the majority of chat traffic) need no
+        // NSString bridge, regex passes, or intermediate match arrays.
+        let hints = scanContentHints(in: content)
+        guard hints.any else {
+            return formatPlainText(content, baseColor: baseColor, isSelf: isSelf, isMentioned: isMentioned)
+        }
+
         // Find all matches
-        let matches = findAllMatches(in: content)
+        let matches = findAllMatches(in: content, hints: hints)
+        guard !matches.isEmpty else {
+            return formatPlainText(content, baseColor: baseColor, isSelf: isSelf, isMentioned: isMentioned)
+        }
 
         // Build formatted content
         var result = AttributedString()
@@ -279,26 +375,19 @@ final class MessageFormattingEngine {
         return result
     }
 
-    private static func findAllMatches(in content: String) -> [ContentMatch] {
+    private static func findAllMatches(in content: String, hints: ContentHints) -> [ContentMatch] {
         let nsContent = content as NSString
         let nsLen = nsContent.length
         let fullRange = NSRange(location: 0, length: nsLen)
 
-        // Quick hints to avoid unnecessary regex work
-        let hasMentions = content.contains("@")
-        let hasHashtags = content.contains("#")
-        let hasURLs = content.contains("://") || content.contains("www.") || content.contains("http")
-        let hasLightning = content.lowercased().contains("ln") || content.lowercased().contains("lightning:")
-        let hasCashu = content.lowercased().contains("cashu")
-
         // Collect matches
-        let mentionMatches = hasMentions ? Patterns.mention.matches(in: content, options: [], range: fullRange) : []
-        let hashtagMatches = hasHashtags ? Patterns.hashtag.matches(in: content, options: [], range: fullRange) : []
-        let urlMatches = hasURLs ? (Patterns.linkDetector?.matches(in: content, options: [], range: fullRange) ?? []) : []
-        let cashuMatches = hasCashu ? Patterns.cashu.matches(in: content, options: [], range: fullRange) : []
-        let lightningMatches = hasLightning ? Patterns.lightningScheme.matches(in: content, options: [], range: fullRange) : []
-        let bolt11Matches = hasLightning ? Patterns.bolt11.matches(in: content, options: [], range: fullRange) : []
-        let lnurlMatches = hasLightning ? Patterns.lnurl.matches(in: content, options: [], range: fullRange) : []
+        let mentionMatches = hints.hasMentions ? Patterns.mention.matches(in: content, options: [], range: fullRange) : []
+        let hashtagMatches = hints.hasHashtags ? Patterns.hashtag.matches(in: content, options: [], range: fullRange) : []
+        let urlMatches = hints.hasURLs ? (Patterns.linkDetector?.matches(in: content, options: [], range: fullRange) ?? []) : []
+        let cashuMatches = hints.hasCashu ? Patterns.cashu.matches(in: content, options: [], range: fullRange) : []
+        let lightningMatches = hints.hasLightning ? Patterns.lightningScheme.matches(in: content, options: [], range: fullRange) : []
+        let bolt11Matches = hints.hasLightning ? Patterns.bolt11.matches(in: content, options: [], range: fullRange) : []
+        let lnurlMatches = hints.hasLightning ? Patterns.lnurl.matches(in: content, options: [], range: fullRange) : []
 
         // Build mention ranges for overlap checking
         let mentionRanges = mentionMatches.map { $0.range(at: 0) }

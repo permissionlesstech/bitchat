@@ -23,11 +23,30 @@ final class AppRuntime: ObservableObject {
     let privateConversationModel: PrivateConversationModel
     let verificationModel: VerificationModel
     let conversationUIModel: ConversationUIModel
+    let composerAutocompleteModel: ComposerAutocompleteModel
+    let composerDraftModel = ComposerDraftModel()
     let locationChannelsModel: LocationChannelsModel
     let peerListModel: PeerListModel
     let appChromeModel: AppChromeModel
     let boardAlertsModel: BoardAlertsModel
     let sharedContentImportModel: SharedContentImportModel
+
+    var environmentModels: AppEnvironmentModels {
+        AppEnvironmentModels(
+            publicChatModel: publicChatModel,
+            privateInboxModel: privateInboxModel,
+            privateConversationModel: privateConversationModel,
+            verificationModel: verificationModel,
+            conversationUIModel: conversationUIModel,
+            composerAutocompleteModel: composerAutocompleteModel,
+            composerDraftModel: composerDraftModel,
+            locationChannelsModel: locationChannelsModel,
+            peerListModel: peerListModel,
+            appChromeModel: appChromeModel,
+            boardAlertsModel: boardAlertsModel,
+            sharedContentImportModel: sharedContentImportModel
+        )
+    }
 
     private let idBridge: NostrIdentityBridge
     private var cancellables = Set<AnyCancellable>()
@@ -42,7 +61,7 @@ final class AppRuntime: ObservableObject {
 
     init(
         keychain: KeychainManagerProtocol = KeychainManager.makeDefault(),
-        idBridge: NostrIdentityBridge = NostrIdentityBridge(),
+        idBridge: NostrIdentityBridge = .shared,
         sharedContentStore: SharedContentStore? = nil
     ) {
         self.idBridge = idBridge
@@ -79,6 +98,7 @@ final class AppRuntime: ObservableObject {
             privateConversationModel: self.privateConversationModel,
             conversations: conversations
         )
+        self.composerAutocompleteModel = ComposerAutocompleteModel(chatViewModel: self.chatViewModel)
         self.peerListModel = PeerListModel(
             chatViewModel: self.chatViewModel,
             conversations: conversations,
@@ -202,6 +222,7 @@ final class AppRuntime: ObservableObject {
             record(.scenePhaseChanged(.background))
             TorManager.shared.setAppForeground(false)
             TorManager.shared.goDormantOnBackground()
+            LocationStateManager.shared.endLiveRefresh()
             chatViewModel.endGeohashSampling()
             NostrRelayManager.shared.disconnect()
             didEnterBackground = true
@@ -297,6 +318,15 @@ final class AppRuntime: ObservableObject {
 
 private extension AppRuntime {
     func bindRuntimeObservers() {
+        NetworkActivationService.shared.$activationAllowed
+            .removeDuplicates()
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] allowed in
+                guard allowed, self?.chatViewModel.networkActivationAllowed == true else { return }
+                GeoRelayDirectory.shared.prefetchIfNeeded()
+            }
+            .store(in: &cancellables)
+
         NostrRelayManager.shared.$isConnected
             .receive(on: DispatchQueue.main)
             .sink { [weak self] isConnected in

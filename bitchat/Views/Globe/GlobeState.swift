@@ -150,20 +150,76 @@ struct GlobeMotionGovernor {
     }
 }
 
+/// High-frequency camera state observed only by `GlobeView`, isolating 120 FPS drags,
+/// flings, and zooms from `GeohashPickerView`'s chrome overlays.
+@MainActor
+final class GlobeCameraState: ObservableObject {
+    fileprivate(set) var centerLat: Double
+    fileprivate(set) var centerLon: Double
+    fileprivate(set) var zoom: Double
+    fileprivate(set) var isInteracting = false
+    fileprivate(set) var isAnimating = false
+    /// Detail level for moving frames; `.full` whenever the globe is at rest.
+    fileprivate(set) var motionDetail: GlobeMotionDetail = .full
+
+    init(centerLat: Double, centerLon: Double, zoom: Double) {
+        self.centerLat = centerLat
+        self.centerLon = centerLon
+        self.zoom = zoom
+    }
+
+    fileprivate func update(lat: Double, lon: Double, zoom newZoom: Double? = nil) {
+        let nextZoom = newZoom ?? zoom
+        guard centerLat != lat || centerLon != lon || zoom != nextZoom else { return }
+        objectWillChange.send()
+        centerLat = lat
+        centerLon = lon
+        zoom = nextZoom
+    }
+
+    fileprivate func setZoom(_ newZoom: Double) {
+        guard zoom != newZoom else { return }
+        objectWillChange.send()
+        zoom = newZoom
+    }
+
+    fileprivate func setInteracting(_ value: Bool) {
+        guard isInteracting != value else { return }
+        objectWillChange.send()
+        isInteracting = value
+    }
+
+    fileprivate func setAnimating(_ value: Bool) {
+        guard isAnimating != value else { return }
+        objectWillChange.send()
+        isAnimating = value
+    }
+
+    fileprivate func setMotionDetail(_ value: GlobeMotionDetail) {
+        guard motionDetail != value else { return }
+        objectWillChange.send()
+        motionDetail = value
+    }
+}
+
 /// Hoisted state for the interactive 3D globe: view center, zoom, geohash precision
 /// and the current selection. All mutation funnels through this class so rendering,
 /// gestures and buttons stay in sync.
 @MainActor
 final class GlobeState: ObservableObject {
-    @Published private(set) var centerLat: Double
-    @Published private(set) var centerLon: Double
-    @Published private(set) var zoom: Double
+    /// Observed by `GlobeView` for per-frame rendering without invalidating outer chrome.
+    let camera: GlobeCameraState
+
     @Published private(set) var precision: Int
     @Published private(set) var selectedGeohash = ""
-    @Published private(set) var isInteracting = false
-    @Published private(set) var isAnimating = false
+
+    var centerLat: Double { camera.centerLat }
+    var centerLon: Double { camera.centerLon }
+    var zoom: Double { camera.zoom }
+    var isInteracting: Bool { camera.isInteracting }
+    var isAnimating: Bool { camera.isAnimating }
     /// Detail level for moving frames; `.full` whenever the globe is at rest.
-    @Published private(set) var motionDetail: GlobeMotionDetail = .full
+    var motionDetail: GlobeMotionDetail { camera.motionDetail }
 
     private(set) var baseRadius: Double = 0
     private(set) var screenMin: Double = 0
@@ -211,9 +267,9 @@ final class GlobeState: ObservableObject {
     ///   target once the viewport is laid out.
     init(targetLat: Double, targetLon: Double, initialPrecision: Int, startZoomedOut: Bool) {
         let precision = min(max(initialPrecision, 1), GlobeMath.maxPrecision)
-        centerLat = startZoomedOut ? targetLat * 0.4 : targetLat
-        centerLon = startZoomedOut ? GlobeMath.normalizeLon(targetLon - 70) : targetLon
-        zoom = GlobeMath.minZoom
+        let initialLat = startZoomedOut ? targetLat * 0.4 : targetLat
+        let initialLon = startZoomedOut ? GlobeMath.normalizeLon(targetLon - 70) : targetLon
+        self.camera = GlobeCameraState(centerLat: initialLat, centerLon: initialLon, zoom: GlobeMath.minZoom)
         self.precision = precision
         if startZoomedOut {
             introTarget = (targetLat, targetLon, precision)
@@ -241,10 +297,10 @@ final class GlobeState: ObservableObject {
                 // Cinematic intro: spin and zoom from the far view into the target location.
                 animateTo(lat: target.lat, lon: target.lon, zoom: targetZoom, precision: target.precision, duration: 1.4)
             } else {
-                centerLat = target.lat
-                centerLon = target.lon
-                zoom = targetZoom
-                precision = target.precision
+                camera.update(lat: target.lat, lon: target.lon, zoom: targetZoom)
+                if precision != target.precision {
+                    precision = target.precision
+                }
             }
         }
         syncSelection()
@@ -254,7 +310,7 @@ final class GlobeState: ObservableObject {
 
     func beginInteraction() {
         // Mark the touch first so catching a fling continues the same motion session.
-        isInteracting = true
+        camera.setInteracting(true)
         motionStateChanged()
         cancelAnimations()
     }
@@ -263,7 +319,7 @@ final class GlobeState: ObservableObject {
     /// within the same motion session.
     func endInteraction(flingVelocityX vx: Double = 0, flingVelocityY vy: Double = 0) {
         fling(vx: vx, vy: vy)
-        isInteracting = false
+        camera.setInteracting(false)
         motionStateChanged()
     }
 
@@ -272,17 +328,18 @@ final class GlobeState: ObservableObject {
         let r = globeRadius
         guard r > 0 else { return }
         let degPerPoint = 180 / (Double.pi * r)
-        centerLon = GlobeMath.normalizeLon(centerLon - dx * degPerPoint)
+        let nextLon = GlobeMath.normalizeLon(centerLon - dx * degPerPoint)
         // A view already past the drag limit (a polar target) may move toward the
         // equator but not further out, and never snaps back to the limit.
-        centerLat = clampedLat(centerLat + dy * degPerPoint, reaching: centerLat)
+        let nextLat = clampedLat(centerLat + dy * degPerPoint, reaching: centerLat)
+        camera.update(lat: nextLat, lon: nextLon)
         syncSelection()
     }
 
     /// Continuous zoom from pinch gestures; precision follows automatically.
     func zoomBy(_ factor: Double) {
         guard factor != 1, factor.isFinite, factor > 0 else { return }
-        zoom = min(max(zoom * factor, GlobeMath.minZoom), GlobeMath.maxZoom)
+        camera.setZoom(min(max(zoom * factor, GlobeMath.minZoom), GlobeMath.maxZoom))
         syncPrecisionFromZoom()
         syncSelection()
     }
@@ -334,7 +391,7 @@ final class GlobeState: ObservableObject {
     func cancelAnimations() {
         motion = nil
         if isAnimating {
-            isAnimating = false
+            camera.setAnimating(false)
             motionStateChanged()
         }
     }
@@ -342,7 +399,7 @@ final class GlobeState: ObservableObject {
     private func start(_ newMotion: Motion) {
         motion = newMotion
         if !isAnimating {
-            isAnimating = true
+            camera.setAnimating(true)
             motionStateChanged()
         }
         clock.start()
@@ -350,7 +407,7 @@ final class GlobeState: ObservableObject {
 
     private func finishMotion() {
         motion = nil
-        isAnimating = false
+        camera.setAnimating(false)
         motionStateChanged()
     }
 
@@ -405,12 +462,14 @@ final class GlobeState: ObservableObject {
     private func applyTween(_ tween: Tween, t: Double) {
         // The target itself is always reachable: a polar cell's center can lie past
         // the drag limit, and clamping it would end the animation on another cell.
-        centerLat = clampedLat(tween.startLat + (tween.endLat - tween.startLat) * t, reaching: tween.endLat)
-        centerLon = GlobeMath.normalizeLon(tween.startLon + tween.dLon * t)
+        let nextLat = clampedLat(tween.startLat + (tween.endLat - tween.startLat) * t, reaching: tween.endLat)
+        let nextLon = GlobeMath.normalizeLon(tween.startLon + tween.dLon * t)
         // Exponential interpolation feels natural for zoom.
-        zoom = tween.startZoom * pow(tween.endZoom / tween.startZoom, t)
+        let nextZoom = tween.startZoom * pow(tween.endZoom / tween.startZoom, t)
+        camera.update(lat: nextLat, lon: nextLon, zoom: nextZoom)
         if let target = tween.targetPrecision {
-            precision = min(max(target, 1), GlobeMath.maxPrecision)
+            let clamped = min(max(target, 1), GlobeMath.maxPrecision)
+            if precision != clamped { precision = clamped }
         } else {
             syncPrecisionFromZoom()
         }
@@ -432,7 +491,7 @@ final class GlobeState: ObservableObject {
     }
 
     private func publishMotionDetail() {
-        if motionDetail != governor.detail { motionDetail = governor.detail }
+        camera.setMotionDetail(governor.detail)
     }
 
     /// Clamps to the drag limit, widened (up to that pole) on `reach`'s side only.

@@ -442,7 +442,7 @@ private extension ChatViewModelBootstrapper {
                 id: Self.bridgeSubscriptionID,
                 relayUrls: relays.isEmpty ? nil : relays,
                 handler: { event in
-                    BridgeService.shared.handleRendezvousEvent(event)
+                    BridgeService.shared.handleRendezvousEvent(event, signatureAlreadyVerified: true)
                 }
             )
         }

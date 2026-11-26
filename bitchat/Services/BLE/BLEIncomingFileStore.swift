@@ -113,6 +113,24 @@ struct BLEIncomingFileStore: @unchecked Sendable {
         var deletionReservations: [UUID: Set<String>] = [:]
     }
 
+    /// Separate leaf lock for resolved media directory caching so callers
+    /// holding or not holding `payloadCoordination.lock` can both query
+    /// `filesDirectory()` without lock ordering cycles.
+    private final class DirectoryCache: @unchecked Sendable {
+        let lock = NSLock()
+        var filesRoot: URL?
+        var incomingDirectoryPaths: Set<String> = []
+        var createdSubdirectories: Set<String> = []
+
+        func invalidate() {
+            lock.lock()
+            filesRoot = nil
+            incomingDirectoryPaths.removeAll(keepingCapacity: false)
+            createdSubdirectories.removeAll(keepingCapacity: false)
+            lock.unlock()
+        }
+    }
+
     private static let defaultQuotaBytes: Int64 = 100 * 1024 * 1024
     /// How long managed media may stay on disk. Bounds by age what the quota
     /// only bounds by size; see `expireAgedMedia(retention:)`.
@@ -133,6 +151,19 @@ struct BLEIncomingFileStore: @unchecked Sendable {
         "files/incoming",
         "files/outgoing"
     ]
+    private static let incomingSubdirectories = [
+        "voicenotes/incoming",
+        "images/incoming",
+        "files/incoming"
+    ]
+    private static let invalidFilenameCharacters =
+        CharacterSet(charactersIn: "<>:\"|?*\0").union(.controlCharacters)
+    private static let timestampFormatterLock = NSLock()
+    private static let timestampFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyyMMdd_HHmmss"
+        return formatter
+    }()
     /// Name prefix of in-flight live voice captures (progressively written by
     /// `ChatLiveVoiceCoordinator`). Quota eviction skips them by pattern —
     /// deleting one mid-stream unlinks the inode under an open `FileHandle`
@@ -163,6 +194,7 @@ struct BLEIncomingFileStore: @unchecked Sendable {
     private let quotaBytes: Int64
     private let privateMediaReceipts: BLEPrivateMediaReceiptStore
     private let payloadCoordination: PayloadCoordination
+    private let directoryCache: DirectoryCache
 
     init(
         fileManager: FileManager = .default,
@@ -184,6 +216,7 @@ struct BLEIncomingFileStore: @unchecked Sendable {
             now: dateProvider
         )
         self.payloadCoordination = PayloadCoordination()
+        self.directoryCache = DirectoryCache()
     }
 
     /// Panic-wipe every managed incoming and outgoing media artifact before
@@ -202,6 +235,7 @@ struct BLEIncomingFileStore: @unchecked Sendable {
         // pre-panic receiver decision survives after identity reset.
         defer {
             privateMediaReceipts.resetForPanic()
+            directoryCache.invalidate()
             payloadCoordination.lock.lock()
             payloadCoordination.pendingDeliveryPaths.removeAll(
                 keepingCapacity: false
@@ -281,9 +315,7 @@ struct BLEIncomingFileStore: @unchecked Sendable {
     /// Resolves (and creates) an incoming-media directory for callers that
     /// write progressively instead of via `save` (live voice captures).
     func incomingDirectory(subdirectory: String) throws -> URL {
-        let directory = try filesDirectory().appendingPathComponent(subdirectory, isDirectory: true)
-        try fileManager.createDirectory(at: directory, withIntermediateDirectories: true, attributes: Self.mediaProtectionAttributes)
-        return directory
+        try ensureSubdirectory(subdirectory)
     }
 
     func save(
@@ -297,8 +329,7 @@ struct BLEIncomingFileStore: @unchecked Sendable {
         defer { payloadCoordination.lock.unlock() }
 
         do {
-            let base = try filesDirectory().appendingPathComponent(subdirectory, isDirectory: true)
-            try fileManager.createDirectory(at: base, withIntermediateDirectories: true, attributes: Self.mediaProtectionAttributes)
+            let base = try ensureSubdirectory(subdirectory)
             let sanitized = sanitizedFileName(
                 preferredName,
                 defaultName: "\(defaultPrefix)_\(Self.timestampString(from: dateProvider()))",
@@ -467,24 +498,14 @@ struct BLEIncomingFileStore: @unchecked Sendable {
     /// incoming payload.
     private func incomingPayloadURL(relativePath: String) -> URL? {
         guard !relativePath.isEmpty,
-              let base = try? filesDirectory().standardizedFileURL else {
+              let resolved = try? resolvedFilesRootAndIncomingPaths() else {
             return nil
         }
-        let candidate = base
+        let candidate = resolved.filesRoot
             .appendingPathComponent(relativePath, isDirectory: false)
             .standardizedFileURL
         let parentPath = candidate.deletingLastPathComponent().path
-        let incomingDirectories = [
-            "voicenotes/incoming",
-            "images/incoming",
-            "files/incoming"
-        ]
-        guard incomingDirectories.contains(where: { relativeDirectory in
-            base.appendingPathComponent(
-                relativeDirectory,
-                isDirectory: true
-            ).standardizedFileURL.path == parentPath
-        }) else {
+        guard resolved.incomingPaths.contains(parentPath) else {
             return nil
         }
         return candidate
@@ -749,10 +770,47 @@ struct BLEIncomingFileStore: @unchecked Sendable {
     }
     #endif
 
-    private func filesDirectory() throws -> URL {
+    private func resolvedFilesRootAndIncomingPaths() throws -> (filesRoot: URL, incomingPaths: Set<String>) {
+        directoryCache.lock.lock()
+        if let cachedRoot = directoryCache.filesRoot {
+            let paths = directoryCache.incomingDirectoryPaths
+            directoryCache.lock.unlock()
+            return (cachedRoot, paths)
+        }
+        directoryCache.lock.unlock()
+
         let filesDir = try rootDirectory().appendingPathComponent("files", isDirectory: true)
         try fileManager.createDirectory(at: filesDir, withIntermediateDirectories: true, attributes: Self.mediaProtectionAttributes)
-        return filesDir
+        let standardized = filesDir.standardizedFileURL
+        let incomingPaths = Set(Self.incomingSubdirectories.map {
+            standardized.appendingPathComponent($0, isDirectory: true).standardizedFileURL.path
+        })
+
+        directoryCache.lock.lock()
+        directoryCache.filesRoot = standardized
+        directoryCache.incomingDirectoryPaths = incomingPaths
+        directoryCache.lock.unlock()
+        return (standardized, incomingPaths)
+    }
+
+    private func ensureSubdirectory(_ subdirectory: String) throws -> URL {
+        let filesDir = try filesDirectory()
+        let directory = filesDir.appendingPathComponent(subdirectory, isDirectory: true)
+        directoryCache.lock.lock()
+        let alreadyCreated = directoryCache.createdSubdirectories.contains(subdirectory)
+        directoryCache.lock.unlock()
+        if alreadyCreated && fileManager.fileExists(atPath: directory.path) {
+            return directory
+        }
+        try fileManager.createDirectory(at: directory, withIntermediateDirectories: true, attributes: Self.mediaProtectionAttributes)
+        directoryCache.lock.lock()
+        directoryCache.createdSubdirectories.insert(subdirectory)
+        directoryCache.lock.unlock()
+        return directory
+    }
+
+    private func filesDirectory() throws -> URL {
+        try resolvedFilesRootAndIncomingPaths().filesRoot
     }
 
     private func rootDirectory() throws -> URL {
@@ -799,8 +857,7 @@ struct BLEIncomingFileStore: @unchecked Sendable {
             .replacingOccurrences(of: "/", with: "_")
             .replacingOccurrences(of: "\\", with: "_")
 
-        let invalid = CharacterSet(charactersIn: "<>:\"|?*\0").union(.controlCharacters)
-        candidate = candidate.components(separatedBy: invalid).joined(separator: "_").trimmed
+        candidate = candidate.components(separatedBy: Self.invalidFilenameCharacters).joined(separator: "_").trimmed
         if candidate.isEmpty { candidate = defaultName }
         if candidate.hasPrefix(".") { candidate = "_" + candidate }
 
@@ -869,8 +926,8 @@ struct BLEIncomingFileStore: @unchecked Sendable {
     }
 
     private static func timestampString(from date: Date) -> String {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "yyyyMMdd_HHmmss"
-        return formatter.string(from: date)
+        timestampFormatterLock.lock()
+        defer { timestampFormatterLock.unlock() }
+        return timestampFormatter.string(from: date)
     }
 }

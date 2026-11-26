@@ -186,7 +186,10 @@ final class NostrRelayManager: ObservableObject {
         defaultRelaySet = Set(defaultRelays)
     }
 
-    @Published private(set) var relays: [Relay] = []
+    // Kept non-@Published: no UI observes `$relays`, and mutating per-relay
+    // packet counters (`messagesReceived`/`messagesSent`) on every frame
+    // previously triggered `objectWillChange` storms on the main actor.
+    private(set) var relays: [Relay] = []
     @Published private(set) var isConnected = false
     /// Whether a relay that carries private messages is connected. DMs
     /// target the default (gift-wrap-capable) relay set, so a connected
@@ -291,6 +294,8 @@ final class NostrRelayManager: ObservableObject {
     
     // Bump generation to invalidate scheduled reconnects when we reset/disconnect
     private var connectionGeneration: Int = 0
+    /// Per-relay cancellation tokens for scheduled idle teardowns of non-default relays.
+    private var idleTeardownTokens: [String: UUID] = [:]
 
     // Per-relay off-main inbound pipeline: raw socket frames are parsed and
     // Schnorr-verified in arrival order OFF the main actor (this is the single
@@ -390,8 +395,8 @@ final class NostrRelayManager: ObservableObject {
     ///    check-and-RECORD plus handler dispatch. Recording only after
     ///    verification means a forged-signature copy can never poison the
     ///    dedup cache and suppress the genuine event.
-    private func ensureRelayInboundPipeline(for relayUrl: String) {
-        let started = inboundRouter.startPipeline(for: relayUrl) { [weak self] stream in
+    private func ensureRelayInboundPipeline(for relayUrl: String, connectionID: ObjectIdentifier) {
+        let started = inboundRouter.startPipeline(for: relayUrl, connectionID: connectionID) { [weak self] stream in
             Task.detached(priority: .userInitiated) {
                 for await frame in stream {
                     guard let parsed = ParsedInbound(frame.message) else { continue }
@@ -405,7 +410,7 @@ final class NostrRelayManager: ObservableObject {
                         ) else {
                             continue
                         }
-                        guard event.isValidSignature() else {
+                        guard await self.inboundRouter.verifySignatureCoalesced(event) else {
                             SecureLogger.warning(
                                 "⚠️ Dropped invalid Nostr event id=\(event.id.prefix(16))… sub=\(subId) relay=\(relayUrl)",
                                 category: .session
@@ -445,6 +450,7 @@ final class NostrRelayManager: ObservableObject {
     /// Disconnect from all relays
     func disconnect() {
         connectionGeneration &+= 1
+        idleTeardownTokens.removeAll()
         for (_, task) in connections {
             task.cancel(with: .goingAway, reason: nil)
         }
@@ -479,6 +485,7 @@ final class NostrRelayManager: ObservableObject {
     /// can capture pre-wipe Nostr private keys.
     func resetForPanicWipe() {
         connectionGeneration &+= 1
+        idleTeardownTokens.removeAll()
         for (_, task) in connections {
             task.cancel(with: .goingAway, reason: nil)
         }
@@ -535,9 +542,12 @@ final class NostrRelayManager: ObservableObject {
         let targets = allowedRelayList(from: relayUrls)
         guard !targets.isEmpty else { return }
         var existing = Set(relays.map { $0.url })
-        for url in targets where !existing.contains(url) {
-            relays.append(Relay(url: url))
-            existing.insert(url)
+        for url in targets {
+            idleTeardownTokens.removeValue(forKey: url)
+            if !existing.contains(url) {
+                relays.append(Relay(url: url))
+                existing.insert(url)
+            }
         }
         connectToRelays(targets)
     }
@@ -564,9 +574,19 @@ final class NostrRelayManager: ObservableObject {
 
         // Attempt immediate send to relays with active connections; queue the rest
         var stillPending = Set<String>()
+        var encodedMessage: String?
         for relayUrl in targetRelays {
             if let connection = connectedConnection(for: relayUrl) {
-                sendToRelay(event: event, connection: connection, relayUrl: relayUrl)
+                if encodedMessage == nil {
+                    guard let encoded = encodeEventMessage(event) else { return }
+                    encodedMessage = encoded
+                }
+                sendEncodedToRelay(
+                    event: event,
+                    encodedMessage: encodedMessage!,
+                    connection: connection,
+                    relayUrl: relayUrl
+                )
             } else {
                 stillPending.insert(relayUrl)
             }
@@ -606,6 +626,10 @@ final class NostrRelayManager: ObservableObject {
             completion(false)
             return
         }
+        guard let encodedMessage = encodeEventMessage(event) else {
+            completion(false)
+            return
+        }
 
         let token = UUID()
         let eventID = event.id
@@ -624,7 +648,12 @@ final class NostrRelayManager: ObservableObject {
         }
 
         for (relayUrl, connection) in connectedTargets {
-            sendToRelay(event: event, connection: connection, relayUrl: relayUrl) { [weak self] succeeded in
+            sendEncodedToRelay(
+                event: event,
+                encodedMessage: encodedMessage,
+                connection: connection,
+                relayUrl: relayUrl
+            ) { [weak self] succeeded in
                 guard let self else { return }
                 // Success only means the bytes reached the socket; wait for
                 // the matching relay OK. A failed write settles this target
@@ -829,6 +858,7 @@ final class NostrRelayManager: ObservableObject {
     private func dropRelays(_ urls: Set<String>) {
         guard !urls.isEmpty else { return }
         for url in urls {
+            idleTeardownTokens.removeValue(forKey: url)
             if let connection = connections[url] {
                 connection.cancel(with: .goingAway, reason: nil)
             }
@@ -878,8 +908,11 @@ final class NostrRelayManager: ObservableObject {
         subscriptionRequestState.removeValue(forKey: id)
         pendingEOSECallbacks.removeValue(forKey: id)
         eoseTrackers.removeValue(forKey: id)
+        var affectedRelays = Set<String>()
         for url in Array(pendingSubscriptions.keys) {
-            pendingSubscriptions[url]?.removeValue(forKey: id)
+            if pendingSubscriptions[url]?.removeValue(forKey: id) != nil {
+                affectedRelays.insert(url)
+            }
         }
         
         let req = NostrRequest.close(id: id)
@@ -892,9 +925,57 @@ final class NostrRelayManager: ObservableObject {
         for (relayUrl, connection) in connections {
             if subscriptions[relayUrl]?.contains(id) == true {
                 subscriptions[relayUrl]?.remove(id)
+                affectedRelays.insert(relayUrl)
                 connection.send(.string(messageString)) { _ in
                     // Local state is cleared before sending so callers can re-subscribe immediately.
                 }
+            }
+        }
+
+        // Reclaim idle non-default (geohash/notes) relay sockets after a short
+        // grace window so switching channels does not accumulate dead sockets.
+        for relayUrl in affectedRelays {
+            scheduleIdleTeardownIfUnused(for: relayUrl)
+        }
+    }
+
+    private func hasPendingMessages(for relayUrl: String) -> Bool {
+        messageQueueLock.lock()
+        defer { messageQueueLock.unlock() }
+        return messageQueue.contains { $0.pendingRelays.contains(relayUrl) }
+    }
+
+    private func isRelayIdle(_ relayUrl: String) -> Bool {
+        let hasActiveSubs = !(subscriptions[relayUrl]?.isEmpty ?? true)
+        let hasPendingSubs = !(pendingSubscriptions[relayUrl]?.isEmpty ?? true)
+        let hasConfirmedSends = confirmedSends.values.contains { $0.awaitingRelays.contains(relayUrl) }
+        return !hasActiveSubs && !hasPendingSubs && !hasConfirmedSends && !hasPendingMessages(for: relayUrl)
+    }
+
+    private func scheduleIdleTeardownIfUnused(for relayUrl: String) {
+        guard !defaultRelaySet.contains(relayUrl),
+              connections[relayUrl] != nil,
+              isRelayIdle(relayUrl) else {
+            return
+        }
+        let token = UUID()
+        idleTeardownTokens[relayUrl] = token
+        let generation = connectionGeneration
+        dependencies.scheduleAfter(TransportConfig.nostrIdleRelayTeardownSeconds) { [weak self] in
+            Task { @MainActor [weak self] in
+                guard let self,
+                      self.connectionGeneration == generation,
+                      self.idleTeardownTokens[relayUrl] == token else {
+                    return
+                }
+                self.idleTeardownTokens.removeValue(forKey: relayUrl)
+                guard !self.defaultRelaySet.contains(relayUrl),
+                      self.connections[relayUrl] != nil,
+                      self.isRelayIdle(relayUrl) else {
+                    return
+                }
+                SecureLogger.debug("🧹 Closing idle non-default Nostr relay: \(relayUrl)", category: .session)
+                self.dropRelays([relayUrl])
             }
         }
     }
@@ -1174,14 +1255,16 @@ final class NostrRelayManager: ObservableObject {
         let task = session.webSocketTask(with: url)
         
         connections[urlString] = task
+        idleTeardownTokens.removeValue(forKey: urlString)
         task.resume()
 
         // Bring up this relay's own serial verify pipeline before arming the
         // socket, so inbound frames have somewhere to land.
-        ensureRelayInboundPipeline(for: urlString)
+        let connectionID = ObjectIdentifier(task)
+        ensureRelayInboundPipeline(for: urlString, connectionID: connectionID)
 
-        // Start receiving messages
-        receiveMessage(from: task, relayUrl: urlString)
+        // Start receiving messages (re-arms directly off-main via InboundFrameRouter)
+        receiveMessage(from: task, relayUrl: urlString, connectionID: connectionID)
         
         // Send initial ping to verify connection
         task.sendPing { [weak self] error in
@@ -1248,28 +1331,25 @@ final class NostrRelayManager: ObservableObject {
         }
     }
     
-    private func receiveMessage(from task: NostrRelayConnectionProtocol, relayUrl: String) {
+    nonisolated private func receiveMessage(
+        from task: NostrRelayConnectionProtocol,
+        relayUrl: String,
+        connectionID: ObjectIdentifier
+    ) {
         task.receive { [weak self] result in
             guard let self = self else { return }
             
             switch result {
             case .success(let message):
-                // Hand the raw frame to this relay's serial inbound pipeline:
-                // parsing and signature verification run off-main, in arrival
-                // order, independently of every other relay's pipeline. Routing
-                // through the lock-guarded router keeps this off the main actor
-                // (no per-frame main hop).
-                self.inboundRouter.yield(InboundFrame(message: message), to: relayUrl)
-
-
-                // Continue receiving
-                Task { @MainActor in
-                    guard self.connections[relayUrl] === task else { return }
-                    self.receiveMessage(from: task, relayUrl: relayUrl)
+                // Hand the raw frame to this relay's serial inbound pipeline and
+                // re-arm directly off-main when this socket is still active —
+                // zero main-actor hop per WebSocket frame.
+                if self.inboundRouter.yield(InboundFrame(message: message), to: relayUrl, from: connectionID) {
+                    self.receiveMessage(from: task, relayUrl: relayUrl, connectionID: connectionID)
                 }
                 
             case .failure(let error):
-                DispatchQueue.main.async {
+                Task { @MainActor in
                     self.handleDisconnection(relayUrl: relayUrl, error: error, connection: task)
                 }
             }
@@ -1361,38 +1441,58 @@ final class NostrRelayManager: ObservableObject {
         }
     }
     
+    private func encodeEventMessage(_ event: NostrEvent) -> String? {
+        let req = NostrRequest.event(event)
+        do {
+            let data = try encoder.encode(req)
+            return String(data: data, encoding: .utf8) ?? ""
+        } catch {
+            SecureLogger.error("Failed to encode event: \(error)", category: .session)
+            return nil
+        }
+    }
+
     private func sendToRelay(
         event: NostrEvent,
         connection: NostrRelayConnectionProtocol,
         relayUrl: String,
         completion: ((Bool) -> Void)? = nil
     ) {
-        let req = NostrRequest.event(event)
-        
-        do {
-            let data = try encoder.encode(req)
-            let message = String(data: data, encoding: .utf8) ?? ""
-            
-            SecureLogger.debug("📤 Send kind=\(event.kind) id=\(event.id.prefix(16))… relay=\(relayUrl)", category: .session)
-            
-            connection.send(.string(message)) { [weak self] error in
-                DispatchQueue.main.async {
-                    if let error = error {
-                        SecureLogger.error("❌ Failed to send event to \(relayUrl): \(error)", category: .session)
-                        completion?(false)
-                    } else {
-                        // SecureLogger.debug("✅ Event sent to relay: \(relayUrl)", category: .session)
-                        // Update relay stats
-                        if let index = self?.relays.firstIndex(where: { $0.url == relayUrl }) {
-                            self?.relays[index].messagesSent += 1
-                        }
-                        completion?(true)
+        guard let message = encodeEventMessage(event) else {
+            completion?(false)
+            return
+        }
+        sendEncodedToRelay(
+            event: event,
+            encodedMessage: message,
+            connection: connection,
+            relayUrl: relayUrl,
+            completion: completion
+        )
+    }
+
+    private func sendEncodedToRelay(
+        event: NostrEvent,
+        encodedMessage: String,
+        connection: NostrRelayConnectionProtocol,
+        relayUrl: String,
+        completion: ((Bool) -> Void)? = nil
+    ) {
+        SecureLogger.debug("📤 Send kind=\(event.kind) id=\(event.id.prefix(16))… relay=\(relayUrl)", category: .session)
+
+        connection.send(.string(encodedMessage)) { [weak self] error in
+            DispatchQueue.main.async {
+                if let error = error {
+                    SecureLogger.error("❌ Failed to send event to \(relayUrl): \(error)", category: .session)
+                    completion?(false)
+                } else {
+                    // Update relay stats
+                    if let index = self?.relays.firstIndex(where: { $0.url == relayUrl }) {
+                        self?.relays[index].messagesSent += 1
                     }
+                    completion?(true)
                 }
             }
-        } catch {
-            SecureLogger.error("Failed to encode event: \(error)", category: .session)
-            completion?(false)
         }
     }
     
@@ -1415,10 +1515,16 @@ final class NostrRelayManager: ObservableObject {
     }
     
     private func updateConnectionStatus() {
-        isConnected = relays.contains { $0.isConnected }
+        let nextConnected = relays.contains { $0.isConnected }
+        if nextConnected != isConnected {
+            isConnected = nextConnected
+        }
         // Relay URLs are normalized before entries are created, so direct
         // set membership is sound.
-        isDMRelayConnected = relays.contains { $0.isConnected && defaultRelaySet.contains($0.url) }
+        let nextDMConnected = relays.contains { $0.isConnected && defaultRelaySet.contains($0.url) }
+        if nextDMConnected != isDMRelayConnected {
+            isDMRelayConnected = nextDMConnected
+        }
     }
     
     /// A relay that drops before sending EOSE must not stall initial-load
@@ -1463,6 +1569,7 @@ final class NostrRelayManager: ObservableObject {
     ) {
         if let connection, connections[relayUrl] !== connection { return }
         connections.removeValue(forKey: relayUrl)
+        idleTeardownTokens.removeValue(forKey: relayUrl)
         teardownRelayInboundPipeline(for: relayUrl)
         subscriptions.removeValue(forKey: relayUrl)
         let awaitingConfirmation = confirmedSends.compactMap { eventID, state in
@@ -1667,9 +1774,54 @@ private struct InboundFrame: Sendable {
 /// thread. All access is serialized by a single lock — contention is negligible
 /// because the guarded critical section is only a dictionary lookup + yield.
 private final class InboundFrameRouter: @unchecked Sendable {
+    /// Full cryptographic identity of a Nostr event being verified.
+    /// Including every field covered by the NIP-01 event ID + signature ensures
+    /// a forged/tampered copy can never coalesce onto — or poison — a genuine copy.
+    private struct VerificationFingerprint: Hashable {
+        let id: String
+        let pubkey: String
+        let createdAt: Int
+        let kind: Int
+        let tags: [[String]]
+        let content: String
+        let sig: String?
+
+        init(event: NostrEvent) {
+            self.id = event.id
+            self.pubkey = event.pubkey
+            self.createdAt = event.created_at
+            self.kind = event.kind
+            self.tags = event.tags
+            self.content = event.content
+            self.sig = event.sig
+        }
+
+        static func == (lhs: VerificationFingerprint, rhs: VerificationFingerprint) -> Bool {
+            lhs.id == rhs.id &&
+            lhs.pubkey == rhs.pubkey &&
+            lhs.createdAt == rhs.createdAt &&
+            lhs.kind == rhs.kind &&
+            lhs.sig == rhs.sig &&
+            lhs.content == rhs.content &&
+            lhs.tags == rhs.tags
+        }
+
+        func hash(into hasher: inout Hasher) {
+            hasher.combine(id)
+            hasher.combine(pubkey)
+            hasher.combine(createdAt)
+            hasher.combine(kind)
+            hasher.combine(sig)
+            hasher.combine(content)
+            hasher.combine(tags)
+        }
+    }
+
     private let lock = NSLock()
     private var continuations: [String: AsyncStream<InboundFrame>.Continuation] = [:]
     private var tasks: [String: Task<Void, Never>] = [:]
+    private var activeConnections: [String: ObjectIdentifier] = [:]
+    private var inFlightVerifications: [VerificationFingerprint: [CheckedContinuation<Bool, Never>]] = [:]
 
     /// Start a relay's stream + consumer if one does not already exist.
     /// Returns true when a new pipeline was created. The bounded
@@ -1679,10 +1831,12 @@ private final class InboundFrameRouter: @unchecked Sendable {
     /// byte cap (`maximumMessageSize`) — see TransportConfig.
     func startPipeline(
         for relayUrl: String,
+        connectionID: ObjectIdentifier,
         makeConsumer: (AsyncStream<InboundFrame>) -> Task<Void, Never>
     ) -> Bool {
         lock.lock()
         defer { lock.unlock() }
+        activeConnections[relayUrl] = connectionID
         if continuations[relayUrl] != nil { return false }
         let (stream, continuation) = AsyncStream<InboundFrame>.makeStream(
             bufferingPolicy: .bufferingNewest(TransportConfig.nostrInboundPerRelayBufferCap)
@@ -1692,20 +1846,66 @@ private final class InboundFrameRouter: @unchecked Sendable {
         return true
     }
 
-    /// Route a frame to a relay's stream. No-op if the relay has no live
-    /// pipeline (socket already torn down) — the frame is simply dropped, which
-    /// is safe for best-effort Nostr inbound.
-    func yield(_ frame: InboundFrame, to relayUrl: String) {
+    /// Route a frame to a relay's stream if `connectionID` is still the active
+    /// socket for `relayUrl`. Returns whether the caller should re-arm receive.
+    @discardableResult
+    func yield(_ frame: InboundFrame, to relayUrl: String, from connectionID: ObjectIdentifier) -> Bool {
         lock.lock()
-        let continuation = continuations[relayUrl]
+        guard activeConnections[relayUrl] == connectionID,
+              let continuation = continuations[relayUrl] else {
+            lock.unlock()
+            return false
+        }
         lock.unlock()
-        continuation?.yield(frame)
+        continuation.yield(frame)
+        return true
+    }
+
+    /// Verifies `event.isValidSignature()` while coalescing simultaneous fan-in
+    /// deliveries of byte-identical events across multiple relay pipelines.
+    func verifySignatureCoalesced(_ event: NostrEvent) async -> Bool {
+        let fingerprint = VerificationFingerprint(event: event)
+        let isOwner: Bool = {
+            lock.lock()
+            defer { lock.unlock() }
+            if inFlightVerifications[fingerprint] != nil {
+                return false
+            }
+            inFlightVerifications[fingerprint] = []
+            return true
+        }()
+
+        if isOwner {
+            let valid = event.isValidSignature()
+            let waiters: [CheckedContinuation<Bool, Never>] = {
+                lock.lock()
+                defer { lock.unlock() }
+                return inFlightVerifications.removeValue(forKey: fingerprint) ?? []
+            }()
+            for waiter in waiters {
+                waiter.resume(returning: valid)
+            }
+            return valid
+        }
+
+        return await withCheckedContinuation { continuation in
+            lock.lock()
+            if var waiters = inFlightVerifications[fingerprint] {
+                waiters.append(continuation)
+                inFlightVerifications[fingerprint] = waiters
+                lock.unlock()
+            } else {
+                lock.unlock()
+                continuation.resume(returning: event.isValidSignature())
+            }
+        }
     }
 
     /// Finish a relay's stream. The consumer drains any already-buffered frames
     /// before exiting, so in-flight verified events are still delivered.
     func finishPipeline(for relayUrl: String) {
         lock.lock()
+        activeConnections.removeValue(forKey: relayUrl)
         let continuation = continuations.removeValue(forKey: relayUrl)
         tasks.removeValue(forKey: relayUrl)
         lock.unlock()
@@ -1715,6 +1915,7 @@ private final class InboundFrameRouter: @unchecked Sendable {
     func finishAll() {
         lock.lock()
         let allContinuations = continuations
+        activeConnections.removeAll()
         continuations.removeAll()
         tasks.removeAll()
         lock.unlock()

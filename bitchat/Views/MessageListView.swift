@@ -42,394 +42,71 @@ private struct TimelineSignature: Equatable {
     }
 }
 
-struct MessageListView: View {
+/// Public timeline host: observes only public-channel state so private DM
+/// traffic never invalidates the public message list.
+struct PublicMessageListView: View {
     @EnvironmentObject private var publicChatModel: PublicChatModel
-    @EnvironmentObject private var privateInboxModel: PrivateInboxModel
-    @EnvironmentObject private var privateConversationModel: PrivateConversationModel
-    @EnvironmentObject private var conversationUIModel: ConversationUIModel
     @EnvironmentObject private var locationChannelsModel: LocationChannelsModel
     @EnvironmentObject private var appChromeModel: AppChromeModel
     @ObservedObject private var nearbyNotes = NearbyNotesCounter.shared
 
-    @Environment(\.colorScheme) private var colorScheme
-    @Environment(\.appTheme) private var theme
-
-    let privatePeer: PeerID?
     @Binding var isAtBottom: Bool
-    @Binding var messageText: String
     @Binding var selectedMessageSender: String?
     @Binding var selectedMessageSenderID: PeerID?
     @Binding var imagePreviewURL: URL?
     @Binding var windowCountPublic: Int
-    @Binding var windowCountPrivate: [PeerID: Int]
     @Binding var showSidebar: Bool
-
     var isTextFieldFocused: FocusState<Bool>.Binding
 
-    @State private var showMessageActions = false
-    @State private var showClearConfirmation = false
-    @State private var lastScrollTime: Date = .distantPast
-    @State private var scrollThrottleTimer: Timer?
-    @State private var unseenCount = 0
-    /// The timeline as of the last change this list observed: its newest
-    /// message (the next change counts what landed after it) and the
-    /// window's first row (kept in place while the reader is scrolled up).
-    /// Marks are per context: channel switches swap the timeline wholesale,
-    /// so a difference only means "new messages" within one context. Its
-    /// context is the one the list has landed in; row callbacks from any
-    /// other timeline are ignored.
-    @State private var timelineMark: MessageListScrollPolicy.TimelineMark?
-    /// Row whose appearance last put the list at the bottom, cleared when it
-    /// leaves the screen. Its leaving means the reader scrolled up, even while
-    /// a newer row that landed below it has not appeared yet.
-    @State private var bottomRowID: String?
-    /// Set while an expansion's position-restoring scroll is still queued.
-    @State private var isRestoringExpansion = false
-    /// Context whose newest row has appeared since the list appeared or
-    /// landed in it, i.e. whose scroll to the bottom has landed. Window
-    /// expansion waits for it.
-    @State private var bottomSettledContextKey: String?
     /// Whether this instance holds the nearby-notes counter active (mesh
     /// public timeline only); balanced against activate/deactivate.
     @State private var holdsNotesCounter = false
-
     @ThemedPalette private var palette
 
     var body: some View {
-        let currentWindowCount = windowCount(for: privatePeer)
-
-        let messages = conversationMessages(for: privatePeer)
-        let contextKey = timelineContextKey(for: privatePeer)
-        // While the reader is scrolled up, messages landing below the
-        // window's first row widen the window in this same render instead of
-        // pushing that row out of the top, which would shift what they are
-        // reading (onTimelineChange then records the wider window).
-        let renderedWindowCount = isAtBottom
-            ? currentWindowCount
-            : MessageListScrollPolicy.windowCountKeepingFirstRow(
-                current: currentWindowCount,
-                mark: contextMark(for: contextKey),
-                appendedCount: 0,
-                in: messages
-            )
-        let windowedMessages = Array(messages.suffix(renderedWindowCount))
-
-        let messageItems: [MessageDisplayItem] = windowedMessages.compactMap { message in
-            guard !message.content.trimmed.isEmpty else { return nil }
-            return MessageDisplayItem(id: "\(contextKey)|\(message.id)", message: message)
-        }
-        // Top edge of the rendered window (whitespace-only messages get no
-        // row, so they could never report reaching it).
-        let firstRowID = messageItems.first?.id
-
         VStack(spacing: 0) {
-        // Notes pinned to this place stay visible while chatting — a
-        // conversation starting must not hide what's left here.
-        if privatePeer == nil,
-           case .mesh = locationChannelsModel.selectedChannel,
-           nearbyNotes.noteCount > 0 {
-            notesHereStrip
-        }
-        GeometryReader { geometry in
-        ScrollViewReader { proxy in
-            ScrollView {
-                if messageItems.isEmpty && privatePeer == nil {
-                    publicEmptyState(fillHeight: geometry.size.height)
-                }
-                LazyVStack(alignment: .leading, spacing: 0) {
-                    ForEach(messageItems) { item in
-                        let message = item.message
-                        messageRow(for: message)
-                            .onAppear {
-                                // Callbacks lag a timeline switch: the new
-                                // rows appear before the old ones disappear,
-                                // each with its own render's view of which row
-                                // was last. Only rows of the timeline the list
-                                // has landed in may move its state, checked
-                                // against live state rather than the render's.
-                                guard isLandedRow(item.id) else { return }
-                                if item.id == newestRowID(for: privatePeer) {
-                                    isAtBottom = true
-                                    unseenCount = 0
-                                    if bottomRowID != item.id {
-                                        bottomRowID = item.id
-                                    }
-                                    if bottomSettledContextKey != contextKey {
-                                        bottomSettledContextKey = contextKey
-                                    }
-                                    returnWindowToInitialSize(for: privatePeer, contextKey: contextKey, messages: messages)
-                                }
-                                if item.id == firstRowID,
-                                   messages.count > windowedMessages.count {
-                                    expandWindow(
-                                        ifNeededFor: message,
-                                        allMessages: messages,
-                                        privatePeer: privatePeer,
-                                        proxy: proxy
-                                    )
-                                }
-                            }
-                            .onDisappear {
-                                // A row of the landed timeline shares this
-                                // closure's peer, so newestRowID is live here.
-                                guard isLandedRow(item.id) else { return }
-                                if item.id == newestRowID(for: privatePeer) || item.id == bottomRowID {
-                                    isAtBottom = false
-                                    bottomRowID = nil
-                                    // Leaving the bottom drops a follow-scroll
-                                    // still waiting on the throttle: it would
-                                    // yank the reader back down.
-                                    cancelFollowScroll()
-                                }
-                            }
-                            .contentShape(Rectangle())
-                            .contextMenu {
-                                let showsUserActions = message.sender != "system" && !conversationUIModel.isSentByCurrentUser(message)
-                                if showsUserActions {
-                                    // Mention and DM are redundant inside a 1:1 conversation:
-                                    // mentioning the only other participant is noise, and "DM"
-                                    // would just reopen the conversation that is already open.
-                                    if privatePeer == nil {
-                                        Button("content.actions.mention") {
-                                            insertMention(message.sender)
-                                        }
-                                        if let peerID = message.senderPeerID {
-                                            Button("content.actions.direct_message") {
-                                                privateConversationModel.openConversation(for: peerID)
-                                                withAnimation(.easeInOut(duration: TransportConfig.uiAnimationMediumSeconds)) {
-                                                    showSidebar = true
-                                                }
-                                            }
-                                        }
-                                    }
-                                    Button("content.actions.hug") {
-                                        conversationUIModel.sendHug(to: message.sender)
-                                    }
-                                    Button("content.actions.slap") {
-                                        conversationUIModel.sendSlap(to: message.sender)
-                                    }
-                                }
-                                Button("content.message.copy") {
-                                    #if os(iOS)
-                                    UIPasteboard.general.string = message.content
-                                    #else
-                                    let pb = NSPasteboard.general
-                                    pb.clearContents()
-                                    pb.setString(message.content, forType: .string)
-                                    #endif
-                                }
-                                if isResendableFailedMessage(message) {
-                                    Button("content.actions.resend") {
-                                        conversationUIModel.resendFailedPrivateMessage(message)
-                                    }
-                                }
-                                if showsUserActions {
-                                    Button("content.actions.block", role: .destructive) {
-                                        conversationUIModel.block(peerID: message.senderPeerID, displayName: message.sender)
-                                    }
-                                }
-                            }
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 1)
-                            // Archived echoes read as one tinted block, not
-                            // just faded rows.
-                            .background(message.isArchivedEcho ? palette.secondary.opacity(0.08) : Color.clear)
-                    }
-                }
-                .padding(.vertical, 2)
+            // Notes pinned to this place stay visible while chatting — a
+            // conversation starting must not hide what's left here.
+            if case .mesh = locationChannelsModel.selectedChannel,
+               nearbyNotes.noteCount > 0 {
+                notesHereStrip
+            }
 
-                // Only carried history on screen: the ambient layer (radar,
-                // sightings, live hints) stays visible below it instead of
-                // vanishing the moment echoes exist.
-                if privatePeer == nil, showsAmbientFooter(messageItems: messageItems) {
-                    MeshEmptyStateView(compact: true, bluetoothAvailable: bluetoothCanScan)
-                        .padding(.horizontal, 12)
-                        .padding(.top, 20)
-                        .padding(.bottom, 8)
-                }
-            }
-            .overlay(alignment: .bottomTrailing) {
-                if !isAtBottom && !messageItems.isEmpty {
-                    jumpToLatestPill(proxy: proxy)
-                }
-            }
-            .onOpenURL(perform: handleOpenURL)
-            .onTapGesture(count: 3) {
-                showClearConfirmation = true
-            }
-            .confirmationDialog(
-                "content.clear.confirm_title",
-                isPresented: $showClearConfirmation,
-                titleVisibility: .visible
-            ) {
-                Button("content.clear.confirm_action", role: .destructive) {
-                    conversationUIModel.clearCurrentConversation()
-                }
-                Button("common.cancel", role: .cancel) {}
-            }
-            .onAppear {
-                // Runs before the rows' onAppear: lands the list (and sets the
-                // mark the row callbacks are checked against) before any row
-                // reports in. Expansion waits until the scroll below has
-                // brought the newest row on screen.
-                bottomSettledContextKey = nil
-                scrollToBottom(on: proxy, privatePeer: privatePeer)
-            }
-            // The one change handler: a channel or DM switch changes the
-            // signature too, so landing in the new timeline happens here,
-            // ahead of that update's row callbacks.
-            .onChange(of: TimelineSignature(privatePeer: privatePeer, contextKey: contextKey, messages: messages)) { signature in
-                onTimelineChange(signature, proxy: proxy)
-            }
-            .confirmationDialog(
-                selectedMessageSender.map { "@\($0)" } ?? String(localized: "content.actions.title", comment: "Fallback title for the message action sheet"),
-                isPresented: $showMessageActions,
-                titleVisibility: .visible
-            ) {
-                Button("content.actions.mention") {
-                    if let sender = selectedMessageSender {
-                        insertMention(sender)
-                    }
-                }
-
-                Button("content.actions.direct_message") {
-                    if let peerID = selectedMessageSenderID {
-                        privateConversationModel.openConversation(for: peerID)
-                        withAnimation(.easeInOut(duration: TransportConfig.uiAnimationMediumSeconds)) {
-                            showSidebar = true
-                        }
-                    }
-                }
-
-                Button("content.actions.hug") {
-                    if let sender = selectedMessageSender {
-                        conversationUIModel.sendHug(to: sender)
-                    }
-                }
-
-                Button("content.actions.slap") {
-                    if let sender = selectedMessageSender {
-                        conversationUIModel.sendSlap(to: sender)
-                    }
-                }
-
-                Button("content.actions.block", role: .destructive) {
-                    conversationUIModel.block(peerID: selectedMessageSenderID, displayName: selectedMessageSender)
-                }
-
-                Button("common.cancel", role: .cancel) {}
-            }
-            .onAppear {
-                // Also check when view appears
-                if let peerID = privatePeer {
-                    // Try multiple times to ensure read receipts are sent
-                    privateConversationModel.markMessagesAsRead(from: peerID)
-
-                    DispatchQueue.main.asyncAfter(deadline: .now() + TransportConfig.uiReadReceiptRetryShortSeconds) {
-                        privateConversationModel.markMessagesAsRead(from: peerID)
-                    }
-
-                    DispatchQueue.main.asyncAfter(deadline: .now() + TransportConfig.uiReadReceiptRetryLongSeconds) {
-                        privateConversationModel.markMessagesAsRead(from: peerID)
-                    }
-                }
-            }
-            .onDisappear {
-                cancelFollowScroll()
-            }
-        }
-        }
+            MessageListContentView(
+                privatePeer: nil,
+                messages: publicChatModel.messages,
+                contextKey: publicChatModel.activeChannel.contextKey,
+                selectedPublicChannel: locationChannelsModel.selectedChannel,
+                bluetoothCanScan: bluetoothCanScan,
+                liveMessages: { _ in publicChatModel.messages },
+                liveContextKey: { _ in publicChatModel.activeChannel.contextKey },
+                liveWindowCount: { _ in windowCountPublic },
+                setWindowCount: { count, _ in windowCountPublic = count },
+                isAtBottom: $isAtBottom,
+                selectedMessageSender: $selectedMessageSender,
+                selectedMessageSenderID: $selectedMessageSenderID,
+                imagePreviewURL: $imagePreviewURL,
+                showSidebar: $showSidebar,
+                isTextFieldFocused: isTextFieldFocused
+            )
         }
         .onAppear { updateNotesCounterHold() }
         .onDisappear { releaseNotesCounterHold() }
         .onChange(of: locationChannelsModel.selectedChannel) { _ in updateNotesCounterHold() }
-        .onChange(of: privatePeer) { _ in updateNotesCounterHold() }
-        .environment(\.openURL, OpenURLAction { url in
-            // Intercept custom cashu: links created in attributed text
-            if let scheme = url.scheme?.lowercased(), scheme == "cashu" || scheme == "lightning" {
-                #if os(iOS)
-                UIApplication.shared.open(url)
-                return .handled
-                #else
-                // On non-iOS platforms, let the system handle or ignore
-                return .systemAction
-                #endif
-            }
-            return .systemAction
-        })
     }
-}
 
-private extension MessageListView {
     /// Whether the radio could be scanning at all — the empty-state radar
     /// must not sweep over a switched-off or denied radio.
-    var bluetoothCanScan: Bool {
+    private var bluetoothCanScan: Bool {
         switch appChromeModel.bluetoothState {
         case .poweredOff, .unauthorized, .unsupported: return false
         default: return true
         }
     }
 
-    /// Context key of the timeline shown for `privatePeer` (the DM, or the
-    /// public channel); also the prefix of its row IDs. The public key comes
-    /// from the channel PublicChatModel publishes together with its messages:
-    /// the selected channel switches one render or more before the timeline
-    /// does, and keying the old messages with the new channel re-keys (and
-    /// re-appears) every row.
-    func timelineContextKey(for privatePeer: PeerID?) -> String {
-        if let peer = privatePeer {
-            return "dm:\(peer)"
-        }
-        return publicChatModel.activeChannel.contextKey
-    }
-
-    func windowCount(for privatePeer: PeerID?) -> Int {
-        if let peer = privatePeer {
-            return windowCountPrivate[peer] ?? TransportConfig.uiWindowInitialCountPrivate
-        }
-        return windowCountPublic
-    }
-
-    func setWindowCount(_ count: Int, for privatePeer: PeerID?) {
-        if let peer = privatePeer {
-            windowCountPrivate[peer] = count
-        } else {
-            windowCountPublic = count
-        }
-    }
-
-    /// Returns the window to its initial size once the reader is back at the
-    /// bottom (the newest row has appeared): whatever it grew by while they
-    /// were scrolled up, or expanded into history, need not stay rendered,
-    /// and dropping rows above the bottom moves nothing on screen. Never in
-    /// the same update as a scroll: rows changing above the viewport make
-    /// SwiftUI hold its position, and a pending scrollTo never lands.
-    func returnWindowToInitialSize(for privatePeer: PeerID?, contextKey: String, messages: [BitchatMessage]) {
-        let initialCount = privatePeer == nil
-            ? TransportConfig.uiWindowInitialCountPublic
-            : TransportConfig.uiWindowInitialCountPrivate
-        guard windowCount(for: privatePeer) > initialCount else { return }
-        setWindowCount(initialCount, for: privatePeer)
-        timelineMark = contextMark(for: contextKey)?.withWindowCount(initialCount, in: messages)
-    }
-
-    /// The timeline mark, if it was taken in `contextKey`.
-    func contextMark(for contextKey: String) -> MessageListScrollPolicy.TimelineMark? {
-        guard let timelineMark, timelineMark.contextKey == contextKey else { return nil }
-        return timelineMark
-    }
-
-    /// Whether a row belongs to the timeline the list has landed in (the
-    /// mark's context: the change handler lands a switch before the rows of
-    /// that update report in).
-    func isLandedRow(_ rowID: String) -> Bool {
-        guard let landedContextKey = timelineMark?.contextKey else { return false }
-        return MessageListScrollPolicy.isRow(rowID, inContext: landedContextKey)
-    }
-
     /// Tappable strip above the mesh timeline while notes are pinned at this
     /// place: opens the notices sheet on the geo tab.
-    var notesHereStrip: some View {
+    private var notesHereStrip: some View {
         let text: String = nearbyNotes.noteCount == 1
             ? String(localized: "content.empty.notes_one", comment: "Hint when exactly one note was left at this place")
             : String(
@@ -462,8 +139,8 @@ private extension MessageListView {
     /// showing — the strip needs a live count before it can decide to exist.
     /// Holding is not subscribing: nothing hits the relays until an explicit
     /// act reveals the counter (tap-to-reveal).
-    func updateNotesCounterHold() {
-        let shouldHold = privatePeer == nil && locationChannelsModel.selectedChannel.isMesh
+    private func updateNotesCounterHold() {
+        let shouldHold = locationChannelsModel.selectedChannel.isMesh
         guard shouldHold != holdsNotesCounter else { return }
         holdsNotesCounter = shouldHold
         if shouldHold {
@@ -473,17 +150,403 @@ private extension MessageListView {
         }
     }
 
-    func releaseNotesCounterHold() {
+    private func releaseNotesCounterHold() {
         guard holdsNotesCounter else { return }
         holdsNotesCounter = false
         NearbyNotesCounter.shared.deactivate()
+    }
+}
+
+/// Private DM timeline host: observes only `PrivateInboxModel` so public
+/// channel messages, location updates, and nearby-note counts never invalidate
+/// an open direct-message timeline.
+struct PrivateMessageListView: View {
+    @EnvironmentObject private var privateInboxModel: PrivateInboxModel
+
+    let privatePeer: PeerID?
+    @Binding var isAtBottom: Bool
+    @Binding var selectedMessageSender: String?
+    @Binding var selectedMessageSenderID: PeerID?
+    @Binding var imagePreviewURL: URL?
+    @Binding var windowCountPrivate: [PeerID: Int]
+    @Binding var showSidebar: Bool
+    var isTextFieldFocused: FocusState<Bool>.Binding
+
+    var body: some View {
+        MessageListContentView(
+            privatePeer: privatePeer,
+            messages: privateInboxModel.messages(for: privatePeer),
+            contextKey: Self.contextKey(for: privatePeer),
+            selectedPublicChannel: nil,
+            bluetoothCanScan: false,
+            liveMessages: { peer in privateInboxModel.messages(for: peer) },
+            liveContextKey: { peer in Self.contextKey(for: peer) },
+            liveWindowCount: { peer in
+                if let peer {
+                    return windowCountPrivate[peer] ?? TransportConfig.uiWindowInitialCountPrivate
+                }
+                return TransportConfig.uiWindowInitialCountPrivate
+            },
+            setWindowCount: { count, peer in
+                if let peer {
+                    windowCountPrivate[peer] = count
+                }
+            },
+            isAtBottom: $isAtBottom,
+            selectedMessageSender: $selectedMessageSender,
+            selectedMessageSenderID: $selectedMessageSenderID,
+            imagePreviewURL: $imagePreviewURL,
+            showSidebar: $showSidebar,
+            isTextFieldFocused: isTextFieldFocused
+        )
+    }
+
+    private static func contextKey(for peer: PeerID?) -> String {
+        if let peer {
+            return "dm:\(peer)"
+        }
+        return "dm:none"
+    }
+}
+
+private struct MessageListContentView: View {
+    private static let allowedGeohashChars = Set("0123456789bcdefghjkmnpqrstuvwxyz")
+
+    @EnvironmentObject private var conversationUIModel: ConversationUIModel
+    @Environment(\.appEnvironmentModels) private var appEnvironmentModels
+    @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.appTheme) private var theme
+
+    let privatePeer: PeerID?
+    let messages: [BitchatMessage]
+    let contextKey: String
+    let selectedPublicChannel: ChannelID?
+    let bluetoothCanScan: Bool
+    let liveMessages: (PeerID?) -> [BitchatMessage]
+    let liveContextKey: (PeerID?) -> String
+    let liveWindowCount: (PeerID?) -> Int
+    let setWindowCount: (Int, PeerID?) -> Void
+
+    @Binding var isAtBottom: Bool
+    @Binding var selectedMessageSender: String?
+    @Binding var selectedMessageSenderID: PeerID?
+    @Binding var imagePreviewURL: URL?
+    @Binding var showSidebar: Bool
+
+    var isTextFieldFocused: FocusState<Bool>.Binding
+
+    @State private var showMessageActions = false
+    @State private var showClearConfirmation = false
+    @State private var lastScrollTime: Date = .distantPast
+    @State private var scrollThrottleTimer: Timer?
+    @State private var unseenCount = 0
+    /// The timeline as of the last change this list observed: its newest
+    /// message (the next change counts what landed after it) and the
+    /// window's first row (kept in place while the reader is scrolled up).
+    /// Marks are per context: channel switches swap the timeline wholesale,
+    /// so a difference only means "new messages" within one context. Its
+    /// context is the one the list has landed in; row callbacks from any
+    /// other timeline are ignored.
+    @State private var timelineMark: MessageListScrollPolicy.TimelineMark?
+    /// Row whose appearance last put the list at the bottom, cleared when it
+    /// leaves the screen. Its leaving means the reader scrolled up, even while
+    /// a newer row that landed below it has not appeared yet.
+    @State private var bottomRowID: String?
+    /// Set while an expansion's position-restoring scroll is still queued.
+    @State private var isRestoringExpansion = false
+    /// Context whose newest row has appeared since the list appeared or
+    /// landed in it, i.e. whose scroll to the bottom has landed. Window
+    /// expansion waits for it.
+    @State private var bottomSettledContextKey: String?
+
+    @ThemedPalette private var palette
+
+    var body: some View {
+        let currentWindowCount = liveWindowCount(privatePeer)
+
+        // While the reader is scrolled up, messages landing below the
+        // window's first row widen the window in this same render instead of
+        // pushing that row out of the top, which would shift what they are
+        // reading (onTimelineChange then records the wider window).
+        let renderedWindowCount = isAtBottom
+            ? currentWindowCount
+            : MessageListScrollPolicy.windowCountKeepingFirstRow(
+                current: currentWindowCount,
+                mark: contextMark(for: contextKey),
+                appendedCount: 0,
+                in: messages
+            )
+        let windowedMessages = Array(messages.suffix(renderedWindowCount))
+
+        let messageItems: [MessageDisplayItem] = windowedMessages.compactMap { message in
+            guard !message.content.trimmed.isEmpty else { return nil }
+            return MessageDisplayItem(id: "\(contextKey)|\(message.id)", message: message)
+        }
+        // Top edge of the rendered window (whitespace-only messages get no
+        // row, so they could never report reaching it).
+        let firstRowID = messageItems.first?.id
+
+        GeometryReader { geometry in
+            ScrollViewReader { proxy in
+                ScrollView {
+                    if messageItems.isEmpty && privatePeer == nil {
+                        publicEmptyState(fillHeight: geometry.size.height)
+                    }
+                    LazyVStack(alignment: .leading, spacing: 0) {
+                        ForEach(messageItems) { item in
+                            let message = item.message
+                            messageRow(for: message)
+                                .onAppear {
+                                    // Callbacks lag a timeline switch: the new
+                                    // rows appear before the old ones disappear,
+                                    // each with its own render's view of which row
+                                    // was last. Only rows of the timeline the list
+                                    // has landed in may move its state, checked
+                                    // against live state rather than the render's.
+                                    guard isLandedRow(item.id) else { return }
+                                    if item.id == newestRowID(for: privatePeer) {
+                                        isAtBottom = true
+                                        unseenCount = 0
+                                        if bottomRowID != item.id {
+                                            bottomRowID = item.id
+                                        }
+                                        if bottomSettledContextKey != contextKey {
+                                            bottomSettledContextKey = contextKey
+                                        }
+                                        returnWindowToInitialSize(for: privatePeer, contextKey: contextKey, messages: messages)
+                                    }
+                                    if item.id == firstRowID,
+                                       messages.count > windowedMessages.count {
+                                        expandWindow(
+                                            ifNeededFor: message,
+                                            allMessages: messages,
+                                            privatePeer: privatePeer,
+                                            proxy: proxy
+                                        )
+                                    }
+                                }
+                                .onDisappear {
+                                    // A row of the landed timeline shares this
+                                    // closure's peer, so newestRowID is live here.
+                                    guard isLandedRow(item.id) else { return }
+                                    if item.id == newestRowID(for: privatePeer) || item.id == bottomRowID {
+                                        isAtBottom = false
+                                        bottomRowID = nil
+                                        // Leaving the bottom drops a follow-scroll
+                                        // still waiting on the throttle: it would
+                                        // yank the reader back down.
+                                        cancelFollowScroll()
+                                    }
+                                }
+                                .contentShape(Rectangle())
+                                .contextMenu {
+                                    let showsUserActions = message.sender != "system" && !conversationUIModel.isSentByCurrentUser(message)
+                                    if showsUserActions {
+                                        // Mention and DM are redundant inside a 1:1 conversation:
+                                        // mentioning the only other participant is noise, and "DM"
+                                        // would just reopen the conversation that is already open.
+                                        if privatePeer == nil {
+                                            Button("content.actions.mention") {
+                                                insertMention(message.sender)
+                                            }
+                                            if let peerID = message.senderPeerID {
+                                                Button("content.actions.direct_message") {
+                                                    appEnvironmentModels?.privateConversationModel.openConversation(for: peerID)
+                                                    withAnimation(.easeInOut(duration: TransportConfig.uiAnimationMediumSeconds)) {
+                                                        showSidebar = true
+                                                    }
+                                                }
+                                            }
+                                        }
+                                        Button("content.actions.hug") {
+                                            conversationUIModel.sendHug(to: message.sender)
+                                        }
+                                        Button("content.actions.slap") {
+                                            conversationUIModel.sendSlap(to: message.sender)
+                                        }
+                                    }
+                                    Button("content.message.copy") {
+                                        #if os(iOS)
+                                        UIPasteboard.general.string = message.content
+                                        #else
+                                        let pb = NSPasteboard.general
+                                        pb.clearContents()
+                                        pb.setString(message.content, forType: .string)
+                                        #endif
+                                    }
+                                    if isResendableFailedMessage(message) {
+                                        Button("content.actions.resend") {
+                                            conversationUIModel.resendFailedPrivateMessage(message)
+                                        }
+                                    }
+                                    if showsUserActions {
+                                        Button("content.actions.block", role: .destructive) {
+                                            conversationUIModel.block(peerID: message.senderPeerID, displayName: message.sender)
+                                        }
+                                    }
+                                }
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 1)
+                                // Archived echoes read as one tinted block, not
+                                // just faded rows.
+                                .background(message.isArchivedEcho ? palette.secondary.opacity(0.08) : Color.clear)
+                        }
+                    }
+                    .padding(.vertical, 2)
+
+                    // Only carried history on screen: the ambient layer (radar,
+                    // sightings, live hints) stays visible below it instead of
+                    // vanishing the moment echoes exist.
+                    if privatePeer == nil, showsAmbientFooter(messageItems: messageItems) {
+                        MeshEmptyStateView(compact: true, bluetoothAvailable: bluetoothCanScan)
+                            .padding(.horizontal, 12)
+                            .padding(.top, 20)
+                            .padding(.bottom, 8)
+                    }
+                }
+                .overlay(alignment: .bottomTrailing) {
+                    if !isAtBottom && !messageItems.isEmpty {
+                        jumpToLatestPill(proxy: proxy)
+                    }
+                }
+                .onOpenURL(perform: handleOpenURL)
+                .onTapGesture(count: 3) {
+                    showClearConfirmation = true
+                }
+                .confirmationDialog(
+                    "content.clear.confirm_title",
+                    isPresented: $showClearConfirmation,
+                    titleVisibility: .visible
+                ) {
+                    Button("content.clear.confirm_action", role: .destructive) {
+                        conversationUIModel.clearCurrentConversation()
+                    }
+                    Button("common.cancel", role: .cancel) {}
+                }
+                .onAppear {
+                    // Runs before the rows' onAppear: lands the list (and sets the
+                    // mark the row callbacks are checked against) before any row
+                    // reports in. Expansion waits until the scroll below has
+                    // brought the newest row on screen.
+                    bottomSettledContextKey = nil
+                    scrollToBottom(on: proxy, privatePeer: privatePeer)
+                }
+                // The one change handler: a channel or DM switch changes the
+                // signature too, so landing in the new timeline happens here,
+                // ahead of that update's row callbacks.
+                .onChange(of: TimelineSignature(privatePeer: privatePeer, contextKey: contextKey, messages: messages)) { signature in
+                    onTimelineChange(signature, proxy: proxy)
+                }
+                .confirmationDialog(
+                    selectedMessageSender.map { "@\($0)" } ?? String(localized: "content.actions.title", comment: "Fallback title for the message action sheet"),
+                    isPresented: $showMessageActions,
+                    titleVisibility: .visible
+                ) {
+                    Button("content.actions.mention") {
+                        if let sender = selectedMessageSender {
+                            insertMention(sender)
+                        }
+                    }
+
+                    Button("content.actions.direct_message") {
+                        if let peerID = selectedMessageSenderID {
+                            appEnvironmentModels?.privateConversationModel.openConversation(for: peerID)
+                            withAnimation(.easeInOut(duration: TransportConfig.uiAnimationMediumSeconds)) {
+                                showSidebar = true
+                            }
+                        }
+                    }
+
+                    Button("content.actions.hug") {
+                        if let sender = selectedMessageSender {
+                            conversationUIModel.sendHug(to: sender)
+                        }
+                    }
+
+                    Button("content.actions.slap") {
+                        if let sender = selectedMessageSender {
+                            conversationUIModel.sendSlap(to: sender)
+                        }
+                    }
+
+                    Button("content.actions.block", role: .destructive) {
+                        conversationUIModel.block(peerID: selectedMessageSenderID, displayName: selectedMessageSender)
+                    }
+
+                    Button("common.cancel", role: .cancel) {}
+                }
+                .onAppear {
+                    // Also check when view appears
+                    if let peerID = privatePeer,
+                       let privateConversationModel = appEnvironmentModels?.privateConversationModel {
+                        // Try multiple times to ensure read receipts are sent
+                        privateConversationModel.markMessagesAsRead(from: peerID)
+
+                        DispatchQueue.main.asyncAfter(deadline: .now() + TransportConfig.uiReadReceiptRetryShortSeconds) {
+                            privateConversationModel.markMessagesAsRead(from: peerID)
+                        }
+
+                        DispatchQueue.main.asyncAfter(deadline: .now() + TransportConfig.uiReadReceiptRetryLongSeconds) {
+                            privateConversationModel.markMessagesAsRead(from: peerID)
+                        }
+                    }
+                }
+                .onDisappear {
+                    cancelFollowScroll()
+                }
+            }
+        }
+        .environment(\.openURL, OpenURLAction { url in
+            // Intercept custom cashu: links created in attributed text
+            if let scheme = url.scheme?.lowercased(), scheme == "cashu" || scheme == "lightning" {
+                #if os(iOS)
+                UIApplication.shared.open(url)
+                return .handled
+                #else
+                // On non-iOS platforms, let the system handle or ignore
+                return .systemAction
+                #endif
+            }
+            return .systemAction
+        })
+    }
+}
+
+private extension MessageListContentView {
+    /// Returns the window to its initial size once the reader is back at the
+    /// bottom (the newest row has appeared): whatever it grew by while they
+    /// were scrolled up, or expanded into history, need not stay rendered,
+    /// and dropping rows above the bottom moves nothing on screen. Never in
+    /// the same update as a scroll: rows changing above the viewport make
+    /// SwiftUI hold its position, and a pending scrollTo never lands.
+    func returnWindowToInitialSize(for privatePeer: PeerID?, contextKey: String, messages: [BitchatMessage]) {
+        let initialCount = privatePeer == nil
+            ? TransportConfig.uiWindowInitialCountPublic
+            : TransportConfig.uiWindowInitialCountPrivate
+        guard liveWindowCount(privatePeer) > initialCount else { return }
+        setWindowCount(initialCount, privatePeer)
+        timelineMark = contextMark(for: contextKey)?.withWindowCount(initialCount, in: messages)
+    }
+
+    /// The timeline mark, if it was taken in `contextKey`.
+    func contextMark(for contextKey: String) -> MessageListScrollPolicy.TimelineMark? {
+        guard let timelineMark, timelineMark.contextKey == contextKey else { return nil }
+        return timelineMark
+    }
+
+    /// Whether a row belongs to the timeline the list has landed in (the
+    /// mark's context: the change handler lands a switch before the rows of
+    /// that update report in).
+    func isLandedRow(_ rowID: String) -> Bool {
+        guard let landedContextKey = timelineMark?.contextKey else { return false }
+        return MessageListScrollPolicy.isRow(rowID, inContext: landedContextKey)
     }
 
     /// True when the mesh timeline holds nothing but archived echoes and
     /// system lines — no live conversation yet, so the ambient layer still
     /// applies.
-    private func showsAmbientFooter(messageItems: [MessageDisplayItem]) -> Bool {
-        guard case .mesh = locationChannelsModel.selectedChannel,
+    func showsAmbientFooter(messageItems: [MessageDisplayItem]) -> Bool {
+        guard case .mesh = selectedPublicChannel,
               !messageItems.isEmpty else { return false }
         return messageItems.allSatisfy { $0.message.isArchivedEcho || $0.message.sender == "system" }
     }
@@ -495,8 +558,8 @@ private extension MessageListView {
     /// in the space below the text.
     func publicEmptyState(fillHeight: CGFloat) -> some View {
         VStack(alignment: .leading, spacing: 6) {
-            switch locationChannelsModel.selectedChannel {
-            case .mesh:
+            switch selectedPublicChannel {
+            case .mesh, .none:
                 MeshEmptyStateView(
                     fillHeight: max(0, fillHeight - 24),
                     bluetoothAvailable: bluetoothCanScan
@@ -541,14 +604,7 @@ private extension MessageListView {
     /// Appends an @mention to the composer draft (never overwrites what the
     /// user has already typed) and focuses the input field.
     func insertMention(_ sender: String) {
-        let mention = "@\(sender) "
-        if messageText.isEmpty {
-            messageText = mention
-        } else if messageText.hasSuffix(" ") {
-            messageText += mention
-        } else {
-            messageText += " " + mention
-        }
+        appEnvironmentModels?.composerDraftModel.insertMention(sender)
         isTextFieldFocused.wrappedValue = true
     }
 
@@ -623,17 +679,17 @@ private extension MessageListView {
                       allMessages: [BitchatMessage],
                       privatePeer: PeerID?,
                       proxy: ScrollViewProxy) {
-        let contextKey = timelineContextKey(for: privatePeer)
+        let contextKey = liveContextKey(privatePeer)
         guard MessageListScrollPolicy.canExpandWindow(
             isRestoringExpansion: isRestoringExpansion,
             bottomSettledContextKey: bottomSettledContextKey,
             contextKey: contextKey
         ) else { return }
 
-        let current = windowCount(for: privatePeer)
+        let current = liveWindowCount(privatePeer)
         let newCount = min(allMessages.count, current + TransportConfig.uiWindowStepCount)
         guard newCount != current else { return }
-        setWindowCount(newCount, for: privatePeer)
+        setWindowCount(newCount, privatePeer)
         // The window's first row moved up with it: re-take the mark's window
         // so a scrolled-up reader keeps holding the new first row.
         timelineMark = contextMark(for: contextKey)?.withWindowCount(newCount, in: allMessages)
@@ -658,7 +714,7 @@ private extension MessageListView {
 
             selectedMessageSender = conversationUIModel.senderDisplayName(
                 for: peerID,
-                fallbackMessages: conversationMessages(for: privatePeer)
+                fallbackMessages: liveMessages(privatePeer)
             )
 
             if conversationUIModel.isSelfSender(peerID: peerID, displayName: selectedMessageSender) {
@@ -670,9 +726,8 @@ private extension MessageListView {
 
         case "geohash":
             let gh = url.path.trimmingCharacters(in: CharacterSet(charactersIn: "/")).lowercased()
-            let allowed = Set("0123456789bcdefghjkmnpqrstuvwxyz")
-            guard (2...12).contains(gh.count), gh.allSatisfy({ allowed.contains($0) }) else { return }
-            locationChannelsModel.openLocationChannel(for: gh)
+            guard (2...12).contains(gh.count), gh.allSatisfy({ Self.allowedGeohashChars.contains($0) }) else { return }
+            appEnvironmentModels?.locationChannelsModel.openLocationChannel(for: gh)
 
         default:
             return
@@ -686,9 +741,9 @@ private extension MessageListView {
         isAtBottom = true
         unseenCount = 0
         timelineMark = MessageListScrollPolicy.TimelineMark(
-            contextKey: timelineContextKey(for: privatePeer),
-            messages: conversationMessages(for: privatePeer),
-            windowCount: windowCount(for: privatePeer)
+            contextKey: liveContextKey(privatePeer),
+            messages: liveMessages(privatePeer),
+            windowCount: liveWindowCount(privatePeer)
         )
         if let target = newestRowID(for: privatePeer) {
             proxy.scrollTo(target, anchor: .bottom)
@@ -716,10 +771,10 @@ private extension MessageListView {
     /// Row ID of the newest message that has a row (whitespace-only
     /// messages render none).
     func newestRowID(for privatePeer: PeerID?) -> String? {
-        guard let newest = conversationMessages(for: privatePeer).last(where: { !$0.content.trimmed.isEmpty }) else {
+        guard let newest = liveMessages(privatePeer).last(where: { !$0.content.trimmed.isEmpty }) else {
             return nil
         }
-        return "\(timelineContextKey(for: privatePeer))|\(newest.id)"
+        return "\(liveContextKey(privatePeer))|\(newest.id)"
     }
 
     /// Handles any change to the shown timeline: an append, a late message
@@ -730,14 +785,14 @@ private extension MessageListView {
         // timeline comes from the new value rather than `self.privatePeer`.
         let privatePeer = signature.privatePeer
         let contextKey = signature.contextKey
-        let messages = conversationMessages(for: privatePeer)
+        let messages = liveMessages(privatePeer)
 
         // No mark in this context means the timeline was swapped wholesale:
         // nothing is booked as "new", the list lands instead.
         let mark = contextMark(for: contextKey)
         let appended = mark.map { MessageListScrollPolicy.appended(since: $0, in: messages) }
             ?? MessageListScrollPolicy.Appended()
-        let currentWindowCount = windowCount(for: privatePeer)
+        let currentWindowCount = liveWindowCount(privatePeer)
         let reaction = MessageListScrollPolicy.reaction(
             mark: mark,
             messages: messages,
@@ -766,7 +821,7 @@ private extension MessageListView {
                 in: messages
             )
         if keptWindowCount != currentWindowCount {
-            setWindowCount(keptWindowCount, for: privatePeer)
+            setWindowCount(keptWindowCount, privatePeer)
         }
         timelineMark = MessageListScrollPolicy.TimelineMark(contextKey: contextKey, messages: messages, windowCount: keptWindowCount)
 
@@ -800,14 +855,14 @@ private extension MessageListView {
             return
         }
         // Schedule a delayed scroll
-        let scheduledContextKey = timelineContextKey(for: privatePeer)
+        let scheduledContextKey = liveContextKey(privatePeer)
         scrollThrottleTimer?.invalidate()
         scrollThrottleTimer = Timer.scheduledTimer(withTimeInterval: TransportConfig.uiScrollThrottleSeconds, repeats: false) { _ in
             Task { @MainActor in
                 guard MessageListScrollPolicy.shouldRunDeferredFollowScroll(
                     isAtBottom: isAtBottom,
                     scheduledContextKey: scheduledContextKey,
-                    currentContextKey: timelineContextKey(for: privatePeer)
+                    currentContextKey: liveContextKey(privatePeer)
                 ) else { return }
                 scrollToNewestRow(privatePeer: privatePeer, proxy: proxy, at: Date())
             }
@@ -827,13 +882,6 @@ private extension MessageListView {
         timer.invalidate()
         scrollThrottleTimer = nil
     }
-
-    func conversationMessages(for privatePeer: PeerID?) -> [BitchatMessage] {
-        if let privatePeer {
-            return privateInboxModel.messages(for: privatePeer)
-        }
-        return publicChatModel.messages
-    }
 }
 
 private extension ChannelID {
@@ -844,7 +892,3 @@ private extension ChannelID {
         }
     }
 }
-
-// #Preview {
-//    MessageListView()
-// }

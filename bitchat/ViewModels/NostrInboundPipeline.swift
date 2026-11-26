@@ -13,6 +13,7 @@ protocol NostrInboundPipelineContext: AnyObject {
     // MARK: Event dedup
     func hasProcessedNostrEvent(_ eventID: String) -> Bool
     func recordProcessedNostrEvent(_ eventID: String)
+    func recordProcessedEphemeralNostrEvent(_ eventID: String)
 
     // MARK: Nostr identity & blocking
     func deriveNostrIdentity(forGeohash geohash: String) throws -> NostrIdentity
@@ -24,6 +25,9 @@ protocol NostrInboundPipelineContext: AnyObject {
     /// All favorite relationships, used to bridge a Nostr pubkey back to a
     /// Noise key on the inbound DM path.
     func allFavoriteRelationships() -> [FavoritesPersistenceService.FavoriteRelationship]
+    /// Fast reverse lookup from a Nostr pubkey (hex or npub) to a favorite's
+    /// Noise static key; defaults to scanning `allFavoriteRelationships()`.
+    func favoriteNoiseKey(forNostrPubkey nostrPubkey: String) -> Data?
 
     // MARK: Presence & key mapping
     func setGeoNickname(_ nickname: String, forPubkey pubkeyHex: String)
@@ -55,6 +59,38 @@ protocol NostrInboundPipelineContext: AnyObject {
     func handleReadReceipt(_ payload: NoisePayload, senderPubkey: String, convKey: PeerID)
 }
 
+extension NostrInboundPipelineContext {
+    func favoriteNoiseKey(forNostrPubkey nostrPubkey: String) -> Data? {
+        let favorites = allFavoriteRelationships()
+        var npubToMatch = nostrPubkey
+
+        if !nostrPubkey.hasPrefix("npub") {
+            if let pubkeyData = Data(hexString: nostrPubkey),
+               let encoded = try? Bech32.encode(hrp: "npub", data: pubkeyData) {
+                npubToMatch = encoded
+            } else {
+                SecureLogger.warning(
+                    "⚠️ Invalid hex public key format or encoding failed: \(nostrPubkey.prefix(16))...",
+                    category: .session
+                )
+            }
+        }
+
+        for relationship in favorites {
+            if let storedNostrKey = relationship.peerNostrPublicKey {
+                if storedNostrKey == npubToMatch {
+                    return relationship.peerNoisePublicKey
+                }
+                if !storedNostrKey.hasPrefix("npub") && storedNostrKey == nostrPubkey {
+                    SecureLogger.debug("✅ Found Noise key for Nostr sender (hex match)", category: .session)
+                    return relationship.peerNoisePublicKey
+                }
+            }
+        }
+        return nil
+    }
+}
+
 extension ChatViewModel: NostrInboundPipelineContext {
     // `currentGeohash`, the identity/blocking members, key mapping, and the
     // inbound message handlers already have witnesses on `ChatViewModel`.
@@ -68,8 +104,16 @@ extension ChatViewModel: NostrInboundPipelineContext {
         Array(FavoritesPersistenceService.shared.favorites.values)
     }
 
+    func favoriteNoiseKey(forNostrPubkey nostrPubkey: String) -> Data? {
+        FavoritesPersistenceService.shared.noisePublicKey(forNostrPubkey: nostrPubkey)
+    }
+
     func recordProcessedNostrEvent(_ eventID: String) {
-        deduplicationService.recordNostrEvent(eventID)
+        deduplicationService.recordNostrEvent(eventID, persist: true)
+    }
+
+    func recordProcessedEphemeralNostrEvent(_ eventID: String) {
+        deduplicationService.recordNostrEvent(eventID, persist: false)
     }
 
     func setGeoNickname(_ nickname: String, forPubkey pubkeyHex: String) {
@@ -138,7 +182,7 @@ final class NostrInboundPipeline {
             return
         }
 
-        context.recordProcessedNostrEvent(event.id)
+        context.recordProcessedEphemeralNostrEvent(event.id)
 
         if let gh = context.currentGeohash,
            let myGeoIdentity = try? context.deriveNostrIdentity(forGeohash: gh),
@@ -200,14 +244,11 @@ final class NostrInboundPipeline {
             mentions: mentions.isEmpty ? nil : mentions
         )
 
-        Task { @MainActor [weak context] in
-            guard let context else { return }
-            let isBlocked = context.isNostrBlocked(pubkeyHexLowercased: event.pubkey.lowercased())
-            context.handlePublicMessage(message, powBits: powBits)
-            if !isBlocked {
-                context.checkForMentions(message)
-                context.sendHapticFeedback(for: message)
-            }
+        let isBlocked = context.isNostrBlocked(pubkeyHexLowercased: event.pubkey.lowercased())
+        context.handlePublicMessage(message, powBits: powBits)
+        if !isBlocked {
+            context.checkForMentions(message)
+            context.sendHapticFeedback(for: message)
         }
     }
 
@@ -223,7 +264,7 @@ final class NostrInboundPipeline {
             return
         }
         if context.hasProcessedNostrEvent(event.id) { return }
-        context.recordProcessedNostrEvent(event.id)
+        context.recordProcessedEphemeralNostrEvent(event.id)
 
         let powBits = NostrPoW.validatedDifficulty(idHex: event.id, tags: event.tags)
 
@@ -298,21 +339,22 @@ final class NostrInboundPipeline {
             mentions: mentions.isEmpty ? nil : mentions
         )
 
-        Task { @MainActor [weak context] in
-            guard let context else { return }
-            context.handlePublicMessage(message, powBits: powBits)
-            context.checkForMentions(message)
-            context.sendHapticFeedback(for: message)
-        }
+        context.handlePublicMessage(message, powBits: powBits)
+        context.checkForMentions(message)
+        context.sendHapticFeedback(for: message)
     }
 
     @MainActor
-    func subscribeGiftWrap(_ giftWrap: NostrEvent, id: NostrIdentity) {
+    func subscribeGiftWrap(
+        _ giftWrap: NostrEvent,
+        id: NostrIdentity,
+        outerSignatureAlreadyVerified: Bool = false
+    ) {
         guard let context else { return }
         // Cheap dedup pre-check only; processGeohashGiftWrap does the
         // authoritative main-actor check-and-record before the off-main
         // NIP-17 unwrap. The outer signature was already verified (exactly
-        // once, off the main actor) by NostrRelayManager.
+        // once, off the main actor) by NostrRelayManager when sourced from a relay.
         guard !context.hasProcessedNostrEvent(giftWrap.id) else { return }
 
         // Capture the wipe generation at spawn, alongside the per-geohash
@@ -321,12 +363,22 @@ final class NostrInboundPipeline {
         // drops its result instead of delivering plaintext post-wipe.
         let wipeGeneration = self.wipeGeneration
         Task.detached(priority: .userInitiated) { [weak self] in
-            await self?.processGeohashGiftWrap(giftWrap, id: id, verbose: false, wipeGeneration: wipeGeneration)
+            await self?.processGeohashGiftWrap(
+                giftWrap,
+                id: id,
+                verbose: false,
+                wipeGeneration: wipeGeneration,
+                outerSignatureAlreadyVerified: outerSignatureAlreadyVerified
+            )
         }
     }
 
     @MainActor
-    func handleGiftWrap(_ giftWrap: NostrEvent, id: NostrIdentity) {
+    func handleGiftWrap(
+        _ giftWrap: NostrEvent,
+        id: NostrIdentity,
+        outerSignatureAlreadyVerified: Bool = false
+    ) {
         guard let context else { return }
         // Cheap dedup pre-check only; see subscribeGiftWrap.
         if context.hasProcessedNostrEvent(giftWrap.id) {
@@ -336,14 +388,20 @@ final class NostrInboundPipeline {
         // Spawn-time wipe-generation capture; see subscribeGiftWrap.
         let wipeGeneration = self.wipeGeneration
         Task.detached(priority: .userInitiated) { [weak self] in
-            await self?.processGeohashGiftWrap(giftWrap, id: id, verbose: true, wipeGeneration: wipeGeneration)
+            await self?.processGeohashGiftWrap(
+                giftWrap,
+                id: id,
+                verbose: true,
+                wipeGeneration: wipeGeneration,
+                outerSignatureAlreadyVerified: outerSignatureAlreadyVerified
+            )
         }
     }
 
     /// Geohash-DM gift wrap ingest. The NIP-17 unwrap (two ECDH+ChaCha
-    /// layers) runs off the main actor; results hop back for state updates.
-    /// `verbose` keeps `handleGiftWrap`'s decrypt logging without adding it
-    /// to the sampling path.
+    /// layers) and BitChat packet decode run off the main actor; results hop
+    /// back for state updates. `verbose` keeps `handleGiftWrap`'s decrypt
+    /// logging without adding it to the sampling path.
     ///
     /// `wipeGeneration` is this pipeline's generation captured at spawn (the
     /// moment the pre-wipe `id` was captured); a mismatch at either main-actor
@@ -355,7 +413,8 @@ final class NostrInboundPipeline {
         _ giftWrap: NostrEvent,
         id: NostrIdentity,
         verbose: Bool,
-        wipeGeneration: UInt64
+        wipeGeneration: UInt64,
+        outerSignatureAlreadyVerified: Bool
     ) async {
         guard let context else { return }
         // Authoritative check-and-record, atomic on the main actor so two
@@ -370,7 +429,8 @@ final class NostrInboundPipeline {
 
         guard let (content, senderPubkey, rumorTs) = try? NostrProtocol.decryptPrivateMessage(
             giftWrap: giftWrap,
-            recipientIdentity: id
+            recipientIdentity: id,
+            outerSignatureAlreadyVerified: outerSignatureAlreadyVerified
         ) else {
             if verbose {
                 SecureLogger.warning("GeoDM: failed decrypt giftWrap id=\(giftWrap.id.prefix(8))…", category: .session)
@@ -392,17 +452,18 @@ final class NostrInboundPipeline {
             )
         }
 
+        guard let packet = Self.decodeEmbeddedBitChatPacket(from: content),
+              packet.type == MessageType.noiseEncrypted.rawValue,
+              let payload = NoisePayload.decode(packet.payload)
+        else {
+            return
+        }
+
         await MainActor.run {
             // A panic wipe during the off-main decrypt must not let the
             // pre-wipe plaintext reach post-wipe state; drop it here, atomic
             // with the wipe on the main actor.
             guard self.wipeGeneration == wipeGeneration else { return }
-            guard let packet = Self.decodeEmbeddedBitChatPacket(from: content),
-                  packet.type == MessageType.noiseEncrypted.rawValue,
-                  let payload = NoisePayload.decode(packet.payload)
-            else {
-                return
-            }
 
             let convKey = PeerID(nostr_: senderPubkey)
             context.registerNostrKeyMapping(senderPubkey, for: convKey)
@@ -432,7 +493,7 @@ final class NostrInboundPipeline {
     }
 
     @MainActor
-    func handleNostrMessage(_ giftWrap: NostrEvent) {
+    func handleNostrMessage(_ giftWrap: NostrEvent, outerSignatureAlreadyVerified: Bool = false) {
         guard let context else { return }
         // Cheap dedup pre-check only; processNostrMessage does the
         // authoritative check-and-record before the off-main NIP-17 unwrap.
@@ -443,34 +504,34 @@ final class NostrInboundPipeline {
         if context.hasProcessedNostrEvent(giftWrap.id) { return }
 
         Task.detached(priority: .userInitiated) { [weak self] in
-            await self?.processNostrMessage(giftWrap)
+            await self?.processNostrMessage(
+                giftWrap,
+                outerSignatureAlreadyVerified: outerSignatureAlreadyVerified
+            )
         }
     }
 
-    func processNostrMessage(_ giftWrap: NostrEvent) async {
+    func processNostrMessage(
+        _ giftWrap: NostrEvent,
+        outerSignatureAlreadyVerified: Bool = false
+    ) async {
         guard let context else { return }
-        // Authoritative check-and-record, atomic on the main actor so two
-        // concurrent detached tasks can't both process the same event.
-        let alreadyProcessed: Bool = await MainActor.run {
-            if context.hasProcessedNostrEvent(giftWrap.id) { return true }
+        // Single pre-decrypt main-actor hop: atomically check-and-record dedup
+        // AND snapshot `(currentIdentity, wipeGeneration)` so the generation
+        // vouches for exactly this identity.
+        let preDecrypt: (identity: NostrIdentity, wipeGeneration: UInt64)? = await MainActor.run {
+            if context.hasProcessedNostrEvent(giftWrap.id) { return nil }
             context.recordProcessedNostrEvent(giftWrap.id)
-            return false
+            guard let identity = context.currentNostrIdentity() else { return nil }
+            return (identity, self.wipeGeneration)
         }
-        if alreadyProcessed { return }
-        // Fetch the identity and the wipe generation in ONE main-actor hop:
-        // the generation then vouches for exactly this identity. A wipe after
-        // this point bumps the generation and the delivery hop below drops
-        // the decrypted result (same guard as processGeohashGiftWrap; this
-        // account-mailbox path had the identical hazard).
-        let (currentIdentity, wipeGeneration): (NostrIdentity?, UInt64) = await MainActor.run {
-            (context.currentNostrIdentity(), self.wipeGeneration)
-        }
-        guard let currentIdentity else { return }
+        guard let (currentIdentity, wipeGeneration) = preDecrypt else { return }
 
         do {
             let (content, senderPubkey, rumorTimestamp) = try NostrProtocol.decryptPrivateMessage(
                 giftWrap: giftWrap,
-                recipientIdentity: currentIdentity
+                recipientIdentity: currentIdentity,
+                outerSignatureAlreadyVerified: outerSignatureAlreadyVerified
             )
 
             guard Self.isPlausibleRumorTimestamp(rumorTimestamp) else {
@@ -482,53 +543,50 @@ final class NostrInboundPipeline {
                 return
             }
 
-            if content.hasPrefix("bitchat1:") {
-                let packet: BitchatPacket? = await MainActor.run {
-                    Self.decodeEmbeddedBitChatPacket(from: content)
-                }
-                guard let packet else {
-                    SecureLogger.error("Failed to decode embedded BitChat packet from Nostr DM", category: .session)
-                    return
-                }
-
-                let actualSenderNoiseKey: Data? = await MainActor.run {
-                    self.findNoiseKey(for: senderPubkey)
-                }
-                let targetPeerID = PeerID(str: actualSenderNoiseKey?.hexEncodedString()) ?? PeerID(nostr_: senderPubkey)
-
-                if packet.type == MessageType.noiseEncrypted.rawValue,
-                   let payload = NoisePayload.decode(packet.payload) {
-                    let messageTimestamp = Date(timeIntervalSince1970: TimeInterval(rumorTimestamp))
-                    await MainActor.run {
-                        // Drop pre-wipe plaintext if a panic wipe landed
-                        // during the off-main decrypt (see above).
-                        guard self.wipeGeneration == wipeGeneration else { return }
-                        context.registerNostrKeyMapping(senderPubkey, for: targetPeerID)
-
-                        switch payload.type {
-                        case .privateMessage:
-                            context.handlePrivateMessage(
-                                payload,
-                                senderPubkey: senderPubkey,
-                                convKey: targetPeerID,
-                                id: currentIdentity,
-                                messageTimestamp: messageTimestamp
-                            )
-                        case .delivered:
-                            context.handleDelivered(payload, senderPubkey: senderPubkey, convKey: targetPeerID)
-                        case .readReceipt:
-                            context.handleReadReceipt(payload, senderPubkey: senderPubkey, convKey: targetPeerID)
-                        // Group state travels only over mesh Noise sessions
-                        // in v1; group traffic over Nostr is ignored.
-                        // Live voice is mesh-only: latency and relay cost make it
-                        // meaningless over Nostr.
-                        case .verifyChallenge, .verifyResponse, .groupInvite, .groupKeyUpdate, .vouch, .voiceFrame, .privateFile, .authenticatedPeerState:
-                            break
-                        }
-                    }
-                }
-            } else {
+            guard content.hasPrefix("bitchat1:") else {
                 SecureLogger.debug("Ignoring non-embedded Nostr DM content", category: .session)
+                return
+            }
+
+            guard let packet = Self.decodeEmbeddedBitChatPacket(from: content) else {
+                SecureLogger.error("Failed to decode embedded BitChat packet from Nostr DM", category: .session)
+                return
+            }
+
+            guard packet.type == MessageType.noiseEncrypted.rawValue,
+                  let payload = NoisePayload.decode(packet.payload) else {
+                return
+            }
+
+            let messageTimestamp = Date(timeIntervalSince1970: TimeInterval(rumorTimestamp))
+            await MainActor.run {
+                // Drop pre-wipe plaintext if a panic wipe landed
+                // during the off-main decrypt (see above).
+                guard self.wipeGeneration == wipeGeneration else { return }
+                let actualSenderNoiseKey = self.findNoiseKey(for: senderPubkey)
+                let targetPeerID = PeerID(str: actualSenderNoiseKey?.hexEncodedString()) ?? PeerID(nostr_: senderPubkey)
+                context.registerNostrKeyMapping(senderPubkey, for: targetPeerID)
+
+                switch payload.type {
+                case .privateMessage:
+                    context.handlePrivateMessage(
+                        payload,
+                        senderPubkey: senderPubkey,
+                        convKey: targetPeerID,
+                        id: currentIdentity,
+                        messageTimestamp: messageTimestamp
+                    )
+                case .delivered:
+                    context.handleDelivered(payload, senderPubkey: senderPubkey, convKey: targetPeerID)
+                case .readReceipt:
+                    context.handleReadReceipt(payload, senderPubkey: senderPubkey, convKey: targetPeerID)
+                // Group state travels only over mesh Noise sessions
+                // in v1; group traffic over Nostr is ignored.
+                // Live voice is mesh-only: latency and relay cost make it
+                // meaningless over Nostr.
+                case .verifyChallenge, .verifyResponse, .groupInvite, .groupKeyUpdate, .vouch, .voiceFrame, .privateFile, .authenticatedPeerState:
+                    break
+                }
             }
         } catch {
             SecureLogger.error("Failed to decrypt Nostr message: \(error)", category: .session)
@@ -540,35 +598,11 @@ final class NostrInboundPipeline {
     @MainActor
     func findNoiseKey(for nostrPubkey: String) -> Data? {
         guard let context else { return nil }
-        let favorites = context.allFavoriteRelationships()
-        var npubToMatch = nostrPubkey
-
-        if !nostrPubkey.hasPrefix("npub") {
-            if let pubkeyData = Data(hexString: nostrPubkey),
-               let encoded = try? Bech32.encode(hrp: "npub", data: pubkeyData) {
-                npubToMatch = encoded
-            } else {
-                SecureLogger.warning(
-                    "⚠️ Invalid hex public key format or encoding failed: \(nostrPubkey.prefix(16))...",
-                    category: .session
-                )
-            }
+        if let noiseKey = context.favoriteNoiseKey(forNostrPubkey: nostrPubkey) {
+            return noiseKey
         }
-
-        for relationship in favorites {
-            if let storedNostrKey = relationship.peerNostrPublicKey {
-                if storedNostrKey == npubToMatch {
-                    return relationship.peerNoisePublicKey
-                }
-                if !storedNostrKey.hasPrefix("npub") && storedNostrKey == nostrPubkey {
-                    SecureLogger.debug("✅ Found Noise key for Nostr sender (hex match)", category: .session)
-                    return relationship.peerNoisePublicKey
-                }
-            }
-        }
-
         SecureLogger.debug(
-            "⚠️ No matching Noise key found for Nostr pubkey: \(nostrPubkey.prefix(16))... (tried npub: \(npubToMatch.prefix(16))...)",
+            "⚠️ No matching Noise key found for Nostr pubkey: \(nostrPubkey.prefix(16))...",
             category: .session
         )
         return nil
@@ -592,8 +626,7 @@ extension NostrInboundPipeline {
 }
 
 private extension NostrInboundPipeline {
-    @MainActor
-    static func decodeEmbeddedBitChatPacket(from content: String) -> BitchatPacket? {
+    nonisolated static func decodeEmbeddedBitChatPacket(from content: String) -> BitchatPacket? {
         guard content.hasPrefix("bitchat1:") else { return nil }
         let encoded = String(content.dropFirst("bitchat1:".count))
         let maxBytes = FileTransferLimits.maxFramedFileBytes

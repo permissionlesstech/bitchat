@@ -120,36 +120,79 @@ enum ContentNormalizer {
     ) -> String {
         // Lowercase for case-insensitive comparison
         let lowered = content.lowercased()
-        let ns = lowered as NSString
-        let range = NSRange(location: 0, length: ns.length)
 
-        // Simplify URLs by stripping query/fragment
-        var simplified = ""
-        var last = 0
-        for match in simplifyHTTPURL.matches(in: lowered, options: [], range: range) {
-            if match.range.location > last {
-                simplified += ns.substring(with: NSRange(location: last, length: match.range.location - last))
+        // Fast path: skip NSString bridging + URL regex when no scheme separator is present
+        let simplified: String
+        if lowered.contains("://") {
+            let ns = lowered as NSString
+            let range = NSRange(location: 0, length: ns.length)
+            var out = ""
+            out.reserveCapacity(lowered.count)
+            var last = 0
+            for match in simplifyHTTPURL.matches(in: lowered, options: [], range: range) {
+                if match.range.location > last {
+                    out += ns.substring(with: NSRange(location: last, length: match.range.location - last))
+                }
+                let url = ns.substring(with: match.range)
+                if let queryIndex = url.firstIndex(where: { $0 == "?" || $0 == "#" }) {
+                    out += url[..<queryIndex]
+                } else {
+                    out += url
+                }
+                last = match.range.location + match.range.length
             }
-            let url = ns.substring(with: match.range)
-            if let queryIndex = url.firstIndex(where: { $0 == "?" || $0 == "#" }) {
-                simplified += String(url[..<queryIndex])
-            } else {
-                simplified += url
+            if last < ns.length {
+                out += ns.substring(with: NSRange(location: last, length: ns.length - last))
             }
-            last = match.range.location + match.range.length
-        }
-        if last < ns.length {
-            simplified += ns.substring(with: NSRange(location: last, length: ns.length - last))
+            simplified = out
+        } else {
+            simplified = lowered
         }
 
-        // Trim and collapse whitespace
+        // Preserve exact Foundation boundary trimming (including U+200B), then
+        // collapse interior whitespace over Unicode scalars (`\s+` parity without
+        // compiling NSRegularExpression) before grapheme-cluster prefix truncation.
         let trimmed = simplified.trimmed
-        let collapsed = trimmed.replacingOccurrences(of: "\\s+", with: " ", options: .regularExpression)
+        var collapsedScalars = String.UnicodeScalarView()
+        collapsedScalars.reserveCapacity(trimmed.unicodeScalars.count)
+        var hasContent = false
+        var pendingSpace = false
+        for scalar in trimmed.unicodeScalars {
+            if scalar.properties.isWhitespace {
+                if hasContent {
+                    pendingSpace = true
+                }
+                continue
+            }
+            if pendingSpace {
+                collapsedScalars.append(" ")
+                pendingSpace = false
+            }
+            collapsedScalars.append(scalar)
+            hasContent = true
+        }
 
-        // Take prefix and hash
-        let prefix = String(collapsed.prefix(prefixLength))
+        let collapsed = String(collapsedScalars)
+        let prefix = prefixLength > 0 ? String(collapsed.prefix(prefixLength)) : ""
         let hash = prefix.djb2()
-        return String(format: "h:%016llx", hash)
+        return formatHashKey(hash)
+    }
+
+    private static func formatHashKey(_ hash: UInt64) -> String {
+        String(unsafeUninitializedCapacity: 18) { buffer in
+            guard let dst = buffer.baseAddress else { return 0 }
+            dst[0] = UInt8(ascii: "h")
+            dst[1] = UInt8(ascii: ":")
+            var value = hash
+            var i = 17
+            while i >= 2 {
+                let nibble = UInt8(value & 0x0f)
+                dst[i] = nibble < 10 ? nibble &+ 48 : nibble &+ 87
+                value >>= 4
+                i &-= 1
+            }
+            return 18
+        }
     }
 }
 
@@ -178,7 +221,9 @@ final class MessageDeduplicationService {
     private let nostrEventStore: NostrProcessedEventStore?
     private let nostrEventCapacity: Int
     private var persistScheduled = false
+    private var persistTask: Task<Void, Never>?
     private var pendingPersistIDs: [String] = []
+    private var clearAllGeneration: UInt64 = 0
 
     /// Creates a new deduplication service with specified capacities.
     /// - Parameters:
@@ -197,8 +242,15 @@ final class MessageDeduplicationService {
         self.nostrEventStore = nostrEventStore
         self.nostrEventCapacity = nostrEventCapacity
         if let nostrEventStore {
-            for eventID in nostrEventStore.load() {
-                nostrEventCache.record(eventID, value: true)
+            let generation = clearAllGeneration
+            nostrEventStore.loadAsync { [weak self] eventIDs in
+                guard !eventIDs.isEmpty else { return }
+                Task { @MainActor [weak self] in
+                    guard let self, self.clearAllGeneration == generation else { return }
+                    for eventID in eventIDs where !self.nostrEventCache.contains(eventID) {
+                        self.nostrEventCache.record(eventID, value: true)
+                    }
+                }
             }
         }
     }
@@ -264,10 +316,14 @@ final class MessageDeduplicationService {
     }
 
     /// Records a Nostr event as processed.
-    /// - Parameter eventId: The event ID
-    func recordNostrEvent(_ eventId: String) {
+    /// - Parameters:
+    ///   - eventId: The event ID
+    ///   - persist: Whether to persist the ID across launches (true for
+    ///     private-envelope kind 1059 DMs; false for ephemeral geohash
+    ///     chat/presence kinds 20000/20001).
+    func recordNostrEvent(_ eventId: String, persist: Bool = true) {
         nostrEventCache.record(eventId, value: true)
-        if nostrEventStore != nil {
+        if persist, nostrEventStore != nil {
             pendingPersistIDs.append(eventId)
             schedulePersistIfNeeded()
         }
@@ -279,10 +335,11 @@ final class MessageDeduplicationService {
     private func schedulePersistIfNeeded() {
         guard let nostrEventStore, !persistScheduled else { return }
         persistScheduled = true
-        Task { @MainActor [weak self] in
+        persistTask = Task { @MainActor [weak self] in
             try? await Task.sleep(nanoseconds: 2_000_000_000)
-            guard let self else { return }
+            guard let self, !Task.isCancelled else { return }
             self.persistScheduled = false
+            self.persistTask = nil
             let newIDs = self.pendingPersistIDs
             self.pendingPersistIDs.removeAll()
             nostrEventStore.append(newIDs, cap: self.nostrEventCapacity)
@@ -314,6 +371,10 @@ final class MessageDeduplicationService {
     /// Clears all caches. This is the wipe/panic path: the persisted
     /// private-envelope record goes with everything else.
     func clearAll() {
+        clearAllGeneration &+= 1
+        persistTask?.cancel()
+        persistTask = nil
+        persistScheduled = false
         contentCache.clear()
         nostrEventCache.clear()
         nostrAckCache.clear()

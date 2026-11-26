@@ -111,6 +111,16 @@ final class NearbyNotesCounter: ObservableObject {
         noteCount = 0
     }
 
+    /// Panic-wipe hook: reset sticky reveal state and drop the active
+    /// building-level notes subscription and count.
+    func resetForPanic() {
+        revealed = false
+        managerCancellable = nil
+        releaseManager(manager)
+        manager = nil
+        noteCount = 0
+    }
+
     private func retarget() {
         guard activeHolders > 0,
               revealed,

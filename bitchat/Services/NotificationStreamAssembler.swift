@@ -146,10 +146,15 @@ struct NotificationStreamAssembler {
             pendingFrameStartedAt = nil
             pendingFrameExpectedLength = 0
 
-            let frame = Data(buffer.prefix(frameLength))
-            frames.append(frame)
-            buffer.removeFirst(frameLength)
-            _ = discardLeadingPaddingIfPresent()
+            if frameLength == buffer.count {
+                frames.append(buffer)
+                buffer.removeAll(keepingCapacity: true)
+            } else {
+                let frame = Data(buffer.prefix(frameLength))
+                frames.append(frame)
+                buffer.removeFirst(frameLength)
+                _ = discardLeadingPaddingIfPresent()
+            }
         }
 
         if discardLeadingPaddingIfPresent() {

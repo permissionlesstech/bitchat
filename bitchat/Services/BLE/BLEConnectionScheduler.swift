@@ -137,9 +137,11 @@ final class BLEConnectionScheduler<Peripheral> {
             candidates.append(candidate)
         }
 
-        candidates.sort {
-            if $0.rssi != $1.rssi { return $0.rssi > $1.rssi }
-            return $0.discoveredAt < $1.discoveredAt
+        if candidates.count > 1 {
+            candidates.sort {
+                if $0.rssi != $1.rssi { return $0.rssi > $1.rssi }
+                return $0.discoveredAt < $1.discoveredAt
+            }
         }
         if candidates.count > candidateCap {
             candidates.removeLast(candidates.count - candidateCap)
@@ -152,22 +154,31 @@ final class BLEConnectionScheduler<Peripheral> {
         now: Date
     ) -> BLEConnectionQueueDecision<Peripheral> {
         guard connectedOrConnectingCount < maxCentralLinks else { return .none }
+        guard !candidates.isEmpty else { return .none }
 
         if let retryDelay = rateLimitRetryDelay(now: now) {
             return .retryAfter(retryDelay)
         }
 
-        while !candidates.isEmpty {
+        // Sort once by descending score instead of re-sorting on every loop step.
+        if candidates.count > 1 {
             candidates.sort { score($0, now: now) > score($1, now: now) }
-            let candidate = candidates.removeFirst()
+        }
+
+        var index = 0
+        while index < candidates.count {
+            let candidate = candidates[index]
+            index += 1
             guard candidate.isConnectable else { continue }
 
             if let delay = weakLinkRetryDelay(for: candidate, now: now) {
+                candidates.removeFirst(index)
                 enqueue(candidate)
                 return .retryAfter(delay)
             }
 
             if let delay = disconnectSettleDelay(for: candidate, now: now) {
+                candidates.removeFirst(index)
                 enqueue(candidate)
                 return .retryAfter(delay)
             }
@@ -176,9 +187,11 @@ final class BLEConnectionScheduler<Peripheral> {
                 continue
             }
 
+            candidates.removeFirst(index)
             return .connect(candidate)
         }
 
+        candidates.removeAll(keepingCapacity: true)
         return .none
     }
 

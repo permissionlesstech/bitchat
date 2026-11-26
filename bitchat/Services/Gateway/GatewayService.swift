@@ -159,6 +159,22 @@ final class GatewayService: ObservableObject {
         onEnabledChanged?(enabled)
     }
 
+    /// Panic-wipe hook: disable gateway mode, clear its persisted toggle, and
+    /// drop queued uplinks/downlinks and loop-prevention caches.
+    func resetForPanic() {
+        isEnabled = false
+        defaults.removeObject(forKey: Self.enabledKey)
+        queuedUplinks.removeAll(keepingCapacity: false)
+        pendingDownlinks.removeAll(keepingCapacity: false)
+        downlinkDrainScheduled = false
+        uplinkDepositTimes.removeAll(keepingCapacity: false)
+        downlinkSendTimes.removeAll(keepingCapacity: false)
+        meshBroadcastEventIDs = BoundedIDSet(capacity: Limits.maxTrackedEventIDs)
+        publishedEventIDs = BoundedIDSet(capacity: Limits.maxTrackedEventIDs)
+        rebroadcastEventIDs = BoundedIDSet(capacity: Limits.maxTrackedEventIDs)
+        onEnabledChanged?(false)
+    }
+
     // MARK: - Mesh carrier ingress (both roles)
 
     /// Entry point for received `nostrCarrier` packets. `directedToUs` is
@@ -290,7 +306,7 @@ final class GatewayService: ObservableObject {
     /// Called for every event the gateway's own geohash-channel subscription
     /// delivers. Wraps it in a `fromGateway` carrier and broadcasts it on
     /// the mesh, within the airtime budget.
-    func rebroadcastRelayEvent(_ event: NostrEvent, geohash: String) {
+    func rebroadcastRelayEvent(_ event: NostrEvent, geohash: String, signatureAlreadyVerified: Bool = false) {
         guard isEnabled, broadcastToMesh != nil else { return }
         guard event.kind == NostrProtocol.EventKind.ephemeralEvent.rawValue else { return }
         // Freshness + geohash gate BEFORE spending any budget. A channel
@@ -319,8 +335,9 @@ final class GatewayService: ObservableObject {
               !pendingDownlinks.contains(where: { $0.event.id == event.id }) else {
             return
         }
-        // Verify before spending BLE airtime; receivers verify again.
-        guard event.isValidSignature() else { return }
+        // Verify before spending BLE airtime when not already verified by
+        // NostrRelayManager's off-main inbound pipeline; receivers verify again.
+        guard signatureAlreadyVerified || event.isValidSignature() else { return }
 
         pendingDownlinks.append((event, geohash))
         if pendingDownlinks.count > Limits.maxPendingDownlinks {
@@ -460,9 +477,10 @@ final class GatewayService: ObservableObject {
         abs(now().timeIntervalSince1970 - TimeInterval(event.created_at)) <= Limits.maxEventAgeSeconds
     }
 
+    private static let validGeohashCharacters: Set<Character> = Set("0123456789bcdefghjkmnpqrstuvwxyz")
+
     static func isValidGeohash(_ geohash: String) -> Bool {
-        let allowed = Set("0123456789bcdefghjkmnpqrstuvwxyz")
-        return (1...NostrCarrierPacket.maxGeohashLength).contains(geohash.count)
-            && geohash.allSatisfy { allowed.contains($0) }
+        (1...NostrCarrierPacket.maxGeohashLength).contains(geohash.count)
+            && geohash.allSatisfy { validGeohashCharacters.contains($0) }
     }
 }

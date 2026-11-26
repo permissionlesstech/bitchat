@@ -8,7 +8,19 @@ final class VerificationService {
     // identity operations go through the transport's narrow noise* wrappers
     // so the raw NoiseEncryptionService is never exposed.
     private var transport: Transport?
+    private let qrCacheLock = NSLock()
+    private var cachedQR: (nick: String, npub: String?, builtAt: Date, value: String)?
+
     func configure(with transport: Transport) { self.transport = transport }
+
+    /// Panic-wipe hook: drop the cached signed verification QR immediately so
+    /// pre-panic Noise/Ed25519/npub keys cannot be re-served during the 60s
+    /// cache window.
+    func resetForPanic() {
+        qrCacheLock.lock()
+        cachedQR = nil
+        qrCacheLock.unlock()
+    }
 
     /// Encapsulates the data encoded into a verification QR
     struct VerificationQR: Codable {
@@ -75,8 +87,10 @@ final class VerificationService {
     /// Build a signed QR string for the current identity
     func buildMyQRString(nickname: String, npub: String?) -> String? {
         // Simple short-lived cache to speed up sheet opening
-        struct Cache { static var last: (nick: String, npub: String?, builtAt: Date, value: String)? }
-        if let c = Cache.last, c.nick == nickname, c.npub == npub, Date().timeIntervalSince(c.builtAt) < 60 {
+        qrCacheLock.lock()
+        let cached = cachedQR
+        qrCacheLock.unlock()
+        if let c = cached, c.nick == nickname, c.npub == npub, Date().timeIntervalSince(c.builtAt) < 60 {
             return c.value
         }
         guard let transport = transport else { return nil }
@@ -99,7 +113,9 @@ final class VerificationService {
                                     nonceB64: payload.nonceB64,
                                     sigHex: sig.hexEncodedString())
         let out = signed.toURLString()
-        Cache.last = (nickname, npub, Date(), out)
+        qrCacheLock.lock()
+        cachedQR = (nickname, npub, Date(), out)
+        qrCacheLock.unlock()
         return out
     }
 
