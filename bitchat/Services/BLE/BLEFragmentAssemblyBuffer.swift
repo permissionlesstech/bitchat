@@ -7,6 +7,11 @@ struct BLEFragmentKey: Hashable, Equatable {
 }
 
 struct BLEFragmentHeader: Equatable {
+    /// Hard receiver ceiling for fragment trains (`total <= 10_000`), shared
+    /// with outbound fragment planning and link MTU capability checks so sender
+    /// and receiver limits never drift apart.
+    static let maxSupportedFragments = 10_000
+
     let key: BLEFragmentKey
     let index: Int
     let total: Int
@@ -35,7 +40,7 @@ struct BLEFragmentHeader: Equatable {
         let index = Int((UInt16(packet.payload[8]) << 8) | UInt16(packet.payload[9]))
         let total = Int((UInt16(packet.payload[10]) << 8) | UInt16(packet.payload[11]))
 
-        guard total > 0 && total <= 10_000 && index >= 0 && index < total else {
+        guard total > 0 && total <= Self.maxSupportedFragments && index >= 0 && index < total else {
             return nil
         }
 
@@ -78,8 +83,11 @@ struct BLEFragmentAssemblyBuffer {
 
     @discardableResult
     mutating func removeExpired(before cutoff: Date) -> Int {
+        // Expire by `lastFragmentAt` (updated only on new fragment indexes) so
+        // actively progressing multi-fragment trains on small-MTU links are not
+        // discarded mid-transfer while stalled/abandoned assemblies still expire.
         let expiredKeys = metadataByKey
-            .filter { $0.value.timestamp < cutoff }
+            .filter { $0.value.lastFragmentAt < cutoff }
             .map(\.key)
 
         for key in expiredKeys {

@@ -26,14 +26,22 @@ final class SimulatedMesh {
     }
 
     private let lock = NSLock()
+    private let usePlannedLinkDelivery: Bool
     private var pendingDeliveries: [(from: Int, packet: BitchatPacket)] = []
+    private var pendingPlannedDeliveries: [(from: Int, to: Int, link: BLEIngressLinkID, packet: BitchatPacket)] = []
     /// Total (packet, receiving-node) deliveries pumped — the storm bound.
     private(set) var deliveredFrameCount = 0
 
     private(set) var nodes: [Node] = []
     private var neighbors: [Set<Int>] = []
     private var duplicateLinkEdges: Set<String> = []
+    private var droppedPrimaryLinks: Set<String> = []
     private var emitted: [[BitchatPacket]] = []
+    private var plannedTransmissions: [[(to: Int, packet: BitchatPacket)]] = []
+
+    init(usePlannedLinkDelivery: Bool = false) {
+        self.usePlannedLinkDelivery = usePlannedLinkDelivery
+    }
 
     /// Every packet a node has put on the wire — the attacker's capture
     /// buffer for replay tests.
@@ -41,6 +49,14 @@ final class SimulatedMesh {
         lock.lock()
         defer { lock.unlock() }
         return emitted[index]
+    }
+
+    /// Every per-target transmission selected by `sendOnAllLinks` when
+    /// `usePlannedLinkDelivery` is enabled.
+    func plannedTransmissions(from index: Int) -> [(to: Int, packet: BitchatPacket)] {
+        lock.lock()
+        defer { lock.unlock() }
+        return plannedTransmissions[index]
     }
 
     @discardableResult
@@ -64,29 +80,73 @@ final class SimulatedMesh {
         nodes.append(node)
         neighbors.append([])
         emitted.append([])
+        plannedTransmissions.append([])
         lock.unlock()
-        // The tap must be live before `setNickname` below: setNickname
-        // force-announces asynchronously on the engine, and if that slot
-        // ran in the gap before a later tap install, the announce was
-        // emitted invisibly while still stamping the wall-clock announce
-        // throttle — swallowing `announceAll`'s forced announce on a
-        // starved runner (the CI flake this ordering fixes).
-        service._test_onOutboundPacket = { [weak self] packet in
-            // Runs on the sender's engine; only buffer here — delivering
-            // inline would nest one engine inside another.
-            guard let self else { return }
-            self.lock.lock()
-            self.pendingDeliveries.append((from: index, packet: packet))
-            self.emitted[index].append(packet)
-            self.lock.unlock()
+        if usePlannedLinkDelivery {
+            service._test_virtualCentralIDs = { [weak self] in
+                self?.activeVirtualCentralIDs(at: index) ?? []
+            }
+            service._test_onPlannedLinks = { [weak self, weak service] packet, selection in
+                guard let self, let service else { return }
+                let pad = BLEOutboundPacketPolicy.padsBLEFrame(for: packet.type)
+                let encodedLength = packet.toBinaryData(padding: pad)?.count
+                self.lock.lock()
+                var deliveredAny = false
+                for selectedUUID in selection.centralIDs.sorted() {
+                    guard let (target, isDuplicate) = self.decodeVirtualCentralLink(selectedUUID, at: index),
+                          self.neighbors[index].contains(target) else {
+                        continue
+                    }
+                    if let mtu = service._test_virtualCentralMTU?(selectedUUID),
+                       let encodedLength,
+                       encodedLength > mtu {
+                        // Drop frames whose encoded wire length exceeds the
+                        // simulated link's physical MTU, matching BLE GATT limits.
+                        continue
+                    }
+                    deliveredAny = true
+                    let receiverLinkUUID = isDuplicate
+                        ? self.duplicateLinkUUID(from: index, at: target)
+                        : self.linkUUID(from: index, at: target)
+                    self.pendingPlannedDeliveries.append((
+                        from: index,
+                        to: target,
+                        link: .central(receiverLinkUUID),
+                        packet: packet
+                    ))
+                    self.plannedTransmissions[index].append((to: target, packet: packet))
+                }
+                if deliveredAny || !selection.peripheralIDs.isEmpty {
+                    self.emitted[index].append(packet)
+                }
+                self.lock.unlock()
+            }
+        } else {
+            // The tap must be live before `setNickname` below: setNickname
+            // force-announces asynchronously on the engine, and if that slot
+            // ran in the gap before a later tap install, the announce was
+            // emitted invisibly while still stamping the wall-clock announce
+            // throttle — swallowing `announceAll`'s forced announce on a
+            // starved runner (the CI flake this ordering fixes).
+            service._test_onOutboundPacket = { [weak self] packet in
+                // Runs on the sender's engine; only buffer here — delivering
+                // inline would nest one engine inside another.
+                guard let self else { return }
+                self.lock.lock()
+                self.pendingDeliveries.append((from: index, packet: packet))
+                self.emitted[index].append(packet)
+                self.lock.unlock()
+            }
         }
         service.setNickname(nickname)
         return node
     }
 
     func connect(_ a: Int, _ b: Int) {
+        lock.lock()
         neighbors[a].insert(b)
         neighbors[b].insert(a)
+        lock.unlock()
     }
 
     /// Radio silence: stops delivering between two nodes without reporting
@@ -94,8 +154,10 @@ final class SimulatedMesh {
     /// a peer walks out of range before its link times out. Lets a test
     /// capture a packet the far side never received.
     func silence(_ a: Int, _ b: Int) {
+        lock.lock()
         neighbors[a].remove(b)
         neighbors[b].remove(a)
+        lock.unlock()
     }
 
     /// Models two live links to the same phone (issue #1538): every frame
@@ -110,8 +172,19 @@ final class SimulatedMesh {
     /// link state keyed by a real CBPeripheral, which no CB-free harness
     /// can fabricate.
     func connectDuplicateLinks(_ a: Int, _ b: Int) {
-        connect(a, b)
+        lock.lock()
+        neighbors[a].insert(b)
+        neighbors[b].insert(a)
         duplicateLinkEdges.insert(Self.edgeKey(a, b))
+        lock.unlock()
+    }
+
+    /// Removes only the primary link of a duplicate-link edge while keeping
+    /// the second link active (simulating single-link drop on a multi-link peer).
+    func dropPrimaryDuplicateLink(_ a: Int, _ b: Int) {
+        lock.lock()
+        droppedPrimaryLinks.insert(Self.edgeKey(a, b))
+        lock.unlock()
     }
 
     /// The synthetic central link a frame from `sender` arrives on at
@@ -132,11 +205,52 @@ final class SimulatedMesh {
     }
 
     private func links(from sender: Int, at receiver: Int) -> [BLEIngressLinkID] {
-        var links: [BLEIngressLinkID] = [.central(linkUUID(from: sender, at: receiver))]
-        if duplicateLinkEdges.contains(Self.edgeKey(sender, receiver)) {
-            links.append(.central(duplicateLinkUUID(from: sender, at: receiver)))
+        lock.lock()
+        let key = Self.edgeKey(sender, receiver)
+        let hasDup = duplicateLinkEdges.contains(key)
+        let primaryDropped = droppedPrimaryLinks.contains(key)
+        lock.unlock()
+        var result: [BLEIngressLinkID] = []
+        if !primaryDropped {
+            result.append(.central(linkUUID(from: sender, at: receiver)))
         }
-        return links
+        if hasDup {
+            result.append(.central(duplicateLinkUUID(from: sender, at: receiver)))
+        }
+        return result
+    }
+
+    private func activeVirtualCentralIDs(at nodeIndex: Int) -> [String] {
+        lock.lock()
+        let peerIndices = neighbors[nodeIndex].sorted()
+        let dupEdges = duplicateLinkEdges
+        let droppedPrimary = droppedPrimaryLinks
+        lock.unlock()
+        var ids: [String] = []
+        ids.reserveCapacity(peerIndices.count)
+        for peer in peerIndices {
+            let key = Self.edgeKey(peer, nodeIndex)
+            if !droppedPrimary.contains(key) {
+                ids.append(linkUUID(from: peer, at: nodeIndex))
+            }
+            if dupEdges.contains(key) {
+                ids.append(duplicateLinkUUID(from: peer, at: nodeIndex))
+            }
+        }
+        return ids
+    }
+
+    private func decodeVirtualCentralLink(_ uuid: String, at receiver: Int) -> (peer: Int, isDuplicate: Bool)? {
+        let suffix = "-TO-\(receiver)"
+        guard uuid.hasSuffix(suffix) else { return nil }
+        let body = uuid.dropLast(suffix.count)
+        if body.hasPrefix("SIM-DUP-"), let peer = Int(body.dropFirst("SIM-DUP-".count)) {
+            return (peer, true)
+        }
+        if body.hasPrefix("SIM-"), let peer = Int(body.dropFirst("SIM-".count)) {
+            return (peer, false)
+        }
+        return nil
     }
 
     func forceAnnounce(from index: Int) {
@@ -152,25 +266,34 @@ final class SimulatedMesh {
             lock.lock()
             let batch = pendingDeliveries
             pendingDeliveries.removeAll()
+            let plannedBatch = pendingPlannedDeliveries
+            pendingPlannedDeliveries.removeAll()
             lock.unlock()
 
-            if batch.isEmpty {
+            if batch.isEmpty && plannedBatch.isEmpty {
                 // Engines may still be running slots that will emit more.
                 nodes.forEach { $0.service._test_fenceEngine() }
                 lock.lock()
-                let stillEmpty = pendingDeliveries.isEmpty
+                let stillEmpty = pendingDeliveries.isEmpty && pendingPlannedDeliveries.isEmpty
                 lock.unlock()
                 if stillEmpty { return }
                 continue
             }
 
             for (from, packet) in batch {
-                for receiver in neighbors[from] {
+                lock.lock()
+                let peerIndices = Array(neighbors[from])
+                lock.unlock()
+                for receiver in peerIndices {
                     for link in links(from: from, at: receiver) {
                         deliveredFrameCount += 1
                         nodes[receiver].service._test_ingestFrame(packet, link: link)
                     }
                 }
+            }
+            for delivery in plannedBatch {
+                deliveredFrameCount += 1
+                nodes[delivery.to].service._test_ingestFrame(delivery.packet, link: delivery.link)
             }
             nodes.forEach { $0.service._test_fenceEngine() }
         }

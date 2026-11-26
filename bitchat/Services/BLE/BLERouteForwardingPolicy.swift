@@ -5,24 +5,47 @@ struct BLERouteForwardingPlan {
     let shouldSuppressFloodRelay: Bool
     let forwardPacket: BitchatPacket?
     let nextHop: PeerID?
+    let isSourceRouteFallback: Bool
+
+    init(
+        shouldSuppressFloodRelay: Bool,
+        forwardPacket: BitchatPacket?,
+        nextHop: PeerID?,
+        isSourceRouteFallback: Bool = false
+    ) {
+        self.shouldSuppressFloodRelay = shouldSuppressFloodRelay
+        self.forwardPacket = forwardPacket
+        self.nextHop = nextHop
+        self.isSourceRouteFallback = isSourceRouteFallback
+    }
 
     static let allowFloodRelay = BLERouteForwardingPlan(
         shouldSuppressFloodRelay: false,
         forwardPacket: nil,
-        nextHop: nil
+        nextHop: nil,
+        isSourceRouteFallback: false
+    )
+
+    static let fallbackToFloodRelay = BLERouteForwardingPlan(
+        shouldSuppressFloodRelay: false,
+        forwardPacket: nil,
+        nextHop: nil,
+        isSourceRouteFallback: true
     )
 
     static let suppressFloodRelay = BLERouteForwardingPlan(
         shouldSuppressFloodRelay: true,
         forwardPacket: nil,
-        nextHop: nil
+        nextHop: nil,
+        isSourceRouteFallback: false
     )
 
     static func forward(_ packet: BitchatPacket, to nextHop: PeerID) -> BLERouteForwardingPlan {
         BLERouteForwardingPlan(
             shouldSuppressFloodRelay: true,
             forwardPacket: packet,
-            nextHop: nextHop
+            nextHop: nextHop,
+            isSourceRouteFallback: false
         )
     }
 }
@@ -51,22 +74,38 @@ struct BLERouteForwardingPolicy {
             return .allowFloodRelay
         }
 
+        // Guard against routing loops caused by duplicate hops in the route list.
+        if Set(route).count < route.count {
+            return .suppressFloodRelay
+        }
+
         guard packet.ttl > 1 else {
             return .suppressFloodRelay
         }
 
         guard let localRoutingData else {
-            return .allowFloodRelay
+            return .fallbackToFloodRelay
         }
 
         guard let localIndex = route.firstIndex(of: localRoutingData) else {
-            return forward(packet, toRouteData: route[0], routingPeer: routingPeer, isPeerConnected: isPeerConnected)
+            // Only the packet's origin forwards to `route[0]`. An off-route
+            // relay only sees a routed packet during conservative flood
+            // fallback; bouncing it back to `route[0]` hits deduplication on an
+            // already-visited hop instead of progressing toward the destination.
+            if PeerID(hexData: packet.senderID) == localPeerID {
+                return forward(packet, toRouteData: route[0], routingPeer: routingPeer, isPeerConnected: isPeerConnected)
+            }
+            if let destinationPeer = PeerID(hexData: packet.recipientID),
+               isPeerConnected(destinationPeer) {
+                return .forward(relayed(packet), to: destinationPeer)
+            }
+            return .fallbackToFloodRelay
         }
 
         if localIndex == route.count - 1 {
             guard let destinationPeer = PeerID(hexData: packet.recipientID),
                   isPeerConnected(destinationPeer) else {
-                return .allowFloodRelay
+                return .fallbackToFloodRelay
             }
             return .forward(relayed(packet), to: destinationPeer)
         }
@@ -87,7 +126,7 @@ struct BLERouteForwardingPolicy {
     ) -> BLERouteForwardingPlan {
         guard let nextPeer = routingPeer(routeData),
               isPeerConnected(nextPeer) else {
-            return .allowFloodRelay
+            return .fallbackToFloodRelay
         }
 
         return .forward(relayed(packet), to: nextPeer)

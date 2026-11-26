@@ -50,8 +50,10 @@ struct BLEAnnounceHandlerEnvironment {
     /// Debounced reconnect-log decision.
     /// Must only be called from inside `withRegistryBarrier`.
     let shouldEmitReconnectLog: (_ peerID: PeerID, _ now: Date) -> Bool
-    /// Records verified direct-neighbor claims in the mesh topology.
-    let updateTopology: (_ peerID: PeerID, _ neighbors: [Data]) -> Void
+    /// Records verified direct-neighbor claims in the mesh topology with the
+    /// packet's monotonic timestamp, returning whether the peer's topology
+    /// entry was newly introduced, previously stale, or changed.
+    let updateTopology: (_ peerID: PeerID, _ neighbors: [Data], _ timestamp: UInt64) -> Bool
     /// Persists the announced cryptographic identity for offline verification.
     let persistIdentity: (AnnouncementPacket) -> Void
     /// Announce-back dedup check.
@@ -83,6 +85,27 @@ struct BLEAnnounceHandlingResult {
     let announcement: AnnouncementPacket
     let isDirectAnnounce: Bool
     let isVerified: Bool
+    let isNewPeer: Bool
+    let isReconnectedPeer: Bool
+    let topologyChanged: Bool
+
+    init(
+        peerID: PeerID,
+        announcement: AnnouncementPacket,
+        isDirectAnnounce: Bool,
+        isVerified: Bool,
+        isNewPeer: Bool = false,
+        isReconnectedPeer: Bool = false,
+        topologyChanged: Bool = false
+    ) {
+        self.peerID = peerID
+        self.announcement = announcement
+        self.isDirectAnnounce = isDirectAnnounce
+        self.isVerified = isVerified
+        self.isNewPeer = isNewPeer
+        self.isReconnectedPeer = isReconnectedPeer
+        self.topologyChanged = topologyChanged
+    }
 }
 
 /// Orchestrates inbound announce packets: preflight validation, signature
@@ -240,9 +263,13 @@ final class BLEAnnounceHandler {
             }
         }
 
-        // Update topology with verified neighbor claims (only for authenticated announces)
-        if verifiedAnnounce, let neighbors = announcement.directNeighbors {
-            env.updateTopology(peerID, neighbors)
+        // Update topology with verified neighbor claims (only for authenticated announces).
+        // Omitted TLV 0x04 means the peer currently reports no neighbors (empty list),
+        // so pass `[]` to clear any previously announced edges when a peer loses its links.
+        var topologyChanged = false
+        if verifiedAnnounce {
+            let neighbors = announcement.directNeighbors ?? []
+            topologyChanged = env.updateTopology(peerID, neighbors, packet.timestamp)
         }
 
         // Persist cryptographic identity and signing key for robust offline
@@ -298,7 +325,10 @@ final class BLEAnnounceHandler {
             peerID: peerID,
             announcement: announcement,
             isDirectAnnounce: isDirectAnnounce,
-            isVerified: verifiedAnnounce
+            isVerified: verifiedAnnounce,
+            isNewPeer: isNewPeer,
+            isReconnectedPeer: isReconnectedPeer,
+            topologyChanged: topologyChanged
         )
     }
 }

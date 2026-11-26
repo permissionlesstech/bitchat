@@ -237,6 +237,43 @@ struct BLEFragmentAssemblyBufferTests {
     }
 
     @Test
+    func removeExpiredKeepsActivelyProgressingAssemblyAliveAndExpiresStalledOnes() throws {
+        var buffer = BLEFragmentAssemblyBuffer()
+        let activePacket = makePacket(payload: makePayload(count: 384, seed: 11))
+        let activeFrags = try makeFragments(for: activePacket, chunkSize: 128, fragmentID: Data(repeating: 0x07, count: 8))
+        let activeHeaders = try activeFrags.map { try #require(BLEFragmentHeader(packet: $0)) }
+        #expect(activeHeaders.count >= 3)
+
+        let stalledPacket = makePacket(payload: makePayload(count: 256, seed: 22))
+        let stalledFrags = try makeFragments(for: stalledPacket, chunkSize: 128, fragmentID: Data(repeating: 0x08, count: 8))
+        let stalledFirst = try #require(BLEFragmentHeader(packet: stalledFrags[0]))
+
+        let t0 = Date(timeIntervalSince1970: 1_000)
+        _ = buffer.append(activeHeaders[0], maxInFlightAssemblies: 8, now: t0)
+        _ = buffer.append(stalledFirst, maxInFlightAssemblies: 8, now: t0)
+
+        // At t0 + 20s: active stream makes real progress (new index 1), while
+        // stalled stream only receives a duplicate of index 0 (no progress).
+        _ = buffer.append(activeHeaders[1], maxInFlightAssemblies: 8, now: t0.addingTimeInterval(20))
+        _ = buffer.append(stalledFirst, maxInFlightAssemblies: 8, now: t0.addingTimeInterval(20))
+
+        // Cleanup at t0 + 45s (30s cutoff = t0 + 15s): stalled stream expires
+        // while actively progressing stream survives past its start time.
+        let removed = buffer.removeExpired(before: t0.addingTimeInterval(15))
+        #expect(removed == 1)
+
+        var finalResult: BLEFragmentAssemblyBuffer.AppendResult?
+        for header in activeHeaders.dropFirst(2) {
+            finalResult = buffer.append(header, maxInFlightAssemblies: 8, now: t0.addingTimeInterval(46))
+        }
+        if case let .complete(_, reassembled, _) = finalResult {
+            #expect(BinaryProtocol.decode(reassembled)?.payload == activePacket.payload)
+        } else {
+            Issue.record("Expected actively progressing assembly to complete after surviving cleanup")
+        }
+    }
+
+    @Test
     func stalledBroadcastAssemblyReportsFragmentIDOnceUntilRetryLapses() throws {
         var buffer = BLEFragmentAssemblyBuffer()
         let fragmentID = Data((1...8).map { UInt8($0) })

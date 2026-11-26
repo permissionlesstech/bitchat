@@ -89,6 +89,239 @@ struct BLEOutboundFragmentPlannerTests {
         #expect(plan.fragmentPackets.allSatisfy { $0.route == route && $0.isRSR })
     }
 
+    @Test("source-routed directed re-fragmentation preserves final destination recipientID")
+    func routedDirectedRefragmentationPreservesFinalRecipient() throws {
+        let nextHop = PeerID(str: "1011121314151617")
+        let finalDest = PeerID(str: "9091929394959697")
+        let route = [
+            Data([0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17]),
+            Data([0x20, 0x21, 0x22, 0x23, 0x24, 0x25, 0x26, 0x27])
+        ]
+        let routedPacket = BitchatPacket(
+            type: MessageType.message.rawValue,
+            senderID: Data([0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08]),
+            recipientID: finalDest.routingData,
+            timestamp: 1_000,
+            payload: makePayload(count: 256),
+            signature: nil,
+            ttl: 5,
+            version: 2,
+            route: route
+        )
+        let request = BLEOutboundFragmentTransferRequest(
+            packet: routedPacket,
+            pad: false,
+            maxChunk: 96,
+            directedPeer: nextHop,
+            transferId: nil
+        )
+
+        let plan = try #require(BLEOutboundFragmentPlanner.makePlan(
+            for: request,
+            defaultChunkSize: 256,
+            bleMaxMTU: 512,
+            fragmentID: Data(repeating: 0xD4, count: 8)
+        ))
+
+        #expect(plan.fragmentPackets.count > 1)
+        #expect(plan.fragmentPackets.allSatisfy { $0.recipientID == finalDest.routingData })
+        #expect(plan.fragmentPackets.allSatisfy { $0.route == route })
+
+        // A tight 110-byte link yields a 48-byte routed chunk budget; planner
+        // must not clamp upward past 48 bytes and every encoded fragment must
+        // fit within 110 bytes on the wire.
+        let tightBudget = try #require(BLEOutboundPacketPolicy.fragmentChunkSize(for: routedPacket, linkLimit: 110))
+        #expect(tightBudget == 48)
+        let tightPlan = try #require(BLEOutboundFragmentPlanner.makePlan(
+            for: BLEOutboundFragmentTransferRequest(
+                packet: routedPacket,
+                pad: false,
+                maxChunk: tightBudget,
+                directedPeer: nextHop,
+                transferId: nil
+            ),
+            defaultChunkSize: 256,
+            bleMaxMTU: 512,
+            fragmentID: Data(repeating: 0xD5, count: 8)
+        ))
+        #expect(tightPlan.chunkSize == 48)
+        #expect(tightPlan.fragmentPackets.allSatisfy { ($0.toBinaryData(padding: false)?.count ?? Int.max) <= 110 })
+    }
+
+    @Test("routed fragment framing overhead matches encoded byte sizes and enforces 10,000-fragment ceiling")
+    func fragmentPlannerAcceptsReceiverLimitAndRejectsLargerTrainsBeforeAllocation() throws {
+        let finalDest = PeerID(str: "9091929394959697")
+        let nextHop = PeerID(str: "1011121314151617")
+        let hops = [
+            Data([0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17]),
+            Data([0x20, 0x21, 0x22, 0x23, 0x24, 0x25, 0x26, 0x27]),
+            Data([0x30, 0x31, 0x32, 0x33, 0x34, 0x35, 0x36, 0x37])
+        ]
+
+        // Shared overhead formula must match exact encoded wire overhead for 1..3 hops.
+        for hopCount in 1...3 {
+            let route = Array(hops.prefix(hopCount))
+            let packet = BitchatPacket(
+                type: MessageType.message.rawValue,
+                senderID: Data([0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08]),
+                recipientID: finalDest.routingData,
+                timestamp: 1_000,
+                payload: makePayload(count: 160),
+                signature: nil,
+                ttl: 5,
+                version: 2,
+                route: route
+            )
+            let overhead = BLEOutboundPacketPolicy.routedFragmentFrameOverhead(routeHopCount: hopCount)
+            let linkLimit = overhead + 24
+            let budget = try #require(BLEOutboundPacketPolicy.fragmentChunkSize(for: packet, linkLimit: linkLimit))
+            #expect(budget == 24)
+            let plan = try #require(BLEOutboundFragmentPlanner.makePlan(
+                for: BLEOutboundFragmentTransferRequest(
+                    packet: packet,
+                    pad: false,
+                    maxChunk: budget,
+                    directedPeer: nextHop,
+                    transferId: nil
+                ),
+                defaultChunkSize: 256,
+                bleMaxMTU: 512,
+                fragmentID: Data(repeating: 0xE1, count: 8)
+            ))
+            let firstEncoded = try #require(plan.fragmentPackets[0].toBinaryData(padding: false))
+            #expect(firstEncoded.count == linkLimit)
+        }
+
+        // Regression for R5-BUG-01: enforce the 10,000-fragment receiver ceiling
+        // before fragment allocation so tiny routed chunks never crash UInt16(total).
+        let route = Array(hops.prefix(2))
+        let basePacket = BitchatPacket(
+            type: MessageType.message.rawValue,
+            senderID: Data([0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08]),
+            recipientID: finalDest.routingData,
+            timestamp: 1_000,
+            payload: Data(),
+            signature: nil,
+            ttl: 5,
+            version: 2,
+            route: route
+        )
+        let emptyEncodedLen = try #require(basePacket.toBinaryData(padding: false)).count
+        let atLimitPayload = makePayload(count: BLEOutboundFragmentPlanner.maxSupportedFragments - emptyEncodedLen)
+        let atLimitPacket = BitchatPacket(
+            type: basePacket.type,
+            senderID: basePacket.senderID,
+            recipientID: basePacket.recipientID,
+            timestamp: basePacket.timestamp,
+            payload: atLimitPayload,
+            signature: nil,
+            ttl: basePacket.ttl,
+            version: 2,
+            route: route
+        )
+        let atLimitPlan = try #require(BLEOutboundFragmentPlanner.makePlan(
+            for: BLEOutboundFragmentTransferRequest(
+                packet: atLimitPacket,
+                pad: false,
+                maxChunk: 1,
+                directedPeer: nextHop,
+                transferId: nil
+            ),
+            defaultChunkSize: 256,
+            bleMaxMTU: 512,
+            fragmentID: Data(repeating: 0xE2, count: 8)
+        ))
+        #expect(atLimitPlan.totalFragments == BLEOutboundFragmentPlanner.maxSupportedFragments)
+
+        let overLimitPacket = BitchatPacket(
+            type: basePacket.type,
+            senderID: basePacket.senderID,
+            recipientID: basePacket.recipientID,
+            timestamp: basePacket.timestamp,
+            payload: makePayload(count: BLEOutboundFragmentPlanner.maxSupportedFragments - emptyEncodedLen + 1),
+            signature: nil,
+            ttl: basePacket.ttl,
+            version: 2,
+            route: route
+        )
+        #expect(BLEOutboundFragmentPlanner.makePlan(
+            for: BLEOutboundFragmentTransferRequest(
+                packet: overLimitPacket,
+                pad: false,
+                maxChunk: 1,
+                directedPeer: nextHop,
+                transferId: nil
+            ),
+            defaultChunkSize: 256,
+            bleMaxMTU: 512,
+            fragmentID: Data(repeating: 0xE3, count: 8)
+        ) == nil)
+
+        // Even > UInt16.max fragments must return nil cleanly without trapping.
+        let hugePacket = BitchatPacket(
+            type: basePacket.type,
+            senderID: basePacket.senderID,
+            recipientID: basePacket.recipientID,
+            timestamp: basePacket.timestamp,
+            payload: makePayload(count: 70_000),
+            signature: nil,
+            ttl: basePacket.ttl,
+            version: 2,
+            route: route
+        )
+        #expect(BLEOutboundFragmentPlanner.makePlan(
+            for: BLEOutboundFragmentTransferRequest(
+                packet: hugePacket,
+                pad: false,
+                maxChunk: 1,
+                directedPeer: nextHop,
+                transferId: nil
+            ),
+            defaultChunkSize: 256,
+            bleMaxMTU: 512,
+            fragmentID: Data(repeating: 0xE4, count: 8)
+        ) == nil)
+    }
+
+    @Test("unrouted directed v1 file fragments fit exact 185-byte link MTU without 1-byte overflow")
+    func unroutedDirectedFragmentFitsExactV1LinkMTU() throws {
+        let recipient = PeerID(str: "9091929394959697")
+        let packet = BitchatPacket(
+            type: MessageType.fileTransfer.rawValue,
+            senderID: Data([0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08]),
+            recipientID: recipient.routingData,
+            timestamp: 1_000,
+            payload: makePayload(count: 1_024, seed: 0x1357_9BDF),
+            signature: nil,
+            ttl: 5,
+            version: 1,
+            route: nil
+        )
+        let budget = try #require(BLEOutboundPacketPolicy.fragmentChunkSize(for: packet, linkLimit: 185))
+        #expect(budget == 142)
+
+        let plan = try #require(BLEOutboundFragmentPlanner.makePlan(
+            for: BLEOutboundFragmentTransferRequest(
+                packet: packet,
+                pad: false,
+                maxChunk: budget,
+                directedPeer: recipient,
+                transferId: nil
+            ),
+            defaultChunkSize: 256,
+            bleMaxMTU: 512,
+            fragmentID: Data(repeating: 0xE5, count: 8)
+        ))
+        #expect(plan.fragmentVersion == 1)
+        #expect(plan.fragmentPackets.count > 1)
+        for fragment in plan.fragmentPackets {
+            let encoded = try #require(fragment.toBinaryData(padding: false))
+            #expect(encoded.count <= 185)
+        }
+        let firstEncoded = try #require(plan.fragmentPackets[0].toBinaryData(padding: false))
+        #expect(firstEncoded.count == 185)
+    }
+
     @Test("invalid fragment IDs do not produce a plan")
     func invalidFragmentIDReturnsNil() {
         let packet = makePacket(payload: makePayload(count: 128))

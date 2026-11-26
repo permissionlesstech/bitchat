@@ -48,7 +48,8 @@ final class BLEPublicMessageHandler {
         self.environment = environment
     }
 
-    func handle(_ packet: BitchatPacket, from peerID: PeerID) {
+    @discardableResult
+    func handle(_ packet: BitchatPacket, from peerID: PeerID) -> Bool {
         let env = environment
         let now = env.now()
         let messageDecision = BLEPublicMessagePolicy.evaluate(
@@ -63,10 +64,10 @@ final class BLEPublicMessageHandler {
         case .accept(let acceptance):
             messagePolicy = acceptance
         case .reject(.selfEcho):
-            return
+            return false
         case .reject(.staleBroadcast(let ageSeconds)):
             SecureLogger.debug("⏰ Ignoring stale broadcast message from \(peerID.id.prefix(8))… (age: \(ageSeconds)s)", category: .session)
-            return
+            return false
         }
 
         // Snapshot peers to avoid concurrent mutation while iterating during nickname collision checks.
@@ -92,7 +93,7 @@ final class BLEPublicMessageHandler {
         let signedDisplayName = (isSelf || verifiedViaRegistry) ? nil : env.signedSenderDisplayName(packet, peerID)
         guard isSelf || verifiedViaRegistry || signedDisplayName != nil else {
             SecureLogger.warning("🚫 Dropping public message with missing/invalid signature for claimed sender \(peerID.id.prefix(8))…", category: .security)
-            return
+            return false
         }
 
         // Authenticity is established; prefer the registry's collision-resolved
@@ -105,7 +106,7 @@ final class BLEPublicMessageHandler {
             allowConnectedUnverified: false
         ) ?? signedDisplayName else {
             SecureLogger.warning("🚫 Dropping public message from unknown peer \(peerID.id.prefix(8))…", category: .security)
-            return
+            return false
         }
 
         if messagePolicy.shouldTrackForSync {
@@ -119,12 +120,12 @@ final class BLEPublicMessageHandler {
         // so nothing larger than a v1 frame is delivered.
         guard packet.payload.count <= Self.maxDeliveredPayloadBytes else {
             SecureLogger.warning("🚫 Dropping \(packet.payload.count)-byte public message from \(peerID.id.prefix(8))…: larger than a v1 frame", category: .security)
-            return
+            return false
         }
 
         guard let content = String(data: packet.payload, encoding: .utf8) else {
             SecureLogger.error("❌ Failed to decode message payload as UTF-8", category: .session)
-            return
+            return false
         }
         // Determine if we have a direct link to the sender
         let directLink = env.linkState(peerID)
@@ -147,5 +148,6 @@ final class BLEPublicMessageHandler {
             )
         }
         env.deliverPublicMessage(peerID, senderNickname, content, ts, messageID)
+        return true
     }
 }

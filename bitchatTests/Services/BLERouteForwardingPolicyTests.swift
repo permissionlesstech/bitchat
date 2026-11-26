@@ -27,6 +27,7 @@ struct BLERouteForwardingPolicyTests {
         let plan = forwardingPlan(packet, local: local)
 
         #expect(!plan.shouldSuppressFloodRelay)
+        #expect(!plan.isSourceRouteFallback)
         #expect(plan.forwardPacket == nil)
         #expect(plan.nextHop == nil)
     }
@@ -55,6 +56,27 @@ struct BLERouteForwardingPolicyTests {
         let plan = forwardingPlan(packet, local: local, connected: [])
 
         #expect(!plan.shouldSuppressFloodRelay)
+        #expect(plan.isSourceRouteFallback)
+        #expect(plan.forwardPacket == nil)
+        #expect(plan.nextHop == nil)
+    }
+
+    @Test("routed packet with duplicate hops is dropped to prevent loops")
+    func duplicateHopsInRouteAreDropped() {
+        let local = peer("1111111111111111")
+        let hop = peer("2222222222222222")
+        let destination = peer("3333333333333333")
+        let packet = makePacket(
+            sender: peer("4444444444444444"),
+            recipient: destination,
+            ttl: 6,
+            route: [routeData(hop), routeData(local), routeData(hop)]
+        )
+
+        let plan = forwardingPlan(packet, local: local, connected: [hop])
+
+        #expect(plan.shouldSuppressFloodRelay)
+        #expect(!plan.isSourceRouteFallback)
         #expect(plan.forwardPacket == nil)
         #expect(plan.nextHop == nil)
     }
@@ -140,6 +162,42 @@ struct BLERouteForwardingPolicyTests {
         #expect(plan.shouldSuppressFloodRelay)
         #expect(plan.forwardPacket == nil)
         #expect(plan.nextHop == nil)
+    }
+
+    @Test("off-route relay delivers to connected destination or continues flood instead of looping back to first hop")
+    func offRouteRelayDoesNotBounceFallbackBackToFirstHop() {
+        let origin = peer("1111111111111111")
+        let firstHop = peer("2222222222222222")
+        let brokenHop = peer("3333333333333333")
+        let offRouteRelay = peer("4444444444444444")
+        let destination = peer("5555555555555555")
+        let packet = makePacket(
+            sender: origin,
+            recipient: destination,
+            ttl: 5,
+            route: [routeData(firstHop), routeData(brokenHop)]
+        )
+
+        // Connected to both `firstHop` and `destination`: forward directly to `destination`.
+        let directPlan = forwardingPlan(
+            packet,
+            local: offRouteRelay,
+            connected: [firstHop, destination]
+        )
+        #expect(directPlan.shouldSuppressFloodRelay)
+        #expect(directPlan.nextHop == destination)
+        #expect(directPlan.forwardPacket?.ttl == 4)
+
+        // Connected to `firstHop` (already visited) but not `destination`: fall back to flood.
+        let floodPlan = forwardingPlan(
+            packet,
+            local: offRouteRelay,
+            connected: [firstHop]
+        )
+        #expect(!floodPlan.shouldSuppressFloodRelay)
+        #expect(floodPlan.isSourceRouteFallback)
+        #expect(floodPlan.nextHop == nil)
+        #expect(floodPlan.forwardPacket == nil)
     }
 
     private func forwardingPlan(

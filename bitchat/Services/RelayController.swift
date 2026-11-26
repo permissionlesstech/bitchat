@@ -1,3 +1,12 @@
+//
+// RelayController.swift
+// bitchat
+//
+// This is free and unencumbered software released into the public domain.
+// For more information, see <https://unlicense.org>
+//
+
+import BitFoundation
 import Foundation
 
 // RelayDecision encapsulates a single relay scheduling choice.
@@ -7,7 +16,44 @@ struct RelayDecision {
     let delayMs: Int
 }
 
-// RelayController centralizes flood control policy for relays.
+/// Traffic-class-aware broadcast relay policy.
+enum BroadcastRelayPolicy: Equatable {
+    case mpr1Covered
+    case mpr2Covered
+    case prunedFlood
+    case conservativeFlood
+}
+
+/// Outcome of deterministic MPR / broadcast-policy evaluation.
+struct BroadcastRelayDecision: Equatable {
+    let shouldRelay: Bool
+    let skipNeighborPruning: Bool
+    let isMPRGoverned: Bool
+    let isConservative: Bool
+    let reason: String
+
+    /// Both MPR-elected hubs and conservative-flood packets must not have
+    /// their scheduled relays cancelled by duplicate arrival.
+    var isProtectedFromDuplicateCancellation: Bool {
+        isMPRGoverned || isConservative
+    }
+
+    init(
+        shouldRelay: Bool,
+        skipNeighborPruning: Bool,
+        isMPRGoverned: Bool,
+        isConservative: Bool = false,
+        reason: String
+    ) {
+        self.shouldRelay = shouldRelay
+        self.skipNeighborPruning = skipNeighborPruning
+        self.isMPRGoverned = isMPRGoverned
+        self.isConservative = isConservative
+        self.reason = reason
+    }
+}
+
+// RelayController centralizes flood control and deterministic MPR policy for relays.
 struct RelayController {
     static func decide(ttl: UInt8,
                        senderIsSelf: Bool,
@@ -93,5 +139,196 @@ struct RelayController {
         default:    delayMs = Int.random(in: 100...220)
         }
         return RelayDecision(shouldRelay: true, newTTL: newTTL, delayMs: delayMs)
+    }
+
+    // MARK: - Traffic-Class-Aware MPR Relay Policy
+
+    /// Single source of truth for packet types that must always use
+    /// conservative flooding (no MPR suppression, no neighbor pruning).
+    /// Shared by `broadcastRelayPolicy` and `BroadcastPruningPolicy` so relay
+    /// evaluation and egress target pruning never disagree.
+    static func isAlwaysConservativeBroadcastPacket(_ packet: BitchatPacket) -> Bool {
+        if !BLEPacketFreshnessPolicy.isBroadcastRecipient(packet.recipientID) {
+            return true
+        }
+        guard let messageType = MessageType(rawValue: packet.type) else {
+            return true
+        }
+        switch messageType {
+        case .leave,
+             .noiseHandshake,
+             .noiseEncrypted,
+             .requestSync,
+             .courierEnvelope,
+             .ping,
+             .pong,
+             .nostrCarrier,
+             .announceV2:
+            return true
+        case .boardPost:
+            return BoardWire.urgentFlag(in: packet.payload)
+        case .announce, .message, .fragment, .fileTransfer, .prekeyBundle, .groupMessage, .voiceFrame:
+            return false
+        }
+    }
+
+    /// Determines the broadcast relay policy for a packet, in parity with
+    /// Android's `PacketRelayManager.relayPolicyFor`.
+    static func broadcastRelayPolicy(
+        for packet: BitchatPacket,
+        originPeerID: PeerID,
+        forceConservativeRelay: Bool,
+        sourceRouteFallback: Bool,
+        isAuthenticated: Bool = true,
+        topology: MeshTopologyTracker,
+        edgeMaxAge: TimeInterval = TransportConfig.bleMprEdgeMaxAgeSeconds,
+        now: Date? = nil
+    ) -> BroadcastRelayPolicy {
+        if sourceRouteFallback || isAlwaysConservativeBroadcastPacket(packet) {
+            return .conservativeFlood
+        }
+
+        guard let messageType = MessageType(rawValue: packet.type) else {
+            return .conservativeFlood
+        }
+
+        switch messageType {
+        case .voiceFrame, .boardPost:
+            return isAuthenticated ? .mpr1Covered : .prunedFlood
+
+        case .message:
+            // Only cryptographically authenticated signed broadcast messages can
+            // safely enter MPR suppression (so a matching duplicate from an
+            // electing hop can reopen suppression). Unsigned or unverified
+            // messages fail closed to neighbor-pruned relaying.
+            return (packet.signature != nil && isAuthenticated) ? .mpr1Covered : .prunedFlood
+
+        case .fragment:
+            // Only cryptographically authenticated signed broadcast fragments
+            // can safely enter 2-covered MPR (so a matching duplicate from an
+            // electing hop can reopen suppression). Unsigned or unverified
+            // fragments fail closed to neighbor-pruned relaying.
+            return (packet.signature != nil && isAuthenticated) ? .mpr2Covered : .prunedFlood
+
+        case .fileTransfer:
+            return isAuthenticated ? .mpr2Covered : .prunedFlood
+
+        case .announce:
+            if !isAuthenticated
+                || forceConservativeRelay
+                || !topology.isFreshAnnouncement(for: originPeerID, maxAge: edgeMaxAge, now: now) {
+                return .conservativeFlood
+            }
+            return .mpr1Covered
+
+        case .groupMessage:
+            // Sealed group messages have an unsigned outer envelope (authenticated
+            // inside ChaChaPoly only by group members), so non-member relays
+            // cannot re-authenticate duplicates; use neighbor-pruned relaying.
+            return .prunedFlood
+
+        case .prekeyBundle:
+            return (packet.signature != nil && isAuthenticated) ? .mpr1Covered : .prunedFlood
+
+        default:
+            // All other packet types are classified as conservative by
+            // `isAlwaysConservativeBroadcastPacket(_:)` above.
+            return .conservativeFlood
+        }
+    }
+
+    /// Evaluates whether the local node should relay a broadcast packet under
+    /// deterministic 2-hop MPR hub selection and mixed/moving-mesh fail-safes.
+    static func evaluateBroadcastRelay(
+        packet: BitchatPacket,
+        originPeerID: PeerID,
+        localPeerID: PeerID,
+        previousHopPeerID: PeerID?,
+        networkSize: Int,
+        directConnectedPeers: Set<PeerID>,
+        hasUnidentifiedDirectLink: Bool,
+        forceConservativeRelay: Bool = false,
+        sourceRouteFallback: Bool = false,
+        isAuthenticated: Bool = true,
+        topology: MeshTopologyTracker,
+        smallNetworkThreshold: Int = TransportConfig.bleMprSmallNetworkRelayThreshold,
+        edgeMaxAge: TimeInterval = TransportConfig.bleMprEdgeMaxAgeSeconds,
+        now: Date? = nil
+    ) -> BroadcastRelayDecision {
+        let policy = broadcastRelayPolicy(
+            for: packet,
+            originPeerID: originPeerID,
+            forceConservativeRelay: forceConservativeRelay,
+            sourceRouteFallback: sourceRouteFallback,
+            isAuthenticated: isAuthenticated,
+            topology: topology,
+            edgeMaxAge: edgeMaxAge,
+            now: now
+        )
+
+        if policy == .conservativeFlood {
+            return BroadcastRelayDecision(
+                shouldRelay: true,
+                skipNeighborPruning: true,
+                isMPRGoverned: false,
+                isConservative: true,
+                reason: sourceRouteFallback ? "source-route-fallback" : "conservative-policy"
+            )
+        }
+
+        let previousHopMissingOrStale: Bool = {
+            guard let previousHopPeerID, !previousHopPeerID.isEmpty else { return true }
+            return !topology.isFreshAnnouncement(for: previousHopPeerID, maxAge: edgeMaxAge, now: now)
+        }()
+
+        if policy == .prunedFlood {
+            return BroadcastRelayDecision(
+                shouldRelay: true,
+                skipNeighborPruning: previousHopMissingOrStale,
+                isMPRGoverned: false,
+                reason: "pruned-flood"
+            )
+        }
+
+        // Small networks always relay to preserve connectivity while still
+        // guarding neighbor pruning on a fresh previous-hop graph.
+        if networkSize <= smallNetworkThreshold {
+            return BroadcastRelayDecision(
+                shouldRelay: true,
+                skipNeighborPruning: previousHopMissingOrStale,
+                isMPRGoverned: false,
+                reason: "small-network(\(networkSize))"
+            )
+        }
+
+        // Unknown previous hop cannot safely compute N1(P)/N2(P) or prune neighbors.
+        guard let previousHopPeerID, !previousHopPeerID.isEmpty else {
+            return BroadcastRelayDecision(
+                shouldRelay: true,
+                skipNeighborPruning: true,
+                isMPRGoverned: false,
+                reason: "unknown-previous-hop"
+            )
+        }
+
+        let coverageK = (policy == .mpr2Covered) ? 2 : 1
+        let mprDecision = MPRSelector.evaluateRelay(
+            myPeerID: localPeerID,
+            previousHopPeerID: previousHopPeerID,
+            originPeerID: originPeerID,
+            topology: topology,
+            directConnectedNeighbors: directConnectedPeers,
+            hasUnidentifiedDirectLink: hasUnidentifiedDirectLink,
+            coverageK: coverageK,
+            maxAge: edgeMaxAge,
+            now: now
+        )
+
+        return BroadcastRelayDecision(
+            shouldRelay: mprDecision.shouldRelay,
+            skipNeighborPruning: mprDecision.reason == .staleOrMissingGraph,
+            isMPRGoverned: mprDecision.reason != .staleOrMissingGraph,
+            reason: "mpr(k=\(coverageK)):\(mprDecision.reason)"
+        )
     }
 }
