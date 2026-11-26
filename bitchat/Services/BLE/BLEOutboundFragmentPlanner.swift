@@ -20,12 +20,17 @@ enum BLEOutboundFragmentPlanner {
     /// Current Android receivers reject fragment sets above 256. Private
     /// media v1 treats that deployed ceiling as a cross-platform contract.
     static let privateMediaV1MaxFragments = 256
-    /// Matches `BLEFragmentHeader`'s hard receiver ceiling (`total <= 10_000`)
-    /// and stays well below the 16-bit wire fragment-count limit so tiny routed
-    /// chunks can never allocate unbounded trains or trap on `UInt16(total)`.
-    static let maxSupportedFragments = 10_000
+    /// Matches `BLEFragmentHeader.maxSupportedFragments` (`10_000`) and stays
+    /// well below the 16-bit wire fragment-count limit so tiny routed chunks
+    /// can never allocate unbounded trains or trap on `UInt16(total)`.
+    static let maxSupportedFragments = BLEFragmentHeader.maxSupportedFragments
     private static let minimumChunkSize = 64
     private static let fragmentIDLength = 8
+
+    static func fragmentCount(forDataCount dataCount: Int, chunkSize: Int) -> Int {
+        guard dataCount > 0, chunkSize > 0 else { return 0 }
+        return (dataCount + chunkSize - 1) / chunkSize
+    }
 
     static func makePlan(
         for request: BLEOutboundFragmentTransferRequest,
@@ -48,7 +53,7 @@ enum BLEOutboundFragmentPlanner {
             return nil
         }
 
-        let totalFragments = (fullData.count + sizing.chunkSize - 1) / sizing.chunkSize
+        let totalFragments = fragmentCount(forDataCount: fullData.count, chunkSize: sizing.chunkSize)
         guard totalFragments > 0, totalFragments <= maxSupportedFragments else {
             return nil
         }
@@ -120,9 +125,14 @@ enum BLEOutboundFragmentPlanner {
 
         if let requestedMaxChunk {
             guard requestedMaxChunk > 0 else { return nil }
+            // Honor explicit link-MTU-derived budgets for directed packets too
+            // so tight links never clamp upward past the physical MTU.
+            let chunk = packet.recipientID != nil
+                ? requestedMaxChunk
+                : max(minimumChunkSize, requestedMaxChunk)
             return (
                 fragmentVersion: fragmentVersion,
-                chunkSize: max(minimumChunkSize, requestedMaxChunk)
+                chunkSize: chunk
             )
         }
 

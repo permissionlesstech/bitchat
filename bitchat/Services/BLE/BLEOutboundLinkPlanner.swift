@@ -32,17 +32,53 @@ enum BLEOutboundLinkPlanner {
         let isFragment = packet.type == MessageType.fragment.rawValue
         let isRouted = !(packet.route?.isEmpty ?? true)
 
+        let peripheralLimitByID = Dictionary(zip(peripheralIDs, peripheralWriteLimits), uniquingKeysWith: { first, _ in first })
+        let centralLimitByID = Dictionary(zip(centralIDs, centralNotifyLimits), uniquingKeysWith: { first, _ in first })
+
+        // For unrouted, non-strict broadcast fragments, identify peers that
+        // hold at least one fitting non-excluded link so an undersized
+        // preferred link (e.g., MTU 50) never displaces a usable sibling link
+        // (e.g., MTU 512) during per-peer link collapse.
+        var peersWithFittingFragmentLink = Set<PeerID>()
+        if isFragment && !(requireDirectPeerLink || isRouted) {
+            var blocked = excludedLinks
+            if let ingressLink = ingressRecord?.link {
+                blocked.insert(ingressLink)
+            }
+            for id in peripheralIDs where !blocked.contains(.peripheral(id)) {
+                if let peer = peripheralPeerBindings[id],
+                   let limit = peripheralLimitByID[id],
+                   dataCount <= limit {
+                    peersWithFittingFragmentLink.insert(peer)
+                }
+            }
+            for id in centralIDs where !blocked.contains(.central(id)) {
+                if let peer = centralPeerBindings[id],
+                   let limit = centralLimitByID[id],
+                   dataCount <= limit {
+                    peersWithFittingFragmentLink.insert(peer)
+                }
+            }
+        }
+
         // Filter out links whose physical MTU cannot carry this packet BEFORE
         // duplicate-peer link collapse, so an undersized preferred link (e.g.,
         // a 50-byte peripheral) cannot hide a usable sibling link (e.g., a
         // 512-byte central) to the same peer during strict unicast or fallback.
-        func isLinkCapable(limit: Int?) -> Bool {
+        func isLinkCapable(limit: Int?, boundPeer: PeerID?) -> Bool {
             guard let limit else { return true }
             if dataCount <= limit { return true }
             if isFragment {
                 // Already-fragmented packets cannot be re-fragmented; enforce
-                // encoded MTU for strict direct sends and routed fragments.
-                return !(requireDirectPeerLink || isRouted)
+                // encoded MTU for strict direct sends, routed fragments, and
+                // any peer that has a fitting sibling link.
+                if requireDirectPeerLink || isRouted {
+                    return false
+                }
+                if let boundPeer, peersWithFittingFragmentLink.contains(boundPeer) {
+                    return false
+                }
+                return true
             }
             return BLEOutboundPacketPolicy.fragmentChunkSize(
                 for: packet,
@@ -51,11 +87,12 @@ enum BLEOutboundLinkPlanner {
             ) != nil
         }
 
-        let peripheralLimitByID = Dictionary(zip(peripheralIDs, peripheralWriteLimits), uniquingKeysWith: { first, _ in first })
-        let centralLimitByID = Dictionary(zip(centralIDs, centralNotifyLimits), uniquingKeysWith: { first, _ in first })
-
-        let capablePeripheralIDs = peripheralIDs.filter { isLinkCapable(limit: peripheralLimitByID[$0]) }
-        let capableCentralIDs = centralIDs.filter { isLinkCapable(limit: centralLimitByID[$0]) }
+        let capablePeripheralIDs = peripheralIDs.filter {
+            isLinkCapable(limit: peripheralLimitByID[$0], boundPeer: peripheralPeerBindings[$0])
+        }
+        let capableCentralIDs = centralIDs.filter {
+            isLinkCapable(limit: centralLimitByID[$0], boundPeer: centralPeerBindings[$0])
+        }
 
         let effectiveLinks = BLEFanoutSelector.selectLinks(
             peripheralIDs: capablePeripheralIDs,

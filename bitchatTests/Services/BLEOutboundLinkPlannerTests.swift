@@ -392,6 +392,37 @@ struct BLEOutboundLinkPlannerTests {
         )
         #expect(fallbackFragPlan.selectedLinks.peripheralIDs.isEmpty)
         #expect(fallbackFragPlan.selectedLinks.centralIDs == Set(["c-good"]))
+
+        // Route-less broadcast fragment (100 bytes) on a mixed-MTU dual-role peer:
+        // preferred `p-tiny` (MTU 50) must not displace usable sibling `c-good` (MTU 512).
+        let unroutedBroadcastFrag = BitchatPacket(
+            type: MessageType.fragment.rawValue,
+            senderID: Data([0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08]),
+            recipientID: nil,
+            timestamp: 1_235,
+            payload: Data(repeating: 0x33, count: 40),
+            signature: nil,
+            ttl: 5,
+            version: 1,
+            route: nil
+        )
+        let unroutedFragPlan = BLEOutboundLinkPlanner.plan(
+            packet: unroutedBroadcastFrag,
+            dataCount: 100,
+            peripheralIDs: ["p-tiny"],
+            peripheralWriteLimits: [50],
+            centralIDs: ["c-good"],
+            centralNotifyLimits: [512],
+            ingressRecord: nil,
+            excludedLinks: [],
+            peripheralPeerBindings: ["p-tiny": nextHop],
+            centralPeerBindings: ["c-good": nextHop],
+            preferredPeripheralPerPeer: [nextHop: "p-tiny"],
+            directedOnlyPeer: nil,
+            requireDirectPeerLink: false
+        )
+        #expect(unroutedFragPlan.selectedLinks.peripheralIDs.isEmpty)
+        #expect(unroutedFragPlan.selectedLinks.centralIDs == Set(["c-good"]))
     }
 
     private func makePacket(

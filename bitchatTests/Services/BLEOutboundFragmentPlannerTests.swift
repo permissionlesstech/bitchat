@@ -283,6 +283,45 @@ struct BLEOutboundFragmentPlannerTests {
         ) == nil)
     }
 
+    @Test("unrouted directed v1 file fragments fit exact 185-byte link MTU without 1-byte overflow")
+    func unroutedDirectedFragmentFitsExactV1LinkMTU() throws {
+        let recipient = PeerID(str: "9091929394959697")
+        let packet = BitchatPacket(
+            type: MessageType.fileTransfer.rawValue,
+            senderID: Data([0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08]),
+            recipientID: recipient.routingData,
+            timestamp: 1_000,
+            payload: makePayload(count: 1_024, seed: 0x1357_9BDF),
+            signature: nil,
+            ttl: 5,
+            version: 1,
+            route: nil
+        )
+        let budget = try #require(BLEOutboundPacketPolicy.fragmentChunkSize(for: packet, linkLimit: 185))
+        #expect(budget == 142)
+
+        let plan = try #require(BLEOutboundFragmentPlanner.makePlan(
+            for: BLEOutboundFragmentTransferRequest(
+                packet: packet,
+                pad: false,
+                maxChunk: budget,
+                directedPeer: recipient,
+                transferId: nil
+            ),
+            defaultChunkSize: 256,
+            bleMaxMTU: 512,
+            fragmentID: Data(repeating: 0xE5, count: 8)
+        ))
+        #expect(plan.fragmentVersion == 1)
+        #expect(plan.fragmentPackets.count > 1)
+        for fragment in plan.fragmentPackets {
+            let encoded = try #require(fragment.toBinaryData(padding: false))
+            #expect(encoded.count <= 185)
+        }
+        let firstEncoded = try #require(plan.fragmentPackets[0].toBinaryData(padding: false))
+        #expect(firstEncoded.count == 185)
+    }
+
     @Test("invalid fragment IDs do not produce a plan")
     func invalidFragmentIDReturnsNil() {
         let packet = makePacket(payload: makePayload(count: 128))
