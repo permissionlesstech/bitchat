@@ -83,6 +83,30 @@ struct PTTAudioTests {
         #expect(energy > 1)
     }
 
+    @Test func encoderAndDecoderReuseScratchBuffersAcrossChunks() throws {
+        let encoder = try #require(PTTFrameEncoder())
+        let decoder = try #require(PTTFrameDecoder())
+        let format = try #require(PTTAudioFormat.pcmFormat)
+        let chunkFrames = AVAudioFrameCount(0.2 * PTTAudioFormat.sampleRate)
+
+        var totalDecodedSamples = 0
+        for chunk in 0..<4 {
+            let buffer = try #require(AVAudioPCMBuffer(pcmFormat: format, frameCapacity: chunkFrames))
+            buffer.frameLength = chunkFrames
+            let channel = try #require(buffer.floatChannelData?[0])
+            let baseIndex = chunk * Int(chunkFrames)
+            for i in 0..<Int(chunkFrames) {
+                channel[i] = sinf(2 * .pi * 440 * Float(baseIndex + i) / Float(PTTAudioFormat.sampleRate)) * 0.5
+            }
+            for frame in encoder.encode(buffer) {
+                if let pcm = decoder.decode(frame) {
+                    totalDecodedSamples += Int(pcm.frameLength)
+                }
+            }
+        }
+        #expect(totalDecodedSamples >= 8 * Int(PTTAudioFormat.samplesPerFrame))
+    }
+
     // MARK: - Helpers
 
     private func encodeSineFrames(seconds: Double) throws -> [Data] {

@@ -85,4 +85,39 @@ struct ImageUtilsTests {
         #expect(FileManager.default.fileExists(atPath: firstURL.path))
         #expect(FileManager.default.fileExists(atPath: secondURL.path))
     }
+
+    @Test
+    func processImageAtURL_downsamplesAndWritesJpeg() throws {
+        let sourceImage = makePlatformImage(size: CGSize(width: 800, height: 600))
+        let sourceDir = makeTemporaryDirectoryURL("image-src-\(UUID().uuidString)")
+        let outputDir = makeTemporaryDirectoryURL("image-dst-\(UUID().uuidString)")
+        defer {
+            try? FileManager.default.removeItem(at: sourceDir)
+            try? FileManager.default.removeItem(at: outputDir)
+        }
+
+        let sourceURL = try ImageUtils.processImage(sourceImage, maxDimension: 800, outputDirectory: sourceDir)
+        let downsampledURL = try ImageUtils.processImage(at: sourceURL, maxDimension: 200, outputDirectory: outputDir)
+
+        let data = try Data(contentsOf: downsampledURL)
+        #expect(data.starts(with: Data([0xFF, 0xD8])))
+        let loaded = try #require(ImageDownsampler.loadDownsampledImage(from: downsampledURL, maxPixelSize: 1024))
+        #expect(max(loaded.size.width, loaded.size.height) <= 200.5)
+    }
+
+    @Test
+    func imageDownsampler_cachesAndClearsOnPanicReset() throws {
+        let image = makePlatformImage(size: CGSize(width: 128, height: 128))
+        let dir = makeTemporaryDirectoryURL("image-cache-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: dir) }
+
+        let fileURL = try ImageUtils.processImage(image, maxDimension: 128, outputDirectory: dir)
+        #expect(ImageDownsampler.cachedImage(for: fileURL, maxPixelSize: 64) == nil)
+        let decoded = try #require(ImageDownsampler.loadDownsampledImage(from: fileURL, maxPixelSize: 64))
+        let cached = try #require(ImageDownsampler.cachedImage(for: fileURL, maxPixelSize: 64))
+        #expect(decoded === cached)
+
+        ImageDownsampler.resetForPanic()
+        #expect(ImageDownsampler.cachedImage(for: fileURL, maxPixelSize: 64) == nil)
+    }
 }

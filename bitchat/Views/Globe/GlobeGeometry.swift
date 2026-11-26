@@ -147,6 +147,25 @@ enum GlobeGeometry {
 
     /// Sutherland–Hodgman clip of a polygon to the rect.
     static func clipPolygon(_ pts: [CGPoint], to rect: ClipRect) -> [CGPoint] {
+        guard let first = pts.first else { return pts }
+        let left = CGFloat(rect.left), right = CGFloat(rect.right)
+        let top = CGFloat(rect.top), bottom = CGFloat(rect.bottom)
+
+        // Fast bounding-box pre-check avoids 4 edge passes and allocations when
+        // a polygon is fully inside or fully outside the expanded clip rect.
+        var minX = first.x, maxX = first.x
+        var minY = first.y, maxY = first.y
+        for p in pts.dropFirst() {
+            if p.x < minX { minX = p.x } else if p.x > maxX { maxX = p.x }
+            if p.y < minY { minY = p.y } else if p.y > maxY { maxY = p.y }
+        }
+        if maxX < left || minX > right || maxY < top || minY > bottom {
+            return []
+        }
+        if minX >= left && maxX <= right && minY >= top && maxY <= bottom {
+            return pts
+        }
+
         func clipEdge(
             _ input: [CGPoint],
             inside: (CGPoint) -> Bool,
@@ -167,8 +186,6 @@ enum GlobeGeometry {
             }
             return result
         }
-        let left = CGFloat(rect.left), right = CGFloat(rect.right)
-        let top = CGFloat(rect.top), bottom = CGFloat(rect.bottom)
         var out = pts
         out = clipEdge(out, inside: { $0.x >= left }) { a, b in
             CGPoint(x: left, y: a.y + (left - a.x) / (b.x - a.x) * (b.y - a.y))
@@ -214,6 +231,31 @@ enum GlobeGeometry {
         )
     }
 
+    /// Precomputed disc probe point and its geographic coordinates for one frame's camera,
+    /// avoiding redundant `GlobeMath.unproject` calls for every back-crossing land ring.
+    struct UnprojectedSample {
+        let nx: Double
+        let ny: Double
+        let lat: Double
+        let lon: Double
+    }
+
+    private static let inversionProbeCoords: [(Double, Double)] = [
+        (0, 0), (-0.5, 0), (0.5, 0), (0, -0.5), (0, 0.5),
+        (-0.35, -0.35), (0.35, -0.35), (-0.35, 0.35), (0.35, 0.35)
+    ]
+
+    /// Unprojects the 9 fixed disc probes once per frame for `projectedFillNeedsInversion`.
+    static func unprojectInversionSamples(centerLat: Double, centerLon: Double) -> [UnprojectedSample] {
+        var out: [UnprojectedSample] = []
+        out.reserveCapacity(inversionProbeCoords.count)
+        for (nx, ny) in inversionProbeCoords {
+            guard let location = GlobeMath.unproject(x: nx, y: ny, centerLat: centerLat, centerLon: centerLon) else { continue }
+            out.append(UnprojectedSample(nx: nx, ny: ny, lat: location.lat, lon: location.lon))
+        }
+        return out
+    }
+
     /// Orthographic projection can choose the wrong side of the horizon closure for very
     /// large rings. A single center-point check is ambiguous for a large polygon and
     /// caused an occasional whole-disc fill, so compare several visible points with the
@@ -225,18 +267,15 @@ enum GlobeGeometry {
         cy: Double,
         r: Double,
         centerLat: Double,
-        centerLon: Double
+        centerLon: Double,
+        samples: [UnprojectedSample]? = nil
     ) -> Bool {
-        let samples: [(Double, Double)] = [
-            (0, 0), (-0.5, 0), (0.5, 0), (0, -0.5), (0, 0.5),
-            (-0.35, -0.35), (0.35, -0.35), (-0.35, 0.35), (0.35, 0.35)
-        ]
+        let resolvedSamples = samples ?? unprojectInversionSamples(centerLat: centerLat, centerLon: centerLon)
         var normalErrors = 0
         var invertedErrors = 0
-        for (nx, ny) in samples {
-            guard let location = GlobeMath.unproject(x: nx, y: ny, centerLat: centerLat, centerLon: centerLon) else { continue }
-            let geographicInside = ringContains(ring, lat: location.lat, lon: location.lon)
-            let projectedInside = polygonContains(polygon, x: cx + nx * r, y: cy + ny * r)
+        for sample in resolvedSamples {
+            let geographicInside = ringContains(ring, lat: sample.lat, lon: sample.lon)
+            let projectedInside = polygonContains(polygon, x: cx + sample.nx * r, y: cy + sample.ny * r)
             if projectedInside != geographicInside { normalErrors += 1 }
             if !projectedInside != geographicInside { invertedErrors += 1 }
         }

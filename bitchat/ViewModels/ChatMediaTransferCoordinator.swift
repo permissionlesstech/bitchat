@@ -697,15 +697,6 @@ final class ChatMediaTransferCoordinator {
 
         let targetPeer = context.selectedPrivateChatPeer
         let generation = imagePreparationBarrier.currentGeneration
-
-        do {
-            try ImageUtils.validateImageSource(at: sourceURL)
-        } catch {
-            SecureLogger.error("Image send preparation failed: \(error)", category: .session)
-            context.addSystemMessage("Failed to prepare image for sending.")
-            return
-        }
-
         let prepareImagePacket = self.prepareImagePacket
         let barrier = imagePreparationBarrier
         Task.detached(priority: .userInitiated) { [weak self, barrier] in
@@ -714,7 +705,8 @@ final class ChatMediaTransferCoordinator {
                     try barrier.performIfCurrent(
                         generation: generation,
                         operation: {
-                            try prepareImagePacket(sourceURL)
+                            try ImageUtils.validateImageSource(at: sourceURL)
+                            return try prepareImagePacket(sourceURL)
                         }
                     )
                 }
