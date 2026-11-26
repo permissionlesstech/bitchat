@@ -59,6 +59,12 @@ struct BLENoiseSessionQueues {
         }
     }
 
+    #if DEBUG
+    func typedPayloadCount(for peerID: PeerID) -> Int {
+        typedPayloadsByPeerID[peerID]?.count ?? 0
+    }
+    #endif
+
     @discardableResult
     mutating func removeTypedPayload(transferId: String) -> Bool {
         for peerID in Array(typedPayloadsByPeerID.keys) {
