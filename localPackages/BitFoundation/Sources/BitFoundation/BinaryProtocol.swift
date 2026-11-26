@@ -6,88 +6,26 @@
 // For more information, see <https://unlicense.org>
 //
 
+/// Binary encoding and decoding for BitChat packets, using network byte order.
 ///
-/// # BinaryProtocol
+/// Version 1 has a 14-byte fixed header with a two-byte payload-length field;
+/// version 2 has a 16-byte fixed header with a four-byte payload-length field.
+/// The header is followed by the eight-byte sender ID, optional eight-byte
+/// recipient ID, optional v2 route, payload and optional 64-byte signature.
+/// A route contains a one-byte hop count followed by eight-byte hop IDs.
+/// For compressed payloads, the payload length includes an original-size
+/// field of the same width as the payload-length field and the encoded bytes.
 ///
-/// Low-level binary encoding and decoding for BitChat protocol messages.
-/// Optimized for Bluetooth LE's limited bandwidth and MTU constraints.
+/// Received packets retain their compressed or uncompressed payload encoding
+/// for signing reconstruction and relay. Newly constructed packets use
+/// CompressionUtil's eligibility checks and use compression when it is smaller.
+/// Decoding checks the framed payload length, per-type decoded and retained
+/// compressed-size limits, and the compression-ratio bound. Codable metadata
+/// validation is separate.
 ///
-/// ## Overview
-/// BinaryProtocol implements an efficient binary wire format that minimizes
-/// overhead while maintaining extensibility. It handles:
-/// - Compact binary encoding with fixed headers
-/// - Optional field support via flags
-/// - Automatic compression for large payloads
-/// - Endianness handling for cross-platform compatibility
-///
-/// ## Wire Format
-/// ```
-/// Header (Fixed 14 bytes for v1, 16 bytes for v2):
-/// +--------+------+-----+-----------+-------+------------------+
-/// |Version | Type | TTL | Timestamp | Flags | PayloadLength    |
-/// |1 byte  |1 byte|1byte| 8 bytes   | 1 byte| 2 or 4 bytes     |
-/// +--------+------+-----+-----------+-------+------------------+
-///
-/// Variable sections:
-/// +----------+-------------+---------+------------+
-/// | SenderID | RecipientID | Payload | Signature  |
-/// | 8 bytes  | 8 bytes*    | Variable| 64 bytes*  |
-/// +----------+-------------+---------+------------+
-/// * Optional fields based on flags
-/// ```
-///
-/// ## Design Rationale
-/// The protocol is designed for:
-/// - **Efficiency**: Minimal overhead for small messages
-/// - **Flexibility**: Optional fields via flag bits
-/// - **Compatibility**: Network byte order (big-endian)
-/// - **Performance**: Zero-copy where possible
-///
-/// ## Compression Strategy
-/// - Automatic compression for payloads > 256 bytes
-/// - zlib compression for broad compatibility on Apple platforms
-/// - Original size stored for decompression; decoded payloads, compressed or
-///   not, are capped per message type (see `PacketPayloadLimits`)
-/// - Flag bit indicates compressed payload
-///
-/// ## Flag Bits
-/// - Bit 0: Has recipient ID (directed message)
-/// - Bit 1: Has signature (authenticated message)
-/// - Bit 2: Is compressed (zlib compression applied)
-/// - Bits 3-7: Reserved for future use
-///
-/// ## Size Constraints
-/// - Maximum packet size: 65,535 bytes (16-bit length field)
-/// - Typical packet size: < 512 bytes (BLE MTU)
-/// - Minimum packet size: 21 bytes (header + sender ID)
-///
-/// ## Encoding Process
-/// 1. Construct header with fixed fields
-/// 2. Set appropriate flags
-/// 3. Compress payload if beneficial
-/// 4. Append variable-length fields
-/// 5. Calculate and append signature if needed
-///
-/// ## Decoding Process
-/// 1. Validate minimum packet size
-/// 2. Parse fixed header
-/// 3. Extract flags and determine field presence
-/// 4. Parse variable fields based on flags
-/// 5. Decompress payload if compressed
-/// 6. Verify signature if present
-///
-/// ## Error Handling
-/// - Graceful handling of malformed packets
-/// - Clear error messages for debugging
-/// - No crashes on invalid input
-/// - Logging of protocol violations
-///
-/// ## Performance Notes
-/// - Allocation-free for small messages
-/// - Streaming support for large payloads
-/// - Efficient bit manipulation
-/// - Platform-optimized byte swapping
-///
+/// Flags indicate recipient (bit 0), signature (bit 1), compression (bit 2),
+/// route (bit 3) and sync reply (bit 4). Encoding appends a supplied signature;
+/// decoding reads it. Signature verification is performed by callers.
 
 import struct Foundation.Data
 import class Foundation.NSData
@@ -134,11 +72,21 @@ public struct BinaryProtocol {
         let version = packet.version
         guard version == 1 || version == 2 else { return nil }
 
-        // Try to compress payload when beneficial, keeping original size for later decoding
+        // Reuse a received payload encoding, or try compression for a locally constructed packet.
         var payload = packet.payload
         var isCompressed = false
         var originalPayloadSize: Int?
-        if CompressionUtil.shouldCompress(payload) {
+        if let received = packet.wirePayload {
+            // Recompression can produce different signed bytes. Reuse the retained
+            // payload representation for encoding and signing-byte reconstruction.
+            if let compressed = received.compressedBytes {
+                let maxRepresentable = version == 2 ? Int(UInt32.max) : Int(UInt16.max)
+                guard payload.count <= maxRepresentable else { return nil }
+                originalPayloadSize = payload.count
+                payload = compressed
+                isCompressed = true
+            }
+        } else if CompressionUtil.shouldCompress(payload) {
             // Only compress when we can represent the original length in the outbound frame
             let maxRepresentable = version == 2 ? Int(UInt32.max) : Int(UInt16.max)
             if payload.count <= maxRepresentable,
@@ -357,9 +305,10 @@ public struct BinaryProtocol {
 
             // Payload: payloadLength is exactly the payload size (+ compression preamble if compressed)
             // Per-type ceiling on the decoded payload, compressed or not,
-            // checked before any allocation: see PacketPayloadLimits for why
+            // checked before allocating the decoded payload buffer: see PacketPayloadLimits for why
             // one frame-wide cap is not enough.
             let maxPayloadSize = PacketPayloadLimits.maxPayloadBytes(forType: type)
+            var receivedCompressed: Data?
             let payload: Data
             if isCompressed {
                 guard payloadLength >= lengthFieldBytes else { return nil }
@@ -376,7 +325,9 @@ public struct BinaryProtocol {
                     return nil
                 }
                 let compressedSize = payloadLength - lengthFieldBytes
-                guard compressedSize > 0, let compressed = readData(compressedSize) else { return nil }
+                // The received encoding is retained by packets and count-limited stores.
+                guard compressedSize > 0, compressedSize <= maxPayloadSize,
+                      let compressed = readData(compressedSize) else { return nil }
 
                 guard originalSize <= compressedSize * PacketPayloadLimits.maxDeflateRatio else {
                     SecureLogger.debug("🚫 Impossible compression ratio: \(originalSize) bytes from \(compressedSize)", category: .security)
@@ -385,6 +336,7 @@ public struct BinaryProtocol {
 
                 guard let decompressed = CompressionUtil.decompress(compressed, originalSize: originalSize),
                       decompressed.count == originalSize else { return nil }
+                receivedCompressed = compressed
                 payload = decompressed
             } else {
                 // Uncompressed payloads get the same ceiling, or a large frame
@@ -405,7 +357,7 @@ public struct BinaryProtocol {
 
             guard offset <= buf.count else { return nil }
 
-            return BitchatPacket(
+            var decoded = BitchatPacket(
                 type: type,
                 senderID: senderID,
                 recipientID: recipientID,
@@ -417,6 +369,8 @@ public struct BinaryProtocol {
                 route: route,
                 isRSR: isRSR
             )
+            decoded.wirePayload = PacketWirePayload(compressedBytes: receivedCompressed)
+            return decoded
         }
     }
 }

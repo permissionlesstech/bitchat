@@ -94,6 +94,42 @@ struct BoardStoreTests {
         )
     }
 
+    @Test(arguments: [0, 1600])
+    func notificationDecodeBoundsRetainedBoardPayload(emptyBlocks: Int) throws {
+        let entry = try makePost(author: Curve25519.Signing.PrivateKey(), createdAt: baseMs)
+        let frame = RetainedPacketTestFixture.frame(type: .boardPost,
+            sender: entry.packet.senderID, timestamp: baseMs,
+            payload: entry.wire.encode(), emptyBlocks: emptyBlocks)
+        var assembler = NotificationStreamAssembler()
+        var frames: [Data] = []
+        for offset in stride(from: 0, to: frame.count, by: 454) {
+            let result = assembler.append(Data(frame[offset..<min(offset + 454, frame.count)]))
+            #expect(!result.reset)
+            frames.append(contentsOf: result.frames)
+        }
+        #expect(frames.count == 1)
+        let received = BitchatPacket.from(try #require(frames.first))
+        if emptyBlocks > 0 {
+            #expect(frame.count > PacketPayloadLimits.maxFrameBytes(forType: MessageType.boardPost.rawValue))
+            #expect(received == nil)
+            return
+        }
+        let packet = try #require(received)
+        let wire = try #require(BoardWire.decode(from: packet.payload))
+        #expect(wire.verifySignature())
+        let file = tempFileURL()
+        defer { try? FileManager.default.removeItem(at: file) }
+        let clock = MutableClock(now: baseDate)
+        let store = makeStore(clock: clock, fileURL: file)
+        #expect(store.ingest(wire, packet: packet) == .accepted)
+        let retained = try #require(store.syncCandidates().first)
+        #expect(retained.toBinaryData(padding: false) == frame)
+        let restored = makeStore(clock: clock, fileURL: file)
+        let restoredPacket = try #require(restored.syncCandidates().first)
+        #expect(restoredPacket.toBinaryData(padding: false) == frame)
+        #expect(BoardWire.decode(from: restoredPacket.payload)?.verifySignature() == true)
+    }
+
     // MARK: - Ingest basics
 
     @Test func ingestStoresAndDeduplicates() throws {

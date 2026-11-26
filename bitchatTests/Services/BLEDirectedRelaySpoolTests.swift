@@ -80,6 +80,18 @@ struct BLEDirectedRelaySpoolTests {
         #expect(spool.isEmpty)
     }
 
+    @Test
+    func retainedWireBytesCountAgainstTheBudget() throws {
+        let original = makePacket(payload: [UInt8](repeating: 0x41, count: 100))
+        let frame = try #require(original.toBinaryData(padding: false))
+        let decoded = try #require(BitchatPacket.from(frame))
+        #expect(decoded.retainedPayloadBytes > decoded.payload.count)
+        var spool = BLEDirectedRelaySpool(capacity: 10, byteBudget: decoded.payload.count)
+        let inserted = spool.enqueue(packet: decoded, recipient: PeerID(str: "1122334455667788"), messageID: "synthetic", enqueuedAt: Date())
+        #expect(!inserted)
+        #expect(spool.isEmpty)
+    }
+
     // MARK: - Bounds
 
     @Test
@@ -97,8 +109,8 @@ struct BLEDirectedRelaySpoolTests {
             )
         }
 
-        // 300 bytes against a 250-byte budget: only the oldest goes, though
-        // the count cap is nowhere near. Survivors drain oldest-first.
+        // The 250-byte budget evicts the oldest of three 100-byte packets.
+        // The count limit is 10; the two remaining packets drain oldest-first.
         #expect(spool.count == 2)
         let drained = spool.drainUnexpired(now: now, window: 60)
         #expect(drained.map { $0.packet.payload.first } == [1, 2])
@@ -179,5 +191,72 @@ struct BLEDirectedRelaySpoolTests {
             signature: nil,
             ttl: TransportConfig.messageTTLDefault
         )
+    }
+}
+
+
+extension BLEDirectedRelaySpoolTests {
+    enum RetainedOperation: CaseIterable { case eviction, expiry, drain, reset, duplicate }
+
+    @Test(arguments: RetainedOperation.allCases)
+    func compressedByteAccountingAllowsRefillAfterQueueOperations(action: RetainedOperation) throws {
+        let frame = try #require(makePacket(
+            payload: [UInt8](repeating: 0x41, count: 100)).toBinaryData(padding: false))
+        let packet = try #require(BitchatPacket.from(frame))
+        #expect(packet.retainedPayloadBytes > packet.payload.count)
+        let freshFrame = try #require(makePacket(payload: [UInt8](repeating: 0x42, count: 100)).toBinaryData(padding: false))
+        let nextFrame = try #require(makePacket(payload: [UInt8](repeating: 0x43, count: 100)).toBinaryData(padding: false))
+        let freshPacket = try #require(BitchatPacket.from(freshFrame))
+        let nextPacket = try #require(BitchatPacket.from(nextFrame))
+        #expect(freshPacket.retainedPayloadBytes == packet.retainedPayloadBytes)
+        #expect(nextPacket.retainedPayloadBytes == packet.retainedPayloadBytes)
+        let recipient = PeerID(str: "1122334455667788")
+        let now = Date(timeIntervalSince1970: 1000)
+        var spool = BLEDirectedRelaySpool(capacity: 2, byteBudget: 2 * packet.retainedPayloadBytes)
+        let enqueueResult1 = spool.enqueue(packet: packet, recipient: recipient, messageID: "old", enqueuedAt: now.addingTimeInterval(-10))
+        #expect(enqueueResult1)
+        let enqueueResult2 = spool.enqueue(packet: freshPacket, recipient: recipient, messageID: "fresh", enqueuedAt: now)
+        #expect(enqueueResult2)
+        switch action {
+        case .eviction: break
+        case .expiry: spool.pruneExpired(now: now, window: 5)
+        case .drain:
+            let initiallyDrained = spool.drainUnexpired(now: now, window: 20)
+            #expect(initiallyDrained.count == 2)
+            let enqueueResult3 = spool.enqueue(packet: freshPacket, recipient: recipient, messageID: "fresh", enqueuedAt: now)
+            #expect(enqueueResult3)
+        case .reset:
+            spool.removeAll()
+            let enqueueResult4 = spool.enqueue(packet: freshPacket, recipient: recipient, messageID: "fresh", enqueuedAt: now)
+            #expect(enqueueResult4)
+        case .duplicate:
+            let enqueueResult5 = spool.enqueue(packet: packet, recipient: recipient, messageID: "old", enqueuedAt: now)
+            #expect(!enqueueResult5)
+        }
+        let enqueueResult6 = spool.enqueue(packet: nextPacket, recipient: recipient, messageID: "next", enqueuedAt: now)
+        #expect(enqueueResult6)
+        let drained = spool.drainUnexpired(now: now, window: 5)
+        #expect(drained.count == 2)
+        #expect(drained.map { $0.packet.payload.first } == [0x42, 0x43])
+        #expect(drained.allSatisfy { $0.packet.retainedPayloadBytes == packet.retainedPayloadBytes })
+    }
+}
+
+
+extension BLEDirectedRelaySpoolTests {
+    @Test func compressedInsertionUsesTheByteBudgetBeforeTheCountLimit() throws {
+        let recipient = PeerID(str: "1122334455667788")
+        let packet = try RetainedPacketTestFixture.packet(type: .noiseEncrypted,
+            sender: Data(repeating: 1, count: 8), recipient: Data(repeating: 2, count: 8),
+            timestamp: 1_000_000, payload: Data(repeating: 0x41, count: 32), emptyBlocks: 20)
+        #expect(packet.retainedPayloadBytes > 3 * packet.payload.count)
+        var spool = BLEDirectedRelaySpool(capacity: 10, byteBudget: 2 * packet.retainedPayloadBytes)
+        let now = Date(timeIntervalSince1970: 1000)
+        for index in 0..<3 {
+            let accepted = spool.enqueue(packet: packet, recipient: recipient,
+                messageID: "synthetic-insertion-\(index)", enqueuedAt: now)
+            #expect(accepted)
+        }
+        #expect(spool.count == 2)
     }
 }

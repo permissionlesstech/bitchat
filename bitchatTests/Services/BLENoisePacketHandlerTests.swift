@@ -1213,6 +1213,35 @@ struct BLENoisePacketHandlerTests {
     }
 
     @Test
+    func deferredByteBudgetIncludesReceivedCompression() throws {
+        let recorder = Recorder()
+        recorder.hasSession = true
+        recorder.awaitingResponderHandshake = true
+        recorder.decryptResult = .failure(CryptoKitError.authenticationFailure)
+        let handler = makeHandler(recorder: recorder)
+        let firstPeer = PeerID(str: "0000000000000001")
+        let secondPeer = PeerID(str: "0000000000000002")
+        let large = BitchatPacket(
+            type: MessageType.noiseEncrypted.rawValue,
+            senderID: Data(hexString: firstPeer.id)!, recipientID: localPeerIDData,
+            timestamp: 1_000_000,
+            payload: Data(repeating: 0x41, count: NoiseSecurityConstants.maxPrivateFileCiphertextSize),
+            signature: nil, ttl: 3, version: 2
+        )
+        let frame = try #require(large.toBinaryData(padding: false))
+        let decoded = try #require(BitchatPacket.from(frame))
+        #expect(decoded.retainedPayloadBytes > decoded.payload.count)
+        handler.handleEncrypted(decoded, from: firstPeer)
+        handler.handleEncrypted(try receivedUncompressedCiphertext(count: 256 * 1024, peer: secondPeer), from: secondPeer)
+        recorder.awaitingResponderHandshake = false
+        recorder.decryptResult = .success(Data([NoisePayloadType.delivered.rawValue, 0x01]))
+        handler.handleSessionAuthenticated(firstPeer)
+        handler.handleSessionAuthenticated(secondPeer)
+        #expect(recorder.deliveries.count == 1)
+        #expect(recorder.deliveries.first?.peerID == firstPeer)
+    }
+
+    @Test
     func expiredEarlyCiphertextIsNotRetried() {
         let recorder = Recorder()
         recorder.hasSession = true
@@ -1304,5 +1333,105 @@ struct BLENoisePacketHandlerTests {
             signature: nil,
             ttl: TransportConfig.messageTTLDefault
         )
+    }
+}
+
+
+extension BLENoisePacketHandlerTests {
+    enum RetainedRelease: CaseIterable { case drain, expiry, panic }
+
+    @Test(arguments: RetainedRelease.allCases)
+    func deferredCompressionAccountingIsReleased(action: RetainedRelease) throws {
+        let recorder = Recorder()
+        recorder.hasSession = true
+        recorder.awaitingResponderHandshake = true
+        recorder.decryptResult = .failure(CryptoKitError.authenticationFailure)
+        let handler = makeHandler(recorder: recorder)
+        let peers = (1...4).map { PeerID(str: String(format: "%016x", $0)) }
+        let large = BitchatPacket(type: MessageType.noiseEncrypted.rawValue,
+            senderID: try #require(Data(hexString: peers[0].id)), recipientID: localPeerIDData,
+            timestamp: 1_000_000,
+            payload: Data(repeating: 0x41, count: NoiseSecurityConstants.maxPrivateFileCiphertextSize),
+            signature: nil, ttl: 3, version: 2)
+        let frame = try #require(large.toBinaryData(padding: false))
+        let decoded = try #require(BitchatPacket.from(frame))
+        let compressedCount = decoded.retainedPayloadBytes - decoded.payload.count
+        #expect(compressedCount > 0)
+        handler.handleEncrypted(decoded, from: peers[0])
+        var retainedSmallBytes = 0
+        var initialDeliveries = 0
+        switch action {
+        case .drain:
+            recorder.awaitingResponderHandshake = false
+            recorder.decryptResult = .success(Data([NoisePayloadType.delivered.rawValue, 1]))
+            handler.handleSessionAuthenticated(peers[0])
+            initialDeliveries = 1
+        case .expiry:
+            recorder.currentDate = recorder.currentDate.addingTimeInterval(
+                NoiseSecurityConstants.ordinaryResponderHandshakeTimeout - 0.5)
+            let small = makeEncryptedPacket(recipientID: localPeerIDData, payload: Data(repeating: 0x42, count: 100))
+            let smallFrame = try #require(small.toBinaryData(padding: false))
+            let smallDecoded = try #require(BitchatPacket.from(smallFrame))
+            #expect(smallDecoded.retainedPayloadBytes > smallDecoded.payload.count)
+            retainedSmallBytes = smallDecoded.retainedPayloadBytes
+            handler.handleEncrypted(smallDecoded, from: peers[0])
+            recorder.currentDate = recorder.currentDate.addingTimeInterval(0.501)
+        case .panic: handler.resetForPanic()
+        }
+        recorder.awaitingResponderHandshake = true
+        recorder.decryptResult = .failure(CryptoKitError.authenticationFailure)
+        handler.handleEncrypted(decoded, from: peers[1])
+        let remainingBytes = 256 * 1024 - compressedCount - retainedSmallBytes
+        #expect(remainingBytes > 0)
+        handler.handleEncrypted(try receivedUncompressedCiphertext(count: remainingBytes, peer: peers[2]), from: peers[2])
+        handler.handleEncrypted(try receivedUncompressedCiphertext(count: 1, peer: peers[3]), from: peers[3])
+        recorder.awaitingResponderHandshake = false
+        recorder.decryptResult = .success(Data([NoisePayloadType.delivered.rawValue, 1]))
+        for peer in peers { handler.handleSessionAuthenticated(peer) }
+        #expect(recorder.deliveries.count == initialDeliveries + 2 + (action == .expiry ? 1 : 0))
+        #expect(!recorder.deliveries.contains { $0.peerID == peers[3] })
+        #expect(recorder.deliveries.contains { $0.peerID == peers[1] })
+        #expect(recorder.deliveries.contains { $0.peerID == peers[2] })
+    }
+}
+
+
+extension BLENoisePacketHandlerTests {
+    @Test func deferredAdmissionCountsTheIncomingCompressedRepresentation() throws {
+        let recorder = Recorder()
+        recorder.hasSession = true
+        recorder.awaitingResponderHandshake = true
+        recorder.decryptResult = .failure(CryptoKitError.authenticationFailure)
+        let handler = makeHandler(recorder: recorder)
+        let first = PeerID(str: "0000000000000001")
+        let second = PeerID(str: "0000000000000002")
+        let uncompressed = try receivedUncompressedCiphertext(count: 256 * 1024, peer: first)
+        handler.handleEncrypted(uncompressed, from: first)
+        let large = BitchatPacket(type: MessageType.noiseEncrypted.rawValue,
+            senderID: try #require(Data(hexString: second.id)), recipientID: localPeerIDData,
+            timestamp: 1_000_000,
+            payload: Data(repeating: 0x41, count: NoiseSecurityConstants.maxPrivateFileCiphertextSize),
+            signature: nil, ttl: 3, version: 2)
+        let bytes = try #require(large.toBinaryData(padding: false))
+        let received = try #require(BitchatPacket.from(bytes))
+        #expect(received.retainedPayloadBytes > received.payload.count)
+        handler.handleEncrypted(received, from: second)
+        recorder.awaitingResponderHandshake = false
+        recorder.decryptResult = .success(Data([NoisePayloadType.delivered.rawValue, 1]))
+        handler.handleSessionAuthenticated(first)
+        handler.handleSessionAuthenticated(second)
+        #expect(recorder.deliveries.map(\.peerID) == [first])
+    }
+
+    private func receivedUncompressedCiphertext(count: Int, peer: PeerID) throws -> BitchatPacket {
+        let payload = Data((0..<count).map { UInt8(truncatingIfNeeded: $0) })
+        let packet = BitchatPacket(type: MessageType.noiseEncrypted.rawValue,
+            senderID: try #require(Data(hexString: peer.id)), recipientID: localPeerIDData,
+            timestamp: 1_000_000, payload: payload, signature: nil, ttl: 3, version: 2)
+        let bytes = try #require(packet.toBinaryData(padding: false))
+        let received = try #require(BitchatPacket.from(bytes))
+        #expect(received.payload == payload)
+        #expect(received.retainedPayloadBytes == payload.count)
+        return received
     }
 }

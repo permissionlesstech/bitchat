@@ -375,7 +375,7 @@ final class BLENoisePacketHandler {
         }
         guard peerCount < Self.maxDeferredPacketsPerPeer,
               globalCount < Self.maxDeferredPacketsGlobal,
-              deferredCiphertextBytes + packet.payload.count
+              deferredCiphertextBytes + packet.retainedPayloadBytes
                 <= Self.maxDeferredBytes else {
             SecureLogger.warning(
                 "Dropping early Noise ciphertext from \(peerID.id.prefix(8))… because the handshake buffer is full",
@@ -387,7 +387,7 @@ final class BLENoisePacketHandler {
         deferredCiphertexts[peerID, default: []].append(
             DeferredCiphertext(packet: packet, receivedAt: now)
         )
-        deferredCiphertextBytes += packet.payload.count
+        deferredCiphertextBytes += packet.retainedPayloadBytes
         SecureLogger.debug(
             "Deferring early Noise ciphertext from \(peerID.id.prefix(8))… until responder handshake completion",
             category: .session
@@ -406,7 +406,7 @@ final class BLENoisePacketHandler {
         purgeExpiredCiphertextsLocked(now: now)
         let deferred = deferredCiphertexts.removeValue(forKey: peerID) ?? []
         deferredCiphertextBytes -= deferred.reduce(0) {
-            $0 + $1.packet.payload.count
+            $0 + $1.packet.retainedPayloadBytes
         }
         deferredLock.unlock()
 
@@ -429,10 +429,10 @@ final class BLENoisePacketHandler {
             guard retained.count != items.count else { continue }
 
             deferredCiphertextBytes -= items.reduce(0) {
-                $0 + $1.packet.payload.count
+                $0 + $1.packet.retainedPayloadBytes
             }
             deferredCiphertextBytes += retained.reduce(0) {
-                $0 + $1.packet.payload.count
+                $0 + $1.packet.retainedPayloadBytes
             }
             if retained.isEmpty {
                 deferredCiphertexts.removeValue(forKey: peerID)
