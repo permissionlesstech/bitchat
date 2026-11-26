@@ -108,6 +108,65 @@ struct BLEFileTransferPolicyTests {
         ))
     }
 
+    @Test
+    func validatorAcceptsValidPNGAndJPEGWithinBounds() throws {
+        let pngPayload = try makeFilePayload(mimeType: "image/png", content: TestImageFixtures.makePNG(width: 16, height: 12))
+        let jpegPayload = try makeFilePayload(mimeType: "image/jpeg", content: TestImageFixtures.makeJPEG(width: 16, height: 12))
+
+        if case .failure(let rejection) = BLEIncomingFileValidator.validate(payload: pngPayload) {
+            Issue.record("Expected valid PNG to pass, got \(rejection)")
+        }
+        if case .failure(let rejection) = BLEIncomingFileValidator.validate(payload: jpegPayload) {
+            Issue.record("Expected valid JPEG to pass, got \(rejection)")
+        }
+    }
+
+    @Test
+    func validatorRejectsPNGDecompressionBombExceedingDimensionLimit() throws {
+        let bomb = TestImageFixtures.makePNGBomb(width: 32_768, height: 32_768)
+        let payload = try makeFilePayload(mimeType: "image/png", content: bomb)
+
+        let result = BLEIncomingFileValidator.validate(payload: payload)
+
+        guard case .failure(.invalidImage(let mime, let bytes, _)) = result else {
+            Issue.record("Expected .invalidImage rejection for 32768x32768 PNG bomb, got \(result)")
+            return
+        }
+        #expect(mime == .png)
+        #expect(bytes == bomb.count)
+    }
+
+    @Test
+    func validatorRejectsTruncatedJPEGWithoutDimensions() throws {
+        let stub = Data([0xFF, 0xD8, 0xFF, 0xD9])
+        let payload = try makeFilePayload(mimeType: "image/jpeg", content: stub)
+
+        let result = BLEIncomingFileValidator.validate(payload: payload)
+
+        guard case .failure(.invalidImage(let mime, _, _)) = result else {
+            Issue.record("Expected .invalidImage rejection for truncated JPEG stub, got \(result)")
+            return
+        }
+        #expect(mime == .jpeg)
+    }
+
+    @Test
+    func imageDownsamplerRejectsOversizedPNGAndDownsamplesValidImage() throws {
+        let tempDir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("ImageDownsamplerTests-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tempDir) }
+
+        let bombURL = tempDir.appendingPathComponent("bomb.png")
+        try TestImageFixtures.makePNGBomb(width: 16_384, height: 16_384).write(to: bombURL)
+        #expect(ImageDownsampler.loadDownsampledImage(from: bombURL, maxPixelSize: 64) == nil)
+
+        let validURL = tempDir.appendingPathComponent("valid.png")
+        try TestImageFixtures.makePNG(width: 256, height: 128).write(to: validURL)
+        let thumbnail = try #require(ImageDownsampler.loadDownsampledImage(from: validURL, maxPixelSize: 64))
+        #expect(max(thumbnail.size.width, thumbnail.size.height) <= 64)
+    }
+
     private func makePacket(
         sender: PeerID,
         ttl: UInt8 = 3,

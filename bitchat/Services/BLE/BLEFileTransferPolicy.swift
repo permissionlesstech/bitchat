@@ -1,6 +1,7 @@
 import AudioToolbox
 import BitFoundation
 import Foundation
+import ImageIO
 
 struct BLEFileTransferDeliveryPlan: Equatable {
     let isPrivateMessage: Bool
@@ -41,6 +42,7 @@ enum BLEIncomingFileRejection: Error, Equatable {
     case unsupportedMime(mimeType: String?, bytes: Int)
     case magicMismatch(mime: MimeType, bytes: Int, prefixHex: String)
     case invalidAudio(mime: MimeType, bytes: Int, reason: String)
+    case invalidImage(mime: MimeType, bytes: Int, reason: String)
 }
 
 enum BLEIncomingFileValidator {
@@ -77,7 +79,93 @@ enum BLEIncomingFileValidator {
             ))
         }
 
+        if mime.category == .image,
+           let failureReason = ImageContainerValidator.validate(data: filePacket.content, mime: mime) {
+            return .failure(.invalidImage(
+                mime: mime,
+                bytes: filePacket.content.count,
+                reason: failureReason
+            ))
+        }
+
         return .success(BLEIncomingFileAcceptance(filePacket: filePacket, mime: mime))
+    }
+}
+
+/// Inspects incoming image headers in memory via ImageIO without decoding pixel
+/// buffers. Blocks decompression bombs (tiny compressed payloads claiming huge
+/// pixel dimensions or frame counts) and container/UTI spoofing before a file
+/// is persisted, tracked for gossip sync, or rendered.
+enum ImageContainerValidator {
+    static let maxDimensionPixels = 4_096
+    static let maxTotalPixels = 16_777_216 // 4096 x 4096 (~64 MiB RGBA max)
+    static let maxFrameCount = 120
+
+    private static let metadataOptions: CFDictionary = [
+        kCGImageSourceShouldCache: false
+    ] as CFDictionary
+
+    static func validate(data: Data, mime: MimeType) -> String? {
+        guard let expectedUTI = expectedTypeIdentifier(for: mime) else {
+            return "unsupported image MIME \(mime)"
+        }
+
+        guard let source = CGImageSourceCreateWithData(data as CFData, metadataOptions) else {
+            return "unreadable image container"
+        }
+
+        guard let detectedUTI = CGImageSourceGetType(source) as String?,
+              detectedUTI == expectedUTI else {
+            let detected = (CGImageSourceGetType(source) as String?) ?? "unknown"
+            return "image container UTI \(detected) does not match \(mime)"
+        }
+
+        return validateDimensions(of: source)
+    }
+
+    static func validateDimensions(of source: CGImageSource) -> String? {
+        let frameCount = CGImageSourceGetCount(source)
+        guard frameCount >= 1 else {
+            return "image contains no frames"
+        }
+        guard frameCount <= maxFrameCount else {
+            return "image frame count \(frameCount) exceeds limit \(maxFrameCount)"
+        }
+
+        for index in 0..<frameCount {
+            guard let properties = CGImageSourceCopyPropertiesAtIndex(source, index, metadataOptions) as? [CFString: Any],
+                  let width = (properties[kCGImagePropertyPixelWidth] as? NSNumber)?.intValue,
+                  let height = (properties[kCGImagePropertyPixelHeight] as? NSNumber)?.intValue else {
+                return "missing pixel dimensions at frame \(index)"
+            }
+            guard width > 0, height > 0 else {
+                return "non-positive pixel dimensions \(width)x\(height)"
+            }
+            guard width <= maxDimensionPixels, height <= maxDimensionPixels else {
+                return "pixel dimensions \(width)x\(height) exceed max \(maxDimensionPixels)"
+            }
+            let totalPixels = Int64(width) * Int64(height)
+            guard totalPixels <= Int64(maxTotalPixels) else {
+                return "pixel count \(totalPixels) exceeds max \(maxTotalPixels)"
+            }
+        }
+
+        return nil
+    }
+
+    private static func expectedTypeIdentifier(for mime: MimeType) -> String? {
+        switch mime {
+        case .jpeg, .jpg:
+            return "public.jpeg"
+        case .png:
+            return "public.png"
+        case .gif:
+            return "com.compuserve.gif"
+        case .webp:
+            return "org.webmproject.webp"
+        default:
+            return nil
+        }
     }
 }
 
