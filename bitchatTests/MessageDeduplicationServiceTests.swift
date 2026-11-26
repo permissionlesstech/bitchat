@@ -386,14 +386,19 @@ struct MessageDeduplicationServiceTests {
         let service = MessageDeduplicationService(
             contentCapacity: 100,
             nostrEventCapacity: 100,
-            nostrEventStore: store
+            nostrEventStore: store,
+            persistDebounceNanoseconds: 0
         )
 
         service.recordNostrEvent("ephemeral-geo-event", persist: false)
-
         #expect(service.hasProcessedNostrEvent("ephemeral-geo-event"))
-        #expect(!FileManager.default.fileExists(atPath: fileURL.path))
         #expect(store.load().isEmpty)
+        #expect(!FileManager.default.fileExists(atPath: fileURL.path))
+
+        service.recordNostrEvent("durable-dm-event", persist: true)
+        #expect(service.hasProcessedNostrEvent("durable-dm-event"))
+        #expect(store.load() == ["durable-dm-event"])
+        #expect(NostrProcessedEventStore(fileURL: fileURL).load() == ["durable-dm-event"])
     }
 
     @Test func nostrProcessedEventStore_recoversAfterTransientReadFailure() throws {
