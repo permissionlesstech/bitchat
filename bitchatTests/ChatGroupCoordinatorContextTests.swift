@@ -39,6 +39,7 @@ private final class MockChatGroupContext: ChatGroupContext {
 
     // Peers: the fingerprint each Noise session authenticated.
     var fingerprintsByPeerID: [PeerID: String] = [:]
+    var blockedFingerprints: Set<String> = []
 
     func getPeerIDForNickname(_ nickname: String) -> PeerID? { nil }
     func isPeerConnected(_ peerID: PeerID) -> Bool { false }
@@ -46,7 +47,7 @@ private final class MockChatGroupContext: ChatGroupContext {
     func meshFingerprint(for peerID: PeerID) -> String? { fingerprintsByPeerID[peerID] }
     func cryptoIdentity(for peerID: PeerID) -> (fingerprint: String, signingKey: Data)? { nil }
     func connectedPeerID(forFingerprint fingerprint: String) -> PeerID? { nil }
-    func isFingerprintBlocked(_ fingerprint: String) -> Bool { false }
+    func isFingerprintBlocked(_ fingerprint: String) -> Bool { blockedFingerprints.contains(fingerprint) }
 
     // Transport (outbound state is not exercised by these tests)
     func sendGroupInvitePayload(_ payload: Data, to peerID: PeerID) {}
@@ -298,5 +299,42 @@ struct ChatGroupCoordinatorContextTests {
         )
         coordinator.handleGroupKeyUpdatePayload(from: creator.peerID, payload: staleRemoval)
         expectUnchanged(context, joined: joined)
+    }
+
+    @Test
+    func blockedCreatorInviteIsDropped() throws {
+        let context = MockChatGroupContext(identity: me)
+        let coordinator = ChatGroupCoordinator(context: context)
+        context.fingerprintsByPeerID[creator.peerID] = creator.fingerprint
+        context.blockedFingerprints.insert(creator.fingerprint)
+
+        let invite = try creatorState(epoch: 1, members: [creator.member, me.member], key: groupKey)
+        coordinator.handleGroupInvitePayload(from: creator.peerID, payload: invite)
+
+        #expect(context.groupStore.groups.isEmpty)
+        #expect(context.systemMessages.isEmpty)
+    }
+
+    @Test
+    func oversizedOrEmptyGroupNameInviteIsDropped() throws {
+        let context = MockChatGroupContext(identity: me)
+        let coordinator = ChatGroupCoordinator(context: context)
+        context.fingerprintsByPeerID[creator.peerID] = creator.fingerprint
+
+        for badName in ["   ", String(repeating: "x", count: BitchatGroup.maxNameLength + 1)] {
+            let group = BitchatGroup(
+                groupID: groupID,
+                name: badName,
+                epoch: 1,
+                members: [creator.member, me.member],
+                creatorFingerprint: creator.fingerprint
+            )
+            let payload = try #require(GroupStatePayload.makeSigned(group: group, key: groupKey, sign: creator.sign))
+            let encoded = try #require(payload.encode())
+            coordinator.handleGroupInvitePayload(from: creator.peerID, payload: encoded)
+        }
+
+        #expect(context.groupStore.groups.isEmpty)
+        #expect(context.systemMessages.isEmpty)
     }
 }

@@ -30,6 +30,9 @@ struct GroupMember: Codable, Equatable {
 /// in the keychain (see `GroupStore`).
 struct BitchatGroup: Codable, Equatable {
     static let maxMembers = 16
+    static let maxGroups = 64
+    static let maxNameLength = 40
+    static let maxNameUTF8Bytes = 160
     static let groupIDLength = 16
     static let keyLength = 32
 

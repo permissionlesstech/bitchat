@@ -267,4 +267,84 @@ struct GroupStoreTests {
         #expect(store.groups.isEmpty)
         #expect(store.key(forGroupID: group.groupID) == nil)
     }
+
+    @Test func upsertRejectsEmptyAndOversizedGroupNames() {
+        let keychain = MockKeychain()
+        let store = GroupStore(keychain: keychain, persistsToDisk: false)
+        let creator = makeMember(seed: 0xD1)
+        let key = Data(repeating: 0x77, count: BitchatGroup.keyLength)
+
+        let emptyName = BitchatGroup(
+            groupID: Data(repeating: 0x01, count: BitchatGroup.groupIDLength),
+            name: "   ",
+            epoch: 1,
+            members: [creator],
+            creatorFingerprint: creator.fingerprint
+        )
+        #expect(!store.upsert(emptyName, key: key))
+
+        let hugeName = BitchatGroup(
+            groupID: Data(repeating: 0x02, count: BitchatGroup.groupIDLength),
+            name: String(repeating: "a", count: BitchatGroup.maxNameLength + 1),
+            epoch: 1,
+            members: [creator],
+            creatorFingerprint: creator.fingerprint
+        )
+        #expect(!store.upsert(hugeName, key: key))
+
+        // Whitespace-padded or combining-mark-bloated names pass `.count` but
+        // must still be rejected by the UTF-8 byte ceiling.
+        let paddedName = BitchatGroup(
+            groupID: Data(repeating: 0x03, count: BitchatGroup.groupIDLength),
+            name: "x" + String(repeating: " ", count: BitchatGroup.maxNameUTF8Bytes + 1),
+            epoch: 1,
+            members: [creator],
+            creatorFingerprint: creator.fingerprint
+        )
+        #expect(!store.upsert(paddedName, key: key))
+
+        let combiningMarkName = BitchatGroup(
+            groupID: Data(repeating: 0x04, count: BitchatGroup.groupIDLength),
+            name: "e" + String(repeating: "\u{0301}", count: BitchatGroup.maxNameUTF8Bytes),
+            epoch: 1,
+            members: [creator],
+            creatorFingerprint: creator.fingerprint
+        )
+        #expect(!store.upsert(combiningMarkName, key: key))
+        #expect(store.groups.isEmpty)
+    }
+
+    @Test func upsertEnforcesMaxGroupsCapWithoutLeakingKeychainEntry() throws {
+        let keychain = MockKeychain()
+        let store = GroupStore(keychain: keychain, persistsToDisk: false)
+        let creator = makeMember(seed: 0xD2)
+        let key = Data(repeating: 0x88, count: BitchatGroup.keyLength)
+
+        for i in 0..<BitchatGroup.maxGroups {
+            var id = Data(repeating: 0x00, count: BitchatGroup.groupIDLength)
+            id[0] = UInt8(i & 0xFF)
+            id[1] = UInt8((i >> 8) & 0xFF)
+            let group = BitchatGroup(
+                groupID: id,
+                name: "group-\(i)",
+                epoch: 1,
+                members: [creator],
+                creatorFingerprint: creator.fingerprint
+            )
+            #expect(store.upsert(group, key: key))
+        }
+        #expect(store.groups.count == BitchatGroup.maxGroups)
+
+        let overflowID = Data(repeating: 0xFF, count: BitchatGroup.groupIDLength)
+        let overflowGroup = BitchatGroup(
+            groupID: overflowID,
+            name: "overflow",
+            epoch: 1,
+            members: [creator],
+            creatorFingerprint: creator.fingerprint
+        )
+        #expect(!store.upsert(overflowGroup, key: key))
+        #expect(store.groups.count == BitchatGroup.maxGroups)
+        #expect(store.key(forGroupID: overflowID) == nil)
+    }
 }

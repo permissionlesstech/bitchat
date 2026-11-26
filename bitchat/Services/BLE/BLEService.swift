@@ -5028,20 +5028,21 @@ extension BLEService {
     /// freshness or poison attribution. Only after that does the packet enter
     /// our own gossip store, so we never help spread a bundle we couldn't
     /// attribute.
-    private func handlePrekeyBundle(_ packet: BitchatPacket, from peerID: PeerID) {
+    @discardableResult
+    private func handlePrekeyBundle(_ packet: BitchatPacket, from peerID: PeerID) -> Bool {
         guard let bundle = PrekeyBundle.decode(packet.payload) else {
             SecureLogger.debug("🔑 Ignoring malformed prekey bundle from \(peerID.id.prefix(8))…", category: .security)
-            return
+            return false
         }
         // Our own bundle is tracked at send time; a copy echoing back adds nothing.
-        guard bundle.noiseStaticPublicKey != noiseService.getStaticPublicKeyData() else { return }
+        guard bundle.noiseStaticPublicKey != noiseService.getStaticPublicKeyData() else { return false }
         let owner = PeerID(publicKey: bundle.noiseStaticPublicKey)
         // The owner's genuine bundle (direct or relayed) always carries the
         // owner's senderID + outer signature; gossip resends preserve both. A
         // packet whose senderID isn't the owner can't be authenticated here.
         guard PeerID(hexData: packet.senderID) == owner else {
             SecureLogger.debug("🔑 Ignoring prekey bundle whose sender ≠ owner \(owner.id.prefix(8))…", category: .security)
-            return
+            return false
         }
         // Look up the announce-bound signing key and stash-if-unbound in ONE
         // barrier: the receive queue is concurrent, so this bundle can race
@@ -5069,23 +5070,25 @@ extension BLEService {
         }
         guard let signingKey else {
             SecureLogger.debug("🔑 Deferring prekey bundle without a bound signing key (owner \(owner.id.prefix(8))…)", category: .security)
-            return
+            return false
         }
-        ingestVerifiedPrekeyBundle(bundle, packet: packet, owner: owner, signingKey: signingKey)
+        return ingestVerifiedPrekeyBundle(bundle, packet: packet, owner: owner, signingKey: signingKey)
     }
 
     /// Verify a bundle's inner + outer signatures against the owner's bound
     /// signing key and, on success, cache it and let it enter our gossip store.
-    private func ingestVerifiedPrekeyBundle(_ bundle: PrekeyBundle, packet: BitchatPacket, owner: PeerID, signingKey: Data) {
+    @discardableResult
+    private func ingestVerifiedPrekeyBundle(_ bundle: PrekeyBundle, packet: BitchatPacket, owner: PeerID, signingKey: Data) -> Bool {
         guard noiseService.verifyPrekeyBundleSignature(bundle, signingPublicKey: signingKey),
               noiseService.verifyPacketSignature(packet, publicKey: signingKey) else {
             SecureLogger.debug("🔑 Ignoring prekey bundle without verifiable signature (owner \(owner.id.prefix(8))…)", category: .security)
-            return
+            return false
         }
         if prekeyBundleStore.ingest(bundle) {
             SecureLogger.debug("🔑 Cached prekey bundle for \(owner.id.prefix(8))… (\(bundle.prekeys.count) prekeys)", category: .security)
         }
         gossipSyncManager?.onPublicPacketSeen(packet)
+        return true
     }
 
     /// Re-attempt any prekey bundle that arrived before this owner's announce
@@ -5863,12 +5866,12 @@ extension BLEService {
         }
     }
     
-    private func handleFragment(_ packet: BitchatPacket, from peerID: PeerID) {
+    private func handleFragment(_ packet: BitchatPacket, from peerID: PeerID) -> Bool {
         if DispatchQueue.getSpecific(key: messageQueueKey) != nil {
-            fragmentHandler.handle(packet, from: peerID)
+            return fragmentHandler.handle(packet, from: peerID)
         } else {
-            messageQueue.async { [weak self] in
-                self?.fragmentHandler.handle(packet, from: peerID)
+            return onEngine {
+                fragmentHandler.handle(packet, from: peerID)
             }
         }
     }
@@ -6186,7 +6189,7 @@ extension BLEService {
         // Process by type
         switch context.messageType {
         case .announce:
-            handleAnnounce(packet, from: senderID)
+            guard handleAnnounce(packet, from: senderID) else { return }
 
         case .announceV2:
             // Parsed and ignored on purpose. The wire format and derivations are
@@ -6198,7 +6201,7 @@ extension BLEService {
             break
 
         case .message:
-            handleMessage(packet, from: senderID)
+            guard handleMessage(packet, from: senderID) else { return }
             
         case .requestSync:
             handleRequestSync(packet, from: senderID)
@@ -6210,7 +6213,7 @@ extension BLEService {
             handleNoiseEncrypted(packet, from: senderID)
             
         case .fragment:
-            handleFragment(packet, from: senderID)
+            guard handleFragment(packet, from: senderID) else { return }
             
         case .fileTransfer:
             // Broadcast files that fail sender authentication must not spread
@@ -6225,7 +6228,7 @@ extension BLEService {
             handleGroupMessage(packet, from: senderID)
 
         case .prekeyBundle:
-            handlePrekeyBundle(packet, from: senderID)
+            guard handlePrekeyBundle(packet, from: senderID) else { return }
 
         case .boardPost:
             // Invalid or deleted posts must not spread; skip the relay step.
@@ -6253,6 +6256,9 @@ extension BLEService {
             guard handleLeave(packet, from: senderID) else { return }
 
         case .none:
+            // Unknown/future wire types stay relayable (subject to dedup,
+            // TTL clamp, and PacketPayloadLimits's default cap) for
+            // forward compatibility with newer iOS/Android clients.
             SecureLogger.warning("⚠️ Unknown message type: \(packet.type)", category: .session)
         }
         
@@ -6305,16 +6311,17 @@ extension BLEService {
         engineScheduler.schedule(after: Double(decision.delayMs) / 1_000, execute: work)
     }
     
-    private func handleAnnounce(_ packet: BitchatPacket, from peerID: PeerID) {
-        let result = announceHandler.handle(packet, from: peerID)
+    private func handleAnnounce(_ packet: BitchatPacket, from peerID: PeerID) -> Bool {
+        guard let result = announceHandler.handle(packet, from: peerID),
+              result.isVerified else {
+            return false
+        }
 
         // A capability bit in the public announce is only a discovery hint.
         // Start authentication promptly for a directly connected candidate,
         // but never pin or pre-queue private bytes until encrypted 0x21 state
         // arrives from the completed Noise session.
-        if let result,
-           result.isVerified,
-           result.isDirectAnnounce,
+        if result.isDirectAnnounce,
            result.announcement.capabilities?.contains(.privateMedia) == true,
            privateMediaSendPolicy(to: result.peerID) == .awaitingCapabilityProof,
            !noiseService.hasSession(with: result.peerID) {
@@ -6323,30 +6330,24 @@ extension BLEService {
 
         // A verified announce is the moment a signing key becomes bound to this
         // owner's noise key: retry any prekey bundle that raced ahead of it.
-        if let result, result.isVerified {
-            drainPendingPrekeyBundles(for: result.peerID)
-        }
+        drainPendingPrekeyBundles(for: result.peerID)
 
         // A verified direct announce proves the sender owns the link it came
         // in on: heal any stale binding left by a peer-ID rotation, and
         // consolidate duplicate same-role connections onto that link.
-        if let result, result.isVerified, result.isDirectAnnounce {
+        if result.isDirectAnnounce {
             rebindLinkAfterVerifiedDirectAnnounce(packet, to: result.peerID)
             retireRedundantPeripheralLinks(packet, to: result.peerID)
         }
 
         // Bridge courier watch: a verified announce may add a peer whose
         // relay-parked drops we should start watching for.
-        if let result, result.isVerified {
-            onVerifiedPeerAnnounce?(result.peerID)
-        }
+        onVerifiedPeerAnnounce?(result.peerID)
 
         // Courier work: an announce is the moment we learn a peer's Noise
         // static key, so check whether we're carrying mail addressed to them
         // (or spray-able mail they could carry). Verified announces only.
-        guard !courierStore.isEmpty,
-              let result,
-              result.isVerified else { return }
+        guard !courierStore.isEmpty else { return true }
         let noiseKey = result.announcement.noisePublicKey
         let authenticatedIngress = result.isDirectAnnounce
             && canDeliverSecurely(to: result.peerID)
@@ -6373,6 +6374,7 @@ extension BLEService {
                 }
             }
         }
+        return true
     }
 
     /// When a peer relaunches it rotates its ephemeral peer ID, but an
@@ -6855,7 +6857,7 @@ extension BLEService {
     
     // Mention parsing moved to ChatViewModel
     
-    private func handleMessage(_ packet: BitchatPacket, from peerID: PeerID) {
+    private func handleMessage(_ packet: BitchatPacket, from peerID: PeerID) -> Bool {
         publicMessageHandler.handle(packet, from: peerID)
     }
 
@@ -7312,7 +7314,7 @@ extension BLEService {
         }
         for removedPeer in changes.removedPeers {
             SecureLogger.debug("🗑️ Removing stale peer after reachability window: \(removedPeer.peerID.id.prefix(8))… (\(removedPeer.nickname))", category: .session)
-            gossipSyncManager?.removeAnnouncementForPeer(removedPeer.peerID)
+            gossipSyncManager?.expireStaleAnnouncementForPeer(removedPeer.peerID)
         }
         
         // Update UI if there were direct disconnections or offline removals

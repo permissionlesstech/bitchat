@@ -151,8 +151,6 @@ extension ChatViewModel: ChatGroupContext {
 final class ChatGroupCoordinator {
     private unowned let context: any ChatGroupContext
 
-    private static let maxGroupNameLength = 40
-
     init(context: any ChatGroupContext) {
         self.context = context
     }
@@ -164,7 +162,8 @@ final class ChatGroupCoordinator {
         guard !name.isEmpty else {
             return .error(message: String(localized: "system.group.usage_create", comment: "Usage hint for /group create"))
         }
-        guard name.count <= Self.maxGroupNameLength else {
+        guard name.count <= BitchatGroup.maxNameLength,
+              name.utf8.count <= BitchatGroup.maxNameUTF8Bytes else {
             return .error(message: String(localized: "system.group.name_too_long", comment: "Error when a group name exceeds the length cap"))
         }
 
@@ -552,6 +551,17 @@ private extension ChatGroupCoordinator {
             SecureLogger.warning("Dropping group state from non-creator \(peerID.id.prefix(8))…", category: .security)
             return
         }
+        guard !context.isFingerprintBlocked(senderFingerprint) else {
+            SecureLogger.warning("Dropping group state from blocked sender \(senderFingerprint.prefix(8))…", category: .security)
+            return
+        }
+        let trimmedName = state.name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedName.isEmpty,
+              trimmedName.count <= BitchatGroup.maxNameLength,
+              state.name.utf8.count <= BitchatGroup.maxNameUTF8Bytes else {
+            SecureLogger.warning("Dropping group state with invalid name length (\(state.name.count) chars, \(state.name.utf8.count) bytes) from \(peerID.id.prefix(8))…", category: .security)
+            return
+        }
         guard state.verifyCreatorSignature() else {
             SecureLogger.warning("Dropping group state with invalid creator signature", category: .security)
             return
@@ -603,8 +613,10 @@ private extension ChatGroupCoordinator {
         }
 
         let isNewMembership = existing == nil
-        guard context.groupStore.upsert(state.asGroup, key: state.key) else {
-            SecureLogger.error("Failed to store group state for \(state.name)", category: .session)
+        var sanitizedGroup = state.asGroup
+        sanitizedGroup.name = trimmedName
+        guard context.groupStore.upsert(sanitizedGroup, key: state.key) else {
+            SecureLogger.error("Failed to store group state for \(trimmedName)", category: .session)
             return
         }
 
@@ -615,14 +627,14 @@ private extension ChatGroupCoordinator {
             let notice = String(
                 format: String(localized: "system.group.joined", comment: "System message when added to a group; placeholders are the group name and the inviter"),
                 locale: .current,
-                state.name,
+                trimmedName,
                 inviter
             )
             context.addSystemMessage(notice)
-            context.markPrivateChatUnread(state.asGroup.peerID)
-            context.notifyPrivateMessage(from: inviter, message: notice, peerID: state.asGroup.peerID)
+            context.markPrivateChatUnread(sanitizedGroup.peerID)
+            context.notifyPrivateMessage(from: inviter, message: notice, peerID: sanitizedGroup.peerID)
         } else if isInvite == false, let existing, state.epoch > existing.epoch {
-            SecureLogger.info("Group '\(state.name)' rotated to epoch \(state.epoch)", category: .session)
+            SecureLogger.info("Group '\(trimmedName)' rotated to epoch \(state.epoch)", category: .session)
         }
         context.notifyUIChanged()
     }
