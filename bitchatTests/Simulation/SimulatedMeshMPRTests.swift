@@ -63,8 +63,8 @@ struct SimulatedMeshMPRTests {
         mesh.advanceTime(by: 2)
 
         // Both nodes in Cluster B receive the message exactly once (zero partitions).
-        #expect(await captureB1.drainedCount(content: "bridge-test") == 1)
-        #expect(await captureB2.drainedCount(content: "bridge-test") == 1)
+        #expect(await captureB1.drainedCount(content: "bridge-test", on: clusterB1.service) == 1)
+        #expect(await captureB2.drainedCount(content: "bridge-test", on: clusterB2.service) == 1)
 
         // Bridge relayed once; non-bridge Cluster A nodes suppressed redundant relays.
         #expect(countOutboundPublicMessages(mesh, nodeIndex: 3) - bridgeMessagesBefore == 1)
@@ -113,7 +113,7 @@ struct SimulatedMeshMPRTests {
         mesh.advanceTime(by: 2)
 
         for (offset, capture) in captures.enumerated() {
-            #expect(await capture.drainedCount(content: "clique-only") == 1)
+            #expect(await capture.drainedCount(content: "clique-only", on: mesh.nodes[offset + 1].service) == 1)
             let relaysEmitted = countOutboundPublicMessages(mesh, nodeIndex: offset + 1) - beforeCounts[offset]
             #expect(relaysEmitted == 0)
         }
@@ -157,7 +157,7 @@ struct SimulatedMeshMPRTests {
         let mRelays = countOutboundPublicMessages(mesh, nodeIndex: 1) - mBefore
         let nRelays = countOutboundPublicMessages(mesh, nodeIndex: 2) - nBefore
         #expect(mRelays + nRelays == 1)
-        #expect(await captureT.drainedCount(content: "symmetric-mpr") == 1)
+        #expect(await captureT.drainedCount(content: "symmetric-mpr", on: t.service) == 1)
     }
 
     /// Separate local-delivery vs. relay dedup (R1-STD-03, R1-SPEC-05):
@@ -214,7 +214,7 @@ struct SimulatedMeshMPRTests {
         mesh.pump()
         mesh.advanceTime(by: 2)
 
-        #expect(await captureM.drainedCount(content: "dual-hop") == 1)
+        #expect(await captureM.drainedCount(content: "dual-hop", on: m.service) == 1)
         #expect(countOutboundPublicMessages(mesh, nodeIndex: indices.m) - mRelaysBefore == 0)
 
         // 2. Second arrival from electing P2: M relays once without double-delivering locally.
@@ -224,8 +224,8 @@ struct SimulatedMeshMPRTests {
         mesh.advanceTime(by: 2)
 
         #expect(countOutboundPublicMessages(mesh, nodeIndex: indices.m) - mRelaysBefore == 1)
-        #expect(await captureM.drainedCount(content: "dual-hop") == 1)
-        #expect(await captureLeaf.drainedCount(content: "dual-hop") == 1)
+        #expect(await captureM.drainedCount(content: "dual-hop", on: m.service) == 1)
+        #expect(await captureLeaf.drainedCount(content: "dual-hop", on: leaf.service) == 1)
 
         // Planned link pruning check: M must prune P2 (origin/prevHop), C1, and C2
         // (fresh confirmed neighbors of P2), while transmitting to L.
@@ -246,8 +246,8 @@ struct SimulatedMeshMPRTests {
         mesh.pump()
         mesh.advanceTime(by: 2)
         #expect(countOutboundPublicMessages(mesh, nodeIndex: indices.m) - mRelaysBefore == 1)
-        #expect(await captureM.drainedCount(content: "dual-hop", afterFencing: [m.service]) == 1)
-        #expect(await captureLeaf.drainedCount(content: "dual-hop", afterFencing: [leaf.service]) == 1)
+        #expect(await captureM.drainedCount(content: "dual-hop", on: m.service) == 1)
+        #expect(await captureLeaf.drainedCount(content: "dual-hop", on: leaf.service) == 1)
     }
 
     /// Regression for R1-STD-01, R1-SPEC-01, and R2-STD-02: valid signed broadcast
@@ -870,10 +870,34 @@ struct SimulatedMeshMPRTests {
         #expect(a1.service._test_linkBinding(newcomerLinkOnA1) == newcomer.service.myPeerID)
         #expect(!a1.service.isPeerConnected(newcomer.service.myPeerID))
 
-        // 1. R2-SPEC-03: Normally a1 suppresses origin's broadcast, but because
-        //    newcomer's link is only provisionally bound (unverified), a1 MUST
-        //    fail safe and relay so newcomer is never stranded!
+        // Seed a fresh confirmed edge between `origin` and `newcomer` in a1's
+        // topology (simulating a peer that moved from origin onto a provisional
+        // link on a1). Egress pruning MUST NOT trust the unverified provisional
+        // binding to prune newcomer's only current egress link (R3-SPEC-02).
+        a1.service._test_topologyTracker.updateNeighbors(
+            for: origin.service.myPeerID.routingData,
+            neighbors: [
+                a1.service.myPeerID.routingData,
+                mesh.nodes[2].service.myPeerID.routingData,
+                mesh.nodes[3].service.myPeerID.routingData,
+                newcomer.service.myPeerID.routingData
+            ].compactMap { $0 }
+        )
+        a1.service._test_topologyTracker.updateNeighbors(
+            for: newcomer.service.myPeerID.routingData,
+            neighbors: [origin.service.myPeerID.routingData].compactMap { $0 }
+        )
+        #expect(a1.service._test_topologyTracker.isFreshConfirmedNeighbor(
+            origin.service.myPeerID,
+            newcomer.service.myPeerID
+        ))
+
+        // 1. R2-SPEC-03 & R3-SPEC-02: Normally a1 suppresses origin's broadcast
+        //    and prunes origin's confirmed neighbors, but because newcomer's link
+        //    is only provisionally bound (unverified), a1 MUST fail safe, relay,
+        //    AND deliver to newcomer on its planned egress link!
         let a1RelaysBefore = countOutboundPublicMessages(mesh, nodeIndex: 1)
+        let a1PlannedBefore = mesh.plannedTransmissions(from: 1).count
         let originMsg = origin.service.signPacketForBroadcast(BitchatPacket(
             type: MessageType.message.rawValue,
             senderID: origin.service.myPeerID.routingData ?? Data(),
@@ -888,6 +912,13 @@ struct SimulatedMeshMPRTests {
         mesh.pump()
         mesh.advanceTime(by: 2)
         #expect(countOutboundPublicMessages(mesh, nodeIndex: 1) - a1RelaysBefore == 1)
+        let a1PlannedTargets = Set(
+            mesh.plannedTransmissions(from: 1)
+                .dropFirst(a1PlannedBefore)
+                .filter { $0.packet.type == MessageType.message.rawValue }
+                .map(\.to)
+        )
+        #expect(a1PlannedTargets.contains(5))
 
         // 2. R2-SPEC-02: An unverified provisional link claiming an existing fresh
         //    peer (`origin`) must NOT act as a verified previous hop to suppress.
@@ -963,7 +994,7 @@ struct SimulatedMeshMPRTests {
         mesh.pump()
         mesh.advanceTime(by: 2)
         #expect(countOutboundPublicMessages(mesh, nodeIndex: indices.m) - mRelaysBefore == 1)
-        #expect(await captureLeaf.drainedCount(content: "unknown-hop-dup", afterFencing: [leaf.service]) == 1)
+        #expect(await captureLeaf.drainedCount(content: "unknown-hop-dup", on: leaf.service) == 1)
     }
 
     /// Regression for R2-BUG-01: solicited gossip replay (RSR, TTL 0) must
@@ -1024,7 +1055,235 @@ struct SimulatedMeshMPRTests {
             .filter { $0.packet.type == MessageType.message.rawValue && $0.packet.isRSR }
             .map(\.to)
         #expect(bobReplayTargets == [0])
-        #expect(await captureAlice.drainedCount(content: "restore-my-history", afterFencing: [alice.service]) == 1)
+        #expect(await captureAlice.drainedCount(content: "restore-my-history", on: alice.service) == 1)
+    }
+
+    /// Regression for R3-STD-02: if a routed packet's next hop physically tears
+    /// down before its binding/registry entry retires while another unrelated
+    /// link is available, `forwardAlongRouteIfNeeded` must NOT credit the
+    /// unrelated link as routed unicast success — it must trigger the explicit
+    /// conservative broadcast fallback (`skipNeighborPruning = true`).
+    @Test
+    func routedNextHopPhysicallyGoneFallsBackToConservativeFloodEvenWithOtherLinks() {
+        let mesh = SimulatedMesh(usePlannedLinkDelivery: true)
+        let origin = mesh.addNode(nickname: "origin")     // 0
+        let relay = mesh.addNode(nickname: "relay")       // 1
+        let deadNext = mesh.addNode(nickname: "deadNext") // 2 (physically gone, registry still connected)
+        let altHop = mesh.addNode(nickname: "altHop")     // 3 (also a confirmed neighbor of origin!)
+        let dest = mesh.addNode(nickname: "dest")         // 4
+
+        mesh.connect(0, 1) // origin - relay
+        mesh.connect(0, 3) // origin - altHop (so non-conservative pruning would drop altHop!)
+        mesh.connect(1, 2) // relay - deadNext
+        mesh.connect(1, 3) // relay - altHop
+        mesh.connect(3, 4) // altHop - dest
+        settleDiscovery(mesh)
+
+        // deadNext is physically dead before its binding/registry entry retires.
+        let deadNextLinkOnRelay = BLEIngressLinkID.central(mesh.linkUUID(from: 2, at: 1))
+        #expect(relay.service.isPeerConnected(deadNext.service.myPeerID))
+        relay.service._test_isPhysicalLinkLive = { $0 != deadNextLinkOnRelay }
+
+        let routedPacket = origin.service.signPacketForBroadcast(BitchatPacket(
+            type: MessageType.message.rawValue,
+            senderID: origin.service.myPeerID.routingData ?? Data(),
+            recipientID: dest.service.myPeerID.routingData,
+            timestamp: UInt64(Date().timeIntervalSince1970 * 1000),
+            payload: Data("dead-next-hop-fallback".utf8),
+            signature: nil,
+            ttl: TransportConfig.messageTTLDefault,
+            version: 2,
+            route: [relay.service.myPeerID.routingData, deadNext.service.myPeerID.routingData].compactMap { $0 }
+        ))
+
+        let plannedBefore = mesh.plannedTransmissions(from: 1).count
+        let originLinkOnRelay = BLEIngressLinkID.central(mesh.linkUUID(from: 0, at: 1))
+        relay.service._test_ingestFrame(routedPacket, link: originLinkOnRelay)
+        mesh.pump()
+        mesh.advanceTime(by: 2)
+
+        // Conservative flood fallback ran (did NOT prune altHop despite origin-altHop edge)
+        // and transmitted to altHop (node 3), reaching dest!
+        let relayTargets = Set(
+            mesh.plannedTransmissions(from: 1)
+                .dropFirst(plannedBefore)
+                .filter { $0.packet.type == MessageType.message.rawValue }
+                .map(\.to)
+        )
+        #expect(relayTargets.contains(3))
+        #expect(!relayTargets.contains(0))
+    }
+
+    /// Regression for R3-SPEC-03: verifies previous-hop echo handling across
+    /// both link transitions with `origin != prevHop` and a surviving sibling link:
+    /// 1. Physical teardown BEFORE scheduling: generated fragments must still
+    ///    suppress echo onto `prevHop`'s surviving sibling link.
+    /// 2. Ingress rebind BEFORE unfragmented send: old owner's sibling link
+    ///    must NOT remain excluded once ingress belongs to a different peer.
+    @Test
+    func previousHopEchoSuppressionHandlesTeardownBeforeSchedulingAndIngressRebind() {
+        // Part 1: Physical teardown BEFORE scheduling on fragmented encrypted relay.
+        do {
+            let mesh = SimulatedMesh(usePlannedLinkDelivery: true)
+            let prevHop = mesh.addNode(nickname: "prev")     // 0
+            let relay = mesh.addNode(nickname: "relay")      // 1
+            let recipient = mesh.addNode(nickname: "dest")   // 2
+            let other = mesh.addNode(nickname: "other")      // 3
+            let origin = mesh.addNode(nickname: "origin")    // 4 (distinct from prevHop!)
+
+            mesh.connectDuplicateLinks(0, 1) // primary + sibling link between prevHop and relay
+            mesh.connect(1, 2)
+            mesh.connect(1, 3)
+            mesh.connect(4, 0)
+            settleDiscovery(mesh)
+
+            let primaryLinkUUID = mesh.linkUUID(from: 0, at: 1)
+            let primaryLink = BLEIngressLinkID.central(primaryLinkUUID)
+            let recipientID = recipient.service.myPeerID
+
+            // Force physical teardown of `primaryLink` BEFORE scheduling runs, while
+            // keeping its binding and sibling link intact.
+            relay.service._test_isPhysicalLinkLive = { $0 != primaryLink }
+            relay.service._test_directLinkMTU = { peerID in
+                peerID == recipientID ? (peripheralMaxLen: 90, centralMaxLen: nil) : (nil, nil)
+            }
+
+            let largeEncrypted = BitchatPacket(
+                type: MessageType.noiseEncrypted.rawValue,
+                senderID: origin.service.myPeerID.routingData ?? Data(),
+                recipientID: recipientID.routingData,
+                timestamp: UInt64(Date().timeIntervalSince1970 * 1000),
+                payload: Data(repeating: 0x6B, count: 260),
+                signature: nil,
+                ttl: TransportConfig.messageTTLDefault - 1
+            )
+
+            let plannedBefore = mesh.plannedTransmissions(from: 1).count
+            relay.service._test_ingestFrame(largeEncrypted, link: primaryLink)
+            mesh.pump()
+            relay.service._test_fenceEngine()
+
+            // Start fragment train, then disconnect recipient so remaining chunks flood.
+            mesh.advanceTime(by: 0.07)
+            mesh.advanceTime(by: 0.01)
+            mesh.silence(1, 2)
+            relay.service._test_directLinkMTU = nil
+            relay.service.emitLinkEvent(.centralLinkEnded(centralUUID: mesh.linkUUID(from: 2, at: 1)))
+            relay.service._test_fenceEngine()
+            mesh.advanceTime(by: 2.0)
+
+            let fragTargets = mesh.plannedTransmissions(from: 1)
+                .dropFirst(plannedBefore)
+                .filter { $0.packet.type == MessageType.fragment.rawValue }
+                .map(\.to)
+            #expect(fragTargets.contains(3))
+            #expect(!fragTargets.contains(0)) // sibling link of prevHop must NOT receive echoes
+        }
+
+        // Part 2: Ingress rebind to a different peer BEFORE unfragmented relay fires.
+        do {
+            let mesh = SimulatedMesh(usePlannedLinkDelivery: true)
+            let oldOwner = mesh.addNode(nickname: "oldOwner") // 0
+            let relay = mesh.addNode(nickname: "relay")       // 1
+            let newOwner = mesh.addNode(nickname: "newOwner") // 2
+            let origin = mesh.addNode(nickname: "origin")     // 3 (distinct from oldOwner!)
+
+            mesh.connectDuplicateLinks(0, 1) // oldOwner has primary + sibling link to relay
+            mesh.connect(3, 0)
+            settleDiscovery(mesh)
+
+            let primaryLinkUUID = mesh.linkUUID(from: 0, at: 1)
+            let primaryLink = BLEIngressLinkID.central(primaryLinkUUID)
+
+            let msg = origin.service.signPacketForBroadcast(BitchatPacket(
+                type: MessageType.message.rawValue,
+                senderID: origin.service.myPeerID.routingData ?? Data(),
+                recipientID: nil,
+                timestamp: UInt64(Date().timeIntervalSince1970 * 1000) + 100,
+                payload: Data("rebind-sibling-check".utf8),
+                signature: nil,
+                ttl: TransportConfig.messageTTLDefault - 1
+            ))
+
+            let plannedBefore = mesh.plannedTransmissions(from: 1).count
+            relay.service._test_ingestFrame(msg, link: primaryLink)
+            mesh.pump()
+
+            // Rebind `primaryLink` to `newOwner` BEFORE the jittered relay fires!
+            // `oldOwner`'s sibling link remains live and must no longer be excluded.
+            relay.service._test_bindCentral(primaryLinkUUID, to: newOwner.service.myPeerID, verified: true)
+            mesh.advanceTime(by: 2.0)
+
+            let msgTargets = Set(
+                mesh.plannedTransmissions(from: 1)
+                    .dropFirst(plannedBefore)
+                    .filter { $0.packet.type == MessageType.message.rawValue }
+                    .map(\.to)
+            )
+            #expect(msgTargets.contains(0)) // oldOwner's sibling link is eligible after ingress rebind
+        }
+    }
+
+    /// Regression for R3-SPEC-04: a source-routed packet over a 4-node path
+    /// (`A -> B -> C -> D`) where the middle link (`B -> C`) has a smaller MTU
+    /// forcing re-fragmentation at `B` must preserve `D` as the fragment
+    /// `recipientID`, forward every fragment through `C` to `D`, and reassemble
+    /// at `D`.
+    @Test
+    func sourceRoutedPacketSurvivesMiddleLinkSmallMTURefragmentation() async {
+        let mesh = SimulatedMesh(usePlannedLinkDelivery: true)
+        let a = mesh.addNode(nickname: "a") // 0
+        let b = mesh.addNode(nickname: "b") // 1
+        let c = mesh.addNode(nickname: "c") // 2
+        let d = mesh.addNode(nickname: "d") // 3
+
+        mesh.connect(0, 1)
+        mesh.connect(1, 2)
+        mesh.connect(2, 3)
+        settleDiscovery(mesh)
+
+        // Middle link B -> C has a smaller MTU (110 bytes) forcing re-fragmentation at B.
+        let cLinkOnB = mesh.linkUUID(from: 2, at: 1)
+        b.service._test_virtualCentralMTU = { uuid in
+            uuid == cLinkOnB ? 110 : nil
+        }
+
+        let captureD = MPRPublicMessageCapture()
+        d.service.eventDelegate = captureD
+
+        let longBody = String(repeating: "R", count: 160)
+        let routedPacket = a.service.signPacketForBroadcast(BitchatPacket(
+            type: MessageType.message.rawValue,
+            senderID: a.service.myPeerID.routingData ?? Data(),
+            recipientID: d.service.myPeerID.routingData,
+            timestamp: UInt64(Date().timeIntervalSince1970 * 1000),
+            payload: Data(longBody.utf8),
+            signature: nil,
+            ttl: TransportConfig.messageTTLDefault,
+            version: 2,
+            route: [b.service.myPeerID.routingData, c.service.myPeerID.routingData].compactMap { $0 }
+        ))
+
+        let aLinkOnB = BLEIngressLinkID.central(mesh.linkUUID(from: 0, at: 1))
+        let bPlannedBefore = mesh.plannedTransmissions(from: 1).count
+        let cPlannedBefore = mesh.plannedTransmissions(from: 2).count
+
+        b.service._test_ingestFrame(routedPacket, link: aLinkOnB)
+        mesh.pump()
+        mesh.advanceTime(by: 2)
+        mesh.advanceTime(by: 2)
+
+        // B re-fragmented into >1 fragments addressed to D (NOT C), and C forwarded them to D.
+        let bFragsToC = mesh.plannedTransmissions(from: 1)
+            .dropFirst(bPlannedBefore)
+            .filter { $0.to == 2 && $0.packet.type == MessageType.fragment.rawValue }
+        let cFragsToD = mesh.plannedTransmissions(from: 2)
+            .dropFirst(cPlannedBefore)
+            .filter { $0.to == 3 && $0.packet.type == MessageType.fragment.rawValue }
+        #expect(bFragsToC.count > 1)
+        #expect(bFragsToC.allSatisfy { $0.packet.recipientID == d.service.myPeerID.routingData })
+        #expect(cFragsToD.count == bFragsToC.count)
+        #expect(await captureD.drainedCount(content: longBody, on: d.service) == 1)
     }
 
     // MARK: - Helpers
@@ -1150,17 +1409,12 @@ private final class MPRPublicMessageCapture: TransportEventDelegate, @unchecked 
 
     func drainedCount(
         content: String,
-        afterFencing services: [BLEService] = [],
-        drains: Int = 8
+        on service: BLEService
     ) async -> Int {
-        services.forEach { $0._test_fenceEngine() }
-        // Never break early on the first callback: drain multiple MainActor
-        // turns so any unexpected duplicate delivery task enqueued on the
-        // engine is guaranteed to execute before the exact-once assertion.
-        for _ in 0..<drains {
-            await MainActor.run {}
-            await Task.yield()
-        }
+        // Deterministically await every engine-enqueued `notifyUI` /
+        // `emitTransportEvent` MainActor delivery task on `service` rather
+        // than relying on a fixed number of actor yields.
+        await service._test_drainUI()
         return count(content: content)
     }
 }

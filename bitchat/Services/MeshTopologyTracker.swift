@@ -29,6 +29,9 @@ final class MeshTopologyTracker {
     private let queue = DispatchQueue(label: "mesh.topology", attributes: .concurrent)
     private let hopSize = 8
     private static let maxReportedNeighbors = 10
+    private let wallClockOrigin: Date
+    private let monotonicOrigin: TimeInterval
+    private let monotonicNow: () -> TimeInterval
 
     // Directed claims: Key claims to see Value (neighbors). Local disconnect
     // pruning removes lost links here immediately.
@@ -40,7 +43,7 @@ final class MeshTopologyTracker {
     // Latest accepted ANNOUNCE packet timestamp (ms) per peer for out-of-order
     // duplicate rejection.
     private var lastAnnounceTimestamp: [RoutingID: UInt64] = [:]
-    // Last local receipt time we accepted a topology update for a node.
+    // Last local monotonic receipt time we accepted a topology update for a node.
     private var lastSeen: [RoutingID: Date] = [:]
     // Highest protocol version observed from each node's decoded packets.
     // Nodes absent from this map are assumed v1-only and are never used as
@@ -50,6 +53,22 @@ final class MeshTopologyTracker {
     // Maximum age for topology claims to be considered fresh for source routing.
     // Routes computed using stale topology can fail when the network has changed.
     private static let routeFreshnessThreshold: TimeInterval = 60 // 60 seconds
+
+    init(
+        wallClockOrigin: Date = Date(),
+        monotonicNow: @escaping () -> TimeInterval = { ProcessInfo.processInfo.systemUptime }
+    ) {
+        self.wallClockOrigin = wallClockOrigin
+        self.monotonicOrigin = monotonicNow()
+        self.monotonicNow = monotonicNow
+    }
+
+    /// Monotonic instant projected onto `wallClockOrigin` so local freshness
+    /// checks advance strictly with elapsed uptime and cannot be extended by
+    /// system wall-clock rollbacks.
+    func currentMonotonicDate() -> Date {
+        wallClockOrigin.addingTimeInterval(monotonicNow() - monotonicOrigin)
+    }
 
     func reset() {
         queue.sync(flags: .barrier) {
@@ -82,9 +101,10 @@ final class MeshTopologyTracker {
         neighbors: [Data],
         announceTimestamp: UInt64? = nil,
         maxFreshAge: TimeInterval = TransportConfig.bleMprEdgeMaxAgeSeconds,
-        at now: Date = Date()
+        at now: Date? = nil
     ) -> Bool {
         guard let source = sanitize(sourceData) else { return false }
+        let timestamp = now ?? currentMonotonicDate()
 
         // Preserve first-seen distinct order up to the protocol cap of 10, excluding self-loops.
         var validNeighbors = Set<RoutingID>()
@@ -103,23 +123,24 @@ final class MeshTopologyTracker {
                 self.lastAnnounceTimestamp[source] = announceTimestamp
             }
 
-            let wasFresh = self.isFreshLocked(source, now: now, maxAge: maxFreshAge)
+            let wasFresh = self.isFreshLocked(source, now: timestamp, maxAge: maxFreshAge)
             let prevReported = self.reportedClaims[source]
             let topologyChanged = prevReported == nil || prevReported != validNeighbors || !wasFresh
             self.reportedClaims[source] = validNeighbors
             self.claims[source] = validNeighbors
-            self.lastSeen[source] = now
+            self.lastSeen[source] = timestamp
             return topologyChanged
         }
     }
 
     /// Record the protocol version observed on a decoded packet from a node.
     /// Only versions above the v1 baseline are stored; the highest wins.
-    func recordObservedVersion(_ version: UInt8, for peerData: Data?, at now: Date = Date()) {
+    func recordObservedVersion(_ version: UInt8, for peerData: Data?, at now: Date? = nil) {
         guard version > 1, let peer = sanitize(peerData) else { return }
+        let timestamp = now ?? currentMonotonicDate()
         queue.sync(flags: .barrier) {
             let current = self.observedVersions[peer]?.version ?? 1
-            self.observedVersions[peer] = (version: max(version, current), seenAt: now)
+            self.observedVersions[peer] = (version: max(version, current), seenAt: timestamp)
         }
     }
 
@@ -159,8 +180,9 @@ final class MeshTopologyTracker {
     }
 
     /// Prune nodes that haven't updated their topology in `age` seconds.
-    func prune(olderThan age: TimeInterval, now: Date = Date()) {
-        let deadline = now.addingTimeInterval(-age)
+    func prune(olderThan age: TimeInterval, now: Date? = nil) {
+        let timestamp = now ?? currentMonotonicDate()
+        let deadline = timestamp.addingTimeInterval(-age)
         queue.sync(flags: .barrier) {
             let stalePeers = Set(self.lastSeen.filter { $0.value < deadline }.map(\.key))
             for peer in stalePeers {
@@ -187,11 +209,12 @@ final class MeshTopologyTracker {
     func isFreshAnnouncement(
         for peerID: PeerID,
         maxAge: TimeInterval = TransportConfig.bleMprEdgeMaxAgeSeconds,
-        now: Date = Date()
+        now: Date? = nil
     ) -> Bool {
         guard maxAge >= 0, let peer = sanitize(peerID.routingData) else { return false }
+        let timestamp = now ?? currentMonotonicDate()
         return queue.sync {
-            isFreshLocked(peer, now: now, maxAge: maxAge)
+            isFreshLocked(peer, now: timestamp, maxAge: maxAge)
         }
     }
 
@@ -201,7 +224,7 @@ final class MeshTopologyTracker {
         _ a: PeerID,
         _ b: PeerID,
         maxAge: TimeInterval = TransportConfig.bleMprEdgeMaxAgeSeconds,
-        now: Date = Date()
+        now: Date? = nil
     ) -> Bool {
         guard maxAge >= 0,
               let aData = sanitize(a.routingData),
@@ -209,8 +232,9 @@ final class MeshTopologyTracker {
               aData != bData else {
             return false
         }
+        let timestamp = now ?? currentMonotonicDate()
         return queue.sync {
-            isFreshConfirmedEdgeLocked(aData, bData, now: now, maxAge: maxAge)
+            isFreshConfirmedEdgeLocked(aData, bData, now: timestamp, maxAge: maxAge)
         }
     }
 
@@ -218,11 +242,12 @@ final class MeshTopologyTracker {
     func freshConfirmedNeighbors(
         of peerID: PeerID,
         maxAge: TimeInterval = TransportConfig.bleMprEdgeMaxAgeSeconds,
-        now: Date = Date()
+        now: Date? = nil
     ) -> Set<PeerID> {
         guard maxAge >= 0, let center = sanitize(peerID.routingData) else { return [] }
+        let timestamp = now ?? currentMonotonicDate()
         return queue.sync {
-            let neighbors = freshConfirmedNeighborsLocked(of: center, now: now, maxAge: maxAge)
+            let neighbors = freshConfirmedNeighborsLocked(of: center, now: timestamp, maxAge: maxAge)
             return Set(neighbors.compactMap { PeerID(routingData: $0) })
         }
     }
@@ -233,7 +258,7 @@ final class MeshTopologyTracker {
     func freshTwoHopNeighborhood(
         around centerPeerID: PeerID,
         maxAge: TimeInterval = TransportConfig.bleMprEdgeMaxAgeSeconds,
-        now: Date = Date()
+        now: Date? = nil
     ) -> TwoHopNeighborhood {
         guard maxAge >= 0, let center = sanitize(centerPeerID.routingData) else {
             return TwoHopNeighborhood(
@@ -243,9 +268,10 @@ final class MeshTopologyTracker {
                 neighborsByN1: [:]
             )
         }
+        let timestamp = now ?? currentMonotonicDate()
 
         return queue.sync {
-            guard isFreshLocked(center, now: now, maxAge: maxAge) else {
+            guard isFreshLocked(center, now: timestamp, maxAge: maxAge) else {
                 return TwoHopNeighborhood(
                     centerPeerID: centerPeerID,
                     centerIsFresh: false,
@@ -254,7 +280,7 @@ final class MeshTopologyTracker {
                 )
             }
 
-            let rawN1 = freshConfirmedNeighborsLocked(of: center, now: now, maxAge: maxAge)
+            let rawN1 = freshConfirmedNeighborsLocked(of: center, now: timestamp, maxAge: maxAge)
             var n1 = Set<PeerID>()
             n1.reserveCapacity(rawN1.count)
             var neighborsByN1: [PeerID: Set<PeerID>] = [:]
@@ -263,7 +289,7 @@ final class MeshTopologyTracker {
             for rawU in rawN1 {
                 guard let u = PeerID(routingData: rawU) else { continue }
                 n1.insert(u)
-                let rawUNeighbors = freshConfirmedNeighborsLocked(of: rawU, now: now, maxAge: maxAge)
+                let rawUNeighbors = freshConfirmedNeighborsLocked(of: rawU, now: timestamp, maxAge: maxAge)
                 neighborsByN1[u] = Set(rawUNeighbors.compactMap { PeerID(routingData: $0) })
             }
 
@@ -282,12 +308,13 @@ final class MeshTopologyTracker {
     /// node on the path except the source (i.e. all intermediate hops and the
     /// target) must have been observed speaking at least that protocol
     /// version — a v1-only hop cannot decode a v2 routed packet.
-    func computeRoute(from start: Data?, to goal: Data?, maxHops: Int = 10, requiringVersion: UInt8? = nil, now: Date = Date()) -> [Data]? {
+    func computeRoute(from start: Data?, to goal: Data?, maxHops: Int = 10, requiringVersion: UInt8? = nil, now: Date? = nil) -> [Data]? {
         guard let source = sanitize(start), let target = sanitize(goal) else { return nil }
         if source == target { return [] } // Direct connection, no intermediate hops
+        let timestamp = now ?? currentMonotonicDate()
 
         return queue.sync {
-            let freshnessDeadline = now.addingTimeInterval(-Self.routeFreshnessThreshold)
+            let freshnessDeadline = timestamp.addingTimeInterval(-Self.routeFreshnessThreshold)
             func meetsRequiredVersion(_ peer: RoutingID) -> Bool {
                 guard let requiringVersion else { return true }
                 return (observedVersions[peer]?.version ?? 1) >= requiringVersion

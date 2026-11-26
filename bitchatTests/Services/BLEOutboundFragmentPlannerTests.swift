@@ -89,6 +89,45 @@ struct BLEOutboundFragmentPlannerTests {
         #expect(plan.fragmentPackets.allSatisfy { $0.route == route && $0.isRSR })
     }
 
+    @Test("source-routed directed re-fragmentation preserves final destination recipientID")
+    func routedDirectedRefragmentationPreservesFinalRecipient() throws {
+        let nextHop = PeerID(str: "1011121314151617")
+        let finalDest = PeerID(str: "9091929394959697")
+        let route = [
+            Data([0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17]),
+            Data([0x20, 0x21, 0x22, 0x23, 0x24, 0x25, 0x26, 0x27])
+        ]
+        let routedPacket = BitchatPacket(
+            type: MessageType.message.rawValue,
+            senderID: Data([0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08]),
+            recipientID: finalDest.routingData,
+            timestamp: 1_000,
+            payload: makePayload(count: 256),
+            signature: nil,
+            ttl: 5,
+            version: 2,
+            route: route
+        )
+        let request = BLEOutboundFragmentTransferRequest(
+            packet: routedPacket,
+            pad: false,
+            maxChunk: 96,
+            directedPeer: nextHop,
+            transferId: nil
+        )
+
+        let plan = try #require(BLEOutboundFragmentPlanner.makePlan(
+            for: request,
+            defaultChunkSize: 256,
+            bleMaxMTU: 512,
+            fragmentID: Data(repeating: 0xD4, count: 8)
+        ))
+
+        #expect(plan.fragmentPackets.count > 1)
+        #expect(plan.fragmentPackets.allSatisfy { $0.recipientID == finalDest.routingData })
+        #expect(plan.fragmentPackets.allSatisfy { $0.route == route })
+    }
+
     @Test("invalid fragment IDs do not produce a plan")
     func invalidFragmentIDReturnsNil() {
         let packet = makePacket(payload: makePayload(count: 128))

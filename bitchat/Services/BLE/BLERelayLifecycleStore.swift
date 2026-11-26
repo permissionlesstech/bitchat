@@ -58,6 +58,11 @@ struct BLERelayLifecycleStore {
         entries.count
     }
 
+    /// Number of retained records in the active slice of the insertion-order log.
+    var orderLogCount: Int {
+        order.count - head
+    }
+
     mutating func removeAll() {
         entries.removeAll()
         order.removeAll()
@@ -235,6 +240,18 @@ struct BLERelayLifecycleStore {
     private mutating func compactOrderIfNeeded() {
         if head >= 64 && head * 2 >= order.count {
             order.removeFirst(head)
+            head = 0
+        }
+        // Repeated refreshes of live entries inside the TTL append stale order
+        // records without growing `entries.count`; compact once stale records
+        // exceed 2x `maxCount` so memory stays strictly O(maxCount).
+        if order.count - head > maxCount * 2 {
+            var compacted: [(key: String, updatedAt: Date)] = []
+            compacted.reserveCapacity(entries.count)
+            for item in order[head...] where entries[item.key]?.updatedAt == item.updatedAt {
+                compacted.append(item)
+            }
+            order = compacted
             head = 0
         }
     }

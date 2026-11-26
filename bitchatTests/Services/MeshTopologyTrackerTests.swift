@@ -348,4 +348,34 @@ struct MeshTopologyTrackerTests {
         #expect(tracker.updateNeighbors(for: a, neighbors: [c], announceTimestamp: 40, at: t0.addingTimeInterval(115)))
     }
 
+    @Test func monotonicFreshnessExpiresEvenWhenWallClockRollsBackward() throws {
+        var monotonicSeconds: TimeInterval = 500
+        let initialWallClock = Date(timeIntervalSince1970: 10_000)
+        let tracker = MeshTopologyTracker(
+            wallClockOrigin: initialWallClock,
+            monotonicNow: { monotonicSeconds }
+        )
+        let a = try hex("0101010101010101")
+        let b = try hex("0202020202020202")
+        let peerA = try #require(PeerID(routingData: a))
+        let peerB = try #require(PeerID(routingData: b))
+
+        // Record edges using the tracker's default monotonic clock at t = 500s.
+        tracker.updateNeighbors(for: a, neighbors: [b])
+        tracker.updateNeighbors(for: b, neighbors: [a])
+        #expect(tracker.isFreshAnnouncement(for: peerA, maxAge: 120))
+        #expect(tracker.isFreshConfirmedNeighbor(peerA, peerB, maxAge: 120))
+
+        // Advance elapsed monotonic time past 120s (even though wallClockOrigin
+        // is fixed and independent of any backward wall-clock jump).
+        monotonicSeconds += 121
+        #expect(!tracker.isFreshAnnouncement(for: peerA, maxAge: 120))
+        #expect(!tracker.isFreshConfirmedNeighbor(peerA, peerB, maxAge: 120))
+        #expect(tracker.freshConfirmedNeighbors(of: peerA, maxAge: 120).isEmpty)
+
+        // Default monotonic prune drops the expired entries cleanly.
+        tracker.prune(olderThan: 120)
+        #expect(tracker.adjacencySnapshot().isEmpty)
+    }
+
 }

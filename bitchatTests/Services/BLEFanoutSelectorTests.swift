@@ -124,19 +124,11 @@ struct BLEFanoutSelectorTests {
     }
 
     @Test
-    func broadcastPacketsUseDeterministicSubsetAfterIngressExclusion() {
+    func broadcastPacketsFanOutToAllNonIngressLinks() {
         let peripherals = (1...8).map { "p\($0)" }
         let centrals = (1...8).map { "c\($0)" }
 
-        let first = BLEFanoutSelector.selectLinks(
-            peripheralIDs: peripherals,
-            centralIDs: centrals,
-            ingressLink: .peripheral("p4"),
-            directedPeerHint: nil,
-            packetType: MessageType.message.rawValue,
-            messageID: "message-1"
-        )
-        let second = BLEFanoutSelector.selectLinks(
+        let selection = BLEFanoutSelector.selectLinks(
             peripheralIDs: peripherals,
             centralIDs: centrals,
             ingressLink: .peripheral("p4"),
@@ -145,10 +137,9 @@ struct BLEFanoutSelectorTests {
             messageID: "message-1"
         )
 
-        #expect(first == second)
-        #expect(!first.peripheralIDs.contains("p4"))
-        #expect(first.peripheralIDs.count == 4)
-        #expect(first.centralIDs.count == 4)
+        #expect(!selection.peripheralIDs.contains("p4"))
+        #expect(selection.peripheralIDs == Set(peripherals.filter { $0 != "p4" }))
+        #expect(selection.centralIDs == Set(centrals))
     }
 
     @Test

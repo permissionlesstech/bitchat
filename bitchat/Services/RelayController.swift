@@ -161,7 +161,7 @@ struct RelayController {
         isAuthenticated: Bool = true,
         topology: MeshTopologyTracker,
         edgeMaxAge: TimeInterval = TransportConfig.bleMprEdgeMaxAgeSeconds,
-        now: Date = Date()
+        now: Date? = nil
     ) -> BroadcastRelayPolicy {
         if sourceRouteFallback || isAlwaysConservativeBroadcastPacket(packet) {
             return .conservativeFlood
@@ -232,7 +232,7 @@ struct RelayController {
         topology: MeshTopologyTracker,
         smallNetworkThreshold: Int = TransportConfig.bleMprSmallNetworkRelayThreshold,
         edgeMaxAge: TimeInterval = TransportConfig.bleMprEdgeMaxAgeSeconds,
-        now: Date = Date()
+        now: Date? = nil
     ) -> BroadcastRelayDecision {
         let policy = broadcastRelayPolicy(
             for: packet,

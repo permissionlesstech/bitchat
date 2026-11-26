@@ -48,6 +48,13 @@ enum BLEOutboundFragmentPlanner {
         guard !chunks.isEmpty else { return nil }
 
         let fragmentRecipient: Data? = {
+            // Source-routed packets must preserve their final destination
+            // recipientID on every fragment so intermediate hops forward
+            // along `route` instead of terminating reassembly locally.
+            if let route = request.packet.route, !route.isEmpty,
+               let originalRecipient = request.packet.recipientID {
+                return originalRecipient
+            }
             if let directedPeer = request.directedPeer {
                 return Data(hexString: directedPeer.id)
             }

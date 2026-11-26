@@ -31,7 +31,7 @@ enum BroadcastPruningPolicy {
         skipNeighborPruning: Bool = false,
         topology: MeshTopologyTracker,
         edgeMaxAge: TimeInterval = TransportConfig.bleMprEdgeMaxAgeSeconds,
-        now: Date = Date()
+        now: Date? = nil
     ) -> Bool {
         // 1. Never echo back onto the exact link the packet arrived on.
         if let targetLink, let ingressLink, targetLink == ingressLink {
@@ -106,7 +106,7 @@ enum BroadcastPruningPolicy {
         skipNeighborPruning: Bool,
         topology: MeshTopologyTracker,
         edgeMaxAge: TimeInterval = TransportConfig.bleMprEdgeMaxAgeSeconds,
-        now: Date = Date()
+        now: Date? = nil
     ) -> Set<BLEIngressLinkID> {
         var excluded = Set<BLEIngressLinkID>()
 

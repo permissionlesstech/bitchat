@@ -174,4 +174,24 @@ struct BLERelayLifecycleStoreTests {
         #expect(canReconsiderValid)
         #expect(!canReconsiderTampered)
     }
+
+    @Test
+    func repeatedSuppressedRefreshesKeepOrderLogBounded() {
+        var store = BLERelayLifecycleStore(maxCount: 8, ttl: 60)
+        let t0 = Date(timeIntervalSince1970: 1_000)
+        let packet = makePacket(payload: "refresh-bound")
+
+        // Refresh the same suppressed entry far more than maxCount times within TTL.
+        for i in 0..<100 {
+            store.markSuppressed(
+                messageID: "m1",
+                packet: packet,
+                isAuthenticated: true,
+                now: t0.addingTimeInterval(Double(i) * 0.1)
+            )
+        }
+
+        #expect(store.count == 1)
+        #expect(store.orderLogCount <= store.maxCount * 2)
+    }
 }

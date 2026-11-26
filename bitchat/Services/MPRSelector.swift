@@ -53,7 +53,7 @@ enum MPRSelector {
         topology: MeshTopologyTracker,
         coverageK: Int = 1,
         maxAge: TimeInterval = TransportConfig.bleMprEdgeMaxAgeSeconds,
-        now: Date = Date()
+        now: Date? = nil
     ) -> Set<PeerID> {
         let neighborhood = topology.freshTwoHopNeighborhood(
             around: previousHopPeerID,
@@ -120,7 +120,7 @@ enum MPRSelector {
         hasUnidentifiedDirectLink: Bool = false,
         coverageK: Int = 1,
         maxAge: TimeInterval = TransportConfig.bleMprEdgeMaxAgeSeconds,
-        now: Date = Date()
+        now: Date? = nil
     ) -> RelayDecision {
         let neighborhood = topology.freshTwoHopNeighborhood(
             around: previousHopPeerID,
