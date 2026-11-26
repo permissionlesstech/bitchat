@@ -149,32 +149,31 @@ enum ContentNormalizer {
             simplified = lowered
         }
 
-        // Single-pass trim + whitespace collapse + prefix truncation (avoids
-        // compiling a `\s+` NSRegularExpression on every message).
-        var prefix = ""
-        if prefixLength > 0 {
-            prefix.reserveCapacity(min(simplified.utf8.count, prefixLength))
-            var count = 0
-            var pendingSpace = false
-            for ch in simplified {
-                if ch.isWhitespace || ch.isNewline {
-                    if count > 0 {
-                        pendingSpace = true
-                    }
-                    continue
+        // Single-pass Unicode-scalar trim + whitespace collapse (exact parity with
+        // `\s+` regex without recompiling NSRegularExpression), followed by
+        // grapheme-cluster prefix truncation so combining marks following a
+        // collapsed space are never split at the prefix boundary.
+        var collapsedScalars = String.UnicodeScalarView()
+        collapsedScalars.reserveCapacity(simplified.unicodeScalars.count)
+        var hasContent = false
+        var pendingSpace = false
+        for scalar in simplified.unicodeScalars {
+            if scalar.properties.isWhitespace {
+                if hasContent {
+                    pendingSpace = true
                 }
-                if pendingSpace {
-                    prefix.append(" ")
-                    count += 1
-                    pendingSpace = false
-                    if count >= prefixLength { break }
-                }
-                prefix.append(ch)
-                count += 1
-                if count >= prefixLength { break }
+                continue
             }
+            if pendingSpace {
+                collapsedScalars.append(" ")
+                pendingSpace = false
+            }
+            collapsedScalars.append(scalar)
+            hasContent = true
         }
 
+        let collapsed = String(collapsedScalars)
+        let prefix = prefixLength > 0 ? String(collapsed.prefix(prefixLength)) : ""
         let hash = prefix.djb2()
         return formatHashKey(hash)
     }

@@ -49,21 +49,7 @@ private extension Data {
             guard let src = raw.baseAddress?.assumingMemoryBound(to: UInt8.self) else {
                 return ""
             }
-            return String(unsafeUninitializedCapacity: byteCount &* 2) { buffer in
-                guard let dst = buffer.baseAddress else { return 0 }
-                var outIdx = 0
-                var i = 0
-                while i < byteCount {
-                    let b = src[i]
-                    let hi = b &>> 4
-                    let lo = b & 0x0F
-                    dst[outIdx] = hi < 10 ? hi &+ 48 : hi &+ 87
-                    dst[outIdx &+ 1] = lo < 10 ? lo &+ 48 : lo &+ 87
-                    outIdx &+= 2
-                    i &+= 1
-                }
-                return outIdx
-            }
+            return Self.hexEncodeBytes(src, count: byteCount)
         }
     }
 }

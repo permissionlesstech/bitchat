@@ -56,13 +56,7 @@ final class GossipSyncManager {
         }
 
         func allPackets(isFresh: (BitchatPacket) -> Bool) -> [BitchatPacket] {
-            var result: [BitchatPacket] = []
-            result.reserveCapacity(order.count)
-            for key in order {
-                guard let entry = packets[key], isFresh(entry.packet) else { continue }
-                result.append(entry.packet)
-            }
-            return result
+            allEntries(isFresh: isFresh).map(\.packet)
         }
 
         mutating func remove(where shouldRemove: (BitchatPacket) -> Bool) {
@@ -133,7 +127,6 @@ final class GossipSyncManager {
         var maxFutureSkewMs: UInt64 = TransportConfig.bleMaxTimestampSkewMs
     }
 
-    private let myPeerID: PeerID
     private let mySenderIDData: Data
     private let config: Config
     private let requestSyncManager: RequestSyncManager
@@ -166,7 +159,6 @@ final class GossipSyncManager {
     private var responseRateLimiter: SyncResponseRateLimiter
 
     init(myPeerID: PeerID, config: Config = Config(), requestSyncManager: RequestSyncManager, archive: GossipMessageArchive? = nil) {
-        self.myPeerID = myPeerID
         self.mySenderIDData = Data(hexString: myPeerID.id) ?? Data()
         self.config = config
         self.requestSyncManager = requestSyncManager

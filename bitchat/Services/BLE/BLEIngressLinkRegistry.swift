@@ -175,17 +175,6 @@ final class BLEIngressLinkStore: @unchecked Sendable {
     }
 
     func recordIfNew(
-        _ packet: BitchatPacket,
-        link: BLEIngressLinkID,
-        peerID: PeerID,
-        lifetime: TimeInterval
-    ) -> Bool {
-        lock.withLock {
-            registry.recordIfNew(packet, link: link, peerID: peerID, lifetime: lifetime)
-        }
-    }
-
-    func recordIfNew(
         messageID: String,
         link: BLEIngressLinkID,
         peerID: PeerID,

@@ -77,11 +77,6 @@ final class BLELinkStateStore {
         return subscribedCentrals.count
     }
 
-    var hasConnectedPeripheral: Bool {
-        assertOwned()
-        return peripherals.values.contains { $0.isConnected }
-    }
-
     var hasActiveLinks: Bool {
         assertOwned()
         return !subscribedCentrals.isEmpty || peripherals.values.contains { $0.isConnected }

@@ -262,6 +262,19 @@ final class NoiseCipherState {
         return (nonce: extractedNonce, ciphertext: ciphertext)
     }
 
+    /// Builds the 12-byte Noise ChaChaPoly nonce (4 zero bytes + 8-byte LE counter)
+    /// directly on the stack using three UInt32s (exact 12 bytes, zero padding).
+    private func makeChaChaNonce(for value: UInt64) throws -> ChaChaPoly.Nonce {
+        var nonceWords: (UInt32, UInt32, UInt32) = (
+            0,
+            UInt32(truncatingIfNeeded: value).littleEndian,
+            UInt32(truncatingIfNeeded: value >> 32).littleEndian
+        )
+        return try withUnsafeBytes(of: &nonceWords) { raw in
+            try ChaChaPoly.Nonce(data: raw)
+        }
+    }
+
     func encrypt(plaintext: Data, associatedData: Data = Data()) throws -> Data {
         guard let key = self.key else {
             throw NoiseError.uninitializedCipher
@@ -275,16 +288,7 @@ final class NoiseCipherState {
             throw NoiseError.nonceExceeded
         }
         
-        // Create 12-byte ChaChaPoly nonce (4 zero bytes + 8-byte little-endian counter).
-        // Using three UInt32s avoids struct alignment padding (size is exactly 12 bytes).
-        var nonceWords: (UInt32, UInt32, UInt32) = (
-            0,
-            UInt32(truncatingIfNeeded: currentNonce).littleEndian,
-            UInt32(truncatingIfNeeded: currentNonce >> 32).littleEndian
-        )
-        let chachaNonce = try withUnsafeBytes(of: &nonceWords) { raw in
-            try ChaChaPoly.Nonce(data: raw)
-        }
+        let chachaNonce = try makeChaChaNonce(for: currentNonce)
         
         let sealedBox = try ChaChaPoly.seal(plaintext, using: key, nonce: chachaNonce, authenticating: associatedData)
         // increment local nonce
@@ -295,7 +299,7 @@ final class NoiseCipherState {
         var combinedPayload = Data(capacity: prefixLen + sealedBox.ciphertext.count + sealedBox.tag.count)
         if useExtractedNonce {
             var nonceBE = UInt32(currentNonce).bigEndian
-            withUnsafeBytes(of: &nonceBE) { combinedPayload.append(contentsOf: $0) }
+            withUnsafeBytes(of: &nonceBE) { combinedPayload.append($0.bindMemory(to: UInt8.self)) }
         }
         combinedPayload.append(sealedBox.ciphertext)
         combinedPayload.append(sealedBox.tag)
@@ -352,16 +356,7 @@ final class NoiseCipherState {
             decryptionNonce = nonce
         }
         
-        // Create 12-byte ChaChaPoly nonce (4 zero bytes + 8-byte little-endian counter).
-        // Using three UInt32s avoids struct alignment padding (size is exactly 12 bytes).
-        var nonceWords: (UInt32, UInt32, UInt32) = (
-            0,
-            UInt32(truncatingIfNeeded: decryptionNonce).littleEndian,
-            UInt32(truncatingIfNeeded: decryptionNonce >> 32).littleEndian
-        )
-        let chachaNonce = try withUnsafeBytes(of: &nonceWords) { raw in
-            try ChaChaPoly.Nonce(data: raw)
-        }
+        let chachaNonce = try makeChaChaNonce(for: decryptionNonce)
         
         let sealedBox = try ChaChaPoly.SealedBox(
             nonce: chachaNonce,

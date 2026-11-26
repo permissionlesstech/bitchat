@@ -961,8 +961,11 @@ final class BLEService: NSObject {
             targetInterval = isLowPower ? 20.0 : 15.0
             targetLeeway = .seconds(3)
         } else if isLowPower {
-            targetInterval = 10.0
-            targetLeeway = .seconds(2)
+            // 8s interval with cleanup every 2nd cycle (~16s) keeps fragment
+            // stall recovery well ahead of the 30s fragment lifetime while
+            // still cutting active LPM wakeups by ~37%.
+            targetInterval = 8.0
+            targetLeeway = .seconds(1)
         } else {
             targetInterval = TransportConfig.bleMaintenanceInterval
             targetLeeway = .seconds(TransportConfig.bleMaintenanceLeewaySeconds)
@@ -1053,15 +1056,14 @@ final class BLEService: NSObject {
             RunLoop.current.run(until: Date().addingTimeInterval(0.01))
         }
 
-        // Clear pending notifications
+        // Clear pending notifications and stop timers/duty-cycle on bleQueue
+        // so shutdown cannot race an in-flight scan-resume item.
         bleQueue.sync {
             pendingNotifications.removeAll()
+            maintenanceTimer?.cancel()
+            maintenanceTimer = nil
+            radio.stopDutyCycle()
         }
-
-        // Stop timer
-        maintenanceTimer?.cancel()
-        maintenanceTimer = nil
-        radio.stopDutyCycle()
 
         centralManager?.stopScan()
         peripheralManager?.stopAdvertising()
@@ -1079,11 +1081,10 @@ final class BLEService: NSObject {
     private func stopServicesImmediatelyForPanic() {
         bleQueue.sync {
             pendingNotifications.removeAll()
+            maintenanceTimer?.cancel()
+            maintenanceTimer = nil
+            radio.stopDutyCycle()
         }
-
-        maintenanceTimer?.cancel()
-        maintenanceTimer = nil
-        radio.stopDutyCycle()
 
         centralManager?.stopScan()
         peripheralManager?.stopAdvertising()
@@ -3056,6 +3057,10 @@ extension BLEService: BLERadioControllerDelegate {
         // retirement via the port.
         discardPeripheralLinkPhysical(peripheralID)
         emitLinkEvent(.peripheralLinkEnded(peripheralID: peripheralID, runPeerBookkeeping: false))
+    }
+
+    func radioDidQueueConnectionCandidate() {
+        wakeMaintenanceCadenceIfNeeded()
     }
 
     /// bleQueue half of a peripheral-link teardown: the link's write
@@ -7134,8 +7139,13 @@ extension BLEService {
             checkPeerConnectivity()
         }
         
-        // Every 30 seconds (3 cycles): Cleanup
-        if plan.shouldRunCleanup {
+        // Cleanup & fragment stall recovery: every 3rd cycle (~15s normal), or
+        // every 2nd cycle (~16s) when active cadence is stretched under Low Power Mode
+        // so stalled broadcast fragments are requested well before the 30s expiry.
+        let shouldRunStretchedCleanup = maintenanceIntervalSeconds > TransportConfig.bleMaintenanceInterval
+            && hasActiveLinks
+            && (maintenanceCounter % 2 == 0)
+        if plan.shouldRunCleanup || shouldRunStretchedCleanup {
             performCleanup()
         }
 

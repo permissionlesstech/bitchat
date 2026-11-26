@@ -27,6 +27,7 @@ struct NoticesView: View {
     @ThemedPalette private var palette
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.scenePhase) private var scenePhase
     @EnvironmentObject private var locationChannelsModel: LocationChannelsModel
     @State private var tab: Tab
     @State private var draft: String = ""
@@ -125,13 +126,14 @@ struct NoticesView: View {
         geohash: String?,
         manager: LocationNotesManager?,
         ownsLiveRefresh: Bool,
+        isAppActive: Bool = true,
         beginLiveRefresh: () -> Void,
         endLiveRefresh: () -> Void,
         acquire: (String) -> LocationNotesManager,
         release: (LocationNotesManager?) -> Void
     ) -> GeoSessionState {
         let geoTabActive = tab == .geo && notesEnabled
-        let wantsLiveRefresh = geoTabActive && needsDeviceLocation && permissionState == .authorized
+        let wantsLiveRefresh = geoTabActive && needsDeviceLocation && permissionState == .authorized && isAppActive
 
         if wantsLiveRefresh != ownsLiveRefresh {
             if wantsLiveRefresh {
@@ -184,6 +186,7 @@ struct NoticesView: View {
             geohash: geoGeohash,
             manager: liveGeoManager,
             ownsLiveRefresh: ownsLiveGeoRefresh,
+            isAppActive: scenePhase == .active,
             beginLiveRefresh: {
                 locationChannelsModel.enableLocationChannels()
                 locationChannelsModel.beginLiveRefresh()
@@ -329,6 +332,9 @@ struct NoticesView: View {
             reconcileGeoSession()
         }
         .onChange(of: geoTabNeedsDeviceLocation) { _ in
+            reconcileGeoSession()
+        }
+        .onChange(of: scenePhase) { _ in
             reconcileGeoSession()
         }
         .onReceive(NotificationCenter.default.publisher(for: LocationNotesSettings.didChangeNotification)) { _ in

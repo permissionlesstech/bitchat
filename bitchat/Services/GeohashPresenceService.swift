@@ -97,15 +97,19 @@ final class GeohashPresenceService: ObservableObject {
         self.sleeper = { nanoseconds in
             try? await Task.sleep(nanoseconds: nanoseconds)
         }
+        let loopMinInterval: TimeInterval = 40.0
+        let loopMaxInterval: TimeInterval = 80.0
         self.scheduleTimer = { interval, action in
             let timer = Timer.scheduledTimer(withTimeInterval: interval, repeats: false) { _ in
                 action()
             }
-            timer.tolerance = min(5.0, interval * 0.1)
+            // Keep scheduled delay + tolerance within the documented [40s, 80s] range.
+            let headroom = max(0.0, loopMaxInterval - interval)
+            timer.tolerance = min(5.0, min(interval * 0.1, headroom))
             return GeohashPresenceTimerAdapter(base: timer)
         }
-        self.loopMinInterval = 40.0
-        self.loopMaxInterval = 80.0
+        self.loopMinInterval = loopMinInterval
+        self.loopMaxInterval = loopMaxInterval
         self.burstMinDelay = 2.0
         self.burstMaxDelay = 5.0
         setupObservers()

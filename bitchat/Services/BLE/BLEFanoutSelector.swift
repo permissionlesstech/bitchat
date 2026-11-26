@@ -202,7 +202,7 @@ enum BLEFanoutSelector {
         return (keptPeripheralIDs, keptCentralIDs)
     }
 
-    private static func shouldSubset(packetType: UInt8, directedPeerHint: PeerID?) -> Bool {
+    static func shouldSubset(packetType: UInt8, directedPeerHint: PeerID?) -> Bool {
         directedPeerHint == nil
             && packetType != MessageType.fragment.rawValue
             && packetType != MessageType.announce.rawValue

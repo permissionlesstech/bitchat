@@ -14,6 +14,9 @@ protocol BLERadioControllerDelegate: AnyObject {
     /// the link's transport bookkeeping — write buffers, link-auth proof,
     /// reconnect epoch, and the link-state entry itself.
     func radioTearDownPeripheralLink(_ peripheralID: String)
+    /// A discovery entered the connection candidate queue; wake maintenance
+    /// from idle cadence so the first weak peer is drained promptly.
+    func radioDidQueueConnectionCandidate()
 }
 
 /// bleQueue-confined owner of the central-role radio policy: discovery
@@ -132,6 +135,8 @@ final class BLERadioController {
                         let resumeWork = DispatchWorkItem { [weak self] in
                             guard let self else { return }
                             self.dutyResumeWorkItem = nil
+                            guard self.scanDutyTimer != nil,
+                                  self.delegate?.radioIsPanicSuspended() == false else { return }
                             if self.central?.state == .poweredOn { self.startScanning() }
                             self.dutyActive = true
                         }
@@ -203,7 +208,10 @@ final class BLERadioController {
             peripheralState: peripheral.state.connectionSchedulerState,
             now: candidate.discoveredAt
         ) {
-        case .ignore, .queued:
+        case .ignore:
+            return
+        case .queued:
+            delegate?.radioDidQueueConnectionCandidate()
             return
         case .scheduleRetry(let delay):
             queue.asyncAfter(deadline: .now() + delay) { [weak self] in

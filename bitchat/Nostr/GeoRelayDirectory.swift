@@ -196,6 +196,15 @@ final class GeoRelayDirectory {
     private struct ClosestRelaysCacheKey: Hashable {
         let geohash: String
         let count: Int
+
+        static func == (lhs: Self, rhs: Self) -> Bool {
+            lhs.count == rhs.count && lhs.geohash == rhs.geohash
+        }
+
+        func hash(into hasher: inout Hasher) {
+            hasher.combine(geohash)
+            hasher.combine(count)
+        }
     }
 
     private(set) var entries: [Entry] = [] {

@@ -601,6 +601,43 @@ final class SecureIdentityStateManagerTests: XCTestCase {
         XCTAssertTrue(savedUpdate)
     }
 
+    func test_upsertCryptographicIdentity_retriesFailedKeychainWriteOnIdenticalAnnounce() async {
+        let keychain = FailingCacheSaveKeychain(shouldFailCacheSave: true)
+        let manager = SecureIdentityStateManager(keychain)
+        let noisePublicKey = Data(repeating: 0x52, count: 32)
+        let signingPublicKey = Data(repeating: 0x53, count: 32)
+        let fingerprint = noisePublicKey.sha256Fingerprint()
+        let peerID = PeerID(publicKey: noisePublicKey)
+
+        // First write fails transiently.
+        manager.upsertCryptographicIdentity(
+            fingerprint: fingerprint,
+            noisePublicKey: noisePublicKey,
+            signingPublicKey: signingPublicKey,
+            claimedNickname: "Bob"
+        )
+        let attemptedInitial = await waitUntil { keychain.cacheSaveCount == 1 }
+        XCTAssertTrue(attemptedInitial)
+
+        // Keychain recovers; an identical periodic announce must retry and persist.
+        keychain.setShouldFailCacheSave(false)
+        manager.upsertCryptographicIdentity(
+            fingerprint: fingerprint,
+            noisePublicKey: noisePublicKey,
+            signingPublicKey: signingPublicKey,
+            claimedNickname: "Bob"
+        )
+        let retried = await waitUntil { keychain.cacheSaveCount == 2 }
+        XCTAssertTrue(retried)
+
+        let reloaded = SecureIdentityStateManager(keychain)
+        XCTAssertEqual(
+            reloaded.getCryptoIdentitiesByPeerIDPrefix(peerID).first?.signingPublicKey,
+            signingPublicKey
+        )
+        XCTAssertEqual(reloaded.getSocialIdentity(for: fingerprint)?.claimedNickname, "Bob")
+    }
+
     private func waitUntil(
         timeout: TimeInterval = TestConstants.settleTimeout,
         condition: @escaping () -> Bool
@@ -617,14 +654,20 @@ final class SecureIdentityStateManagerTests: XCTestCase {
 }
 
 private final class FailingCacheSaveKeychain: KeychainManagerProtocol {
-    private let shouldFailCacheSave: Bool
     private let lock = NSLock()
+    private var _shouldFailCacheSave: Bool
     private var _cacheSaveCount = 0
     private var storage: [String: Data] = [:]
     private var serviceStorage: [String: [String: Data]] = [:]
 
     init(shouldFailCacheSave: Bool = true) {
-        self.shouldFailCacheSave = shouldFailCacheSave
+        self._shouldFailCacheSave = shouldFailCacheSave
+    }
+
+    func setShouldFailCacheSave(_ value: Bool) {
+        lock.lock()
+        _shouldFailCacheSave = value
+        lock.unlock()
     }
 
     var cacheSaveCount: Int {
@@ -637,8 +680,9 @@ private final class FailingCacheSaveKeychain: KeychainManagerProtocol {
         if key == "bitchat.identityCache.v2" {
             lock.lock()
             _cacheSaveCount += 1
+            let shouldFail = _shouldFailCacheSave
             lock.unlock()
-            if shouldFailCacheSave {
+            if shouldFail {
                 return false
             }
         }
