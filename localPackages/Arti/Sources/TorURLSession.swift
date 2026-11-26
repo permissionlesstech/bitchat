@@ -6,10 +6,12 @@ import CFNetwork
 /// Provides a shared URLSession that routes traffic via Tor's SOCKS5 proxy
 /// when Tor is enforced/ready. Allows swapping between proxied and direct
 /// sessions so UI can toggle Tor usage at runtime.
-public final class TorURLSession {
+public final class TorURLSession: @unchecked Sendable {
     public static let shared = TorURLSession()
 
-    // Default (no proxy) session for direct Nostr access when Tor is disabled.
+    private let lock = NSLock()
+
+    // Ephemeral (no proxy) session for direct Nostr access when Tor is explicitly disabled.
     private var defaultSession: URLSession = TorURLSession.makeDefaultSession()
 
     // Proxied (SOCKS5) session that routes through Tor.
@@ -17,18 +19,35 @@ public final class TorURLSession {
     private var useTorProxy: Bool = true
 
     public var session: URLSession {
-        useTorProxy ? torSession : defaultSession
+        lock.lock()
+        defer { lock.unlock() }
+        return useTorProxy ? torSession : defaultSession
     }
 
     // Recreate sessions so new clients bind to the fresh SOCKS/control ports after a Tor restart.
     public func rebuild() {
-        defaultSession = TorURLSession.makeDefaultSession()
-        torSession = TorURLSession.makeTorSession()
+        let newDefault = TorURLSession.makeDefaultSession()
+        let newTor = TorURLSession.makeTorSession()
+
+        lock.lock()
+        let oldDefault = defaultSession
+        let oldTor = torSession
+        defaultSession = newDefault
+        torSession = newTor
+        lock.unlock()
+
+        oldDefault.finishTasksAndInvalidate()
+        oldTor.finishTasksAndInvalidate()
     }
 
     public func setProxyMode(useTor: Bool) {
-        guard useTorProxy != useTor else { return }
+        lock.lock()
+        guard useTorProxy != useTor else {
+            lock.unlock()
+            return
+        }
         useTorProxy = useTor
+        lock.unlock()
         rebuild()
     }
 
@@ -56,7 +75,7 @@ public final class TorURLSession {
     }
 
     private static func makeDefaultSession() -> URLSession {
-        let cfg = URLSessionConfiguration.default
+        let cfg = URLSessionConfiguration.ephemeral
         cfg.waitsForConnectivity = true
         return URLSession(configuration: cfg)
     }

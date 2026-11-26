@@ -486,16 +486,75 @@ final class GeoRelayDirectoryTests: XCTestCase {
         XCTAssertNil(weakDirectory)
     }
 
+    func test_prefetchIfNeeded_resolvesFetchSessionOnlyAfterTorReadyCompletes() async {
+        let orderRecorder = EventOrderRecorder()
+        let harness = makeHarness(
+            fetchCSV: """
+            relay url,lat,lon
+            ordered.example,4,5
+            """,
+            awaitTorReady: {
+                orderRecorder.record("awaitTorReady.start")
+                try? await Task.sleep(nanoseconds: 20_000_000)
+                orderRecorder.record("awaitTorReady.done")
+                return true
+            },
+            fetchFactoryObserver: {
+                orderRecorder.record("makeFetchData")
+            },
+            fetchObserver: {
+                orderRecorder.record("fetch")
+            }
+        )
+        let directory = GeoRelayDirectory(dependencies: harness.dependencies)
+
+        directory.prefetchIfNeeded()
+
+        let refreshed = await waitUntil {
+            directory.entries == [GeoRelayDirectory.Entry(host: "ordered.example", lat: 4, lon: 5)]
+        }
+        XCTAssertTrue(refreshed)
+        XCTAssertEqual(
+            orderRecorder.recordedEvents(),
+            ["awaitTorReady.start", "awaitTorReady.done", "makeFetchData", "fetch"]
+        )
+    }
+
+    func test_prefetchIfNeeded_skipsRemoteFetchWhenNetworkActivationDisallowed() async {
+        var factoryCalls = 0
+        let harness = makeHarness(
+            fetchCSV: """
+            relay url,lat,lon
+            blocked.example,1,2
+            """,
+            fetchFactoryObserver: {
+                factoryCalls += 1
+            },
+            isNetworkActivationAllowed: { false }
+        )
+        let directory = GeoRelayDirectory(dependencies: harness.dependencies)
+
+        directory.prefetchIfNeeded(force: true)
+        try? await Task.sleep(nanoseconds: 30_000_000)
+
+        let requestCount = await harness.fetcher.recordedRequestCount()
+        XCTAssertEqual(factoryCalls, 0)
+        XCTAssertEqual(requestCount, 0)
+        XCTAssertFalse(directory.debugHasRetryTask)
+    }
+
     private func makeHarness(
         cacheCSV: String? = nil,
         bundleCSV: String? = nil,
         workingDirectoryCSV: String? = nil,
         fetchCSV: String? = nil,
         fetchResults: [Result<Data, Error>] = [],
+        awaitTorReady: @escaping @Sendable () async -> Bool = { true },
         fetchFactoryObserver: (@MainActor @Sendable () -> Void)? = nil,
         fetchObserver: (@Sendable () async -> Void)? = nil,
         autoStart: Bool = false,
         activeNotificationName: Notification.Name? = nil,
+        isNetworkActivationAllowed: @escaping @MainActor () -> Bool = { true },
         validationPolicy: GeoRelayDirectoryValidationPolicy = GeoRelayDirectoryValidationPolicy(
             maximumBytes: 64 * 1024,
             maximumRows: 1_000,
@@ -539,7 +598,7 @@ final class GeoRelayDirectoryTests: XCTestCase {
             refreshCheckInterval: 0,
             retryInitialSeconds: 5,
             retryMaxSeconds: 40,
-            awaitTorReady: { true },
+            awaitTorReady: awaitTorReady,
             makeFetchData: {
                 fetchFactoryObserver?()
                 return { request in
@@ -561,7 +620,8 @@ final class GeoRelayDirectoryTests: XCTestCase {
             },
             activeNotificationName: activeNotificationName,
             autoStart: autoStart,
-            validationPolicy: validationPolicy
+            validationPolicy: validationPolicy,
+            isNetworkActivationAllowed: isNetworkActivationAllowed
         )
 
         return GeoRelayHarness(
@@ -671,6 +731,23 @@ private actor MainThreadRecorder {
 
     func recordedValues() -> [Bool] {
         values
+    }
+}
+
+private final class EventOrderRecorder: @unchecked Sendable {
+    private let lock = NSLock()
+    private var events: [String] = []
+
+    func record(_ event: String) {
+        lock.lock()
+        events.append(event)
+        lock.unlock()
+    }
+
+    func recordedEvents() -> [String] {
+        lock.lock()
+        defer { lock.unlock() }
+        return events
     }
 }
 

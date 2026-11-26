@@ -142,8 +142,9 @@ final class NetworkActivationService: ObservableObject {
         let allowed = effectiveAllowed()
         activationAllowed = allowed
         torAutoStartDesired = allowed && userTorEnabled
+        proxyController.setProxyMode(useTor: userTorEnabled)
         torController.setAutoStartAllowed(torAutoStartDesired)
-        applyTorState(torDesired: torAutoStartDesired)
+        applyTorLifecycle(torDesired: torAutoStartDesired)
         if allowed {
             relayController.connect()
         } else {
@@ -202,7 +203,11 @@ final class NetworkActivationService: ObservableObject {
         torAutoStartDesired = false
         relayController.disconnect()
         torController.setAutoStartAllowed(false)
-        applyTorState(torDesired: false)
+        // Keep proxy mode aligned with the user's Tor preference so an
+        // in-flight request cannot silently fall back to clearnet while Arti
+        // shuts down.
+        proxyController.setProxyMode(useTor: userTorEnabled)
+        applyTorLifecycle(torDesired: false)
     }
 
     func setUserTorEnabled(_ enabled: Bool) {
@@ -214,10 +219,14 @@ final class NetworkActivationService: ObservableObject {
             object: nil,
             userInfo: ["enabled": enabled]
         )
-        reevaluate()
+        if started {
+            reevaluate(proxyPreferenceChanged: true)
+        } else {
+            proxyController.setProxyMode(useTor: enabled)
+        }
     }
 
-    private func reevaluate() {
+    private func reevaluate(proxyPreferenceChanged: Bool = false) {
         guard started else { return }
         let allowed = effectiveAllowed()
         let torDesired = allowed && userTorEnabled
@@ -227,20 +236,25 @@ final class NetworkActivationService: ObservableObject {
             SecureLogger.info("NetworkActivationService: activationAllowed -> \(allowed)", category: .session)
             activationAllowed = allowed
         }
+
+        // Disconnect relay sockets BEFORE switching transport path or shutting
+        // down Tor so no socket can race across the proxy transition.
+        if (allowed && (torChanged || proxyPreferenceChanged)) || (!allowed && statusChanged) {
+            relayController.disconnect()
+        }
+
+        if proxyPreferenceChanged {
+            proxyController.setProxyMode(useTor: userTorEnabled)
+        }
+
         if statusChanged || torChanged {
             torAutoStartDesired = torDesired
             torController.setAutoStartAllowed(torDesired)
-            applyTorState(torDesired: torDesired)
+            applyTorLifecycle(torDesired: torDesired)
         }
 
         if allowed {
-            if torChanged {
-                // Reset relay sockets when switching transport path (Tor ↔︎ direct)
-                relayController.disconnect()
-            }
             relayController.connect()
-        } else if statusChanged {
-            relayController.disconnect()
         }
     }
 
@@ -265,8 +279,7 @@ final class NetworkActivationService: ObservableObject {
         basePolicyAllowed() && reachabilityMonitor.isReachable
     }
 
-    private func applyTorState(torDesired: Bool) {
-        proxyController.setProxyMode(useTor: torDesired)
+    private func applyTorLifecycle(torDesired: Bool) {
         if torDesired {
             torController.startIfNeeded()
         } else {

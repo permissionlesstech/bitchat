@@ -33,6 +33,7 @@ struct GeoRelayDirectoryDependencies {
     var activeNotificationName: Notification.Name?
     var autoStart: Bool
     var validationPolicy: GeoRelayDirectoryValidationPolicy
+    var isNetworkActivationAllowed: @MainActor () -> Bool = { true }
 }
 
 struct GeoRelayDirectoryValidationPolicy: Sendable {
@@ -152,7 +153,8 @@ private extension GeoRelayDirectoryDependencies {
             },
             activeNotificationName: activeNotificationName,
             autoStart: true,
-            validationPolicy: validationPolicy
+            validationPolicy: validationPolicy,
+            isNetworkActivationAllowed: { NetworkActivationService.shared.activationAllowed }
         )
     }
 }
@@ -243,6 +245,7 @@ final class GeoRelayDirectory {
     // MARK: - Remote Fetch
     func prefetchIfNeeded(force: Bool = false) {
         guard !isFetching else { return }
+        guard dependencies.isNetworkActivationAllowed() else { return }
 
         let now = dependencies.now()
         let last = dependencies.userDefaults.object(forKey: lastFetchKey) as? Date ?? .distantPast
@@ -269,7 +272,7 @@ final class GeoRelayDirectory {
             timeoutInterval: 15
         )
         let awaitTorReady = dependencies.awaitTorReady
-        let fetchData = dependencies.makeFetchData()
+        let makeFetchData = dependencies.makeFetchData
         let validationPolicy = dependencies.validationPolicy
         let baselineEntries = Set(entries)
 
@@ -279,7 +282,7 @@ final class GeoRelayDirectory {
             let outcome = await Self.fetchRemoteOutcome(
                 request: request,
                 awaitTorReady: awaitTorReady,
-                fetchData: fetchData,
+                makeFetchData: makeFetchData,
                 validationPolicy: validationPolicy,
                 baselineEntries: baselineEntries
             )
@@ -300,13 +303,18 @@ final class GeoRelayDirectory {
     nonisolated private static func fetchRemoteOutcome(
         request: URLRequest,
         awaitTorReady: @escaping @Sendable () async -> Bool,
-        fetchData: @escaping @Sendable (URLRequest) async throws -> Data,
+        makeFetchData: @escaping @MainActor @Sendable () -> (@Sendable (URLRequest) async throws -> Data),
         validationPolicy: GeoRelayDirectoryValidationPolicy,
         baselineEntries: Set<Entry>
     ) async -> DetachedFetchOutcome {
         await Task.detached(priority: .utility) {
             let ready = await awaitTorReady()
             guard ready else { return .torNotReady }
+
+            // Resolve the URLSession after Tor readiness completes so a proxy
+            // transition or Tor bootstrap while awaiting cannot leave us on a
+            // stale pre-wait session.
+            let fetchData = await makeFetchData()
 
             do {
                 let data = try await fetchData(request)
