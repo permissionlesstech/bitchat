@@ -98,6 +98,13 @@
             "comment" : "Fallback title when saving a shared link"
           }
         },
+        "lb" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "geteilter link",
+            "comment" : "Fallback title when saving a shared link"
+          }
+        },
         "ms" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -296,6 +303,13 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "공유할 수 있는 내용이 없습니다",
+            "comment" : "Shown when provided content cannot be shared"
+          }
+        },
+        "lb" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "kein teilbarer inhalt",
             "comment" : "Shown when provided content cannot be shared"
           }
         },
@@ -500,6 +514,13 @@
             "comment" : "Shown when the share extension receives no content"
           }
         },
+        "lb" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "nichts zum teilen",
+            "comment" : "Shown when the share extension receives no content"
+          }
+        },
         "ms" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -622,6 +643,12 @@
         "it" : { "stringUnit" : { "state" : "needs_review", "value" : "Impossibile salvare in bitchat" } },
         "ja" : { "stringUnit" : { "state" : "needs_review", "value" : "bitchat に保存できませんでした" } },
         "ko" : { "stringUnit" : { "state" : "needs_review", "value" : "bitchat에 저장할 수 없습니다" } },
+        "lb" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Konnte nicht in bitchat gespeichert werden"
+          }
+        },
         "ms" : { "stringUnit" : { "state" : "needs_review", "value" : "Tidak dapat menyimpan ke bitchat" } },
         "ne" : { "stringUnit" : { "state" : "needs_review", "value" : "bitchat मा सुरक्षित गर्न सकिएन" } },
         "nl" : { "stringUnit" : { "state" : "needs_review", "value" : "Kon niet opslaan in bitchat" } },
@@ -658,6 +685,12 @@
         "it" : { "stringUnit" : { "state" : "needs_review", "value" : "✓ Salvato in bitchat — apri l’app per controllare" } },
         "ja" : { "stringUnit" : { "state" : "needs_review", "value" : "✓ bitchat に保存しました — アプリを開いて確認してください" } },
         "ko" : { "stringUnit" : { "state" : "needs_review", "value" : "✓ bitchat에 저장됨 — 앱을 열어 검토하세요" } },
+        "lb" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "✓ In bitchat gespeichert — App zum Prüfen öffnen"
+          }
+        },
         "ms" : { "stringUnit" : { "state" : "needs_review", "value" : "✓ Disimpan dalam bitchat — buka aplikasi untuk menyemak" } },
         "ne" : { "stringUnit" : { "state" : "needs_review", "value" : "✓ bitchat मा सुरक्षित गरियो — समीक्षा गर्न एप खोल्नुहोस्" } },
         "nl" : { "stringUnit" : { "state" : "needs_review", "value" : "✓ Opgeslagen in bitchat — open de app om te bekijken" } },
