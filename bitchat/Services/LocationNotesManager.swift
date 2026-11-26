@@ -24,6 +24,13 @@ struct LocationNotesDependencies {
 
     private static let idBridge = NostrIdentityBridge()
 
+    /// Panic-wipe hook: drop cached per-geohash secp256k1 keys held by the
+    /// live dependencies bridge so post-panic notes/drops cannot sign with
+    /// pre-panic identities.
+    static func clearCachedIdentitiesForPanic() {
+        idBridge.clearInMemoryCaches()
+    }
+
     static let live = LocationNotesDependencies(
         relayLookup: { geohash, count in
             GeoRelayDirectory.shared.closestRelays(toGeohash: geohash, count: count)
@@ -463,5 +470,18 @@ final class LocationNotesManager: ObservableObject {
         connectivityRetryTimer = nil
         state = .idle
         errorMessage = nil
+    }
+
+    /// Panic-wipe hook: cancel relay subscriptions, stop timers, and erase
+    /// in-memory notes and pre-panic public key state.
+    func resetForPanic() {
+        cancel()
+        expiryPruneTimer?.invalidate()
+        expiryPruneTimer = nil
+        directoryUpdateCancellable = nil
+        notes.removeAll(keepingCapacity: false)
+        noteIDs.removeAll(keepingCapacity: false)
+        ownPubkey = nil
+        initialLoadComplete = false
     }
 }

@@ -97,6 +97,7 @@ final class NostrTransport: Transport, @unchecked Sendable {
         private let queue = DispatchQueue(label: "chat.bitchat.nostr-ack-pacer")
         private var pending: [() -> Void] = []
         private var isSending = false
+        private var generation: UInt64 = 0
         private let interval: TimeInterval = TransportConfig.nostrReadAckInterval
         private let scheduleAfter: Scheduler
 
@@ -113,15 +114,34 @@ final class NostrTransport: Transport, @unchecked Sendable {
             }
         }
 
+        /// Returns the current panic-wipe generation so in-flight `@MainActor`
+        /// ACK tasks can reject stale pre-panic work before signing/publishing.
+        func currentGeneration() -> UInt64 {
+            queue.sync { generation }
+        }
+
+        /// Synchronously drops all queued ACK closures (which may capture
+        /// pre-panic Nostr identities and peer IDs) and fences any in-flight
+        /// pacing timer callback.
+        func resetForPanic() {
+            queue.sync {
+                self.generation &+= 1
+                self.pending.removeAll(keepingCapacity: false)
+                self.isSending = false
+            }
+        }
+
         /// Must be called on `queue`.
         private func processNext() {
             guard !isSending, !pending.isEmpty else { return }
             isSending = true
+            let currentGeneration = generation
             let send = pending.removeFirst()
             send()
             scheduleAfter(interval) { [weak self] in
                 guard let self else { return }
                 self.queue.async {
+                    guard self.generation == currentGeneration else { return }
                     self.isSending = false
                     self.processNext()
                 }
@@ -274,7 +294,8 @@ final class NostrTransport: Transport, @unchecked Sendable {
     /// geohash acks ride throwaway transport instances that must stay alive
     /// until their ack leaves the queue.
     private func enqueueAck(_ ack: QueuedAck) {
-        dependencies.ackPacer.enqueue { self.sendAckItem(ack) }
+        let generation = dependencies.ackPacer.currentGeneration()
+        dependencies.ackPacer.enqueue { self.sendAckItem(ack, generation: generation) }
     }
 
     func sendFavoriteNotification(to peerID: PeerID, isFavorite: Bool) {
@@ -356,8 +377,11 @@ extension NostrTransport {
 
 
     /// Sends a single ack item (invoked by the pacer, one per interval)
-    private func sendAckItem(_ item: QueuedAck) {
+    private func sendAckItem(_ item: QueuedAck, generation: UInt64) {
         Task { @MainActor in
+            // Reject ACKs that were already handed off to MainActor before a
+            // panic wipe so they cannot sign or publish with pre-panic keys.
+            guard dependencies.ackPacer.currentGeneration() == generation else { return }
             switch item {
             case .readDirect(let receipt, let peerID):
                 guard let recipientNpub = resolveRecipientNpub(for: peerID),

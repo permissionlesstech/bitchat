@@ -68,6 +68,7 @@ final class GeohashPresenceService: ObservableObject {
     // Per-broadcast decorrelation delay range in seconds
     private let burstMinDelay: TimeInterval
     private let burstMaxDelay: TimeInterval
+    private let clearIdentityCache: () -> Void
 
     // Privacy: Only broadcast to these levels
     private let allowedPrecisions: Set<Int> = [
@@ -86,6 +87,7 @@ final class GeohashPresenceService: ObservableObject {
         self.torIsReady = { TorManager.shared.isReady }
         self.torIsForeground = { TorManager.shared.isForeground() }
         self.deriveIdentity = { try idBridge.deriveIdentity(forGeohash: $0) }
+        self.clearIdentityCache = { idBridge.clearInMemoryCaches() }
         self.relayLookup = { geohash, count in
             GeoRelayDirectory.shared.closestRelays(toGeohash: geohash, count: count)
         }
@@ -116,6 +118,7 @@ final class GeohashPresenceService: ObservableObject {
         torIsReady: @escaping () -> Bool,
         torIsForeground: @escaping () -> Bool,
         deriveIdentity: @escaping (String) throws -> NostrIdentity,
+        clearIdentityCache: @escaping () -> Void = {},
         relayLookup: @escaping (String, Int) -> [String],
         relaySender: @escaping (NostrEvent, [String]) -> Void,
         sleeper: @escaping (UInt64) async -> Void = { nanoseconds in try? await Task.sleep(nanoseconds: nanoseconds) },
@@ -137,6 +140,7 @@ final class GeohashPresenceService: ObservableObject {
         self.torIsReady = torIsReady
         self.torIsForeground = torIsForeground
         self.deriveIdentity = deriveIdentity
+        self.clearIdentityCache = clearIdentityCache
         self.relayLookup = relayLookup
         self.relaySender = relaySender
         self.sleeper = sleeper
@@ -167,6 +171,7 @@ final class GeohashPresenceService: ObservableObject {
         heartbeatTimer = nil
         pendingBroadcastTasks.values.forEach { $0.cancel() }
         pendingBroadcastTasks.removeAll(keepingCapacity: false)
+        clearIdentityCache()
     }
 
     private func setupObservers() {

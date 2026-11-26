@@ -619,6 +619,17 @@ final class GeoRelayDirectory {
         RunLoop.main.add(timer, forMode: .common)
     }
 
+    /// Panic-wipe hook: stop scheduled retries, clear the last-fetch timestamp,
+    /// and remove the cached relay CSV from Application Support.
+    func resetForPanic() {
+        cancelRetry()
+        retryAttempt = 0
+        dependencies.userDefaults.removeObject(forKey: lastFetchKey)
+        if let cacheURL = dependencies.cacheURL() {
+            try? FileManager.default.removeItem(at: cacheURL)
+        }
+    }
+
     var debugRetryAttempt: Int { retryAttempt }
     var debugHasRetryTask: Bool { cleanupState.retryTask != nil }
     var debugObserverCount: Int { cleanupState.observers.count }

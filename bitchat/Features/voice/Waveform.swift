@@ -14,6 +14,7 @@ final class WaveformCache {
 
     private let queue = DispatchQueue(label: "com.bitchat.waveform-cache", attributes: .concurrent)
     private var cache: [URL: (waveform: [Float], lastAccess: Date)] = [:]
+    private var wipeGeneration: UInt64 = 0
     private let maxCacheSize = 20  // Limit cache to prevent unbounded memory growth
 
     private init() {}
@@ -28,6 +29,7 @@ final class WaveformCache {
     func waveform(for url: URL, bins: Int = 120, completion: @escaping ([Float]) -> Void) {
         queue.async { [weak self] in
             guard let self = self else { return }
+            let generation = self.wipeGeneration
 
             // Check cache (read-only, no update needed on cache hit for performance)
             if let entry = self.cache[url] {
@@ -42,6 +44,10 @@ final class WaveformCache {
 
             self.queue.async(flags: .barrier) { [weak self] in
                 guard let self = self else { return }
+                guard self.wipeGeneration == generation else {
+                    DispatchQueue.main.async { completion([]) }
+                    return
+                }
 
                 // Evict oldest entry if cache is full
                 if self.cache.count >= self.maxCacheSize {
@@ -51,14 +57,21 @@ final class WaveformCache {
                 }
 
                 self.cache[url] = (computed, Date())
+                DispatchQueue.main.async { completion(computed) }
             }
-            DispatchQueue.main.async { completion(computed) }
         }
     }
 
     func purge(url: URL) {
         queue.async(flags: .barrier) { [weak self] in
             self?.cache.removeValue(forKey: url)
+        }
+    }
+
+    func resetForPanic() {
+        queue.sync(flags: .barrier) {
+            wipeGeneration &+= 1
+            cache.removeAll(keepingCapacity: false)
         }
     }
 

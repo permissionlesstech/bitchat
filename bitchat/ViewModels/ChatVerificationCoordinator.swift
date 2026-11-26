@@ -168,6 +168,13 @@ final class ChatVerificationCoordinator {
         self.context = context
     }
 
+    func resetForPanic() {
+        pendingQRVerifications.removeAll(keepingCapacity: false)
+        lastVerifyNonceByPeer.removeAll(keepingCapacity: false)
+        lastInboundVerifyChallengeAt.removeAll(keepingCapacity: false)
+        lastMutualToastAt.removeAll(keepingCapacity: false)
+    }
+
     func verifyFingerprint(for peerID: PeerID) {
         guard let fingerprint = context.getFingerprint(for: peerID) else { return }
 

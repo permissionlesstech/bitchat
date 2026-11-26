@@ -84,6 +84,7 @@ import SwiftUI
 import Combine
 import CommonCrypto
 import CoreBluetooth
+import Tor
 #if os(iOS)
 import UIKit
 #endif
@@ -1638,6 +1639,8 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, SynchronousMessage
         // counters describing all of it
         CourierStore.shared.wipe()
         BridgeCourierService.shared.wipe()
+        BridgeService.shared.resetForPanic()
+        GatewayService.shared.resetForPanic()
         messageRouter.wipeOutbox()
         GossipMessageArchive.wipeDefault()
         StoreAndForwardMetrics.shared.reset()
@@ -1652,6 +1655,10 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, SynchronousMessage
         // A hand-added relay names an operator someone chose to route through,
         // which is the kind of trace a wipe should not leave behind.
         NostrRelaySettings.reset()
+        NearbyNotesCounter.shared.resetForPanic()
+        LocationNotesPool.shared.resetForPanic()
+        LocationNotesDependencies.clearCachedIdentitiesForPanic()
+        WaveformCache.shared.resetForPanic()
 
         // Drop private group keys and rosters (keychain + disk)
         groupStore.wipe()
@@ -1672,7 +1679,9 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, SynchronousMessage
             SharedContentStore(defaults: sharedDefaults).discardAll()
         }
 
-        // Identity manager has cleared persisted identity data above
+        // Clear cached QR verification payload and pending verification state.
+        VerificationService.shared.resetForPanic()
+        verificationCoordinator.resetForPanic()
 
         // Clear autocomplete state
         autocompleteSuggestions.removeAll()
@@ -1697,12 +1706,14 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, SynchronousMessage
 
         // Clear read receipt tracking
         sentReadReceipts.removeAll()
+        privateChatManager.resetForPanic()
         deduplicationService.clearAll()
 
         // IMPORTANT: Clear Nostr-related state
-        // Drop relay subscriptions, handlers, pending sends, and replay state.
-        // Geohash DM handlers can capture pre-wipe Nostr identities, so a plain
-        // disconnect is not enough here.
+        // Drop relay subscriptions, handlers, pending sends, paced ACKs, and
+        // replay state. Geohash DM handlers and paced ACK closures can capture
+        // pre-wipe Nostr identities, so a plain disconnect is not enough here.
+        NostrTransport.sharedAckPacer.resetForPanic()
         NostrRelayManager.shared.resetForPanicWipe()
         // Clearing relay handlers stops NEW events, but a detached gift-wrap
         // decrypt spawned just before the wipe still holds a pre-wipe key and
@@ -1713,6 +1724,13 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, SynchronousMessage
 
         // Clear Nostr identity associations
         idBridge.clearAllAssociations()
+
+        // Wipe cached geo relay list and Arti Tor state on disk (keep unit
+        // tests away from the host user's Application Support tree).
+        if !TestEnvironment.isRunningTests {
+            GeoRelayDirectory.shared.resetForPanic()
+            TorManager.shared.wipeStateDirectoryForPanic()
+        }
 
         // Replace the BLE identity while keeping the radio stopped. It may
         // reopen only after the durable panic transaction commits.
