@@ -7,6 +7,7 @@
 //
 
 import BitFoundation
+import Combine
 import CryptoKit
 import Foundation
 import Testing
@@ -1714,12 +1715,12 @@ struct SimulatedMeshMPRTests {
         _ = survivor
     }
 
-    /// Regression for R6-STD-01 & R6-SPEC-03: legacy directed `FILE_TRANSFER`
-    /// Android 256-fragment compatibility preflight must evaluate the exact
-    /// same link-MTU-aware chunk plan that scheduling uses, rejecting both
-    /// unrouted (40 KiB @ MTU 185 -> >256 fragments) and routed (20 KiB,
-    /// 1-hop route @ MTU 110 -> >256 fragments) transfers before any fragment
-    /// is emitted.
+    /// Regression for R6-STD-01, R6-SPEC-03, R7-STD-02, and R7-SPEC-02:
+    /// legacy directed `FILE_TRANSFER` preflight and encrypted private media
+    /// must evaluate the live link-MTU budget, visibly emit `.rejected` before
+    /// scheduler admission (never `.started`, 0 fragments emitted) when the
+    /// actual plan exceeds 256 fragments, leaves 0 usable payload bytes, or
+    /// exceeds the shared 10,000-fragment receiver ceiling.
     @Test
     func legacyPrivateMediaPreflightRejectsLinkAwarePlansExceedingAndroid256FragmentLimit() {
         func makeIncompressibleData(count: Int, seed: UInt64) -> Data {
@@ -1728,6 +1729,35 @@ struct SimulatedMeshMPRTests {
                 state = state &* 6364136223846793005 &+ 1442695040888963407
                 return UInt8(truncatingIfNeeded: state >> 32)
             })
+        }
+
+        let progressLock = NSLock()
+        var rejectedIDs = Set<String>()
+        var startedIDs = Set<String>()
+        let cancellable = TransferProgressManager.shared.publisher.sink { event in
+            progressLock.lock()
+            defer { progressLock.unlock() }
+            switch event {
+            case let .rejected(id, _):
+                rejectedIDs.insert(id)
+            case let .started(id, _):
+                startedIDs.insert(id)
+            default:
+                break
+            }
+        }
+        defer { cancellable.cancel() }
+
+        func assertRejectedBeforeStart(_ id: String) {
+            // `snapshot(id:)` syncs on TransferProgressManager's internal queue,
+            // deterministically fencing the barrier publish from `rejectBeforeStart`.
+            _ = TransferProgressManager.shared.snapshot(id: id)
+            progressLock.lock()
+            let wasRejected = rejectedIDs.contains(id)
+            let wasStarted = startedIDs.contains(id)
+            progressLock.unlock()
+            #expect(wasRejected)
+            #expect(!wasStarted)
         }
 
         // Case 1 (R6-STD-01): unrouted 40 KiB directed file on an MTU-185 link
@@ -1744,6 +1774,7 @@ struct SimulatedMeshMPRTests {
                 uuid == receiverLink ? 185 : nil
             }
 
+            let transferId = "r6-std-01-unrouted-\(UUID().uuidString)"
             let fragsBefore = countOutboundFragments(mesh, nodeIndex: 0)
             let packet = BitchatPacket(
                 type: MessageType.fileTransfer.rawValue,
@@ -1756,10 +1787,11 @@ struct SimulatedMeshMPRTests {
                 version: 1,
                 route: nil
             )
-            sender.service._test_broadcastPacket(packet, transferId: "r6-std-01-unrouted")
+            sender.service._test_broadcastPacket(packet, transferId: transferId)
             mesh.pump()
             mesh.advanceTime(by: 5)
 
+            assertRejectedBeforeStart(transferId)
             #expect(countOutboundFragments(mesh, nodeIndex: 0) == fragsBefore)
         }
 
@@ -1779,6 +1811,7 @@ struct SimulatedMeshMPRTests {
                 uuid == hopLink ? 110 : nil
             }
 
+            let transferId = "r6-spec-03-routed-\(UUID().uuidString)"
             let fragsBefore = countOutboundFragments(mesh, nodeIndex: 0)
             let packet = BitchatPacket(
                 type: MessageType.fileTransfer.rawValue,
@@ -1791,12 +1824,327 @@ struct SimulatedMeshMPRTests {
                 version: 2,
                 route: [hop.service.myPeerID.routingData].compactMap { $0 }
             )
-            sender.service._test_broadcastPacket(packet, transferId: "r6-spec-03-routed")
+            sender.service._test_broadcastPacket(packet, transferId: transferId)
             mesh.pump()
             mesh.advanceTime(by: 5)
 
+            assertRejectedBeforeStart(transferId)
             #expect(countOutboundFragments(mesh, nodeIndex: 0) == fragsBefore)
         }
+
+        // Case 3 (R7-STD-02): 1-hop routed legacy file on a sole 54-byte link
+        // leaves 0 usable payload bytes (`54 - 54 = 0`); must reject visibly
+        // instead of substituting the global default chunk budget.
+        do {
+            let mesh = SimulatedMesh(usePlannedLinkDelivery: true)
+            let sender = mesh.addNode(nickname: "sender")
+            let hop = mesh.addNode(nickname: "hop")
+            let dest = mesh.addNode(nickname: "dest")
+            mesh.connect(0, 1)
+            mesh.connect(1, 2)
+            settleDiscovery(mesh)
+
+            let hopLink = mesh.linkUUID(from: 1, at: 0)
+            sender.service._test_virtualCentralMTU = { uuid in
+                uuid == hopLink ? 54 : nil
+            }
+
+            let transferId = "r7-std-02-zero-budget-\(UUID().uuidString)"
+            let fragsBefore = countOutboundFragments(mesh, nodeIndex: 0)
+            let packet = BitchatPacket(
+                type: MessageType.fileTransfer.rawValue,
+                senderID: sender.service.myPeerID.routingData ?? Data(),
+                recipientID: dest.service.myPeerID.routingData,
+                timestamp: UInt64(Date().timeIntervalSince1970 * 1000),
+                payload: makeIncompressibleData(count: 4_000, seed: 0x3333),
+                signature: nil,
+                ttl: TransportConfig.messageTTLDefault,
+                version: 2,
+                route: [hop.service.myPeerID.routingData].compactMap { $0 }
+            )
+            sender.service._test_broadcastPacket(packet, transferId: transferId)
+            mesh.pump()
+            mesh.advanceTime(by: 5)
+
+            assertRejectedBeforeStart(transferId)
+            #expect(countOutboundFragments(mesh, nodeIndex: 0) == fragsBefore)
+        }
+
+        // Case 4 (R7-SPEC-02): 80 KiB unrouted legacy file on a sole 50-byte
+        // link requires >11,700 fragments (> 10,000 ceiling); must reject visibly
+        // without falling back to the default chunk budget.
+        do {
+            let mesh = SimulatedMesh(usePlannedLinkDelivery: true)
+            let sender = mesh.addNode(nickname: "sender")
+            let receiver = mesh.addNode(nickname: "receiver")
+            mesh.connect(0, 1)
+            settleDiscovery(mesh)
+
+            let receiverLink = mesh.linkUUID(from: 1, at: 0)
+            sender.service._test_virtualCentralMTU = { uuid in
+                uuid == receiverLink ? 50 : nil
+            }
+
+            let transferId = "r7-spec-02-over10k-file-\(UUID().uuidString)"
+            let fragsBefore = countOutboundFragments(mesh, nodeIndex: 0)
+            let packet = BitchatPacket(
+                type: MessageType.fileTransfer.rawValue,
+                senderID: sender.service.myPeerID.routingData ?? Data(),
+                recipientID: receiver.service.myPeerID.routingData,
+                timestamp: UInt64(Date().timeIntervalSince1970 * 1000),
+                payload: makeIncompressibleData(count: 80_000, seed: 0x4444),
+                signature: nil,
+                ttl: TransportConfig.messageTTLDefault,
+                version: 1,
+                route: nil
+            )
+            sender.service._test_broadcastPacket(packet, transferId: transferId)
+            mesh.pump()
+            mesh.advanceTime(by: 5)
+
+            assertRejectedBeforeStart(transferId)
+            #expect(countOutboundFragments(mesh, nodeIndex: 0) == fragsBefore)
+        }
+
+        // Case 5 (R7-SPEC-02 encrypted): 80 KiB routed encrypted private media
+        // on a sole 60-byte 1-hop link (`60 - 54 = 6` B/chunk -> >13,000 frags)
+        // must reject visibly before scheduler admission.
+        do {
+            let mesh = SimulatedMesh(usePlannedLinkDelivery: true)
+            let sender = mesh.addNode(nickname: "sender")
+            let hop = mesh.addNode(nickname: "hop")
+            let dest = mesh.addNode(nickname: "dest")
+            mesh.connect(0, 1)
+            mesh.connect(1, 2)
+            settleDiscovery(mesh)
+
+            let hopLink = mesh.linkUUID(from: 1, at: 0)
+            sender.service._test_virtualCentralMTU = { uuid in
+                uuid == hopLink ? 60 : nil
+            }
+
+            let transferId = "r7-spec-02-over10k-noise-\(UUID().uuidString)"
+            let fragsBefore = countOutboundFragments(mesh, nodeIndex: 0)
+            let packet = BitchatPacket(
+                type: MessageType.noiseEncrypted.rawValue,
+                senderID: sender.service.myPeerID.routingData ?? Data(),
+                recipientID: dest.service.myPeerID.routingData,
+                timestamp: UInt64(Date().timeIntervalSince1970 * 1000),
+                payload: makeIncompressibleData(count: 80_000, seed: 0x5555),
+                signature: nil,
+                ttl: TransportConfig.messageTTLDefault,
+                version: 2,
+                route: [hop.service.myPeerID.routingData].compactMap { $0 }
+            )
+            sender.service._test_broadcastPacket(packet, transferId: transferId)
+            mesh.pump()
+            mesh.advanceTime(by: 5)
+
+            assertRejectedBeforeStart(transferId)
+            #expect(countOutboundFragments(mesh, nodeIndex: 0) == fragsBefore)
+        }
+    }
+
+    /// Regression for R7-SPEC-01: direct (unrouted) app-originated encrypted
+    /// private media (`noiseEncrypted` with a `transferId`) must size fragments
+    /// to the negotiated direct-recipient MTU (185 bytes) instead of using the
+    /// default 469-byte chunk budget.
+    @Test
+    func appOriginatedDirectEncryptedPrivateMediaRespectsLinkMTU() {
+        let mesh = SimulatedMesh(usePlannedLinkDelivery: true)
+        let a = mesh.addNode(nickname: "a")
+        let b = mesh.addNode(nickname: "b")
+        mesh.connect(0, 1)
+        settleDiscovery(mesh)
+
+        let bLinkOnA = mesh.linkUUID(from: 1, at: 0)
+        a.service._test_virtualCentralMTU = { uuid in
+            uuid == bLinkOnA ? 185 : nil
+        }
+
+        let aPlannedBefore = mesh.plannedTransmissions(from: 0).count
+        var state: UInt64 = 0xCAFE_BABE
+        let incompressiblePayload = Data((0..<400).map { _ in
+            state = state &* 6364136223846793005 &+ 1442695040888963407
+            return UInt8(truncatingIfNeeded: state >> 32)
+        })
+        let directPrivateMedia = BitchatPacket(
+            type: MessageType.noiseEncrypted.rawValue,
+            senderID: a.service.myPeerID.routingData ?? Data(),
+            recipientID: b.service.myPeerID.routingData,
+            timestamp: UInt64(Date().timeIntervalSince1970 * 1000),
+            payload: incompressiblePayload,
+            signature: nil,
+            ttl: TransportConfig.messageTTLDefault,
+            version: 1,
+            route: nil
+        )
+
+        a.service._test_broadcastPacket(directPrivateMedia, transferId: "r7-spec-01-direct-\(UUID().uuidString)")
+        mesh.pump()
+        mesh.advanceTime(by: 2)
+        mesh.advanceTime(by: 2)
+
+        let aFragsToB = mesh.plannedTransmissions(from: 0)
+            .dropFirst(aPlannedBefore)
+            .filter { $0.to == 1 && $0.packet.type == MessageType.fragment.rawValue }
+        #expect(aFragsToB.count > 1)
+        #expect(aFragsToB.allSatisfy { $0.packet.recipientID == b.service.myPeerID.routingData })
+        #expect(aFragsToB.allSatisfy { ($0.packet.toBinaryData(padding: false)?.count ?? Int.max) <= 185 })
+    }
+
+    /// Regression for R7-SPEC-03: when a routed `FILE_TRANSFER` arrives at an
+    /// intermediate relay `C` over its 512-byte link to `route[0] == B` and
+    /// `C`'s next hop `X` is unreachable, conservative flood fallback must
+    /// exclude the ingress link (`B`) when sizing fragments so it respects the
+    /// 110-byte onward alternate link `C -> E` instead of sizing against `B`.
+    @Test
+    func routedFileFallbackExcludesIngressMTUAndDeliversOverSmallAlternateLink() {
+        let mesh = SimulatedMesh(usePlannedLinkDelivery: true)
+        let a = mesh.addNode(nickname: "a") // 0 (origin)
+        let b = mesh.addNode(nickname: "b") // 1 (route[0], 512-byte ingress link into C)
+        let c = mesh.addNode(nickname: "c") // 2 (route[1], relay performing fallback)
+        let x = mesh.addNode(nickname: "x") // 3 (route[2], unreachable from C)
+        let e = mesh.addNode(nickname: "e") // 4 (onward alternate link from C, 110-byte MTU)
+        let d = mesh.addNode(nickname: "d") // 5 (final destination)
+
+        mesh.connect(0, 1) // A - B
+        mesh.connect(1, 2) // B - C (512-byte link)
+        mesh.connect(2, 3) // C - X
+        mesh.connect(3, 5) // X - D
+        mesh.connect(2, 4) // C - E (110-byte onward link)
+        mesh.connect(4, 5) // E - D
+        settleDiscovery(mesh)
+
+        // Break C - X so C falls back to conservative flood toward E.
+        mesh.silence(2, 3)
+        let eLinkOnC = mesh.linkUUID(from: 4, at: 2)
+        c.service._test_virtualCentralMTU = { uuid in
+            uuid == eLinkOnC ? 110 : nil
+        }
+
+        let route = [
+            b.service.myPeerID.routingData,
+            c.service.myPeerID.routingData,
+            x.service.myPeerID.routingData
+        ].compactMap { $0 }
+        let filePayload = BitchatFilePacket(
+            fileName: "fallback.bin",
+            fileSize: 160,
+            mimeType: "application/octet-stream",
+            content: Data(repeating: 0xEF, count: 160)
+        ).encode() ?? Data(repeating: 0xEF, count: 160)
+        let routedFile = a.service.signPacketForBroadcast(BitchatPacket(
+            type: MessageType.fileTransfer.rawValue,
+            senderID: a.service.myPeerID.routingData ?? Data(),
+            recipientID: d.service.myPeerID.routingData,
+            timestamp: UInt64(Date().timeIntervalSince1970 * 1000),
+            payload: filePayload,
+            signature: nil,
+            ttl: TransportConfig.messageTTLDefault,
+            version: 2,
+            route: route
+        ))
+
+        let bLinkOnC = BLEIngressLinkID.central(mesh.linkUUID(from: 1, at: 2))
+        let cPlannedBefore = mesh.plannedTransmissions(from: 2).count
+
+        c.service._test_ingestFrame(routedFile, link: bLinkOnC)
+        mesh.pump()
+        mesh.advanceTime(by: 2)
+        mesh.advanceTime(by: 2)
+
+        let cFragsToE = mesh.plannedTransmissions(from: 2)
+            .dropFirst(cPlannedBefore)
+            .filter { $0.to == 4 && $0.packet.type == MessageType.fragment.rawValue }
+        #expect(cFragsToE.count > 1)
+        #expect(cFragsToE.allSatisfy { $0.packet.recipientID == d.service.myPeerID.routingData })
+        #expect(cFragsToE.allSatisfy { ($0.packet.toBinaryData(padding: false)?.count ?? Int.max) <= 110 })
+        _ = e
+    }
+
+    /// Regression for R7-STD-01: when a peer holds three peripheral bindings
+    /// (`p1`, preferred `p2`, and live `p3`) and `p1` + `p2` physically drop
+    /// before `p1` retires, retiring `p1` must inspect ALL surviving peripheral
+    /// links via `isPhysicalLinkLive` and keep the peer connected via `p3`.
+    @Test
+    func staggeredMultiPeripheralTeardownKeepsPeerConnectedWhenThirdPeripheralRemainsLive() {
+        let mesh = SimulatedMesh(usePlannedLinkDelivery: true)
+        let hub = mesh.addNode(nickname: "hub")
+        let peer = mesh.addNode(nickname: "peer")
+        mesh.connect(0, 1)
+        settleDiscovery(mesh)
+
+        // Bind three peripheral links (`p2` last so it becomes preferred) and
+        // drop the central link so only the peripheral links remain.
+        let centralID = mesh.linkUUID(from: 1, at: 0)
+        hub.service._test_bindPeripheral("SIM-P3-LIVE", to: peer.service.myPeerID)
+        hub.service._test_bindPeripheral("SIM-P1-DEAD", to: peer.service.myPeerID)
+        hub.service._test_bindPeripheral("SIM-P2-PREF-DEAD", to: peer.service.myPeerID)
+        hub.service.emitLinkEvent(.centralLinkEnded(centralUUID: centralID))
+        hub.service._test_fenceEngine()
+
+        // Both p1 and preferred p2 are physically dead; p3 is still live.
+        hub.service._test_isPhysicalLinkLive = { link in
+            link == .peripheral("SIM-P3-LIVE")
+        }
+
+        // Retiring p1 first (while preferred still points at dead p2) must keep
+        // the peer connected and retain its direct edge because p3 is live.
+        hub.service.emitLinkEvent(.peripheralLinkEnded(
+            peripheralID: "SIM-P1-DEAD",
+            runPeerBookkeeping: true
+        ))
+        hub.service._test_fenceEngine()
+
+        #expect(hub.service.isPeerConnected(peer.service.myPeerID))
+        #expect(hub.service._test_topologyTracker.isFreshConfirmedNeighbor(
+            hub.service.myPeerID,
+            peer.service.myPeerID
+        ))
+    }
+
+    /// Regression for R7-BUG-01: bulk role teardown with `retireProofsAndNotify: true`
+    /// must NOT emit `.peerDisconnected` for a peer that remains connected over
+    /// a live opposite-role link.
+    @Test
+    func bulkRoleTeardownDoesNotEmitDisconnectEventForPeerWithLiveOppositeRoleLink() async {
+        final class DisconnectCapture: TransportEventDelegate, @unchecked Sendable {
+            private let lock = NSLock()
+            private var disconnected: [PeerID] = []
+            func didReceiveTransportEvent(_ event: TransportEvent) {
+                guard case let .peerDisconnected(peerID) = event else { return }
+                lock.lock()
+                disconnected.append(peerID)
+                lock.unlock()
+            }
+            func events() -> [PeerID] {
+                lock.lock()
+                defer { lock.unlock() }
+                return disconnected
+            }
+        }
+
+        let mesh = SimulatedMesh(usePlannedLinkDelivery: true)
+        let hub = mesh.addNode(nickname: "hub")
+        let dualPeer = mesh.addNode(nickname: "dual")
+        mesh.connect(0, 1)
+        settleDiscovery(mesh)
+
+        let capture = DisconnectCapture()
+        hub.service.eventDelegate = capture
+
+        let periphID = "SIM-PERIPH-DUAL"
+        hub.service._test_bindPeripheral(periphID, to: dualPeer.service.myPeerID)
+
+        hub.service.emitLinkEvent(.allPeripheralLinksEnded(
+            peripheralIDs: [periphID],
+            retireProofsAndNotify: true
+        ))
+        await hub.service._test_drainUI()
+
+        #expect(hub.service.isPeerConnected(dualPeer.service.myPeerID))
+        #expect(!capture.events().contains(dualPeer.service.myPeerID))
     }
 
     /// Regression for R6-SPEC-02: app-originated encrypted private media
