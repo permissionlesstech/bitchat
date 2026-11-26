@@ -1921,7 +1921,6 @@ final class BLEService: NSObject {
         )
     }
 
-    
     func sendReadReceipt(_ receipt: ReadReceipt, to peerID: PeerID) {
         // Hop like sendMessage: callers are often on the main actor, and the
         // send path sync-waits on bleQueue for link state — the main thread
@@ -3162,7 +3161,6 @@ extension BLEService: BLERadioControllerDelegate {
     }
 }
 
-
 #if DEBUG
 // Test-only helper to inject packets into the receive pipeline
 extension BLEService {
@@ -3530,7 +3528,6 @@ extension BLEService {
     }
 }
 #endif
-
 
 // MARK: - Advertising Builders & Alias Rotation
 
@@ -4072,8 +4069,6 @@ extension BLEService {
         linkBindings.links(to: peerID)
     }
 
-
-
     /// Marks the exact physical ingress link that completed a fresh Noise
     /// handshake. An old session keyed only by peer ID is insufficient: a
     /// replayed announce can rebind an attacker's link to that ID.
@@ -4480,8 +4475,6 @@ extension BLEService {
         }
     }
 
-
-    
     private func sendNoisePayload(_ typedPayload: Data, to peerID: PeerID) {
         // Hop like sendMessage: the Transport-facing wrappers (verify/vouch/
         // group payloads) call this from the main actor, and the send path
@@ -6149,7 +6142,6 @@ extension BLEService {
             bleQueue.async { [weak self] in self?.performBackgroundWakeMaintenanceIfStale() }
         }
         #endif
-
 
         // Process by type
         switch context.messageType {

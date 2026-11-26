@@ -448,7 +448,6 @@ final class BLERadioController {
     #endif
 }
 
-
 // MARK: - Connection scheduling helpers
 
 private extension BLEExistingConnectionState {
