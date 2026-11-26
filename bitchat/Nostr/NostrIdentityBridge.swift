@@ -1,4 +1,5 @@
 import BitFoundation
+import BitLogger
 import Foundation
 import CryptoKit
 
@@ -65,6 +66,10 @@ final class NostrIdentityBridge {
         case .itemNotFound:
             break
         case .deviceLocked, .accessDenied, .authenticationFailed, .otherError:
+            SecureLogger.warning(
+                "Nostr identity unavailable from keychain; refusing to overwrite",
+                category: .security
+            )
             return nil
         }
 
@@ -126,7 +131,7 @@ final class NostrIdentityBridge {
 
     /// Returns a stable device seed used to derive unlinkable per-geohash identities,
     /// along with whether the seed is durably backed by Keychain and safe to cache.
-    private func getOrCreateDeviceSeed() -> (seed: Data, durable: Bool, generation: UInt64) {
+    private func getOrCreateDeviceSeed() throws -> (seed: Data, durable: Bool, generation: UInt64) {
         cacheLock.lock()
         if let cached = deviceSeedCache {
             let generation = cacheGeneration
@@ -159,9 +164,17 @@ final class NostrIdentityBridge {
         case .itemNotFound:
             break
         case .deviceLocked, .accessDenied, .authenticationFailed, .otherError:
-            // Preserve the retry path without overwriting or caching a temporary seed.
-            let ephemeralSeed = SymmetricKey(size: .bits256).withUnsafeBytes { Data($0) }
-            return (ephemeralSeed, false, generation)
+            // Fail closed rather than overwriting the stored seed or deriving
+            // a throwaway geohash identity while Keychain is transiently locked.
+            SecureLogger.warning(
+                "Nostr device seed unavailable from keychain; refusing to overwrite",
+                category: .security
+            )
+            throw NSError(
+                domain: "NostrIdentity",
+                code: -2,
+                userInfo: [NSLocalizedDescriptionKey: "Keychain unavailable for device seed"]
+            )
         }
 
         // CryptoKit key generation cannot fail, unlike SecRandomCopyBytes —
@@ -206,7 +219,7 @@ final class NostrIdentityBridge {
         }
         cacheLock.unlock()
 
-        let (seed, durable, generation) = getOrCreateDeviceSeed()
+        let (seed, durable, generation) = try getOrCreateDeviceSeed()
         guard let msg = geohash.data(using: .utf8) else {
             throw NSError(domain: "NostrIdentity", code: -1, userInfo: [NSLocalizedDescriptionKey: "Invalid geohash string"])
         }
