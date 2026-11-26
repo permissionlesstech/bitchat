@@ -158,7 +158,13 @@ final class ChatLiveVoiceCoordinator {
     /// `sweepsOnInit` exists for tests whose coordinator shares the real
     /// application-support directory: they pass `false` so parallel test
     /// runs never sweep each other's in-flight capture files.
-    init(context: any ChatLiveVoiceContext, fileStore: BLEIncomingFileStore = BLEIncomingFileStore(), sweepsOnInit: Bool = true) {
+    /// `asyncStartupSweep` moves the disk sweep off the main actor for cold launch.
+    init(
+        context: any ChatLiveVoiceContext,
+        fileStore: BLEIncomingFileStore = BLEIncomingFileStore(),
+        sweepsOnInit: Bool = true,
+        asyncStartupSweep: Bool = false
+    ) {
         self.context = context
         self.fileStore = fileStore
         // Orphaned partial captures from a previous session (live-only bursts
@@ -166,7 +172,14 @@ final class ChatLiveVoiceCoordinator {
         // never reclaim (eviction skips voice_live_* by design) — sweep them
         // on startup.
         if sweepsOnInit {
-            sweepStaleLiveCaptures()
+            if asyncStartupSweep {
+                let store = fileStore
+                Task.detached(priority: .utility) {
+                    Self.sweepStaleLiveCaptures(in: store)
+                }
+            } else {
+                Self.sweepStaleLiveCaptures(in: fileStore)
+            }
         }
     }
 
@@ -679,7 +692,7 @@ final class ChatLiveVoiceCoordinator {
         return Data(hexString: hex)
     }
 
-    private static let incomingSubdirectory = "\(MimeType.Category.audio.mediaDir)/incoming"
+    nonisolated private static let incomingSubdirectory = "\(MimeType.Category.audio.mediaDir)/incoming"
 
     /// The peer ID and scope in the name mirror the assembly key: colliding
     /// burst IDs from different senders — or from the same sender across DM
@@ -700,7 +713,8 @@ final class ChatLiveVoiceCoordinator {
     /// only (ConversationStore never persists; the gossip archive replays
     /// `MessageType.message` packets only), so no row from a previous
     /// process can reference the file.
-    private func sweepStaleLiveCaptures() {
+    nonisolated private static func sweepStaleLiveCaptures(in fileStore: BLEIncomingFileStore) {
+        let fileManager = fileStore.fileManager
         guard let directory = try? fileStore.incomingDirectory(subdirectory: Self.incomingSubdirectory),
               let contents = try? fileManager.contentsOfDirectory(
                   at: directory,

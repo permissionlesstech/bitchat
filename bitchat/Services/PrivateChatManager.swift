@@ -151,17 +151,20 @@ final class PrivateChatManager: ObservableObject {
     @MainActor
     func syncReadReceiptsForSentMessages(peerID: PeerID, externalReceipts: inout Set<String>) {
         guard let myPeerID = meshService?.myPeerID else { return }
+        var syncedIDs: [String] = []
         for message in messages(for: peerID) {
             if message.isOwn(myPeerID: myPeerID, myGeoChatPeerID: nil) {
                 switch message.deliveryStatus {
                 case .read, .delivered:
-                    externalReceipts.insert(message.id)
-                    sentReadReceipts.insert(message.id)
+                    syncedIDs.append(message.id)
                 case .notSentYet, .failed, .partiallyDelivered, .sending, .sent, .carried:
                     break
                 }
             }
         }
+        guard !syncedIDs.isEmpty else { return }
+        externalReceipts.formUnion(syncedIDs)
+        sentReadReceipts.formUnion(syncedIDs)
     }
 
     /// Start a private chat with a peer. Selection is mutated through the

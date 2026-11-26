@@ -99,7 +99,15 @@ final class BoardStore {
     init(persistsToDisk: Bool = true, fileURL: URL? = nil, now: @escaping () -> Date = Date.init) {
         self.now = now
         self.fileURL = persistsToDisk ? (fileURL ?? Self.defaultFileURL()) : nil
-        loadFromDisk()
+        if self.fileURL != nil {
+            // Restore off the calling thread (cold launch on MainActor) on the
+            // serial store queue. Every read/write (`posts`, `syncCandidates`,
+            // `ingest`, `wipe`) serializes on `queue`, so callers are linearly
+            // ordered after restore without blocking init().
+            queue.async { [self] in
+                loadFromDiskLocked()
+            }
+        }
     }
 
     // MARK: - Ingest
@@ -168,18 +176,38 @@ final class BoardStore {
         packet: BitchatPacket,
         rawPacket: Data,
         nowMs: UInt64,
-        retainUntilOverride: UInt64? = nil
+        retainUntilOverride: UInt64? = nil,
+        publishSnapshot: Bool = true
     ) -> BoardIngestResult {
-        pruneExpiredLocked(nowMs: nowMs)
+        pruneExpiredLocked(nowMs: nowMs, publishSnapshot: publishSnapshot)
         switch wire {
         case .post(let post):
-            return ingestPostLocked(post, packet: packet, rawPacket: rawPacket, nowMs: nowMs)
+            return ingestPostLocked(
+                post,
+                packet: packet,
+                rawPacket: rawPacket,
+                nowMs: nowMs,
+                publishSnapshot: publishSnapshot
+            )
         case .tombstone(let tombstone):
-            return ingestTombstoneLocked(tombstone, packet: packet, rawPacket: rawPacket, nowMs: nowMs, retainUntilOverride: retainUntilOverride)
+            return ingestTombstoneLocked(
+                tombstone,
+                packet: packet,
+                rawPacket: rawPacket,
+                nowMs: nowMs,
+                retainUntilOverride: retainUntilOverride,
+                publishSnapshot: publishSnapshot
+            )
         }
     }
 
-    private func ingestPostLocked(_ post: BoardPostPacket, packet: BitchatPacket, rawPacket: Data, nowMs: UInt64) -> BoardIngestResult {
+    private func ingestPostLocked(
+        _ post: BoardPostPacket,
+        packet: BitchatPacket,
+        rawPacket: Data,
+        nowMs: UInt64,
+        publishSnapshot: Bool = true
+    ) -> BoardIngestResult {
         guard post.expiresAt > nowMs else { return .rejected }
         // Receive-time sanity (this is the single chokepoint for radio, sync,
         // and disk restores): the decoder only enforces the createdAt to
@@ -204,7 +232,9 @@ final class BoardStore {
         if posts.count > Limits.maxPosts {
             evictOldestLocked(from: posts, keep: Limits.maxPosts)
         }
-        publishSnapshotLocked()
+        if publishSnapshot {
+            publishSnapshotLocked()
+        }
         // Even when the new post itself was the eviction victim it stays
         // valid mesh-wide; peers with room should still receive it.
         return .accepted
@@ -215,7 +245,8 @@ final class BoardStore {
         packet: BitchatPacket,
         rawPacket: Data,
         nowMs: UInt64,
-        retainUntilOverride: UInt64? = nil
+        retainUntilOverride: UInt64? = nil,
+        publishSnapshot: Bool = true
     ) -> BoardIngestResult {
         guard !tombstones.contains(where: { $0.tombstone.postID == tombstone.postID }) else { return .duplicate }
 
@@ -238,7 +269,9 @@ final class BoardStore {
             retainUntil = target.expiresAt
             isOrphan = false
             posts.remove(at: index)
-            publishSnapshotLocked()
+            if publishSnapshot {
+                publishSnapshotLocked()
+            }
         } else if let retainUntilOverride {
             // Restored from disk: the post is long gone, so trust the
             // retention deadline recorded when the delete was first applied.
@@ -289,11 +322,11 @@ final class BoardStore {
         posts.removeAll { victimIDs.contains($0.post.postID) }
     }
 
-    private func pruneExpiredLocked(nowMs: UInt64) {
+    private func pruneExpiredLocked(nowMs: UInt64, publishSnapshot: Bool = true) {
         let postsBefore = posts.count
         posts.removeAll { $0.post.expiresAt <= nowMs }
         tombstones.removeAll { $0.retainUntil <= nowMs }
-        if posts.count != postsBefore {
+        if publishSnapshot && posts.count != postsBefore {
             publishSnapshotLocked()
         }
     }
@@ -335,23 +368,28 @@ final class BoardStore {
         }
     }
 
-    private func loadFromDisk() {
+    private func loadFromDiskLocked() {
         guard let fileURL,
               let data = try? Data(contentsOf: fileURL),
               let payloads = try? JSONDecoder().decode([PersistedEntry].self, from: data) else {
             return
         }
         let nowMs = currentMs()
-        queue.sync {
-            for entry in payloads {
-                guard let packet = BitchatPacket.from(entry.packet),
-                      packet.type == MessageType.boardPost.rawValue,
-                      let wire = BoardWire.decode(from: packet.payload),
-                      wire.verifySignature() else { continue }
-                _ = ingestLocked(wire, packet: packet, rawPacket: entry.packet, nowMs: nowMs, retainUntilOverride: entry.retainUntil)
-            }
-            publishSnapshotLocked()
+        for entry in payloads {
+            guard let packet = BitchatPacket.from(entry.packet),
+                  packet.type == MessageType.boardPost.rawValue,
+                  let wire = BoardWire.decode(from: packet.payload),
+                  wire.verifySignature() else { continue }
+            _ = ingestLocked(
+                wire,
+                packet: packet,
+                rawPacket: entry.packet,
+                nowMs: nowMs,
+                retainUntilOverride: entry.retainUntil,
+                publishSnapshot: false
+            )
         }
+        publishSnapshotLocked()
     }
 
     private static func defaultFileURL() -> URL? {

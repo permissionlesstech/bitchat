@@ -22,7 +22,7 @@ struct LocationNotesDependencies {
     /// fires without data. Defaults to true so tests keep legacy behavior.
     var anyRelayConnected: @MainActor (_ relayUrls: [String]) -> Bool = { _ in true }
 
-    private static let idBridge = NostrIdentityBridge()
+    private static let idBridge = NostrIdentityBridge.shared
 
     /// Panic-wipe hook: drop cached per-geohash secp256k1 keys held by the
     /// live dependencies bridge so post-panic notes/drops cannot sign with

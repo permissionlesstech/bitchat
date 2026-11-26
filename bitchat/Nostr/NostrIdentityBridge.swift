@@ -4,6 +4,8 @@ import CryptoKit
 
 /// Bridge between Noise and Nostr identities
 final class NostrIdentityBridge {
+    static let shared = NostrIdentityBridge()
+
     private let keychainService = "chat.bitchat.nostr"
     private let currentIdentityKey = "nostr-current-identity"
     private let deviceSeedKey = "nostr-device-seed"

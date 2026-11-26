@@ -57,6 +57,19 @@ final class NostrProcessedEventStore {
         }
     }
 
+    /// Loads processed event IDs asynchronously on the utility I/O queue so
+    /// cold launch does not block the main actor on disk I/O + JSON decoding.
+    func loadAsync(completion: @escaping @Sendable ([String]) -> Void) {
+        ioQueue.async { [self] in
+            switch loadLocked() {
+            case .loaded(let ids):
+                completion(ids)
+            case .transientError:
+                completion([])
+            }
+        }
+    }
+
     /// Merge new IDs onto the persisted record, oldest-first, trimming from
     /// the front past `cap`. Append-merge (not snapshot-overwrite) so the
     /// in-memory cache being cleared transiently (channel switches) can
