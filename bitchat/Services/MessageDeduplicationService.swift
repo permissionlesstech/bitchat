@@ -109,8 +109,6 @@ enum ContentNormalizer {
         options: [.caseInsensitive]
     )
 
-    private static let hexDigits: [UInt8] = Array("0123456789abcdef".utf8)
-
     /// Normalizes content for deduplication comparison.
     /// - Parameters:
     ///   - content: The raw message content
@@ -182,15 +180,20 @@ enum ContentNormalizer {
     }
 
     private static func formatHashKey(_ hash: UInt64) -> String {
-        var bytes = [UInt8](repeating: 0, count: 18)
-        bytes[0] = UInt8(ascii: "h")
-        bytes[1] = UInt8(ascii: ":")
-        var value = hash
-        for i in stride(from: 17, through: 2, by: -1) {
-            bytes[i] = hexDigits[Int(value & 0x0f)]
-            value >>= 4
+        String(unsafeUninitializedCapacity: 18) { buffer in
+            guard let dst = buffer.baseAddress else { return 0 }
+            dst[0] = UInt8(ascii: "h")
+            dst[1] = UInt8(ascii: ":")
+            var value = hash
+            var i = 17
+            while i >= 2 {
+                let nibble = UInt8(value & 0x0f)
+                dst[i] = nibble < 10 ? nibble &+ 48 : nibble &+ 87
+                value >>= 4
+                i &-= 1
+            }
+            return 18
         }
-        return String(decoding: bytes, as: UTF8.self)
     }
 }
 
