@@ -3,8 +3,8 @@ name: Arti Binary Provenance
 # The Arti xcframework is a vendored binary; these checks turn the policy in
 # docs/ARTI-BINARY-PROVENANCE.md into an enforced gate:
 #  1. The checked-in binary must match the hash manifest in the provenance doc.
-#  2. A PR that changes the binary must also change at least one provenance
-#     input (Rust source, lockfile, build script, or the doc itself).
+#  2. A PR that changes the binary must also change at least one build input
+#     (Rust source, Cargo manifest/lockfile, or build script).
 
 on:
   push:
@@ -13,10 +13,15 @@ on:
     paths:
       - "localPackages/Arti/**"
       - "docs/ARTI-BINARY-PROVENANCE.md"
+      - ".github/workflows/arti-provenance.yml"
   pull_request:
     paths:
       - "localPackages/Arti/**"
       - "docs/ARTI-BINARY-PROVENANCE.md"
+      - ".github/workflows/arti-provenance.yml"
+
+permissions:
+  contents: read
 
 jobs:
   verify-hashes:
@@ -25,7 +30,9 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v5
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          persist-credentials: false
 
       - name: Compare artifact hashes with manifest
         run: |
@@ -41,8 +48,9 @@ jobs:
             exit 1
           fi
 
-          # Hash the same file set the doc documents.
-          find localPackages/Arti/Frameworks/arti.xcframework -maxdepth 3 -type f -print0 \
+          # Hash every file in arti.xcframework so deeper subdirectories cannot
+          # hide unmanifested files.
+          find localPackages/Arti/Frameworks/arti.xcframework -type f -print0 \
             | sort -z | xargs -0 sha256sum | sed 's/  \.\//  /' | sort -k2 > actual.txt
 
           if ! diff -u expected.txt actual.txt; then
@@ -58,15 +66,18 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v5
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
           fetch-depth: 0
+          persist-credentials: false
 
       - name: Check changed files
+        env:
+          BASE_REF: ${{ github.base_ref }}
         run: |
           set -euo pipefail
-          base="origin/${{ github.base_ref }}"
-          git fetch --no-tags --depth=1 origin "${{ github.base_ref }}"
+          base="origin/$BASE_REF"
+          git fetch --no-tags --depth=1 origin "$BASE_REF"
           changed=$(git diff --name-only "$base"...HEAD)
           echo "Changed files:"
           echo "$changed"
@@ -76,10 +87,10 @@ jobs:
             exit 0
           fi
 
-          if echo "$changed" | grep -Eq '^(localPackages/Arti/(Cargo\.(toml|lock)|build-ios\.sh|arti-bitchat/)|docs/ARTI-BINARY-PROVENANCE\.md)'; then
-            echo "Binary change is accompanied by provenance inputs."
+          if echo "$changed" | grep -Eq '^localPackages/Arti/(Cargo\.(toml|lock)|build-ios\.sh|arti-bitchat/)'; then
+            echo "Binary change is accompanied by build provenance inputs."
             exit 0
           fi
 
-          echo "::error::arti.xcframework changed without matching source, lockfile, build-script, or provenance-doc changes. See docs/ARTI-BINARY-PROVENANCE.md (\"Do not accept an xcframework-only update\")."
+          echo "::error::arti.xcframework changed without matching source, lockfile, or build-script changes. See docs/ARTI-BINARY-PROVENANCE.md (\"Do not accept an xcframework-only update\")."
           exit 1
