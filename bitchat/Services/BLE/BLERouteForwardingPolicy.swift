@@ -88,7 +88,18 @@ struct BLERouteForwardingPolicy {
         }
 
         guard let localIndex = route.firstIndex(of: localRoutingData) else {
-            return forward(packet, toRouteData: route[0], routingPeer: routingPeer, isPeerConnected: isPeerConnected)
+            // Only the packet's origin forwards to `route[0]`. An off-route
+            // relay only sees a routed packet during conservative flood
+            // fallback; bouncing it back to `route[0]` hits deduplication on an
+            // already-visited hop instead of progressing toward the destination.
+            if PeerID(hexData: packet.senderID) == localPeerID {
+                return forward(packet, toRouteData: route[0], routingPeer: routingPeer, isPeerConnected: isPeerConnected)
+            }
+            if let destinationPeer = PeerID(hexData: packet.recipientID),
+               isPeerConnected(destinationPeer) {
+                return .forward(relayed(packet), to: destinationPeer)
+            }
+            return .fallbackToFloodRelay
         }
 
         if localIndex == route.count - 1 {

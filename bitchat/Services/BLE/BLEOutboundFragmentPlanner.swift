@@ -20,6 +20,10 @@ enum BLEOutboundFragmentPlanner {
     /// Current Android receivers reject fragment sets above 256. Private
     /// media v1 treats that deployed ceiling as a cross-platform contract.
     static let privateMediaV1MaxFragments = 256
+    /// Matches `BLEFragmentHeader`'s hard receiver ceiling (`total <= 10_000`)
+    /// and stays well below the 16-bit wire fragment-count limit so tiny routed
+    /// chunks can never allocate unbounded trains or trap on `UInt16(total)`.
+    static let maxSupportedFragments = 10_000
     private static let minimumChunkSize = 64
     private static let fragmentIDLength = 8
 
@@ -30,7 +34,8 @@ enum BLEOutboundFragmentPlanner {
         fragmentID: Data = randomFragmentID()
     ) -> BLEOutboundFragmentPlan? {
         guard fragmentID.count == fragmentIDLength,
-              let fullData = request.packet.toBinaryData(padding: request.pad) else {
+              let fullData = request.packet.toBinaryData(padding: request.pad),
+              !fullData.isEmpty else {
             return nil
         }
 
@@ -40,6 +45,11 @@ enum BLEOutboundFragmentPlanner {
             defaultChunkSize: defaultChunkSize,
             bleMaxMTU: bleMaxMTU
         ) else {
+            return nil
+        }
+
+        let totalFragments = (fullData.count + sizing.chunkSize - 1) / sizing.chunkSize
+        guard totalFragments > 0, totalFragments <= maxSupportedFragments else {
             return nil
         }
 
@@ -98,8 +108,7 @@ enum BLEOutboundFragmentPlanner {
 
         if let route = packet.route, !route.isEmpty {
             fragmentVersion = 2
-            let routeSize = 1 + (route.count * 8)
-            let overhead = 16 + 8 + 8 + routeSize + 13 + 16
+            let overhead = BLEOutboundPacketPolicy.routedFragmentFrameOverhead(routeHopCount: route.count) + 16
             calculatedChunk = max(minimumChunkSize, bleMaxMTU - overhead)
             if let requestedMaxChunk {
                 guard requestedMaxChunk > 0 else { return nil }

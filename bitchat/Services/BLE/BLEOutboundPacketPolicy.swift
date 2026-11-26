@@ -51,20 +51,39 @@ enum BLEOutboundPacketPolicy {
         max(64, limit - fragmentFrameOverhead)
     }
 
+    /// Exact wire overhead in bytes for an unpadded v2 routed fragment packet
+    /// carrying `routeHopCount` intermediate hops (`v2 header 16 + sender 8 +
+    /// recipient 8 + route (1 + 8 * hops) + fragment payload header 13`).
+    static func routedFragmentFrameOverhead(routeHopCount: Int) -> Int {
+        16 + BinaryProtocol.senderIDSize + BinaryProtocol.recipientIDSize + (1 + routeHopCount * BinaryProtocol.senderIDSize) + 13
+    }
+
     /// Computes the maximum fragment data chunk that fits inside `linkLimit`,
     /// accounting for v2 framing and source-route hops when `packet.route` is
     /// non-empty. Returns `nil` when `linkLimit` is too small to carry even a
-    /// 1-byte routed fragment.
-    static func fragmentChunkSize(for packet: BitchatPacket, linkLimit limit: Int) -> Int? {
+    /// 1-byte routed fragment or when `dataCount` would exceed the receiver's
+    /// maximum supported fragment count.
+    static func fragmentChunkSize(
+        for packet: BitchatPacket,
+        linkLimit limit: Int,
+        dataCount: Int? = nil
+    ) -> Int? {
+        let chunkSize: Int
         if let route = packet.route, !route.isEmpty {
-            let routeBytes = 1 + (route.count * BinaryProtocol.senderIDSize)
-            // v2 header (16) + sender (8) + recipient (8) + route + fragment payload header (13)
-            let routedOverhead = 16 + BinaryProtocol.senderIDSize + BinaryProtocol.recipientIDSize + routeBytes + 13
+            let routedOverhead = routedFragmentFrameOverhead(routeHopCount: route.count)
             let available = limit - routedOverhead
             guard available > 0 else { return nil }
-            return available
+            chunkSize = available
+        } else {
+            chunkSize = fragmentChunkSize(forLinkLimit: limit)
         }
-        return fragmentChunkSize(forLinkLimit: limit)
+        if let dataCount, dataCount > 0 {
+            let requiredFragments = (dataCount + chunkSize - 1) / chunkSize
+            guard requiredFragments <= BLEOutboundFragmentPlanner.maxSupportedFragments else {
+                return nil
+            }
+        }
+        return chunkSize
     }
 
     private static func fragmentTotalCount(from payload: Data) -> Int {

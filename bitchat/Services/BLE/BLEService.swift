@@ -2129,10 +2129,11 @@ final class BLEService: NSObject {
         #endif
 
         if packetToSend.type == MessageType.fileTransfer.rawValue {
+            let linkChunk = linkAwareFragmentChunkSize(for: packetToSend, pad: padForBLE)
             sendFragmentedPacket(
                 packetToSend,
                 pad: padForBLE,
-                maxChunk: nil,
+                maxChunk: linkChunk,
                 directedOnlyPeer: nil,
                 transferId: transferId,
                 requiresPrivateMediaAdmission: requiresPrivateMediaAdmission,
@@ -2204,40 +2205,52 @@ final class BLEService: NSObject {
         #endif
 
         if let peripheralMaxLen = effectivePeripheralMaxLen,
-           data.count > peripheralMaxLen {
-            let chunk = BLEOutboundPacketPolicy.fragmentChunkSize(forLinkLimit: peripheralMaxLen)
-            sendFragmentedPacket(
-                packet,
-                pad: pad,
-                maxChunk: chunk,
-                directedOnlyPeer: recipientPeerID,
-                relayContext: relayContext
-            )
+           data.count > peripheralMaxLen,
+           let chunk = BLEOutboundPacketPolicy.fragmentChunkSize(
+               for: packet,
+               linkLimit: peripheralMaxLen,
+               dataCount: data.count
+           ),
+           sendFragmentedPacket(
+               packet,
+               pad: pad,
+               maxChunk: chunk,
+               directedOnlyPeer: recipientPeerID,
+               relayContext: relayContext
+           ) {
             return
         }
         if let centralMaxLen = effectiveCentralMaxLen,
-           data.count > centralMaxLen {
-            let chunk = BLEOutboundPacketPolicy.fragmentChunkSize(forLinkLimit: centralMaxLen)
-            sendFragmentedPacket(
-                packet,
-                pad: pad,
-                maxChunk: chunk,
-                directedOnlyPeer: recipientPeerID,
-                relayContext: relayContext
-            )
+           data.count > centralMaxLen,
+           let chunk = BLEOutboundPacketPolicy.fragmentChunkSize(
+               for: packet,
+               linkLimit: centralMaxLen,
+               dataCount: data.count
+           ),
+           sendFragmentedPacket(
+               packet,
+               pad: pad,
+               maxChunk: chunk,
+               directedOnlyPeer: recipientPeerID,
+               relayContext: relayContext
+           ) {
             return
         }
 
-        // Direct write via peripheral link
+        // Direct write via peripheral link (only when frame fits the link MTU)
         if let state = directPeripheralState,
            state.isConnected,
-           let characteristic = state.characteristic {
+           let characteristic = state.characteristic,
+           effectivePeripheralMaxLen.map({ data.count <= $0 }) ?? true {
             writeOrEnqueue(data, to: state.peripheral, characteristic: characteristic, priority: outboundPriority)
             sentEncrypted = true
         }
 
-        // Notify via central link (dual-role)
-        if let characteristic = characteristic, !sentEncrypted, let recipientCentral {
+        // Notify via central link (dual-role, only when frame fits the link MTU)
+        if let characteristic = characteristic,
+           !sentEncrypted,
+           let recipientCentral,
+           effectiveCentralMaxLen.map({ data.count <= $0 }) ?? true {
             let success = peripheralManager?.updateValue(data, for: characteristic, onSubscribedCentrals: [recipientCentral]) ?? false
             if success {
                 sentEncrypted = true
@@ -2256,6 +2269,49 @@ final class BLEService: NSObject {
                 relayContext: relayContext
             )
         }
+    }
+
+    /// Computes a link-MTU-aware fragment chunk budget for packets sent
+    /// directly through `sendFragmentedPacket` (such as routed or broadcast
+    /// `FILE_TRANSFER`), honoring the smallest capable connected link so
+    /// routed fragments fit on tight links without exceeding the wire MTU.
+    private func linkAwareFragmentChunkSize(for packet: BitchatPacket, pad: Bool) -> Int? {
+        let dataCount = packet.toBinaryData(padding: pad)?.count
+        let isRouted = !(packet.route?.isEmpty ?? true)
+        let physicalSnapshot = readLinkState { store -> (peripheralLimits: [Int], centralLimits: [Int]) in
+            let pLimits = store.peripheralStates
+                .filter { $0.isConnected && $0.characteristic != nil }
+                .map { $0.peripheral.maximumWriteValueLength(for: .withoutResponse) }
+            let cLimits = self.characteristic == nil
+                ? []
+                : store.subscribedCentrals.map { $0.maximumUpdateValueLength }
+            return (pLimits, cLimits)
+        }
+        var limits = physicalSnapshot.peripheralLimits + physicalSnapshot.centralLimits
+        #if DEBUG
+        if !shouldInitializeBluetoothManagers && physicalSnapshot.centralLimits.isEmpty,
+           let virtualIDs = _test_virtualCentralIDs?(),
+           !virtualIDs.isEmpty {
+            limits.append(contentsOf: virtualIDs.map { _test_virtualCentralMTU?($0) ?? bleMaxMTU })
+        }
+        #endif
+        let capableLimits = limits.filter { limit in
+            if let dataCount, dataCount <= limit { return true }
+            return BLEOutboundPacketPolicy.fragmentChunkSize(
+                for: packet,
+                linkLimit: limit,
+                dataCount: dataCount
+            ) != nil
+        }
+        guard let minLimit = capableLimits.min(),
+              minLimit < bleMaxMTU || isRouted else {
+            return nil
+        }
+        return BLEOutboundPacketPolicy.fragmentChunkSize(
+            for: packet,
+            linkLimit: minLimit,
+            dataCount: dataCount
+        )
     }
 
     private func sendGenericBroadcast(
@@ -2351,14 +2407,18 @@ final class BLEService: NSObject {
         guard !eligible.isEmpty else { return false }
 
         let accept = { [self] in
-            // Re-verify physical subscription state atomically on bleQueue so a
-            // central that unsubscribed after the planning snapshot cannot be
-            // admitted to the notification queue and falsely report delivery.
-            guard self.characteristic != nil else { return false }
+            // Re-verify physical characteristic identity and subscription state
+            // atomically on bleQueue so a characteristic replacement or central
+            // unsubscribe after the planning snapshot cannot admit stale sends
+            // and falsely report delivery.
+            guard let currentCharacteristic = self.characteristic,
+                  currentCharacteristic === characteristic else {
+                return false
+            }
             let liveCentralIDs = Set(linkStateStore.subscribedCentrals.map { $0.identifier.uuidString })
             let liveEligible = eligible.filter { liveCentralIDs.contains($0.identifier.uuidString) }
             guard !liveEligible.isEmpty else { return false }
-            if peripheralManager?.updateValue(data, for: characteristic, onSubscribedCentrals: liveEligible) == true {
+            if peripheralManager?.updateValue(data, for: currentCharacteristic, onSubscribedCentrals: liveEligible) == true {
                 return true
             }
             return enqueuePendingNotificationIfAccepted(
@@ -4376,8 +4436,8 @@ extension BLEService {
                 switch link {
                 case .central(let uuid):
                     return virtualCentralIDs.contains(uuid)
-                case .peripheral:
-                    return false
+                case .peripheral(let uuid):
+                    return linkBindings.peer(forPeripheralID: uuid) != nil
                 }
             }
             return true
@@ -6270,8 +6330,9 @@ extension BLEService {
             guard let peerID = linkBindings.centralRemoved(centralUUID) else { return }
             // The remote side retiring a redundant duplicate connection
             // arrives as an unsubscribe while the peer stays live on its
-            // other links; only the peer's last link disconnecting counts.
-            guard linkBindings.links(to: peerID).isEmpty else { return }
+            // other links; join surviving bindings against physical link state
+            // so a staggered disconnect cannot delay edge cleanup or announce.
+            guard !linkBindings.links(to: peerID).contains(where: { isPhysicalLinkLive($0) }) else { return }
             peerRegistry.mutate { $0.markDisconnected(peerID) }
             meshTopology.removeDirectEdge(between: myPeerIDData, and: peerID.routingData)
             refreshLocalTopology()
@@ -6314,7 +6375,13 @@ extension BLEService {
 
     private func handleBulkRoleLinksEnded(_ clearedPeers: [PeerID], notifyUIOnDisconnect: Bool) {
         var anyPeerLostLastLink = false
-        for peerID in clearedPeers where linkBindings.links(to: peerID).isEmpty {
+        for peerID in clearedPeers {
+            // Join surviving opposite-role bindings against physical link state
+            // so a staggered teardown whose retirement is still queued does not
+            // delay direct-edge pruning or the topology-change announce.
+            guard !linkBindings.links(to: peerID).contains(where: { isPhysicalLinkLive($0) }) else {
+                continue
+            }
             peerRegistry.mutate { $0.markDisconnected(peerID) }
             meshTopology.removeDirectEdge(between: myPeerIDData, and: peerID.routingData)
             anyPeerLostLastLink = true

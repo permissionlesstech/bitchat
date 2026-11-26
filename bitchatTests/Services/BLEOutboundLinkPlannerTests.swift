@@ -283,6 +283,117 @@ struct BLEOutboundLinkPlannerTests {
         #expect(fallbackPlan.selectedLinks.centralIDs == Set(["c-alt"]))
     }
 
+    @Test
+    func mixedMTUDualRolePeerFallsBackToUsableSiblingLinkBeforeCollapse() {
+        let nextHop = PeerID(str: "1011121314151617")
+        let finalDest = PeerID(str: "9091929394959697")
+        let route = [
+            Data([0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17]),
+            Data([0x20, 0x21, 0x22, 0x23, 0x24, 0x25, 0x26, 0x27])
+        ]
+        let routedPacket = BitchatPacket(
+            type: MessageType.message.rawValue,
+            senderID: Data([0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08]),
+            recipientID: finalDest.routingData,
+            timestamp: 1_234,
+            payload: Data(repeating: 0x41, count: 160),
+            signature: nil,
+            ttl: 5,
+            version: 2,
+            route: route
+        )
+
+        // Preferred peripheral link has 50-byte MTU (< 62-byte routed overhead)
+        // while sibling central link to the same peer has 512-byte MTU.
+        // Strict unicast must select the usable sibling instead of dropping the peer.
+        let strictPlan = BLEOutboundLinkPlanner.plan(
+            packet: routedPacket,
+            dataCount: 220,
+            peripheralIDs: ["p-tiny"],
+            peripheralWriteLimits: [50],
+            centralIDs: ["c-good"],
+            centralNotifyLimits: [512],
+            ingressRecord: nil,
+            excludedLinks: [],
+            peripheralPeerBindings: ["p-tiny": nextHop],
+            centralPeerBindings: ["c-good": nextHop],
+            preferredPeripheralPerPeer: [nextHop: "p-tiny"],
+            directedOnlyPeer: nextHop,
+            requireDirectPeerLink: true
+        )
+        #expect(strictPlan.selectedLinks.peripheralIDs.isEmpty)
+        #expect(strictPlan.selectedLinks.centralIDs == Set(["c-good"]))
+        #expect(strictPlan.fragmentChunkSize == nil)
+
+        // Conservative flood fallback must also select the usable sibling.
+        let fallbackPlan = BLEOutboundLinkPlanner.plan(
+            packet: routedPacket,
+            dataCount: 220,
+            peripheralIDs: ["p-tiny"],
+            peripheralWriteLimits: [50],
+            centralIDs: ["c-good"],
+            centralNotifyLimits: [512],
+            ingressRecord: nil,
+            excludedLinks: [],
+            peripheralPeerBindings: ["p-tiny": nextHop],
+            centralPeerBindings: ["c-good": nextHop],
+            preferredPeripheralPerPeer: [nextHop: "p-tiny"],
+            directedOnlyPeer: nil,
+            requireDirectPeerLink: false
+        )
+        #expect(fallbackPlan.selectedLinks.peripheralIDs.isEmpty)
+        #expect(fallbackPlan.selectedLinks.centralIDs == Set(["c-good"]))
+
+        // Already-fragmented 100-byte routed fragment: `p-tiny` (MTU 50) cannot
+        // carry it, so both strict unicast and fallback must select `c-good`.
+        let routedFragment = BitchatPacket(
+            type: MessageType.fragment.rawValue,
+            senderID: Data([0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08]),
+            recipientID: finalDest.routingData,
+            timestamp: 1_234,
+            payload: Data(repeating: 0x22, count: 40),
+            signature: nil,
+            ttl: 5,
+            version: 2,
+            route: route
+        )
+        let strictFragPlan = BLEOutboundLinkPlanner.plan(
+            packet: routedFragment,
+            dataCount: 100,
+            peripheralIDs: ["p-tiny"],
+            peripheralWriteLimits: [50],
+            centralIDs: ["c-good"],
+            centralNotifyLimits: [512],
+            ingressRecord: nil,
+            excludedLinks: [],
+            peripheralPeerBindings: ["p-tiny": nextHop],
+            centralPeerBindings: ["c-good": nextHop],
+            preferredPeripheralPerPeer: [nextHop: "p-tiny"],
+            directedOnlyPeer: nextHop,
+            requireDirectPeerLink: true
+        )
+        #expect(strictFragPlan.selectedLinks.peripheralIDs.isEmpty)
+        #expect(strictFragPlan.selectedLinks.centralIDs == Set(["c-good"]))
+
+        let fallbackFragPlan = BLEOutboundLinkPlanner.plan(
+            packet: routedFragment,
+            dataCount: 100,
+            peripheralIDs: ["p-tiny"],
+            peripheralWriteLimits: [50],
+            centralIDs: ["c-good"],
+            centralNotifyLimits: [512],
+            ingressRecord: nil,
+            excludedLinks: [],
+            peripheralPeerBindings: ["p-tiny": nextHop],
+            centralPeerBindings: ["c-good": nextHop],
+            preferredPeripheralPerPeer: [nextHop: "p-tiny"],
+            directedOnlyPeer: nil,
+            requireDirectPeerLink: false
+        )
+        #expect(fallbackFragPlan.selectedLinks.peripheralIDs.isEmpty)
+        #expect(fallbackFragPlan.selectedLinks.centralIDs == Set(["c-good"]))
+    }
+
     private func makePacket(
         type: MessageType,
         sender: PeerID = PeerID(str: "8877665544332211"),
