@@ -3,19 +3,30 @@ import Foundation
 /// Lightweight Geohash encoder used for Location Channels.
 /// Encodes latitude/longitude to base32 geohash with a fixed precision.
 enum Geohash {
-    private static let base32Chars = Array("0123456789bcdefghjkmnpqrstuvwxyz")
-    private static let base32Map: [Character: Int] = {
-        var map: [Character: Int] = [:]
-        for (i, c) in base32Chars.enumerated() { map[c] = i }
-        return map
+    private static let base32Bytes: [UInt8] = Array("0123456789bcdefghjkmnpqrstuvwxyz".utf8)
+    private static let base32DecodeTable: [Int8] = {
+        var table = [Int8](repeating: -1, count: 128)
+        for (i, byte) in base32Bytes.enumerated() {
+            table[Int(byte)] = Int8(i)
+            // Also map uppercase ASCII letters directly to avoid allocating `.lowercased()`
+            if byte >= UInt8(ascii: "a") && byte <= UInt8(ascii: "z") {
+                table[Int(byte - 32)] = Int8(i)
+            }
+        }
+        return table
     }()
 
     /// Validates a geohash string at any channel precision (1-12 characters).
     /// - Parameter geohash: The geohash string to validate
     /// - Returns: true if a non-empty base32 geohash of at most 12 characters
     static func isValidGeohash(_ geohash: String) -> Bool {
-        guard (1...12).contains(geohash.count) else { return false }
-        return geohash.lowercased().allSatisfy { base32Map[$0] != nil }
+        let utf8 = geohash.utf8
+        let count = utf8.count
+        guard count >= 1 && count <= 12 else { return false }
+        for byte in utf8 {
+            guard byte < 128 && base32DecodeTable[Int(byte)] >= 0 else { return false }
+        }
+        return true
     }
 
     /// Encodes the provided coordinates into a geohash string.
@@ -27,97 +38,89 @@ enum Geohash {
     static func encode(latitude: Double, longitude: Double, precision: Int) -> String {
         guard precision > 0 else { return "" }
 
-        var latInterval: (Double, Double) = (-90.0, 90.0)
-        var lonInterval: (Double, Double) = (-180.0, 180.0)
+        var latMin = -90.0
+        var latMax = 90.0
+        var lonMin = -180.0
+        var lonMax = 180.0
 
         var isEven = true
         var bit = 0
         var ch = 0
-        var geohash: [Character] = []
 
         let lat = max(-90.0, min(90.0, latitude))
         let lon = max(-180.0, min(180.0, longitude))
 
-        while geohash.count < precision {
-            if isEven {
-                let mid = (lonInterval.0 + lonInterval.1) / 2
-                if lon >= mid {
-                    ch |= (1 << (4 - bit))
-                    lonInterval.0 = mid
+        return String(unsafeUninitializedCapacity: precision) { buffer in
+            var idx = 0
+            while idx < precision {
+                if isEven {
+                    let mid = (lonMin + lonMax) * 0.5
+                    if lon >= mid {
+                        ch |= (1 << (4 - bit))
+                        lonMin = mid
+                    } else {
+                        lonMax = mid
+                    }
                 } else {
-                    lonInterval.1 = mid
+                    let mid = (latMin + latMax) * 0.5
+                    if lat >= mid {
+                        ch |= (1 << (4 - bit))
+                        latMin = mid
+                    } else {
+                        latMax = mid
+                    }
                 }
-            } else {
-                let mid = (latInterval.0 + latInterval.1) / 2
-                if lat >= mid {
-                    ch |= (1 << (4 - bit))
-                    latInterval.0 = mid
-                } else {
-                    latInterval.1 = mid
-                }
-            }
 
-            isEven.toggle()
-            if bit < 4 {
-                bit += 1
-            } else {
-                geohash.append(base32Chars[ch])
-                bit = 0
-                ch = 0
+                isEven.toggle()
+                if bit < 4 {
+                    bit += 1
+                } else {
+                    buffer[idx] = base32Bytes[ch]
+                    idx += 1
+                    bit = 0
+                    ch = 0
+                }
             }
+            return idx
         }
-
-        return String(geohash)
     }
 
     /// Decodes a geohash into the center latitude/longitude of its bounding box.
     /// - Parameter geohash: Base32 geohash string.
     /// - Returns: (lat, lon) center coordinate.
     static func decodeCenter(_ geohash: String) -> (lat: Double, lon: Double) {
-        var latInterval: (Double, Double) = (-90.0, 90.0)
-        var lonInterval: (Double, Double) = (-180.0, 180.0)
-
-        var isEven = true
-        for ch in geohash.lowercased() {
-            guard let cd = base32Map[ch] else { continue }
-            for mask in [16, 8, 4, 2, 1] {
-                if isEven {
-                    let mid = (lonInterval.0 + lonInterval.1) / 2
-                    if (cd & mask) != 0 { lonInterval.0 = mid } else { lonInterval.1 = mid }
-                } else {
-                    let mid = (latInterval.0 + latInterval.1) / 2
-                    if (cd & mask) != 0 { latInterval.0 = mid } else { latInterval.1 = mid }
-                }
-                isEven.toggle()
-            }
-        }
-        let lat = (latInterval.0 + latInterval.1) / 2
-        let lon = (lonInterval.0 + lonInterval.1) / 2
-        return (lat, lon)
+        let bounds = decodeBounds(geohash)
+        return ((bounds.latMin + bounds.latMax) * 0.5, (bounds.lonMin + bounds.lonMax) * 0.5)
     }
 
     /// Decodes a geohash into its latitude and longitude bounds.
     /// - Parameter geohash: Base32 geohash string.
     /// - Returns: (latMin, latMax, lonMin, lonMax)
     static func decodeBounds(_ geohash: String) -> (latMin: Double, latMax: Double, lonMin: Double, lonMax: Double) {
-        var latInterval: (Double, Double) = (-90.0, 90.0)
-        var lonInterval: (Double, Double) = (-180.0, 180.0)
+        var latMin = -90.0
+        var latMax = 90.0
+        var lonMin = -180.0
+        var lonMax = 180.0
 
         var isEven = true
-        for ch in geohash.lowercased() {
-            guard let cd = base32Map[ch] else { continue }
-            for mask in [16, 8, 4, 2, 1] {
+        for byte in geohash.utf8 {
+            guard byte < 128 else { continue }
+            let cd = Int(base32DecodeTable[Int(byte)])
+            guard cd >= 0 else { continue }
+            var mask = 16
+            while mask > 0 {
                 if isEven {
-                    let mid = (lonInterval.0 + lonInterval.1) / 2
-                    if (cd & mask) != 0 { lonInterval.0 = mid } else { lonInterval.1 = mid }
+                    let mid = (lonMin + lonMax) * 0.5
+                    if (cd & mask) != 0 { lonMin = mid } else { lonMax = mid }
                 } else {
-                    let mid = (latInterval.0 + latInterval.1) / 2
-                    if (cd & mask) != 0 { latInterval.0 = mid } else { latInterval.1 = mid }
+                    let mid = (latMin + latMax) * 0.5
+                    if (cd & mask) != 0 { latMin = mid } else { latMax = mid }
                 }
                 isEven.toggle()
+                mask >>= 1
             }
         }
-        return (latInterval.0, latInterval.1, lonInterval.0, lonInterval.1)
+        return (latMin, latMax, lonMin, lonMax)
     }
 
     /// Returns all 8 neighboring geohash cells at the same precision.
@@ -128,7 +131,8 @@ enum Geohash {
 
         let precision = geohash.count
         let bounds = decodeBounds(geohash)
-        let center = decodeCenter(geohash)
+        let centerLat = (bounds.latMin + bounds.latMax) * 0.5
+        let centerLon = (bounds.lonMin + bounds.lonMax) * 0.5
 
         // Calculate cell dimensions
         let latHeight = bounds.latMax - bounds.latMin
@@ -142,34 +146,29 @@ enum Geohash {
             return wrapped
         }
 
-        // Helper to clamp latitude to ±90
-        func clampLatitude(_ lat: Double) -> Double {
-            return max(-90.0, min(90.0, lat))
-        }
-
         // Calculate 8 neighbor centers
-        let neighbors: [(lat: Double, lon: Double)] = [
-            (center.lat + latHeight, center.lon),                    // N
-            (center.lat + latHeight, center.lon + lonWidth),         // NE
-            (center.lat, center.lon + lonWidth),                     // E
-            (center.lat - latHeight, center.lon + lonWidth),         // SE
-            (center.lat - latHeight, center.lon),                    // S
-            (center.lat - latHeight, center.lon - lonWidth),         // SW
-            (center.lat, center.lon - lonWidth),                     // W
-            (center.lat + latHeight, center.lon - lonWidth)          // NW
+        let offsets: [(dLat: Double, dLon: Double)] = [
+            (latHeight, 0),            // N
+            (latHeight, lonWidth),     // NE
+            (0, lonWidth),             // E
+            (-latHeight, lonWidth),    // SE
+            (-latHeight, 0),           // S
+            (-latHeight, -lonWidth),   // SW
+            (0, -lonWidth),            // W
+            (latHeight, -lonWidth)     // NW
         ]
 
-        // Encode each neighbor, handling boundary conditions
-        return neighbors.compactMap { neighbor in
-            let lat = clampLatitude(neighbor.lat)
-            let lon = wrapLongitude(neighbor.lon)
-
-            // Skip if we've crossed a pole (latitude clamped to boundary)
-            if (neighbor.lat > 90.0 || neighbor.lat < -90.0) {
-                return nil
+        var result: [String] = []
+        result.reserveCapacity(8)
+        for (dLat, dLon) in offsets {
+            let rawLat = centerLat + dLat
+            // Skip if we've crossed a pole
+            if rawLat > 90.0 || rawLat < -90.0 {
+                continue
             }
-
-            return encode(latitude: lat, longitude: lon, precision: precision)
+            let lon = wrapLongitude(centerLon + dLon)
+            result.append(encode(latitude: rawLat, longitude: lon, precision: precision))
         }
+        return result
     }
 }
