@@ -86,17 +86,25 @@ final class SimulatedMesh {
             service._test_virtualCentralIDs = { [weak self] in
                 self?.activeVirtualCentralIDs(at: index) ?? []
             }
-            service._test_onPlannedLinks = { [weak self] packet, selection in
-                guard let self else { return }
+            service._test_onPlannedLinks = { [weak self, weak service] packet, selection in
+                guard let self, let service else { return }
+                let pad = BLEOutboundPacketPolicy.padsBLEFrame(for: packet.type)
+                let encodedLength = packet.toBinaryData(padding: pad)?.count
                 self.lock.lock()
-                if !selection.centralIDs.isEmpty || !selection.peripheralIDs.isEmpty {
-                    self.emitted[index].append(packet)
-                }
+                var deliveredAny = false
                 for selectedUUID in selection.centralIDs.sorted() {
                     guard let (target, isDuplicate) = self.decodeVirtualCentralLink(selectedUUID, at: index),
                           self.neighbors[index].contains(target) else {
                         continue
                     }
+                    if let mtu = service._test_virtualCentralMTU?(selectedUUID),
+                       let encodedLength,
+                       encodedLength > mtu {
+                        // Drop frames whose encoded wire length exceeds the
+                        // simulated link's physical MTU, matching BLE GATT limits.
+                        continue
+                    }
+                    deliveredAny = true
                     let receiverLinkUUID = isDuplicate
                         ? self.duplicateLinkUUID(from: index, at: target)
                         : self.linkUUID(from: index, at: target)
@@ -107,6 +115,9 @@ final class SimulatedMesh {
                         packet: packet
                     ))
                     self.plannedTransmissions[index].append((to: target, packet: packet))
+                }
+                if deliveredAny || !selection.peripheralIDs.isEmpty {
+                    self.emitted[index].append(packet)
                 }
                 self.lock.unlock()
             }

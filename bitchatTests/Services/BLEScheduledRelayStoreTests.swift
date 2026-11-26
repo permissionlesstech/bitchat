@@ -65,4 +65,24 @@ struct BLEScheduledRelayStoreTests {
         store.removeAllIfOverCapacity(2)
         #expect(store.isEmpty)
     }
+
+    @Test("protected relays ignore duplicate cancellation while opportunistic relays cancel")
+    func protectedRelaysIgnoreDuplicateCancellation() {
+        var store = BLEScheduledRelayStore()
+        let protectedWork = DispatchWorkItem {}
+        let opportunisticWork = DispatchWorkItem {}
+
+        store.schedule(protectedWork, messageID: "protected", isProtectedFromDuplicateCancellation: true)
+        store.schedule(opportunisticWork, messageID: "opportunistic", isProtectedFromDuplicateCancellation: false)
+
+        let cancelledProtected = store.cancelIfDuplicateCancellable(messageID: "protected")
+        #expect(!cancelledProtected)
+        #expect(!protectedWork.isCancelled)
+        #expect(store.count == 2)
+
+        let cancelledOpportunistic = store.cancelIfDuplicateCancellable(messageID: "opportunistic")
+        #expect(cancelledOpportunistic)
+        #expect(opportunisticWork.isCancelled)
+        #expect(store.count == 1)
+    }
 }

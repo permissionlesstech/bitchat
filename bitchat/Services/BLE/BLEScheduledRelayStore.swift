@@ -3,7 +3,7 @@ import Foundation
 struct BLEScheduledRelayStore {
     private struct Entry {
         let workItem: DispatchWorkItem
-        let isMPRGoverned: Bool
+        let isProtectedFromDuplicateCancellation: Bool
     }
 
     private var relays: [String: Entry] = [:]
@@ -19,9 +19,12 @@ struct BLEScheduledRelayStore {
     mutating func schedule(
         _ workItem: DispatchWorkItem,
         messageID: String,
-        isMPRGoverned: Bool = false
+        isProtectedFromDuplicateCancellation: Bool = false
     ) {
-        relays[messageID] = Entry(workItem: workItem, isMPRGoverned: isMPRGoverned)
+        relays[messageID] = Entry(
+            workItem: workItem,
+            isProtectedFromDuplicateCancellation: isProtectedFromDuplicateCancellation
+        )
     }
 
     @discardableResult
@@ -41,11 +44,11 @@ struct BLEScheduledRelayStore {
 
     /// Cancels a scheduled relay on duplicate arrival only when it is an
     /// opportunistic flood relay. MPR-elected hubs are responsible for covering
-    /// their own `N2(P)` slice and must not cancel upon hearing another hub's
-    /// transmission.
+    /// their own `N2(P)` slice, and conservative-flood packets always relay, so
+    /// neither may be cancelled upon hearing a duplicate transmission.
     @discardableResult
-    mutating func cancelIfNotMPRGoverned(messageID: String) -> Bool {
-        guard let entry = relays[messageID], !entry.isMPRGoverned else {
+    mutating func cancelIfDuplicateCancellable(messageID: String) -> Bool {
+        guard let entry = relays[messageID], !entry.isProtectedFromDuplicateCancellation else {
             return false
         }
         relays.removeValue(forKey: messageID)

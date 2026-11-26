@@ -181,13 +181,29 @@ struct BLERelayLifecycleStoreTests {
         let t0 = Date(timeIntervalSince1970: 1_000)
         let packet = makePacket(payload: "refresh-bound")
 
-        // Refresh the same suppressed entry far more than maxCount times within TTL.
+        // Refresh the same suppressed entry with advancing timestamps far more
+        // than maxCount times within TTL.
         for i in 0..<100 {
             store.markSuppressed(
                 messageID: "m1",
                 packet: packet,
                 isAuthenticated: true,
                 now: t0.addingTimeInterval(Double(i) * 0.1)
+            )
+        }
+
+        #expect(store.count == 1)
+        #expect(store.orderLogCount <= store.maxCount * 2)
+
+        // Repeat with a fixed timestamp (tied timestamps must not accumulate
+        // duplicate order records across compaction passes).
+        let fixedNow = t0.addingTimeInterval(20)
+        for _ in 0..<100 {
+            store.markSuppressed(
+                messageID: "m1",
+                packet: packet,
+                isAuthenticated: true,
+                now: fixedNow
             )
         }
 

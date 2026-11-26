@@ -2351,12 +2351,19 @@ final class BLEService: NSObject {
         guard !eligible.isEmpty else { return false }
 
         let accept = { [self] in
-            if peripheralManager?.updateValue(data, for: characteristic, onSubscribedCentrals: eligible) == true {
+            // Re-verify physical subscription state atomically on bleQueue so a
+            // central that unsubscribed after the planning snapshot cannot be
+            // admitted to the notification queue and falsely report delivery.
+            guard self.characteristic != nil else { return false }
+            let liveCentralIDs = Set(linkStateStore.subscribedCentrals.map { $0.identifier.uuidString })
+            let liveEligible = eligible.filter { liveCentralIDs.contains($0.identifier.uuidString) }
+            guard !liveEligible.isEmpty else { return false }
+            if peripheralManager?.updateValue(data, for: characteristic, onSubscribedCentrals: liveEligible) == true {
                 return true
             }
             return enqueuePendingNotificationIfAccepted(
                 data: data,
-                centrals: eligible,
+                centrals: liveEligible,
                 context: context
             )
         }
@@ -2590,7 +2597,12 @@ final class BLEService: NSObject {
         }
         #if DEBUG
         if usesVirtualCentrals && requireDirectPeerLink && !requireNoiseAuthenticatedPeerLink {
-            return !plan.selectedLinks.centralIDs.isEmpty
+            let liveVirtualIDs = Set(_test_virtualCentralIDs?() ?? [])
+            return plan.selectedLinks.centralIDs.contains { id in
+                guard liveVirtualIDs.contains(id) else { return false }
+                let limit = _test_virtualCentralMTU?(id) ?? bleMaxMTU
+                return data.count <= limit
+            }
         }
         #endif
         if requireDirectPeerLink || requireNoiseAuthenticatedPeerLink { return acceptedByPhysicalLink }
@@ -3338,6 +3350,14 @@ extension BLEService {
     /// deterministic settling fence for simulated-mesh pumping.
     func _test_fenceEngine() {
         onEngine {}
+    }
+
+    /// Runs `performCleanup()` and fences the engine queue so tests can
+    /// deterministically verify maintenance pruning behavior against injected
+    /// monotonic clocks.
+    func _test_performCleanup() {
+        performCleanup()
+        _test_fenceEngine()
     }
 
     /// Deterministically awaits every `notifyUI` / `emitTransportEvent`
@@ -4315,8 +4335,11 @@ extension BLEService {
         }
 
         let physical = readLinkState { store -> (peripheralIDs: [String], centralIDs: [String]) in
+            // Include every connected peripheral — even before characteristic
+            // discovery completes — because discovery can finish before a
+            // scheduled relay fires and that link is not yet verified/bound.
             let peripheralIDs = store.peripheralStates
-                .filter { $0.isConnected && $0.characteristic != nil }
+                .filter(\.isConnected)
                 .map { $0.peripheral.identifier.uuidString }
             let centralIDs = self.characteristic == nil
                 ? []
@@ -6370,7 +6393,7 @@ extension BLEService {
             // a prior verified direct announce supplies `previousHopPeerID`
             // before verification; newly bound links are promoted in
             // `markVerifiedDirectLink` once the announce signature verifies.
-            if existingBoundPeer == nil {
+            if existingBoundPeer == nil || existingBoundPeer == claimedSenderID {
                 switch link {
                 case .peripheral(let peripheralUUID):
                     bindPeripheralLink(peripheralUUID, to: claimedSenderID)
@@ -6378,16 +6401,9 @@ extension BLEService {
                     linkBindings.bindCentral(centralUUID, to: claimedSenderID)
                 }
                 refreshLocalTopology()
-                previousHopPeerID = nil
-            } else if existingBoundPeer == claimedSenderID {
-                switch link {
-                case .peripheral(let peripheralUUID):
-                    bindPeripheralLink(peripheralUUID, to: claimedSenderID)
-                case .central(let centralUUID):
-                    linkBindings.bindCentral(centralUUID, to: claimedSenderID)
-                }
-                refreshLocalTopology()
-                previousHopPeerID = verifiedDirectLinks.contains(link) ? claimedSenderID : nil
+                previousHopPeerID = (existingBoundPeer == claimedSenderID && verifiedDirectLinks.contains(link))
+                    ? claimedSenderID
+                    : nil
             } else {
                 // Direct announce claiming a different ID on a bound link:
                 // leave previous hop unknown until verified rebind runs.
@@ -6638,7 +6654,7 @@ extension BLEService {
         let routePlan = forwardAlongRouteIfNeeded(packet, ingressRecord: currentIngressRecord)
         if routePlan.shouldSuppressFloodRelay {
             if routePlan.forwardPacket != nil {
-                relayLifecycle.markRelayed(messageID: messageID)
+                relayLifecycle.markRelayed(messageID: messageID, now: currentTopologyDate())
             }
             return
         }
@@ -6683,7 +6699,7 @@ extension BLEService {
 
         let connectedCount = peerRegistry.connectedCount
         if BLEReceivePipeline.shouldCancelScheduledRelayForDuplicate(connectedPeerCount: connectedCount) {
-            scheduledRelays.cancelIfNotMPRGoverned(messageID: messageID)
+            scheduledRelays.cancelIfDuplicateCancellable(messageID: messageID)
         }
 
         return true
@@ -6855,7 +6871,7 @@ extension BLEService {
         scheduledRelays.schedule(
             work,
             messageID: messageID,
-            isMPRGoverned: broadcastDecision.isMPRGoverned
+            isProtectedFromDuplicateCancellation: broadcastDecision.isProtectedFromDuplicateCancellation
         )
         engineScheduler.schedule(after: Double(decision.delayMs) / 1_000, execute: work)
     }
@@ -7952,20 +7968,18 @@ extension BLEService {
         let timeoutCutoff = now.addingTimeInterval(-TransportConfig.bleConnectTimeoutBackoffWindowSeconds)
         radio.pruneConnectionTimeouts(before: timeoutCutoff)
 
-        // Clean up stale scheduled relays and expired relay lifecycle state
+        // Clean up stale scheduled relays, expired relay lifecycle state,
+        // ingress link records (all using the monotonic topology clock), and
+        // expired directed spooled items.
         messageQueue.async { [weak self] in
             guard let self = self else { return }
+            let topologyNow = self.currentTopologyDate()
             // Nothing to compare times to; just cap the size defensively
             self.scheduledRelays.removeAllIfOverCapacity(512)
-            self.relayLifecycle.prune(now: now)
-        }
-
-        // Clean ingress link records older than configured seconds
-        messageQueue.async { [weak self] in
-            guard let self = self else { return }
-            let cutoff = now.addingTimeInterval(-TransportConfig.bleIngressRecordLifetimeSeconds)
+            self.relayLifecycle.prune(now: topologyNow)
+            let ingressCutoff = topologyNow.addingTimeInterval(-TransportConfig.bleIngressRecordLifetimeSeconds)
             if !self.ingressLinks.isEmpty {
-                self.ingressLinks.prune(before: cutoff)
+                self.ingressLinks.prune(before: ingressCutoff)
             }
             // Clean expired directed spooled items
             self.pendingDirectedRelays.pruneExpired(

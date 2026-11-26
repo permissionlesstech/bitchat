@@ -225,8 +225,11 @@ struct BLERelayLifecycleStore {
     }
 
     private mutating func put(key: String, entry: Entry) {
+        let previousUpdatedAt = entries[key]?.updatedAt
         entries[key] = entry
-        order.append((key: key, updatedAt: entry.updatedAt))
+        if previousUpdatedAt != entry.updatedAt {
+            order.append((key: key, updatedAt: entry.updatedAt))
+        }
         while entries.count > maxCount && head < order.count {
             let victim = order[head]
             head += 1
@@ -244,12 +247,17 @@ struct BLERelayLifecycleStore {
         }
         // Repeated refreshes of live entries inside the TTL append stale order
         // records without growing `entries.count`; compact once stale records
-        // exceed 2x `maxCount` so memory stays strictly O(maxCount).
+        // exceed 2x `maxCount` and deduplicate tied timestamps so memory stays
+        // strictly O(maxCount).
         if order.count - head > maxCount * 2 {
             var compacted: [(key: String, updatedAt: Date)] = []
             compacted.reserveCapacity(entries.count)
+            var seenKeys = Set<String>()
+            seenKeys.reserveCapacity(entries.count)
             for item in order[head...] where entries[item.key]?.updatedAt == item.updatedAt {
-                compacted.append(item)
+                if seenKeys.insert(item.key).inserted {
+                    compacted.append(item)
+                }
             }
             order = compacted
             head = 0

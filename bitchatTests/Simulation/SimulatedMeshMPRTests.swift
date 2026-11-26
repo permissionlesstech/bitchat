@@ -7,6 +7,7 @@
 //
 
 import BitFoundation
+import CryptoKit
 import Foundation
 import Testing
 @testable import bitchat
@@ -697,7 +698,7 @@ struct SimulatedMeshMPRTests {
     func encryptedRelayFragmentationPreservesRelayContextAcrossDisconnectForBothRoles() {
         for role in ["peripheral", "central"] {
             let mesh = SimulatedMesh(usePlannedLinkDelivery: true)
-            let prevHop = mesh.addNode(nickname: "prev")
+            _ = mesh.addNode(nickname: "prev")
             let relay = mesh.addNode(nickname: "relay")
             let recipient = mesh.addNode(nickname: "dest")
             let other = mesh.addNode(nickname: "other")
@@ -1125,7 +1126,7 @@ struct SimulatedMeshMPRTests {
         // Part 1: Physical teardown BEFORE scheduling on fragmented encrypted relay.
         do {
             let mesh = SimulatedMesh(usePlannedLinkDelivery: true)
-            let prevHop = mesh.addNode(nickname: "prev")     // 0
+            _ = mesh.addNode(nickname: "prev")     // 0
             let relay = mesh.addNode(nickname: "relay")      // 1
             let recipient = mesh.addNode(nickname: "dest")   // 2
             let other = mesh.addNode(nickname: "other")      // 3
@@ -1282,8 +1283,225 @@ struct SimulatedMeshMPRTests {
             .filter { $0.to == 3 && $0.packet.type == MessageType.fragment.rawValue }
         #expect(bFragsToC.count > 1)
         #expect(bFragsToC.allSatisfy { $0.packet.recipientID == d.service.myPeerID.routingData })
+        #expect(bFragsToC.allSatisfy { ($0.packet.toBinaryData(padding: false)?.count ?? Int.max) <= 110 })
         #expect(cFragsToD.count == bFragsToC.count)
         #expect(await captureD.drainedCount(content: longBody, on: d.service) == 1)
+    }
+
+    /// Regression for R4-SPEC-02: when the routed next hop's MTU is too small
+    /// to carry even a 1-byte v2 routed fragment (`50 < 62` bytes for a 2-hop
+    /// route), strict routed delivery must fail cleanly and fall back to
+    /// conservative broadcast/flood over an alternate path instead of silently
+    /// dropping oversized frames.
+    @Test
+    func routedNextHopMTUTooSmallForRoutedFragmentFallsBackToConservativeFlood() async {
+        let mesh = SimulatedMesh(usePlannedLinkDelivery: true)
+        let a = mesh.addNode(nickname: "a") // 0
+        let b = mesh.addNode(nickname: "b") // 1
+        let c = mesh.addNode(nickname: "c") // 2 (routed next hop, tiny MTU)
+        let e = mesh.addNode(nickname: "e") // 3 (alternate relay)
+        let d = mesh.addNode(nickname: "d") // 4 (final destination)
+
+        mesh.connect(0, 1)
+        mesh.connect(1, 2)
+        mesh.connect(2, 4)
+        mesh.connect(1, 3)
+        mesh.connect(3, 4)
+        settleDiscovery(mesh)
+
+        // B -> C MTU (50 bytes) is smaller than the 62-byte 2-hop v2 routed
+        // fragment overhead, so routed fragmentation cannot fit on B -> C.
+        let cLinkOnB = mesh.linkUUID(from: 2, at: 1)
+        b.service._test_virtualCentralMTU = { uuid in
+            uuid == cLinkOnB ? 50 : nil
+        }
+
+        let captureD = MPRPublicMessageCapture()
+        d.service.eventDelegate = captureD
+
+        let body = String(repeating: "F", count: 140)
+        let routedPacket = a.service.signPacketForBroadcast(BitchatPacket(
+            type: MessageType.message.rawValue,
+            senderID: a.service.myPeerID.routingData ?? Data(),
+            recipientID: d.service.myPeerID.routingData,
+            timestamp: UInt64(Date().timeIntervalSince1970 * 1000),
+            payload: Data(body.utf8),
+            signature: nil,
+            ttl: TransportConfig.messageTTLDefault,
+            version: 2,
+            route: [b.service.myPeerID.routingData, c.service.myPeerID.routingData].compactMap { $0 }
+        ))
+
+        let aLinkOnB = BLEIngressLinkID.central(mesh.linkUUID(from: 0, at: 1))
+        let bPlannedBefore = mesh.plannedTransmissions(from: 1).count
+
+        b.service._test_ingestFrame(routedPacket, link: aLinkOnB)
+        mesh.pump()
+        mesh.advanceTime(by: 2)
+        mesh.advanceTime(by: 2)
+
+        // B must not emit oversized routed frames onto C; it must fall back to
+        // conservative flooding via E so D still receives the message.
+        let bSent = mesh.plannedTransmissions(from: 1).dropFirst(bPlannedBefore)
+        #expect(bSent.allSatisfy { $0.to != 2 })
+        #expect(bSent.contains { $0.to == 3 })
+        #expect(await captureD.drainedCount(content: body, on: d.service) == 1)
+        _ = e
+    }
+
+    /// Regression for R4-STD-02: conservative-flood classes (such as an urgent
+    /// `BOARD_POST`) must always relay and must not have their pending
+    /// scheduled relay cancelled at `degree > 2` if a duplicate copy reassembles
+    /// with `ttl == 0` before the relay timer fires.
+    @Test
+    func conservativeUrgentBoardPostSurvivesReassembledTTLZeroDuplicateBeforeRelayFires() throws {
+        let mesh = SimulatedMesh(usePlannedLinkDelivery: true)
+        let sender = mesh.addNode(nickname: "sender")         // 0
+        let relay = mesh.addNode(nickname: "relay")           // 1 (degree = 3 > 2)
+        let downstream = mesh.addNode(nickname: "downstream") // 2
+        let other = mesh.addNode(nickname: "other")           // 3
+
+        mesh.connect(0, 1)
+        mesh.connect(1, 2)
+        mesh.connect(1, 3)
+        settleDiscovery(mesh)
+
+        let nowMs = UInt64(Date().timeIntervalSince1970 * 1000)
+        let author = Curve25519.Signing.PrivateKey()
+        let postID = Data(repeating: 0x55, count: 16)
+        let content = String(repeating: "URGENT ", count: 30)
+        let signingBytes = BoardPostPacket.signingBytes(
+            postID: postID,
+            geohash: "9q8yy",
+            content: content,
+            authorSigningKey: author.publicKey.rawRepresentation,
+            authorNickname: "sender",
+            createdAt: nowMs,
+            expiresAt: nowMs + 60_000,
+            flags: BoardPostPacket.urgentFlag
+        )
+        let post = BoardPostPacket(
+            postID: postID,
+            geohash: "9q8yy",
+            content: content,
+            authorSigningKey: author.publicKey.rawRepresentation,
+            authorNickname: "sender",
+            createdAt: nowMs,
+            expiresAt: nowMs + 60_000,
+            flags: BoardPostPacket.urgentFlag,
+            signature: try author.signature(for: signingBytes)
+        )
+        let urgentPacket = BitchatPacket(
+            type: MessageType.boardPost.rawValue,
+            senderID: sender.service.myPeerID.routingData ?? Data(),
+            recipientID: nil,
+            timestamp: nowMs,
+            payload: BoardWire.post(post).encode(),
+            signature: nil,
+            ttl: TransportConfig.messageTTLDefault
+        )
+
+        let senderLinkOnRelay = BLEIngressLinkID.central(mesh.linkUUID(from: 0, at: 1))
+        let otherLinkOnRelay = BLEIngressLinkID.central(mesh.linkUUID(from: 3, at: 1))
+        let relayPlannedBefore = mesh.plannedTransmissions(from: 1).count
+
+        // 1. First arrival schedules a conservative relay on `relay` (timer not yet fired).
+        relay.service._test_ingestFrame(urgentPacket, link: senderLinkOnRelay)
+        relay.service._test_fenceEngine()
+
+        // 2. Before advancing time, complete a duplicate fragment train of the
+        //    exact same urgent post on `otherLinkOnRelay`; reassembly sets
+        //    `ttl = 0` and enters `dropDuplicatePacketIfNeeded` at degree 3.
+        let fragPlan = try #require(BLEOutboundFragmentPlanner.makePlan(
+            for: BLEOutboundFragmentTransferRequest(
+                packet: urgentPacket,
+                pad: false,
+                maxChunk: 120,
+                directedPeer: nil,
+                transferId: nil
+            ),
+            defaultChunkSize: 256,
+            bleMaxMTU: 512,
+            fragmentID: Data(repeating: 0x77, count: 8)
+        ))
+        #expect(fragPlan.fragmentPackets.count > 1)
+        for frag in fragPlan.fragmentPackets {
+            relay.service._test_ingestFrame(frag, link: otherLinkOnRelay)
+        }
+        relay.service._test_fenceEngine()
+
+        // 3. Advance time so the scheduled conservative relay fires; it must
+        //    still transmit the urgent BOARD_POST to `downstream`.
+        mesh.advanceTime(by: 2)
+
+        let relayedToDownstream = mesh.plannedTransmissions(from: 1)
+            .dropFirst(relayPlannedBefore)
+            .filter { $0.to == 2 && $0.packet.type == MessageType.boardPost.rawValue }
+        #expect(relayedToDownstream.count == 1)
+        _ = downstream
+        _ = other
+    }
+
+    /// Regression for R4-BUG-01: maintenance cleanup (`performCleanup`) must
+    /// prune `relayLifecycle` and `ingressLinks` against the monotonic topology
+    /// clock rather than wall-clock `Date()`, so a forward wall-clock jump does
+    /// not wipe active suppression state before its monotonic TTL expires.
+    @Test
+    func maintenanceCleanupUsesMonotonicClockAndPreservesSuppressedRelayState() async {
+        let (mesh, idx) = makeDualHopLifecycleMesh()
+        let p1 = mesh.nodes[idx.p1]
+        let p2 = mesh.nodes[idx.p2]
+        let m = mesh.nodes[idx.m]
+        let leaf = mesh.nodes[idx.leaf]
+
+        // Pin M's monotonic clock 10 hours behind wall-clock `Date()` so a
+        // wall-clock maintenance prune would wipe both `relayLifecycle` (60s)
+        // and `ingressLinks` (3s).
+        let monotonicBase = Date().addingTimeInterval(-36_000)
+        m.service._test_now = { monotonicBase }
+        settleDiscovery(mesh)
+
+        let captureLeaf = MPRPublicMessageCapture()
+        leaf.service.eventDelegate = captureLeaf
+
+        let content = "r4-monotonic-cleanup-check"
+        // Author the packet at P2 (not connected to `leaf`) so M's reopened
+        // relay from electing hop P2 is NOT pruned by origin-neighbor exclusion.
+        let signedPacket = p2.service.signPacketForBroadcast(BitchatPacket(
+            type: MessageType.message.rawValue,
+            senderID: p2.service.myPeerID.routingData ?? Data(),
+            recipientID: nil,
+            timestamp: UInt64(Date().timeIntervalSince1970 * 1000),
+            payload: Data(content.utf8),
+            signature: nil,
+            ttl: TransportConfig.messageTTLDefault
+        ))
+
+        let p1LinkOnM = BLEIngressLinkID.central(mesh.linkUUID(from: idx.p1, at: idx.m))
+        let p2LinkOnM = BLEIngressLinkID.central(mesh.linkUUID(from: idx.p2, at: idx.m))
+        let mBefore = countOutboundPublicMessages(mesh, nodeIndex: idx.m)
+
+        // 1. P1 -> M suppresses the broadcast at `monotonicBase` (M not in MPR(P1)).
+        var fromP1 = signedPacket
+        fromP1.ttl = signedPacket.ttl - 1
+        m.service._test_ingestFrame(fromP1, link: p1LinkOnM)
+        mesh.pump()
+        mesh.advanceTime(by: 2)
+        #expect(countOutboundPublicMessages(mesh, nodeIndex: idx.m) == mBefore)
+
+        // 2. Run maintenance cleanup while wall-clock `Date()` is 10 hours
+        //    ahead of `monotonicBase`: suppressed state must survive.
+        m.service._test_performCleanup()
+
+        // 3. Matching duplicate from electing hop P2 must still reopen and
+        //    relay once to `leaf`.
+        m.service._test_ingestFrame(signedPacket, link: p2LinkOnM)
+        mesh.pump()
+        mesh.advanceTime(by: 2)
+
+        #expect(countOutboundPublicMessages(mesh, nodeIndex: idx.m) == mBefore + 1)
+        #expect(await captureLeaf.drainedCount(content: content, on: leaf.service) == 1)
+        _ = p1
     }
 
     // MARK: - Helpers

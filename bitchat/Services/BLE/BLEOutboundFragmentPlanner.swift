@@ -34,12 +34,14 @@ enum BLEOutboundFragmentPlanner {
             return nil
         }
 
-        let sizing = sizingPolicy(
+        guard let sizing = sizingPolicy(
             for: request.packet,
             requestedMaxChunk: request.maxChunk,
             defaultChunkSize: defaultChunkSize,
             bleMaxMTU: bleMaxMTU
-        )
+        ) else {
+            return nil
+        }
 
         let chunks = stride(from: 0, to: fullData.count, by: sizing.chunkSize).map { offset in
             Data(fullData[offset..<min(offset + sizing.chunkSize, fullData.count)])
@@ -90,7 +92,7 @@ enum BLEOutboundFragmentPlanner {
         requestedMaxChunk: Int?,
         defaultChunkSize: Int,
         bleMaxMTU: Int
-    ) -> (fragmentVersion: UInt8, chunkSize: Int) {
+    ) -> (fragmentVersion: UInt8, chunkSize: Int)? {
         var fragmentVersion: UInt8 = 1
         var calculatedChunk = defaultChunkSize
 
@@ -99,11 +101,25 @@ enum BLEOutboundFragmentPlanner {
             let routeSize = 1 + (route.count * 8)
             let overhead = 16 + 8 + 8 + routeSize + 13 + 16
             calculatedChunk = max(minimumChunkSize, bleMaxMTU - overhead)
+            if let requestedMaxChunk {
+                guard requestedMaxChunk > 0 else { return nil }
+                // Honor the caller's link-MTU-derived routed chunk size without
+                // clamping upward past the physical link's payload budget.
+                return (fragmentVersion: fragmentVersion, chunkSize: requestedMaxChunk)
+            }
+        }
+
+        if let requestedMaxChunk {
+            guard requestedMaxChunk > 0 else { return nil }
+            return (
+                fragmentVersion: fragmentVersion,
+                chunkSize: max(minimumChunkSize, requestedMaxChunk)
+            )
         }
 
         return (
             fragmentVersion: fragmentVersion,
-            chunkSize: max(minimumChunkSize, requestedMaxChunk ?? calculatedChunk)
+            chunkSize: max(minimumChunkSize, calculatedChunk)
         )
     }
 

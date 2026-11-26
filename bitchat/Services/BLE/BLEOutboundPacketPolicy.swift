@@ -51,6 +51,22 @@ enum BLEOutboundPacketPolicy {
         max(64, limit - fragmentFrameOverhead)
     }
 
+    /// Computes the maximum fragment data chunk that fits inside `linkLimit`,
+    /// accounting for v2 framing and source-route hops when `packet.route` is
+    /// non-empty. Returns `nil` when `linkLimit` is too small to carry even a
+    /// 1-byte routed fragment.
+    static func fragmentChunkSize(for packet: BitchatPacket, linkLimit limit: Int) -> Int? {
+        if let route = packet.route, !route.isEmpty {
+            let routeBytes = 1 + (route.count * BinaryProtocol.senderIDSize)
+            // v2 header (16) + sender (8) + recipient (8) + route + fragment payload header (13)
+            let routedOverhead = 16 + BinaryProtocol.senderIDSize + BinaryProtocol.recipientIDSize + routeBytes + 13
+            let available = limit - routedOverhead
+            guard available > 0 else { return nil }
+            return available
+        }
+        return fragmentChunkSize(forLinkLimit: limit)
+    }
+
     private static func fragmentTotalCount(from payload: Data) -> Int {
         guard payload.count >= 12 else { return Int(UInt16.max) }
         let totalHigh = Int(payload[10])

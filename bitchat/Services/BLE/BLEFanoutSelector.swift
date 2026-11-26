@@ -17,9 +17,7 @@ enum BLEFanoutSelector {
         preferredPeripheralPerPeer: [PeerID: String] = [:],
         collapseDuplicatePeerLinks: Bool = true,
         directedPeerHint: PeerID?,
-        requireDirectPeerLink: Bool = false,
-        packetType _: UInt8,
-        messageID _: String
+        requireDirectPeerLink: Bool = false
     ) -> BLEFanoutSelection {
         let rawAllowed = allowedLinks(
             peripheralIDs: peripheralIDs,

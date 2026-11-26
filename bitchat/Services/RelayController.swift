@@ -29,7 +29,28 @@ struct BroadcastRelayDecision: Equatable {
     let shouldRelay: Bool
     let skipNeighborPruning: Bool
     let isMPRGoverned: Bool
+    let isConservative: Bool
     let reason: String
+
+    /// Both MPR-elected hubs and conservative-flood packets must not have
+    /// their scheduled relays cancelled by duplicate arrival.
+    var isProtectedFromDuplicateCancellation: Bool {
+        isMPRGoverned || isConservative
+    }
+
+    init(
+        shouldRelay: Bool,
+        skipNeighborPruning: Bool,
+        isMPRGoverned: Bool,
+        isConservative: Bool = false,
+        reason: String
+    ) {
+        self.shouldRelay = shouldRelay
+        self.skipNeighborPruning = skipNeighborPruning
+        self.isMPRGoverned = isMPRGoverned
+        self.isConservative = isConservative
+        self.reason = reason
+    }
 }
 
 // RelayController centralizes flood control and deterministic MPR policy for relays.
@@ -250,6 +271,7 @@ struct RelayController {
                 shouldRelay: true,
                 skipNeighborPruning: true,
                 isMPRGoverned: false,
+                isConservative: true,
                 reason: sourceRouteFallback ? "source-route-fallback" : "conservative-policy"
             )
         }

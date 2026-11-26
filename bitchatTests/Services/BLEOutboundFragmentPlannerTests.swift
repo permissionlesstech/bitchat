@@ -126,6 +126,26 @@ struct BLEOutboundFragmentPlannerTests {
         #expect(plan.fragmentPackets.count > 1)
         #expect(plan.fragmentPackets.allSatisfy { $0.recipientID == finalDest.routingData })
         #expect(plan.fragmentPackets.allSatisfy { $0.route == route })
+
+        // A tight 110-byte link yields a 48-byte routed chunk budget; planner
+        // must not clamp upward past 48 bytes and every encoded fragment must
+        // fit within 110 bytes on the wire.
+        let tightBudget = try #require(BLEOutboundPacketPolicy.fragmentChunkSize(for: routedPacket, linkLimit: 110))
+        #expect(tightBudget == 48)
+        let tightPlan = try #require(BLEOutboundFragmentPlanner.makePlan(
+            for: BLEOutboundFragmentTransferRequest(
+                packet: routedPacket,
+                pad: false,
+                maxChunk: tightBudget,
+                directedPeer: nextHop,
+                transferId: nil
+            ),
+            defaultChunkSize: 256,
+            bleMaxMTU: 512,
+            fragmentID: Data(repeating: 0xD5, count: 8)
+        ))
+        #expect(tightPlan.chunkSize == 48)
+        #expect(tightPlan.fragmentPackets.allSatisfy { ($0.toBinaryData(padding: false)?.count ?? Int.max) <= 110 })
     }
 
     @Test("invalid fragment IDs do not produce a plan")

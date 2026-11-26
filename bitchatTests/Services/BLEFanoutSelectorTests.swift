@@ -10,9 +10,7 @@ struct BLEFanoutSelectorTests {
             peripheralIDs: ["p1", "p2"],
             centralIDs: ["c1", "c2"],
             ingressLink: .central("c1"),
-            directedPeerHint: PeerID(str: "1122334455667788"),
-            packetType: MessageType.noiseEncrypted.rawValue,
-            messageID: "message-1"
+            directedPeerHint: PeerID(str: "1122334455667788")
         )
 
         #expect(selection.peripheralIDs == Set(["p1", "p2"]))
@@ -35,9 +33,7 @@ struct BLEFanoutSelectorTests {
                 "target-c": target,
                 "bystander-c": bystander
             ],
-            directedPeerHint: target,
-            packetType: MessageType.courierEnvelope.rawValue,
-            messageID: "message-1"
+            directedPeerHint: target
         )
 
         #expect(selection.peripheralIDs == Set(["target-p"]))
@@ -59,9 +55,7 @@ struct BLEFanoutSelectorTests {
                 "target-c": target,
                 "bystander-c": bystander
             ],
-            directedPeerHint: target,
-            packetType: MessageType.courierEnvelope.rawValue,
-            messageID: "message-1"
+            directedPeerHint: target
         )
 
         #expect(selection.peripheralIDs.isEmpty)
@@ -83,9 +77,7 @@ struct BLEFanoutSelectorTests {
                 "target-c": target,
                 "bystander-c": bystander
             ],
-            directedPeerHint: target,
-            packetType: MessageType.courierEnvelope.rawValue,
-            messageID: "message-1"
+            directedPeerHint: target
         )
 
         #expect(selection.peripheralIDs.isEmpty)
@@ -99,9 +91,7 @@ struct BLEFanoutSelectorTests {
             centralIDs: ["c1", "c2"],
             ingressLink: .central("c1"),
             excludedLinks: [.peripheral("p2"), .central("c2")],
-            directedPeerHint: PeerID(str: "1122334455667788"),
-            packetType: MessageType.noiseEncrypted.rawValue,
-            messageID: "message-1"
+            directedPeerHint: PeerID(str: "1122334455667788")
         )
 
         #expect(selection.peripheralIDs == Set(["p1"]))
@@ -114,9 +104,7 @@ struct BLEFanoutSelectorTests {
             peripheralIDs: ["p1", "p2", "p3"],
             centralIDs: ["c1", "c2", "c3"],
             ingressLink: .peripheral("p2"),
-            directedPeerHint: nil,
-            packetType: MessageType.requestSync.rawValue,
-            messageID: "message-1"
+            directedPeerHint: nil
         )
 
         #expect(selection.peripheralIDs == Set(["p1", "p3"]))
@@ -132,9 +120,7 @@ struct BLEFanoutSelectorTests {
             peripheralIDs: peripherals,
             centralIDs: centrals,
             ingressLink: .peripheral("p4"),
-            directedPeerHint: nil,
-            packetType: MessageType.message.rawValue,
-            messageID: "message-1"
+            directedPeerHint: nil
         )
 
         #expect(!selection.peripheralIDs.contains("p4"))
@@ -154,9 +140,7 @@ struct BLEFanoutSelectorTests {
             ingressLink: nil,
             peripheralPeerBindings: ["p1": peer],
             centralPeerBindings: ["c1": peer],
-            directedPeerHint: nil,
-            packetType: MessageType.fragment.rawValue,
-            messageID: "message-1"
+            directedPeerHint: nil
         )
 
         #expect(selection.peripheralIDs == Set(["p1"]))
@@ -174,9 +158,7 @@ struct BLEFanoutSelectorTests {
             ingressLink: nil,
             peripheralPeerBindings: ["p1": peer],
             centralPeerBindings: ["c-bound": peer],
-            directedPeerHint: nil,
-            packetType: MessageType.fragment.rawValue,
-            messageID: "message-1"
+            directedPeerHint: nil
         )
 
         #expect(selection.peripheralIDs == Set(["p1"]))
@@ -200,9 +182,7 @@ struct BLEFanoutSelectorTests {
             ],
             centralPeerBindings: ["c-bound": peer],
             preferredPeripheralPerPeer: [peer: "p-preferred"],
-            directedPeerHint: nil,
-            packetType: MessageType.fragment.rawValue,
-            messageID: "message-1"
+            directedPeerHint: nil
         )
 
         #expect(selection.peripheralIDs == Set(["p-preferred"]))
@@ -221,9 +201,7 @@ struct BLEFanoutSelectorTests {
                 "p-preferred": peer
             ],
             preferredPeripheralPerPeer: [peer: "p-preferred"],
-            directedPeerHint: peer,
-            packetType: MessageType.noiseEncrypted.rawValue,
-            messageID: "message-1"
+            directedPeerHint: peer
         )
 
         #expect(selection.peripheralIDs == Set(["p-preferred"]))
@@ -243,9 +221,7 @@ struct BLEFanoutSelectorTests {
             centralPeerBindings: ["c1": peer],
             preferredPeripheralPerPeer: [peer: "p1"],
             collapseDuplicatePeerLinks: false,
-            directedPeerHint: nil,
-            packetType: MessageType.announce.rawValue,
-            messageID: "message-1"
+            directedPeerHint: nil
         )
 
         #expect(selection.peripheralIDs == Set(["p1", "p2"]))
@@ -258,9 +234,7 @@ struct BLEFanoutSelectorTests {
             peripheralIDs: ["p1", "p2"],
             centralIDs: ["c1", "c2"],
             ingressLink: nil,
-            directedPeerHint: nil,
-            packetType: MessageType.message.rawValue,
-            messageID: "message-1"
+            directedPeerHint: nil
         )
 
         #expect(selection.peripheralIDs == Set(["p1", "p2"]))
