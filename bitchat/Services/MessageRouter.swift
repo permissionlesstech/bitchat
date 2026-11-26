@@ -312,6 +312,7 @@ final class MessageRouter {
                   courierDirectory.isTrustedCourier(courierKey) || snapshot.isVerified else { continue }
 
             let currentDate = now()
+            var depositedAny = false
             for (recipient, queue) in outbox {
                 // Mail *to* this peer flushes directly on connect.
                 guard recipient != peerID,
@@ -323,10 +324,14 @@ final class MessageRouter {
                           currentDate.timeIntervalSince(message.timestamp) <= Self.messageTTLSeconds else { continue }
                     if courierTransport.sendCourierMessage(message.content, messageID: message.messageID, recipientNoiseKey: recipientKey, via: [peerID]) {
                         SecureLogger.debug("📦 Deposit retry: PM \(message.messageID.prefix(8))… handed to \(peerID.id.prefix(8))… for \(recipient.id.prefix(8))…", category: .session)
-                        recordCourierDeposit(messageID: message.messageID, for: recipient, courierKeys: [courierKey])
+                        recordCourierDeposit(messageID: message.messageID, for: recipient, courierKeys: [courierKey], persist: false)
+                        depositedAny = true
                         onMessageCarried?(message.messageID, recipient)
                     }
                 }
+            }
+            if depositedAny {
+                persistOutbox()
             }
             return
         }
@@ -381,13 +386,15 @@ final class MessageRouter {
         }
     }
 
-    private func recordCourierDeposit(messageID: String, for peerID: PeerID, courierKeys: [Data]) {
+    private func recordCourierDeposit(messageID: String, for peerID: PeerID, courierKeys: [Data], persist: Bool = true) {
         metrics?.record(.courierDeposited)
         guard var queue = outbox[peerID],
               let index = queue.firstIndex(where: { $0.messageID == messageID }) else { return }
         queue[index].depositedCourierKeys.formUnion(courierKeys)
         outbox[peerID] = queue
-        persistOutbox()
+        if persist {
+            persistOutbox()
+        }
     }
 
     // MARK: - Outbox Management
@@ -421,13 +428,15 @@ final class MessageRouter {
         }
         secureTransmissions.subtract(matchingSecureTransmissions)
         // The durable snapshot may still be hidden by protected data. Record
-        // the ack even when this cold-load view cannot find the message, then
-        // persist the current view so the store retains a removal tombstone.
-        outboxStore?.recordRemoval(messageID: messageID)
-        if cleared {
-            metrics?.record(.outboxDelivered)
+        // the ack and persist when we cleared an entry OR when deferred disk
+        // state still needs a removal tombstone; otherwise skip redundant I/O.
+        if cleared || (outboxStore?.hasDeferredDiskState ?? false) {
+            outboxStore?.recordRemoval(messageID: messageID)
+            if cleared {
+                metrics?.record(.outboxDelivered)
+            }
+            persistOutbox()
         }
-        persistOutbox()
     }
 
     /// A delivery or read ack authenticated to one account confirms receipt
@@ -449,13 +458,15 @@ final class MessageRouter {
         for peerID in peerIDs {
             secureTransmissions.remove(PeerMessageKey(peerID: peerID, messageID: messageID))
         }
-        // Preserve the scoped ack even when protected data hides the durable
-        // queue during a cold launch.
-        outboxStore?.recordRemoval(messageID: messageID, for: peerIDs)
-        if cleared {
-            metrics?.record(.outboxDelivered)
+        // Preserve the scoped ack when protected data hides the durable queue
+        // during a cold launch, but skip rewriting disk when already cleared.
+        if cleared || (outboxStore?.hasDeferredDiskState ?? false) {
+            outboxStore?.recordRemoval(messageID: messageID, for: peerIDs)
+            if cleared {
+                metrics?.record(.outboxDelivered)
+            }
+            persistOutbox()
         }
-        persistOutbox()
         return cleared
     }
 
@@ -692,7 +703,12 @@ final class MessageRouter {
     }
 
     func flushOutbox(for peerID: PeerID) {
-        guard let queued = outbox[peerID], !queued.isEmpty else { return }
+        _ = flushOutbox(for: peerID, persist: true)
+    }
+
+    @discardableResult
+    private func flushOutbox(for peerID: PeerID, persist: Bool) -> Bool {
+        guard let queued = outbox[peerID], !queued.isEmpty else { return false }
         SecureLogger.debug("Flushing outbox for \(peerID.id.prefix(8))… count=\(queued.count)", category: .session)
 
         let now = now()
@@ -772,13 +788,22 @@ final class MessageRouter {
             }
         }
 
-        if outboxChanged {
+        if persist && outboxChanged {
             persistOutbox()
         }
+        return outboxChanged
     }
 
     func flushAllOutbox() {
-        for key in Array(outbox.keys) { flushOutbox(for: key) }
+        var anyChanged = false
+        for key in Array(outbox.keys) {
+            if flushOutbox(for: key, persist: false) {
+                anyChanged = true
+            }
+        }
+        if anyChanged {
+            persistOutbox()
+        }
     }
 
     /// Periodically clean up expired messages from all outboxes

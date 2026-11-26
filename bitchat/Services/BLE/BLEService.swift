@@ -316,6 +316,10 @@ final class BLEService: NSObject {
     // 5. Fragment Reassembly (necessary for messages > MTU)
     private var fragmentAssemblyBuffer = BLEFragmentAssemblyBuffer()
     private var outboundFragmentTransfers = BLEOutboundFragmentTransferScheduler()
+    /// bleQueue-confined tokens holding scanning paused while outbound
+    /// fragment trains are active, preventing overlapping transfers from
+    /// prematurely restarting scanning.
+    private var fragmentScanPauseTokens = Set<UUID>()
     private lazy var privateMediaTransferAdmissions = BLEPrivateMediaTransferAdmissionRegistry { [weak self] transferId in
         self?.handlePrivateMediaAdmissionExpiry(transferId)
     }
@@ -2193,9 +2197,10 @@ final class BLEService: NSObject {
 
         let outboundPriority = BLEOutboundPacketPolicy.priority(for: packet, data: data)
 
-        // Per-link limits for the specific peer
-        let directPeripheralState = snapshotDirectPeripheralState(for: recipientPeerID)
-        let recipientCentral = snapshotSubscribedCentrals().central(for: recipientPeerID)
+        // Per-link limits for the specific peer (single bleQueue.sync hop)
+        let directLinks = snapshotDirectLinks(for: recipientPeerID)
+        let directPeripheralState = directLinks.peripheralState
+        let recipientCentral = directLinks.central
 
         if let peripheralMaxLen = directPeripheralState?.peripheral.maximumWriteValueLength(for: .withoutResponse),
            data.count > peripheralMaxLen {
@@ -2357,13 +2362,14 @@ final class BLEService: NSObject {
     ) -> Bool {
         guard !isPanicSuspended else { return false }
 
-        let states = snapshotPeripheralStates()
+        let allLinks = snapshotAllLinks()
+        let states = allLinks.peripheralStates
         // A link without a discovered characteristic cannot be written to
         // (the write loop below skips it); offering it to the planner only
         // wastes fanout slots — and a peer's single collapsed copy would be
         // silently dropped if its bound link is still mid-rediscovery.
         let connectedStates = states.filter { $0.isConnected && $0.characteristic != nil }
-        let centralSnapshot = snapshotSubscribedCentrals()
+        let centralSnapshot = allLinks.centralSnapshot
         let subscribedCentrals = characteristic == nil ? [] : centralSnapshot.centrals
 
         // Fast path when no physical links are active: skip ingress SHA-256,
@@ -3152,21 +3158,6 @@ extension BLEService: BLERadioControllerDelegate {
         return BLEDirectLinkState(
             hasPeripheral: hasPeripheral,
             hasCentral: linkBindings.hasCentral(boundTo: peerID)
-        )
-    }
-
-    /// The peer's preferred peripheral link state, when physically present.
-    /// Engine-confined.
-    func directPeripheralState(for peerID: PeerID) -> BLEPeripheralLinkState? {
-        linkBindings.preferredPeripheralUUID(for: peerID)
-            .flatMap { uuid in readLinkState { $0.state(forPeripheralID: uuid) } }
-    }
-
-    /// Subscribed centrals with their bindings, one view. Engine-confined.
-    func subscribedCentralSnapshot() -> BLESubscribedCentralSnapshot {
-        BLESubscribedCentralSnapshot(
-            centrals: readLinkState(\.subscribedCentrals),
-            peerIDsByCentralUUID: linkBindings.centralPeersByUUID
         )
     }
 }
@@ -4855,14 +4846,17 @@ extension BLEService {
         let store = courierStore
         let policy = courierDepositPolicy
         let metrics = sfMetrics
-        notifyUI {
+        notifyUI { [weak self] in
+            guard let self else { return }
             guard let tier = policy(depositorKey, isVerifiedPeer) else {
                 SecureLogger.debug("📦 Courier deposit from \(peerID.id.prefix(8))… rejected (neither favorite nor verified)", category: .session)
                 return
             }
-            if store.deposit(envelope, from: depositorKey, tier: tier) {
-                SecureLogger.debug("📦 Carrying courier envelope deposited by \(peerID.id.prefix(8))… (\(tier.rawValue))", category: .session)
-                metrics?.record(.courierAccepted)
+            self.messageQueue.async {
+                if store.deposit(envelope, from: depositorKey, tier: tier) {
+                    SecureLogger.debug("📦 Carrying courier envelope deposited by \(peerID.id.prefix(8))… (\(tier.rawValue))", category: .session)
+                    metrics?.record(.courierAccepted)
+                }
             }
         }
     }
@@ -4935,11 +4929,14 @@ extension BLEService {
             }
         }
         let policy = courierDepositPolicy
-        notifyUI {
+        notifyUI { [weak self] in
+            guard let self else { return }
             // Same trust gate as deposits: don't hand mail to a peer who
             // would reject it from us.
             guard policy(noiseKey, isVerifiedPeer) != nil else { return }
-            sendSpray()
+            self.messageQueue.async {
+                sendSpray()
+            }
         }
     }
 
@@ -5180,16 +5177,35 @@ extension BLEService {
         }
     }
 
-    private func snapshotDirectPeripheralState(for peerID: PeerID) -> BLEPeripheralLinkState? {
-        directPeripheralState(for: peerID)
+    /// Snapshots both physical link tables in a single `bleQueue.sync` hop
+    /// alongside the engine's central-UUID bindings. Engine-confined.
+    private func snapshotAllLinks() -> (peripheralStates: [BLEPeripheralLinkState], centralSnapshot: BLESubscribedCentralSnapshot) {
+        let (peripherals, centrals) = readLinkState { ($0.peripheralStates, $0.subscribedCentrals) }
+        return (
+            peripheralStates: peripherals,
+            centralSnapshot: BLESubscribedCentralSnapshot(
+                centrals: centrals,
+                peerIDsByCentralUUID: linkBindings.centralPeersByUUID
+            )
+        )
     }
 
-    private func snapshotPeripheralStates() -> [BLEPeripheralLinkState] {
-        readLinkState(\.peripheralStates)
-    }
-
-    private func snapshotSubscribedCentrals() -> BLESubscribedCentralSnapshot {
-        subscribedCentralSnapshot()
+    /// Snapshots a single peer's preferred peripheral and subscribed central
+    /// in a single `bleQueue.sync` hop. Engine-confined.
+    private func snapshotDirectLinks(for peerID: PeerID) -> (peripheralState: BLEPeripheralLinkState?, central: CBCentral?) {
+        let preferredPeripheralUUID = linkBindings.preferredPeripheralUUID(for: peerID)
+        let centralPeerBindings = linkBindings.centralPeersByUUID
+        let (peripheralState, centrals) = readLinkState { store in
+            (
+                preferredPeripheralUUID.flatMap { store.state(forPeripheralID: $0) },
+                store.subscribedCentrals
+            )
+        }
+        let centralSnapshot = BLESubscribedCentralSnapshot(
+            centrals: centrals,
+            peerIDsByCentralUUID: centralPeerBindings
+        )
+        return (peripheralState, centralSnapshot.central(for: peerID))
     }
     
     // MARK: Helpers: IDs, selection, and write backpressure
@@ -5664,15 +5680,22 @@ extension BLEService {
         }
 
         // Lightweight pacing to reduce floods and allow BLE buffers to drain
-        // Also briefly pause scanning during long fragment trains to save battery
+        // Also pause scanning during long fragment trains to save battery and
+        // keep it paused until overlapping transfers finish.
         if plan.shouldPauseScanning {
+            let pauseToken = UUID()
+            let totalFragments = plan.totalFragments
+            let expectedMs = min(TransportConfig.bleExpectedWriteMaxMs, totalFragments * TransportConfig.bleExpectedWritePerFragmentMs)
             bleQueue.async { [weak self] in
                 guard let self = self, let c = self.centralManager, c.state == .poweredOn else { return }
+                self.fragmentScanPauseTokens.insert(pauseToken)
                 if c.isScanning { c.stopScan() }
-                let totalFragments = plan.totalFragments
-                let expectedMs = min(TransportConfig.bleExpectedWriteMaxMs, totalFragments * TransportConfig.bleExpectedWritePerFragmentMs)
                 self.bleQueue.asyncAfter(deadline: .now() + .milliseconds(expectedMs)) { [weak self] in
-                    self?.radio.startScanning()
+                    guard let self else { return }
+                    self.fragmentScanPauseTokens.remove(pauseToken)
+                    if self.fragmentScanPauseTokens.isEmpty {
+                        self.radio.startScanning()
+                    }
                 }
             }
         }
@@ -5782,6 +5805,13 @@ extension BLEService {
             }
 
             if !self.outboundFragmentTransfers.isActive(transferId) {
+                if self.outboundFragmentTransfers.activeCount == 0 && self.outboundFragmentTransfers.pendingCount == 0 {
+                    self.bleQueue.async { [weak self] in
+                        guard let self, !self.fragmentScanPauseTokens.isEmpty else { return }
+                        self.fragmentScanPauseTokens.removeAll()
+                        self.radio.startScanning()
+                    }
+                }
                 self.messageQueue.async { [weak self] in
                     self?.startNextPendingTransferIfNeeded()
                 }
@@ -7231,12 +7261,17 @@ extension BLEService {
     private func checkPeerConnectivityOnEngine() {
         let now = Date()
         let peerIDsForLinkState: [PeerID] = peerRegistry.peerIDs
+        let connectedPeripheralIDs = readLinkState { store in
+            Set(store.peripherals.compactMap { $0.value.isConnected ? $0.key : nil })
+        }
         var cachedLinkStates: [PeerID: BLEPeerLinkPresence] = [:]
+        cachedLinkStates.reserveCapacity(peerIDsForLinkState.count)
         for peerID in peerIDsForLinkState {
-            let state = linkState(for: peerID)
+            let hasPeripheral = linkBindings.preferredPeripheralUUID(for: peerID)
+                .map { connectedPeripheralIDs.contains($0) } ?? false
             cachedLinkStates[peerID] = BLEPeerLinkPresence(
-                hasPeripheral: state.hasPeripheral,
-                hasCentral: state.hasCentral
+                hasPeripheral: hasPeripheral,
+                hasCentral: linkBindings.hasCentral(boundTo: peerID)
             )
         }
         
