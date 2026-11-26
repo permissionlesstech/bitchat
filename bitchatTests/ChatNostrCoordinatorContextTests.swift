@@ -163,7 +163,7 @@ private final class MockChatNostrContext: ChatNostrContext {
     func startGeoParticipantRefreshTimer() { refreshTimerStartCount += 1 }
     func stopGeoParticipantRefreshTimer() { refreshTimerStopCount += 1 }
     func setActiveParticipantGeohash(_ geohash: String?) { activeParticipantGeohashes.append(geohash) }
-    func recordGeoParticipant(pubkeyHex: String, seenAt: Date) -> Bool {
+    func recordGeoParticipant(pubkeyHex: String, seenAt: Date, chatEventID: String?) -> Bool {
         recordedParticipants.append(pubkeyHex)
         recordedParticipantTimes.append(seenAt)
         presenceCallLog.append("record:\(pubkeyHex)")
@@ -171,7 +171,7 @@ private final class MockChatNostrContext: ChatNostrContext {
         return seenAt >= Date().addingTimeInterval(-TransportConfig.uiRecentCutoffFiveMinutesSeconds)
     }
 
-    func recordGeoParticipant(pubkeyHex: String, geohash: String, seenAt: Date) {
+    func recordGeoParticipant(pubkeyHex: String, geohash: String, seenAt: Date, chatEventID: String?) {
         recordedSampledParticipants.append((pubkeyHex, geohash))
     }
 

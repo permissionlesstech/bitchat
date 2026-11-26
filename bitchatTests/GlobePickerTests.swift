@@ -232,6 +232,70 @@ struct GlobeMotionDetailTests {
     }
 }
 
+struct GlobeFlightTests {
+    private let screen = 390.0
+    private let baseRadius = 170.0
+
+    /// Largest on-screen jump of the view center between frames, in points.
+    private func largestStep(_ view: (Double) -> (lat: Double, lon: Double, zoom: Double), frames: Int) -> Double {
+        var largest = 0.0
+        var previous = view(0)
+        for frame in 1...frames {
+            let next = view(Double(frame) / Double(frames))
+            let p = GlobeMath.projectRaw(lat: next.lat, lon: next.lon, centerLat: previous.lat, centerLon: previous.lon)
+            let radius = baseRadius * max(previous.zoom, next.zoom)
+            largest = max(largest, (p.x * p.x + p.y * p.y).squareRoot() * radius)
+            previous = next
+        }
+        return largest
+    }
+
+    @Test func endsExactlyOnBothViews() {
+        let flight = GlobeFlight(from: (8, -192.4 + 360, 1), to: (37.75, -122.42, 4_000))
+        #expect(flight.view(at: 0).zoom == 1)
+        let end = flight.view(at: 1)
+        #expect(end.lat == 37.75 && end.lon == -122.42 && end.zoom == 4_000)
+    }
+
+    /// Diving from the whole globe into a block-level cell far away used to stream
+    /// the screen past hundreds of cells per frame; the smooth path keeps every
+    /// frame's motion to a fraction of the screen.
+    @Test func deepFlightsMoveSmoothly() {
+        let start = (lat: 15.1, lon: -192.42 + 360, zoom: 1.0)
+        let zoom = GlobeMath.zoomForPrecision(7, baseRadius: baseRadius, screenMin: screen)
+        let flight = GlobeFlight(from: start, to: (37.75, -122.42, zoom))
+        let frames = 90
+
+        let smooth = largestStep({ flight.view(at: $0) }, frames: frames)
+        let naive = largestStep({ t in
+            (start.lat + (37.75 - start.lat) * t,
+             GlobeMath.normalizeLon(start.lon + GlobeMath.normalizeLon(-122.42 - start.lon) * t),
+             start.zoom * pow(zoom / start.zoom, t))
+        }, frames: frames)
+        #expect(smooth < screen * 0.25)
+        #expect(naive > smooth * 20)
+    }
+
+    @Test func zoomingInPlaceKeepsTheCenter() {
+        let flight = GlobeFlight(from: (10, 20, 1), to: (10, 20, 50))
+        var previousZoom = 1.0
+        for step in 1...20 {
+            let view = flight.view(at: Double(step) / 20)
+            #expect(abs(view.lat - 10) < 1e-9 && abs(view.lon - 20) < 1e-9)
+            #expect(view.zoom >= previousZoom)
+            previousZoom = view.zoom
+        }
+    }
+
+    @Test func spinsAtOneZoomStayAtThatZoom() {
+        let flight = GlobeFlight(from: (8, -70, 1), to: (20, 0, 1))
+        for step in 0...20 {
+            #expect(flight.view(at: Double(step) / 20).zoom == 1)
+        }
+        #expect(flight.view(at: 0.5).lon > -70 && flight.view(at: 0.5).lon < 0)
+    }
+}
+
 @MainActor
 struct GlobeStateTests {
     @Test func selectionFollowsTheViewCenterOnceLaidOut() {
@@ -310,7 +374,7 @@ struct GlobeStateTests {
         let target = GeohashPickerView.initialTarget(initialGeohash: "zzzz", nearbyGeohashes: [])
         #expect(target.lat > 89)
 
-        let animated = GlobeState(targetLat: target.lat, targetLon: target.lon, initialPrecision: target.precision, startZoomedOut: true)
+        let animated = GlobeState(targetLat: target.lat, targetLon: target.lon, initialPrecision: 4, startZoomedOut: true)
         animated.setViewport(baseRadius: 170, screenMin: 390, animateIntro: true)
         #expect(animated.isAnimating)
         animated.tick(100)
@@ -318,7 +382,7 @@ struct GlobeStateTests {
         #expect(!animated.isAnimating)
         #expect(animated.selectedGeohash == "zzzz")
 
-        let still = GlobeState(targetLat: target.lat, targetLon: target.lon, initialPrecision: target.precision, startZoomedOut: true)
+        let still = GlobeState(targetLat: target.lat, targetLon: target.lon, initialPrecision: 4, startZoomedOut: true)
         still.setViewport(baseRadius: 170, screenMin: 390, animateIntro: false)
         #expect(still.selectedGeohash == "zzzz")
         #expect(still.centerLat == animated.centerLat)
@@ -458,20 +522,92 @@ struct GeohashPickerTargetTests {
         let center = Geohash.decodeCenter("u2edk")
         #expect(target.lat == center.lat)
         #expect(target.lon == center.lon)
-        #expect(target.precision == 5)
     }
 
     @Test func fallsBackToTheCoarsestNearbyChannel() {
         let target = GeohashPickerView.initialTarget(initialGeohash: "", nearbyGeohashes: ["u2edk", "u2e", "u2edk7q"])
-        #expect(target.precision == 3)
         #expect(target.lat == Geohash.decodeCenter("u2e").lat)
+        #expect(target.lon == Geohash.decodeCenter("u2e").lon)
     }
 
-    @Test func defaultsToAWideWorldView() {
+    @Test func defaultsToAWorldView() {
         let target = GeohashPickerView.initialTarget(initialGeohash: nil, nearbyGeohashes: [])
         #expect(target.lat == 20)
         #expect(target.lon == 0)
-        #expect(target.precision == 2)
+    }
+
+    /// A fine selected geohash opens as a whole-globe spin to its location, not a
+    /// dive into the cell.
+    /// A fine selected geohash opens as a rotation that zooms into a regional view
+    /// while the selection stays at level 1, not a dive into the cell.
+    @Test func openingRotationZoomsInButStaysAtLevelOne() {
+        let center = Geohash.decodeCenter("9q8yyk2")
+        let state = GlobeState(targetLat: center.lat, targetLon: center.lon, initialPrecision: 1, startZoomedOut: true)
+        #expect(state.zoom < GlobeMath.minZoom)
+        state.setViewport(baseRadius: 170, screenMin: 390)
+        let threshold = GlobeMath.thresholdZoom(forPrecision: 2, baseRadius: 170, screenMin: 390)
+        var time = 100.0
+        state.tick(time)
+        var maxZoom = state.zoom
+        var turnedWhileZooming = false
+        let startLon = state.centerLon
+        while state.isAnimating, time < 110 {
+            time += 1.0 / 60
+            state.tick(time)
+            maxZoom = max(maxZoom, state.zoom)
+            #expect(state.precision == 1)
+            if state.zoom > 1.5, state.zoom < state.introEndZoom * 0.9,
+               abs(GlobeMath.normalizeLon(state.centerLon - startLon)) > 5 { turnedWhileZooming = true }
+        }
+        #expect(abs(state.zoom - state.introEndZoom) < 1e-9)
+        #expect(state.zoom > 2.5)
+        #expect(maxZoom < threshold)
+        #expect(turnedWhileZooming)
+        #expect(state.precision == 1)
+        #expect(abs(state.centerLat - center.lat) < 1e-6)
+        #expect(abs(GlobeMath.normalizeLon(state.centerLon - center.lon)) < 1e-6)
+    }
+
+    @Test func zoomingOutStaysAvailableAtLevelOneUntilTheWholeGlobeShows() {
+        let state = GlobeState(targetLat: 37.77, targetLon: -122.42, initialPrecision: 1, startZoomedOut: true)
+        #expect(!state.canZoomOut)
+        state.setViewport(baseRadius: 170, screenMin: 390, animateIntro: false)
+        #expect(state.precision == 1)
+        #expect(state.zoom > GlobeMath.minZoom)
+        #expect(state.canZoomOut)
+        state.zoomBy(0.0001)
+        #expect(state.precision == 1)
+        #expect(!state.canZoomOut)
+    }
+
+    @Test func thresholdZoomAgreesWithAutoPrecision() {
+        for precision in 2...6 {
+            let zoom = GlobeMath.thresholdZoom(forPrecision: precision, baseRadius: 170, screenMin: 390)
+            #expect(GlobeMath.autoPrecision(globeRadius: 170 * zoom * 1.001, screenMin: 390) == precision)
+            #expect(GlobeMath.autoPrecision(globeRadius: 170 * zoom * 0.999, screenMin: 390) == precision - 1)
+        }
+    }
+
+    /// Interrupting the intro below the minimum zoom: pinching continues from there
+    /// without snapping up or going further out, and a fly-to starts where it is.
+    @Test func interruptedIntroContinuesFromBelowTheMinimum() {
+        let state = GlobeState(targetLat: 0, targetLon: 0, initialPrecision: 1, startZoomedOut: true)
+        state.setViewport(baseRadius: 170, screenMin: 390)
+        state.tick(100)
+        state.beginInteraction()
+        let start = state.zoom
+        #expect(start < GlobeMath.minZoom)
+        state.zoomBy(1.05)
+        #expect(abs(state.zoom - start * 1.05) < 1e-9)
+        state.zoomBy(0.5)
+        #expect(abs(state.zoom - start * 1.05) < 1e-9)
+        state.endInteraction()
+
+        let before = state.zoom
+        state.animateTo(lat: 30, lon: 40, zoom: 40, precision: 4, duration: 0.6)
+        state.tick(200)
+        state.tick(200 + 1.0 / 60)
+        #expect(state.zoom < before * 1.2)
     }
 
     @Test func coverageMatchesTheChannelLevels() {

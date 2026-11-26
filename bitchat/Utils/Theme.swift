@@ -210,7 +210,7 @@ struct ThemedRootBackground: View {
 
 /// Wraps glass-shape content in real Liquid Glass on OS 26+, with a material
 /// fallback below that keeps the frosted look.
-private struct GlassPanel<S: Shape>: ViewModifier {
+struct GlassPanel<S: Shape>: ViewModifier {
     let shape: S
 
     @ViewBuilder

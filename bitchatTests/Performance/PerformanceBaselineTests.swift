@@ -713,11 +713,11 @@ private final class PerfNostrContext: ChatNostrContext {
     func stopGeoParticipantRefreshTimer() {}
     func setActiveParticipantGeohash(_ geohash: String?) {}
     private(set) var participantRecords = 0
-    func recordGeoParticipant(pubkeyHex: String, seenAt: Date) -> Bool {
+    func recordGeoParticipant(pubkeyHex: String, seenAt: Date, chatEventID: String?) -> Bool {
         participantRecords += 1
         return true
     }
-    func recordGeoParticipant(pubkeyHex: String, geohash: String, seenAt: Date) { participantRecords += 1 }
+    func recordGeoParticipant(pubkeyHex: String, geohash: String, seenAt: Date, chatEventID: String?) { participantRecords += 1 }
     func geoParticipantCount(for geohash: String) -> Int { 0 }
     func setGeoNickname(_ nickname: String, forPubkey pubkeyHex: String) { geoNicknames[pubkeyHex.lowercased()] = nickname }
     func markGeoTeleported(_ pubkeyHexLowercased: String) { teleportedKeys.insert(pubkeyHexLowercased) }

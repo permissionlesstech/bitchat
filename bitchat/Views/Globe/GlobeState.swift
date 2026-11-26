@@ -184,12 +184,7 @@ final class GlobeState: ObservableObject {
     }
 
     private struct Tween {
-        let startLat: Double
-        let startLon: Double
-        let endLat: Double
-        let dLon: Double
-        let startZoom: Double
-        let endZoom: Double
+        let flight: GlobeFlight
         let targetPrecision: Int?
         let duration: CFTimeInterval
         var startTime: CFTimeInterval?
@@ -205,6 +200,12 @@ final class GlobeState: ObservableObject {
         static let maxFrameDelta = 1.0 / 30
         static let maxFlingRadiusFractionPerFrame = 0.12
         static let flingFrictionPerSecond = 4.2
+        /// The opening rotation starts a little smaller than the whole-globe view.
+        static let introStartZoom = 0.72
+        /// How far toward the zoom where two-letter cells take over the opening
+        /// rotation zooms: a regional view, with the selection still at level 1.
+        static let introEndThresholdFraction = 0.8
+        static let introDuration: CFTimeInterval = 1.4
     }
 
     /// - Parameter startZoomedOut: begin from a far, offset view and fly into the
@@ -213,7 +214,7 @@ final class GlobeState: ObservableObject {
         let precision = min(max(initialPrecision, 1), GlobeMath.maxPrecision)
         centerLat = startZoomedOut ? targetLat * 0.4 : targetLat
         centerLon = startZoomedOut ? GlobeMath.normalizeLon(targetLon - 70) : targetLon
-        zoom = GlobeMath.minZoom
+        zoom = startZoomedOut ? Constants.introStartZoom : GlobeMath.minZoom
         self.precision = precision
         if startZoomedOut {
             introTarget = (targetLat, targetLon, precision)
@@ -221,6 +222,13 @@ final class GlobeState: ObservableObject {
     }
 
     var globeRadius: Double { baseRadius * zoom }
+
+    /// Where the opening rotation lands at level 1; derived from the same rule as
+    /// `autoPrecision`, so it can never cross into two-letter cells.
+    var introEndZoom: Double {
+        GlobeMath.thresholdZoom(forPrecision: 2, baseRadius: baseRadius, screenMin: screenMin)
+            * Constants.introEndThresholdFraction
+    }
 
     var isInMotion: Bool { isInteracting || isAnimating }
 
@@ -236,10 +244,21 @@ final class GlobeState: ObservableObject {
         self.screenMin = screenMin
         if firstLayout, let target = introTarget {
             introTarget = nil
-            let targetZoom = GlobeMath.zoomForPrecision(target.precision, baseRadius: baseRadius, screenMin: screenMin)
+            // At level 1 the intro turns to the target while zooming into a regional
+            // view short of where two-letter cells take over; finer targets are framed.
+            let opensOnTheGlobe = target.precision <= 1
+            let targetZoom = opensOnTheGlobe
+                ? introEndZoom
+                : GlobeMath.zoomForPrecision(target.precision, baseRadius: baseRadius, screenMin: screenMin)
             if animateIntro {
-                // Cinematic intro: spin and zoom from the far view into the target location.
-                animateTo(lat: target.lat, lon: target.lon, zoom: targetZoom, precision: target.precision, duration: 1.4)
+                animateTo(
+                    lat: target.lat,
+                    lon: target.lon,
+                    zoom: targetZoom,
+                    precision: target.precision,
+                    duration: Constants.introDuration,
+                    glide: opensOnTheGlobe
+                )
             } else {
                 centerLat = target.lat
                 centerLon = target.lon
@@ -282,7 +301,9 @@ final class GlobeState: ObservableObject {
     /// Continuous zoom from pinch gestures; precision follows automatically.
     func zoomBy(_ factor: Double) {
         guard factor != 1, factor.isFinite, factor > 0 else { return }
-        zoom = min(max(zoom * factor, GlobeMath.minZoom), GlobeMath.maxZoom)
+        // An interrupted intro can leave the globe below the minimum: continue from
+        // there rather than snapping up, but never pinch further out.
+        zoom = min(max(zoom * factor, min(GlobeMath.minZoom, zoom)), GlobeMath.maxZoom)
         syncPrecisionFromZoom()
         syncSelection()
     }
@@ -308,19 +329,31 @@ final class GlobeState: ObservableObject {
 
     // MARK: - Animations
 
-    /// Animate the view to a lat/lon, optionally to a zoom and precision.
-    func animateTo(lat: Double, lon: Double, zoom targetZoom: Double? = nil, precision targetPrecision: Int? = nil, duration: CFTimeInterval = 0.55) {
+    /// Animate the view to a lat/lon, optionally to a zoom and precision. `glide`
+    /// rotates and zooms together over `duration` (the opening rotation) instead of
+    /// following the smooth zoom-and-pan path.
+    func animateTo(
+        lat: Double,
+        lon: Double,
+        zoom targetZoom: Double? = nil,
+        precision targetPrecision: Int? = nil,
+        duration: CFTimeInterval = 0.55,
+        glide: Bool = false
+    ) {
         let endZoom = min(max(targetZoom ?? zoom, GlobeMath.minZoom), GlobeMath.maxZoom)
+        let flight = GlobeFlight(from: (centerLat, centerLon, zoom), to: (lat, lon, endZoom), glide: glide)
         start(.tween(Tween(
-            startLat: centerLat,
-            startLon: centerLon,
-            endLat: lat,
-            dLon: GlobeMath.normalizeLon(lon - centerLon),
-            startZoom: zoom,
-            endZoom: endZoom,
+            flight: flight,
             targetPrecision: targetPrecision,
-            duration: duration
+            // Long flights (far and deep) get a little more time so they stay readable.
+            duration: max(duration, min(GlobeFlight.secondsPerUnit * flight.length, GlobeFlight.maxDuration))
         )))
+    }
+
+    /// Whether there is a wider view to zoom out to: a coarser precision, or the
+    /// whole globe while level 1 is framed closer (as after the opening rotation).
+    var canZoomOut: Bool {
+        precision > 1 || zoom > GlobeMath.minZoom * 1.001
     }
 
     /// Button-driven precision change: adjusts precision and animates zoom to frame it.
@@ -403,12 +436,13 @@ final class GlobeState: ObservableObject {
     }
 
     private func applyTween(_ tween: Tween, t: Double) {
+        let view = tween.flight.view(at: t)
         // The target itself is always reachable: a polar cell's center can lie past
         // the drag limit, and clamping it would end the animation on another cell.
-        centerLat = clampedLat(tween.startLat + (tween.endLat - tween.startLat) * t, reaching: tween.endLat)
-        centerLon = GlobeMath.normalizeLon(tween.startLon + tween.dLon * t)
-        // Exponential interpolation feels natural for zoom.
-        zoom = tween.startZoom * pow(tween.endZoom / tween.startZoom, t)
+        centerLat = clampedLat(view.lat, reaching: tween.flight.end.lat)
+        centerLon = view.lon
+        // A flight from below the minimum (an interrupted intro) starts where it is.
+        zoom = min(max(view.zoom, min(GlobeMath.minZoom, tween.flight.start.zoom)), GlobeMath.maxZoom)
         if let target = tween.targetPrecision {
             precision = min(max(target, 1), GlobeMath.maxPrecision)
         } else {
@@ -452,6 +486,113 @@ final class GlobeState: ObservableObject {
         guard baseRadius > 0 else { return }
         let gh = Geohash.encode(latitude: centerLat, longitude: centerLon, precision: precision)
         if gh != selectedGeohash { selectedGeohash = gh }
+    }
+}
+
+/// A smooth zoom-and-pan path between two views (van Wijk & Nuij, "Smooth and
+/// efficient zooming and panning", the model behind d3.interpolateZoom).
+///
+/// Interpolating zoom exponentially while panning linearly spends most of a long
+/// pan zoomed far in, where every frame moves thousands of points: flying from the
+/// whole globe into a block-level cell streamed hundreds of cells past the screen.
+/// This path pans along the great circle while zoom follows the curve that keeps
+/// the perceived speed constant, pulling out first when the target is far away at
+/// the current zoom. With no zoom change, or as a `glide`, it rotates and zooms
+/// together instead.
+struct GlobeFlight {
+    typealias View = (lat: Double, lon: Double, zoom: Double)
+
+    static let secondsPerUnit: CFTimeInterval = 0.32
+    static let maxDuration: CFTimeInterval = 1.6
+    /// Trade-off between zooming and panning; √2 as in the paper and d3.
+    private static let rho = 2.squareRoot()
+
+    let start: View
+    let end: View
+    /// Path length in the paper's units (natural-log zoom levels); scales duration.
+    let length: Double
+
+    private let startVector: SIMD3<Double>
+    private let endVector: SIMD3<Double>
+    /// Great-circle distance in radians.
+    private let angle: Double
+    private let path: Path
+
+    private enum Path {
+        case glide
+        case zoom(w0: Double, k: Double)
+        /// `span` is r1 − r0: the path runs through rho·s + r0 from r0 to r1.
+        case curve(w0: Double, r0: Double, span: Double, distance: Double)
+    }
+
+    init(from start: View, to end: View, glide: Bool = false) {
+        self.start = start
+        self.end = end
+        startVector = Self.vector(lat: start.lat, lon: start.lon)
+        endVector = Self.vector(lat: end.lat, lon: end.lon)
+        angle = acos(min(max((startVector * endVector).sum(), -1), 1))
+
+        // Width of the visible area in radians: about two at the whole globe.
+        let w0 = 2 / max(start.zoom, .ulpOfOne)
+        let w1 = 2 / max(end.zoom, .ulpOfOne)
+        let rho = Self.rho
+        if glide || abs(log(w1 / w0)) < 0.05 {
+            // Rotate and zoom together: the opening rotation, or a move with no zoom
+            // change, which must not pull out past the whole-globe view.
+            path = .glide
+            length = angle / w0
+        } else if angle < 1e-9 {
+            let k = log(w1 / w0)
+            path = .zoom(w0: w0, k: k)
+            length = abs(k) / rho
+        } else {
+            let d = angle
+            let b0 = (w1 * w1 - w0 * w0 + pow(rho, 4) * d * d) / (2 * w0 * rho * rho * d)
+            let b1 = (w1 * w1 - w0 * w0 - pow(rho, 4) * d * d) / (2 * w1 * rho * rho * d)
+            let r0 = log((b0 * b0 + 1).squareRoot() - b0)
+            let r1 = log((b1 * b1 + 1).squareRoot() - b1)
+            path = .curve(w0: w0, r0: r0, span: r1 - r0, distance: d)
+            length = abs(r1 - r0) / rho
+        }
+    }
+
+    /// The view at progress `t` in 0...1.
+    func view(at t: Double) -> View {
+        guard t > 0 else { return start }
+        guard t < 1 else { return end }
+        let rho = Self.rho
+        let fraction: Double
+        let zoom: Double
+        switch path {
+        case .glide:
+            fraction = t
+            zoom = start.zoom * pow(end.zoom / start.zoom, t)
+        case let .zoom(w0, k):
+            fraction = 0
+            zoom = 2 / (w0 * exp(k * t))
+        case let .curve(w0, r0, span, d):
+            let r = r0 + span * t
+            fraction = w0 / (rho * rho * d) * (cosh(r0) * tanh(r) - sinh(r0))
+            zoom = 2 / (w0 * cosh(r0) / cosh(r))
+        }
+        let point = slerp(min(max(fraction, 0), 1))
+        return (point.lat, point.lon, zoom)
+    }
+
+    private func slerp(_ f: Double) -> (lat: Double, lon: Double) {
+        guard angle > 1e-9 else { return (start.lat, start.lon) }
+        let a = sin((1 - f) * angle) / sin(angle)
+        let b = sin(f * angle) / sin(angle)
+        let v = a * startVector + b * endVector
+        let lat = asin(min(max(v.z, -1), 1)) * 180 / .pi
+        let lon = atan2(v.y, v.x) * 180 / .pi
+        return (lat, GlobeMath.normalizeLon(lon))
+    }
+
+    private static func vector(lat: Double, lon: Double) -> SIMD3<Double> {
+        let phi = lat * .pi / 180
+        let lambda = lon * .pi / 180
+        return SIMD3(cos(phi) * cos(lambda), cos(phi) * sin(lambda), sin(phi))
     }
 }
 
