@@ -32,16 +32,7 @@ struct BitchatApp: App {
         WindowGroup {
             ContentView()
                 .environment(\.appTheme, AppTheme(rawValue: appThemeRawValue) ?? .matrix)
-                .environmentObject(runtime.publicChatModel)
-                .environmentObject(runtime.privateInboxModel)
-                .environmentObject(runtime.privateConversationModel)
-                .environmentObject(runtime.verificationModel)
-                .environmentObject(runtime.conversationUIModel)
-                .environmentObject(runtime.locationChannelsModel)
-                .environmentObject(runtime.peerListModel)
-                .environmentObject(runtime.appChromeModel)
-                .environmentObject(runtime.boardAlertsModel)
-                .environmentObject(runtime.sharedContentImportModel)
+                .installAppEnvironment(runtime.environmentModels)
                 .onAppear {
                     appDelegate.runtime = runtime
                     runtime.start()

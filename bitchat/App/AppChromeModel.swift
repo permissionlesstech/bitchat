@@ -46,6 +46,12 @@ final class AppChromeModel: ObservableObject {
         self.chatViewModel = chatViewModel
         self.onPanicWipe = onPanicWipe
         self.nickname = chatViewModel.nickname
+        self.hasUnreadPrivateMessages = !privateInboxModel.unreadPeerIDs.isEmpty
+        self.showBluetoothAlert = chatViewModel.showBluetoothAlert
+        self.bluetoothAlertMessage = chatViewModel.bluetoothAlertMessage
+        self.bluetoothState = chatViewModel.bluetoothState
+        self.torBlocked = chatViewModel.torBlocked
+        self.panicWipeBlocked = chatViewModel.panicRecoveryBlocked
 
         bind(privateInboxModel: privateInboxModel)
     }
@@ -151,13 +157,19 @@ final class AppChromeModel: ObservableObject {
 
     private func bind(privateInboxModel: PrivateInboxModel) {
         privateInboxModel.$unreadPeerIDs
+            .map { !$0.isEmpty }
+            .removeDuplicates()
+            .dropFirst()
             .receive(on: DispatchQueue.main)
-            .sink { [weak self] unreadPeerIDs in
-                self?.hasUnreadPrivateMessages = !unreadPeerIDs.isEmpty
+            .sink { [weak self] hasUnread in
+                guard let self, self.hasUnreadPrivateMessages != hasUnread else { return }
+                self.hasUnreadPrivateMessages = hasUnread
             }
             .store(in: &cancellables)
 
         chatViewModel.$nickname
+            .removeDuplicates()
+            .dropFirst()
             .receive(on: DispatchQueue.main)
             .sink { [weak self] nickname in
                 guard let self, self.nickname != nickname else { return }
@@ -166,25 +178,53 @@ final class AppChromeModel: ObservableObject {
             .store(in: &cancellables)
 
         chatViewModel.$showBluetoothAlert
+            .removeDuplicates()
+            .dropFirst()
             .receive(on: DispatchQueue.main)
-            .assign(to: &$showBluetoothAlert)
+            .sink { [weak self] showAlert in
+                guard let self, self.showBluetoothAlert != showAlert else { return }
+                self.showBluetoothAlert = showAlert
+            }
+            .store(in: &cancellables)
 
         chatViewModel.$bluetoothAlertMessage
+            .removeDuplicates()
+            .dropFirst()
             .receive(on: DispatchQueue.main)
-            .assign(to: &$bluetoothAlertMessage)
+            .sink { [weak self] message in
+                guard let self, self.bluetoothAlertMessage != message else { return }
+                self.bluetoothAlertMessage = message
+            }
+            .store(in: &cancellables)
 
         chatViewModel.$bluetoothState
+            .removeDuplicates()
+            .dropFirst()
             .receive(on: DispatchQueue.main)
-            .assign(to: &$bluetoothState)
+            .sink { [weak self] state in
+                guard let self, self.bluetoothState != state else { return }
+                self.bluetoothState = state
+            }
+            .store(in: &cancellables)
 
         chatViewModel.$torBlocked
+            .removeDuplicates()
+            .dropFirst()
             .receive(on: DispatchQueue.main)
-            .assign(to: &$torBlocked)
+            .sink { [weak self] blocked in
+                guard let self, self.torBlocked != blocked else { return }
+                self.torBlocked = blocked
+            }
+            .store(in: &cancellables)
 
         chatViewModel.$panicRecoveryBlocked
+            .removeDuplicates()
+            .dropFirst()
             .receive(on: DispatchQueue.main)
-            .assign(to: &$panicWipeBlocked)
-
-        hasUnreadPrivateMessages = !privateInboxModel.unreadPeerIDs.isEmpty
+            .sink { [weak self] blocked in
+                guard let self, self.panicWipeBlocked != blocked else { return }
+                self.panicWipeBlocked = blocked
+            }
+            .store(in: &cancellables)
     }
 }

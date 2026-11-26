@@ -88,19 +88,11 @@ struct FocusEffectDisabledModifier: ViewModifier {
 struct ContentView: View {
     @EnvironmentObject private var appChromeModel: AppChromeModel
     @EnvironmentObject private var privateConversationModel: PrivateConversationModel
-    @EnvironmentObject private var verificationModel: VerificationModel
-    @EnvironmentObject private var conversationUIModel: ConversationUIModel
     @EnvironmentObject private var locationChannelsModel: LocationChannelsModel
     @EnvironmentObject private var sharedContentImportModel: SharedContentImportModel
-    @EnvironmentObject private var peerListModel: PeerListModel
-    @EnvironmentObject private var publicChatModel: PublicChatModel
-    @EnvironmentObject private var privateInboxModel: PrivateInboxModel
+    @Environment(\.appEnvironmentModels) private var appEnvironmentModels
 
     @StateObject private var voiceRecordingVM = VoiceRecordingViewModel()
-    @State private var messageText = ""
-    /// Conversation the current `messageText` belongs to, so a channel switch
-    /// can save under the previous key before loading the next draft.
-    @State private var activeDraftKey: ComposerDraftStore.Key = .mesh
     @FocusState private var isTextFieldFocused: Bool
     @Environment(\.colorScheme) var colorScheme
     @Environment(\.appTheme) private var appTheme
@@ -111,7 +103,6 @@ struct ContentView: View {
     @FocusState private var isNicknameFieldFocused: Bool
     @State private var isAtBottomPublic = true
     @State private var isAtBottomPrivate = true
-    @State private var autocompleteDebounceTimer: Timer?
     @State private var showVerifySheet = false
     @State private var imagePreviewURL: URL?
     #if os(iOS)
@@ -228,19 +219,20 @@ struct ContentView: View {
 
     var body: some View {
         mainContent
-            .onAppear { [conversationUIModel, voiceRecordingVM] in
-                conversationUIModel.setCurrentColorScheme(colorScheme)
-                conversationUIModel.setCurrentTheme(appTheme)
-                voiceRecordingVM.sessionProvider = { [weak conversationUIModel] in
-                    conversationUIModel?.makeVoiceCaptureSession() ?? VoiceNoteCaptureSession()
+            .onAppear { [appEnvironmentModels, voiceRecordingVM] in
+                let uiModel = appEnvironmentModels?.conversationUIModel
+                let draftModel = appEnvironmentModels?.composerDraftModel
+                uiModel?.setCurrentColorScheme(colorScheme)
+                uiModel?.setCurrentTheme(appTheme)
+                voiceRecordingVM.sessionProvider = { [weak uiModel] in
+                    uiModel?.makeVoiceCaptureSession() ?? VoiceNoteCaptureSession()
                 }
-                appChromeModel.setPanicPreparation { [weak voiceRecordingVM] in
+                appChromeModel.setPanicPreparation { [weak voiceRecordingVM, weak draftModel] in
                     voiceRecordingVM?.panicWipe()
                     // Drop in-memory composer text before ChatViewModel resets
                     // persisted drafts — otherwise the next inactive/background
                     // transition would write the pre-wipe draft back.
-                    messageText = ""
-                    activeDraftKey = .mesh
+                    draftModel?.resetForPanic()
                 }
                 #if os(macOS)
                 DispatchQueue.main.async {
@@ -249,18 +241,18 @@ struct ContentView: View {
                 }
                 #endif
                 sharedContentImportModel.updateDestination(sharedContentDestination)
-                activeDraftKey = ComposerDraftStore.Key.from(
+                let initialKey = ComposerDraftStore.Key.from(
                     peerID: selectedPrivatePeerID,
-                    fingerprint: selectedPrivatePeerID.flatMap { conversationUIModel.getFingerprint(for: $0) },
+                    fingerprint: selectedPrivatePeerID.flatMap { uiModel?.getFingerprint(for: $0) },
                     channel: locationChannelsModel.selectedChannel
                 )
-                messageText = ComposerDraftStore.load(activeDraftKey)
+                draftModel?.loadInitialDraft(for: initialKey)
             }
             .onChange(of: colorScheme) { newValue in
-                conversationUIModel.setCurrentColorScheme(newValue)
+                appEnvironmentModels?.conversationUIModel.setCurrentColorScheme(newValue)
             }
             .onChange(of: appTheme) { newValue in
-                conversationUIModel.setCurrentTheme(newValue)
+                appEnvironmentModels?.conversationUIModel.setCurrentTheme(newValue)
             }
         .background(ThemedRootBackground())
         .foregroundColor(palette.primary)
@@ -272,9 +264,10 @@ struct ContentView: View {
                 showSidebar = true
             }
             sharedContentImportModel.updateDestination(sharedContentDestination)
-            switchComposerDraft(to: ComposerDraftStore.Key.from(
+            let uiModel = appEnvironmentModels?.conversationUIModel
+            appEnvironmentModels?.composerDraftModel.switchDraft(to: ComposerDraftStore.Key.from(
                 peerID: newValue,
-                fingerprint: newValue.flatMap { conversationUIModel.getFingerprint(for: $0) },
+                fingerprint: newValue.flatMap { uiModel?.getFingerprint(for: $0) },
                 channel: locationChannelsModel.selectedChannel
             ))
         }
@@ -283,7 +276,7 @@ struct ContentView: View {
             // Private drafts are keyed by peer; only public channel switches
             // need a draft swap while no DM is open.
             if selectedPrivatePeerID == nil {
-                switchComposerDraft(to: ComposerDraftStore.Key.from(
+                appEnvironmentModels?.composerDraftModel.switchDraft(to: ComposerDraftStore.Key.from(
                     peerID: nil,
                     fingerprint: nil,
                     channel: newChannel
@@ -295,7 +288,7 @@ struct ContentView: View {
                 // Always save, including empty — clearing the composer must
                 // remove the in-memory draft so it does not resurrect on the
                 // next switch back into this conversation.
-                ComposerDraftStore.save(messageText, for: activeDraftKey)
+                appEnvironmentModels?.composerDraftModel.saveCurrentDraft()
             }
         }
         .sheet(
@@ -318,61 +311,45 @@ struct ContentView: View {
                 }
             )
         ) {
-            #if os(iOS)
-            ContentPeopleSheetView(
-                showSidebar: $showSidebar,
-                messageText: $messageText,
-                selectedMessageSender: $selectedMessageSender,
-                selectedMessageSenderID: $selectedMessageSenderID,
-                imagePreviewURL: $imagePreviewURL,
-                windowCountPublic: $windowCountPublic,
-                windowCountPrivate: $windowCountPrivate,
-                isAtBottomPrivate: $isAtBottomPrivate,
-                isTextFieldFocused: $isTextFieldFocused,
-                voiceRecordingVM: voiceRecordingVM,
-                autocompleteDebounceTimer: $autocompleteDebounceTimer,
-                headerHeight: headerHeight,
-                onSendMessage: sendMessage,
-                showImagePicker: $showImagePicker,
-                imagePickerSourceType: $imagePickerSourceType
-            )
-            // Sheets + NavigationStack can drop inherited EnvironmentObjects on
-            // some iOS versions (#1558). Re-inject every model the sheet tree
-            // reads so ContentPeopleListView / MessageListView never crash.
-            .environmentObject(appChromeModel)
-            .environmentObject(privateConversationModel)
-            .environmentObject(verificationModel)
-            .environmentObject(conversationUIModel)
-            .environmentObject(locationChannelsModel)
-            .environmentObject(peerListModel)
-            .environmentObject(publicChatModel)
-            .environmentObject(privateInboxModel)
-            #else
-            ContentPeopleSheetView(
-                showSidebar: $showSidebar,
-                messageText: $messageText,
-                selectedMessageSender: $selectedMessageSender,
-                selectedMessageSenderID: $selectedMessageSenderID,
-                imagePreviewURL: $imagePreviewURL,
-                windowCountPublic: $windowCountPublic,
-                windowCountPrivate: $windowCountPrivate,
-                isAtBottomPrivate: $isAtBottomPrivate,
-                isTextFieldFocused: $isTextFieldFocused,
-                voiceRecordingVM: voiceRecordingVM,
-                autocompleteDebounceTimer: $autocompleteDebounceTimer,
-                headerHeight: headerHeight,
-                onSendMessage: sendMessage,
-                showMacImagePicker: $showMacImagePicker
-            )
-            .environmentObject(appChromeModel)
-            .environmentObject(privateConversationModel)
-            .environmentObject(verificationModel)
-            .environmentObject(conversationUIModel)
-            .environmentObject(locationChannelsModel)
-            .environmentObject(peerListModel)
-            .environmentObject(publicChatModel)
-            .environmentObject(privateInboxModel)
-            #endif
+            if let models = appEnvironmentModels {
+                #if os(iOS)
+                ContentPeopleSheetView(
+                    showSidebar: $showSidebar,
+                    draftModel: models.composerDraftModel,
+                    selectedMessageSender: $selectedMessageSender,
+                    selectedMessageSenderID: $selectedMessageSenderID,
+                    imagePreviewURL: $imagePreviewURL,
+                    windowCountPrivate: $windowCountPrivate,
+                    isAtBottomPrivate: $isAtBottomPrivate,
+                    isTextFieldFocused: $isTextFieldFocused,
+                    voiceRecordingVM: voiceRecordingVM,
+                    headerHeight: headerHeight,
+                    onSendMessage: sendMessage,
+                    showImagePicker: $showImagePicker,
+                    imagePickerSourceType: $imagePickerSourceType
+                )
+                // Sheets + NavigationStack can drop inherited EnvironmentObjects on
+                // some iOS versions (#1558). Re-inject every model the sheet tree
+                // reads so ContentPeopleListView / PrivateMessageListView never crash.
+                .installAppEnvironment(models)
+                #else
+                ContentPeopleSheetView(
+                    showSidebar: $showSidebar,
+                    draftModel: models.composerDraftModel,
+                    selectedMessageSender: $selectedMessageSender,
+                    selectedMessageSenderID: $selectedMessageSenderID,
+                    imagePreviewURL: $imagePreviewURL,
+                    windowCountPrivate: $windowCountPrivate,
+                    isAtBottomPrivate: $isAtBottomPrivate,
+                    isTextFieldFocused: $isTextFieldFocused,
+                    voiceRecordingVM: voiceRecordingVM,
+                    headerHeight: headerHeight,
+                    onSendMessage: sendMessage,
+                    showMacImagePicker: $showMacImagePicker
+                )
+                .installAppEnvironment(models)
+                #endif
+            }
         }
         .sheet(isPresented: $appChromeModel.isAppInfoPresented) {
             AppInfoView(
@@ -385,7 +362,8 @@ struct ContentView: View {
             get: { appChromeModel.showingFingerprintFor != nil && !showSidebar && selectedPrivatePeerID == nil },
             set: { _ in appChromeModel.clearFingerprint() }
         )) {
-            if let peerID = appChromeModel.showingFingerprintFor {
+            if let peerID = appChromeModel.showingFingerprintFor,
+               let verificationModel = appEnvironmentModels?.verificationModel {
                 FingerprintView(peerID: peerID)
                     .environmentObject(verificationModel)
             }
@@ -401,7 +379,7 @@ struct ContentView: View {
         )) {
             ImagePickerView(sourceType: imagePickerSourceType) { image in
                 showImagePicker = false
-                conversationUIModel.processSelectedImage(image)
+                appEnvironmentModels?.conversationUIModel.processSelectedImage(image)
             }
             .ignoresSafeArea()
         }
@@ -417,7 +395,7 @@ struct ContentView: View {
         )) {
             MacImagePickerView { url in
                 showMacImagePicker = false
-                conversationUIModel.processSelectedImage(from: url)
+                appEnvironmentModels?.conversationUIModel.processSelectedImage(from: url)
             }
         }
         #endif
@@ -472,7 +450,7 @@ struct ContentView: View {
                 // Replacing is deliberate and called out in the prompt. It
                 // avoids combining a stale draft from another conversation
                 // with newly shared content.
-                messageText = importedText
+                appEnvironmentModels?.composerDraftModel.replaceText(importedText)
                 isTextFieldFocused = true
             }
         } message: { offer in
@@ -483,7 +461,7 @@ struct ContentView: View {
             Text(String(format: format, offer.destination.displayName) + "\n\n" + offer.payload.preview)
         }
         .onDisappear {
-            autocompleteDebounceTimer?.invalidate()
+            appEnvironmentModels?.composerDraftModel.cancelAutocompleteDebounce()
             appChromeModel.setPanicPreparation(nil)
         }
     }
@@ -572,58 +550,47 @@ struct ContentView: View {
     }
 
     private var publicMessageList: some View {
-        MessageListView(
-            privatePeer: nil,
+        PublicMessageListView(
             isAtBottom: $isAtBottomPublic,
-            messageText: $messageText,
             selectedMessageSender: $selectedMessageSender,
             selectedMessageSenderID: $selectedMessageSenderID,
             imagePreviewURL: $imagePreviewURL,
             windowCountPublic: $windowCountPublic,
-            windowCountPrivate: $windowCountPrivate,
             showSidebar: $showSidebar,
             isTextFieldFocused: $isTextFieldFocused
         )
     }
 
+    @ViewBuilder
     private var composerView: some View {
-        #if os(iOS)
-        ContentComposerView(
-            messageText: $messageText,
-            isTextFieldFocused: $isTextFieldFocused,
-            voiceRecordingVM: voiceRecordingVM,
-            autocompleteDebounceTimer: $autocompleteDebounceTimer,
-            onSendMessage: sendMessage,
-            showImagePicker: $showImagePicker,
-            imagePickerSourceType: $imagePickerSourceType
-        )
-        #else
-        ContentComposerView(
-            messageText: $messageText,
-            isTextFieldFocused: $isTextFieldFocused,
-            voiceRecordingVM: voiceRecordingVM,
-            autocompleteDebounceTimer: $autocompleteDebounceTimer,
-            onSendMessage: sendMessage,
-            showMacImagePicker: $showMacImagePicker
-        )
-        #endif
-    }
-
-    private func sendMessage() {
-        guard let trimmed = messageText.trimmedOrNilIfEmpty else { return }
-
-        messageText = ""
-        ComposerDraftStore.save("", for: activeDraftKey)
-
-        DispatchQueue.main.async {
-            self.conversationUIModel.sendMessage(trimmed)
+        if let draftModel = appEnvironmentModels?.composerDraftModel {
+            #if os(iOS)
+            ContentComposerView(
+                draftModel: draftModel,
+                isTextFieldFocused: $isTextFieldFocused,
+                voiceRecordingVM: voiceRecordingVM,
+                onSendMessage: sendMessage,
+                showImagePicker: $showImagePicker,
+                imagePickerSourceType: $imagePickerSourceType
+            )
+            #else
+            ContentComposerView(
+                draftModel: draftModel,
+                isTextFieldFocused: $isTextFieldFocused,
+                voiceRecordingVM: voiceRecordingVM,
+                onSendMessage: sendMessage,
+                showMacImagePicker: $showMacImagePicker
+            )
+            #endif
         }
     }
 
-    private func switchComposerDraft(to newKey: ComposerDraftStore.Key) {
-        guard newKey != activeDraftKey else { return }
-        ComposerDraftStore.save(messageText, for: activeDraftKey)
-        activeDraftKey = newKey
-        messageText = ComposerDraftStore.load(newKey)
+    private func sendMessage() {
+        guard let trimmed = appEnvironmentModels?.composerDraftModel.takeMessageToSend() else { return }
+        let uiModel = appEnvironmentModels?.conversationUIModel
+
+        DispatchQueue.main.async {
+            uiModel?.sendMessage(trimmed)
+        }
     }
 }

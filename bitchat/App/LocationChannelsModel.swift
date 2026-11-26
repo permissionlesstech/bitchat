@@ -134,38 +134,56 @@ final class LocationChannelsModel: ObservableObject {
 
     private func bind() {
         manager.$permissionState
+            .removeDuplicates()
+            .dropFirst()
             .receive(on: DispatchQueue.main)
             .assign(to: &$permissionState)
 
         manager.$availableChannels
+            .removeDuplicates()
+            .dropFirst()
             .receive(on: DispatchQueue.main)
             .assign(to: &$availableChannels)
 
         manager.$selectedChannel
+            .removeDuplicates()
+            .dropFirst()
             .receive(on: DispatchQueue.main)
             .assign(to: &$selectedChannel)
 
         manager.$teleported
+            .removeDuplicates()
+            .dropFirst()
             .receive(on: DispatchQueue.main)
             .assign(to: &$teleported)
 
         manager.$bookmarks
+            .removeDuplicates()
+            .dropFirst()
             .receive(on: DispatchQueue.main)
             .assign(to: &$bookmarks)
 
         manager.$bookmarkNames
+            .removeDuplicates()
+            .dropFirst()
             .receive(on: DispatchQueue.main)
             .assign(to: &$bookmarkNames)
 
         manager.$locationNames
+            .removeDuplicates()
+            .dropFirst()
             .receive(on: DispatchQueue.main)
             .assign(to: &$locationNames)
 
         network.$userTorEnabled
+            .removeDuplicates()
+            .dropFirst()
             .receive(on: DispatchQueue.main)
             .assign(to: &$userTorEnabled)
 
         gateway.$isEnabled
+            .removeDuplicates()
+            .dropFirst()
             .receive(on: DispatchQueue.main)
             .assign(to: &$gatewayEnabled)
     }

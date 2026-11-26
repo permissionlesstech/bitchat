@@ -7,9 +7,6 @@ import UIKit
 
 @MainActor
 final class ConversationUIModel: ObservableObject {
-    @Published private(set) var showAutocomplete = false
-    @Published private(set) var autocompleteSuggestions: [String] = []
-    @Published private(set) var selectedAutocompleteIndex = 0
     @Published private(set) var currentNickname: String
     @Published private(set) var canSendMediaInCurrentContext = true
     @Published private(set) var legacyPrivateMediaConsentRequest: LegacyPrivateMediaConsentRequest?
@@ -42,10 +39,9 @@ final class ConversationUIModel: ObservableObject {
         self.conversations = conversations
         self.activeChannel = conversations.activeChannel
         self.currentNickname = chatViewModel.nickname
-        self.showAutocomplete = chatViewModel.showAutocomplete
-        self.autocompleteSuggestions = chatViewModel.autocompleteSuggestions
-        self.selectedAutocompleteIndex = chatViewModel.selectedAutocompleteIndex
         self.canSendMediaInCurrentContext = chatViewModel.canSendMediaInCurrentContext
+        self.activeLiveVoiceTalker = chatViewModel.activePublicVoiceTalker
+        self.legacyPrivateMediaConsentRequest = chatViewModel.legacyPrivateMediaConsentRequest
 
         bind()
     }
@@ -108,39 +104,6 @@ final class ConversationUIModel: ObservableObject {
 
     func getFingerprint(for peerID: PeerID) -> String? {
         chatViewModel.getFingerprint(for: peerID)
-    }
-
-    func updateAutocomplete(for text: String, cursorPosition: Int) {
-        chatViewModel.updateAutocomplete(for: text, cursorPosition: cursorPosition)
-    }
-
-    func completeNickname(_ nickname: String, in text: inout String) -> Int {
-        chatViewModel.completeNickname(nickname, in: &text)
-    }
-
-    /// Accept the currently highlighted mention suggestion, if any.
-    func completeSelectedSuggestion(in text: inout String) -> Bool {
-        guard showAutocomplete,
-              autocompleteSuggestions.indices.contains(selectedAutocompleteIndex)
-        else { return false }
-        _ = completeNickname(autocompleteSuggestions[selectedAutocompleteIndex], in: &text)
-        return true
-    }
-
-    /// Dismiss the mention suggestion panel without inserting (Escape).
-    func dismissAutocomplete() {
-        guard showAutocomplete else { return }
-        chatViewModel.showAutocomplete = false
-        chatViewModel.autocompleteSuggestions = []
-        chatViewModel.autocompleteRange = nil
-        chatViewModel.selectedAutocompleteIndex = 0
-    }
-
-    func moveAutocompleteSelection(by delta: Int) {
-        guard showAutocomplete, !autocompleteSuggestions.isEmpty else { return }
-        let count = min(4, autocompleteSuggestions.count)
-        let next = (selectedAutocompleteIndex + delta + count) % count
-        chatViewModel.selectedAutocompleteIndex = next
     }
 
     func formatMessage(_ message: BitchatMessage, colorScheme: ColorScheme, theme: AppTheme? = nil) -> AttributedString {
@@ -267,35 +230,24 @@ final class ConversationUIModel: ObservableObject {
         // all of them: forward only real changes, never a re-sent equal value.
         chatViewModel.$nickname
             .removeDuplicates()
+            .dropFirst()
             .receive(on: DispatchQueue.main)
             .assign(to: &$currentNickname)
 
-        chatViewModel.$showAutocomplete
-            .removeDuplicates()
-            .receive(on: DispatchQueue.main)
-            .assign(to: &$showAutocomplete)
-
-        chatViewModel.$autocompleteSuggestions
-            .removeDuplicates()
-            .receive(on: DispatchQueue.main)
-            .assign(to: &$autocompleteSuggestions)
-
-        chatViewModel.$selectedAutocompleteIndex
-            .removeDuplicates()
-            .receive(on: DispatchQueue.main)
-            .assign(to: &$selectedAutocompleteIndex)
-
         chatViewModel.$activePublicVoiceTalker
             .removeDuplicates()
+            .dropFirst()
             .receive(on: DispatchQueue.main)
             .assign(to: &$activeLiveVoiceTalker)
 
         chatViewModel.$legacyPrivateMediaConsentRequest
             .removeDuplicates()
+            .dropFirst()
             .receive(on: DispatchQueue.main)
             .assign(to: &$legacyPrivateMediaConsentRequest)
 
         conversations.$activeChannel
+            .removeDuplicates()
             .receive(on: DispatchQueue.main)
             .sink { [weak self] channel in
                 self?.activeChannel = channel
@@ -307,6 +259,7 @@ final class ConversationUIModel: ObservableObject {
             .store(in: &cancellables)
 
         privateConversationModel.$selectedPeerID
+            .removeDuplicates()
             .receive(on: DispatchQueue.main)
             .sink { [weak self] _ in
                 self?.refreshComputedState()
@@ -316,6 +269,8 @@ final class ConversationUIModel: ObservableObject {
         // Verify/unverify while a DM is open must repaint existing rows —
         // showsVerifiedSeal is computed per render, so forward the store change.
         chatViewModel.peerIdentityStore.$verifiedFingerprints
+            .removeDuplicates()
+            .dropFirst()
             .receive(on: DispatchQueue.main)
             .sink { [weak self] _ in
                 self?.objectWillChange.send()

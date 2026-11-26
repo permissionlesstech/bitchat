@@ -23,11 +23,30 @@ final class AppRuntime: ObservableObject {
     let privateConversationModel: PrivateConversationModel
     let verificationModel: VerificationModel
     let conversationUIModel: ConversationUIModel
+    let composerAutocompleteModel: ComposerAutocompleteModel
+    let composerDraftModel = ComposerDraftModel()
     let locationChannelsModel: LocationChannelsModel
     let peerListModel: PeerListModel
     let appChromeModel: AppChromeModel
     let boardAlertsModel: BoardAlertsModel
     let sharedContentImportModel: SharedContentImportModel
+
+    var environmentModels: AppEnvironmentModels {
+        AppEnvironmentModels(
+            publicChatModel: publicChatModel,
+            privateInboxModel: privateInboxModel,
+            privateConversationModel: privateConversationModel,
+            verificationModel: verificationModel,
+            conversationUIModel: conversationUIModel,
+            composerAutocompleteModel: composerAutocompleteModel,
+            composerDraftModel: composerDraftModel,
+            locationChannelsModel: locationChannelsModel,
+            peerListModel: peerListModel,
+            appChromeModel: appChromeModel,
+            boardAlertsModel: boardAlertsModel,
+            sharedContentImportModel: sharedContentImportModel
+        )
+    }
 
     private let idBridge: NostrIdentityBridge
     private var cancellables = Set<AnyCancellable>()
@@ -79,6 +98,7 @@ final class AppRuntime: ObservableObject {
             privateConversationModel: self.privateConversationModel,
             conversations: conversations
         )
+        self.composerAutocompleteModel = ComposerAutocompleteModel(chatViewModel: self.chatViewModel)
         self.peerListModel = PeerListModel(
             chatViewModel: self.chatViewModel,
             conversations: conversations,

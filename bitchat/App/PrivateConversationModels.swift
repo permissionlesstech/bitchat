@@ -235,9 +235,15 @@ final class PrivateConversationModel: ObservableObject {
     }
 
     private func refreshSelectedConversation() {
-        selectedPeerID = conversations.selectedPrivatePeerID
-        selectedHeaderState = selectedPeerID.flatMap { peerID in
+        let nextPeerID = conversations.selectedPrivatePeerID
+        let nextHeaderState = nextPeerID.flatMap { peerID in
             makeHeaderState(for: peerID)
+        }
+        if selectedPeerID != nextPeerID {
+            selectedPeerID = nextPeerID
+        }
+        if selectedHeaderState != nextHeaderState {
+            selectedHeaderState = nextHeaderState
         }
     }
 

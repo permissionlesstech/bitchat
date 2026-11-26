@@ -11,6 +11,7 @@ final class PeerIdentityStore: ObservableObject {
     private(set) var selectedPrivateChatFingerprint: String?
 
     private var stablePeerIDsByShortID: [PeerID: PeerID] = [:]
+    private(set) var stablePeerMappingRevision: UInt64 = 0
     private var encryptionStatusCache: [PeerID: EncryptionStatus] = [:]
 
     func stablePeerID(forShortID peerID: PeerID) -> PeerID? {
@@ -22,7 +23,9 @@ final class PeerIdentityStore: ObservableObject {
     }
 
     func setStablePeerID(_ stablePeerID: PeerID, forShortID peerID: PeerID) {
+        guard stablePeerIDsByShortID[peerID] != stablePeerID else { return }
         stablePeerIDsByShortID[peerID] = stablePeerID
+        stablePeerMappingRevision &+= 1
     }
 
     func fingerprint(for peerID: PeerID) -> String? {
@@ -82,22 +85,27 @@ final class PeerIdentityStore: ObservableObject {
     }
 
     func setEncryptionStatus(_ status: EncryptionStatus?, for peerID: PeerID) {
-        if let status {
-            encryptionStatuses[peerID] = status
-        } else {
-            encryptionStatuses.removeValue(forKey: peerID)
+        if encryptionStatuses[peerID] != status {
+            if let status {
+                encryptionStatuses[peerID] = status
+            } else {
+                encryptionStatuses.removeValue(forKey: peerID)
+            }
         }
         invalidateEncryptionCache(for: peerID)
     }
 
     func setVerifiedFingerprints(_ fingerprints: Set<String>) {
+        guard verifiedFingerprints != fingerprints else { return }
         verifiedFingerprints = fingerprints
     }
 
     func setVerified(_ fingerprint: String, verified: Bool) {
         if verified {
+            guard !verifiedFingerprints.contains(fingerprint) else { return }
             verifiedFingerprints.insert(fingerprint)
         } else {
+            guard verifiedFingerprints.contains(fingerprint) else { return }
             verifiedFingerprints.remove(fingerprint)
         }
     }
@@ -107,11 +115,18 @@ final class PeerIdentityStore: ObservableObject {
     }
 
     func clearAll() {
-        encryptionStatuses.removeAll()
-        verifiedFingerprints.removeAll()
+        if !encryptionStatuses.isEmpty {
+            encryptionStatuses.removeAll()
+        }
+        if !verifiedFingerprints.isEmpty {
+            verifiedFingerprints.removeAll()
+        }
         peerFingerprintsByPeerID.removeAll()
         selectedPrivateChatFingerprint = nil
-        stablePeerIDsByShortID.removeAll()
+        if !stablePeerIDsByShortID.isEmpty {
+            stablePeerIDsByShortID.removeAll()
+            stablePeerMappingRevision &+= 1
+        }
         encryptionStatusCache.removeAll()
     }
 }
