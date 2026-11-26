@@ -14,6 +14,10 @@ final class ChatMessageFormatter {
     /// is rebuilt only when the roster's membership (or our own excluded
     /// key) changes rather than recomputing the roster on every lookup.
     private var nostrPaletteKey: NostrPaletteKey?
+    /// What the mesh palette was last built from. Guarded by membership and
+    /// stable-ID mapping revisions so looking up colors across N rows is O(N)
+    /// instead of rebuilding the seed dictionary O(N²) times.
+    private var meshPaletteKey: MeshPaletteKey?
 
     private struct NostrPaletteKey: Equatable {
         // periphery:ignore - read only via the synthesized Equatable
@@ -22,6 +26,17 @@ final class ChatMessageFormatter {
         let membershipRevision: UInt64
         // periphery:ignore - see `membershipRevision`.
         let excludedHex: String?
+    }
+
+    private struct MeshPaletteKey: Equatable {
+        // periphery:ignore - read only via the synthesized Equatable
+        // conformance (the rebuild check), which the indexer cannot
+        // attribute.
+        let membershipRevision: UInt64
+        // periphery:ignore - see `membershipRevision`.
+        let stablePeerRevision: UInt64
+        // periphery:ignore - see `membershipRevision`.
+        let myPeerID: PeerID
     }
 
     init(viewModel: ChatViewModel) {
@@ -231,7 +246,7 @@ final class ChatMessageFormatter {
                         let (mentionBase, mentionSuffix) = matchText.splitSuffix()
                         let mySuffix: String? = {
                             if case .location(let channel) = viewModel.activeChannel,
-                               let identity = try? viewModel.idBridge.deriveIdentity(forGeohash: channel.geohash) {
+                               let identity = viewModel.geohashIdentity(for: channel.geohash) {
                                 return String(identity.publicKeyHex.suffix(4))
                             }
                             return String(viewModel.meshService.myPeerID.id.prefix(4))
@@ -371,7 +386,7 @@ final class ChatMessageFormatter {
         let isSelf: Bool = {
             if let spid = message.senderPeerID {
                 if case .location(let channel) = viewModel.activeChannel, spid.id.hasPrefix("nostr:"),
-                   let myGeo = try? viewModel.idBridge.deriveIdentity(forGeohash: channel.geohash) {
+                   let myGeo = viewModel.geohashIdentity(for: channel.geohash) {
                     return spid == PeerID(nostr: myGeo.publicKeyHex)
                 }
                 return spid == viewModel.meshService.myPeerID
@@ -517,20 +532,28 @@ private extension ChatMessageFormatter {
             return .orange
         }
 
-        meshPalette.ensurePalette(for: currentMeshPaletteSeeds())
+        ensureMeshPalette()
         if let color = meshPalette.color(for: peerID.id, isDark: isDark) {
             return color
         }
         return Color(peerSeed: meshSeed(for: peerID), isDark: isDark)
     }
 
-    func currentMeshPaletteSeeds() -> [String: String] {
+    func ensureMeshPalette() {
         let myID = viewModel.meshService.myPeerID
+        let key = MeshPaletteKey(
+            membershipRevision: viewModel.meshPeerMembershipRevision,
+            stablePeerRevision: viewModel.peerIdentityStore.stablePeerMappingRevision,
+            myPeerID: myID
+        )
+        guard key != meshPaletteKey else { return }
+        meshPaletteKey = key
+
         var seeds: [String: String] = [:]
         for peer in viewModel.allPeers where peer.peerID != myID {
             seeds[peer.peerID.id] = meshSeed(for: peer.peerID)
         }
-        return seeds
+        meshPalette.ensurePalette(for: seeds)
     }
 
     func getNostrPaletteColor(for pubkeyHexLowercased: String, isDark: Bool) -> Color {
@@ -568,7 +591,7 @@ private extension ChatMessageFormatter {
 
     func currentGeohashIdentityHex() -> String? {
         if case .location(let channel) = viewModel.activeChannel,
-           let identity = try? viewModel.idBridge.deriveIdentity(forGeohash: channel.geohash) {
+           let identity = viewModel.geohashIdentity(for: channel.geohash) {
             return identity.publicKeyHex.lowercased()
         }
         return nil

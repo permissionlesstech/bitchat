@@ -25,21 +25,19 @@ struct ContentPeopleSheetModalPresentationState {
 struct ContentPeopleSheetView: View {
     @EnvironmentObject private var appChromeModel: AppChromeModel
     @EnvironmentObject private var privateConversationModel: PrivateConversationModel
-    @EnvironmentObject private var verificationModel: VerificationModel
     @EnvironmentObject private var conversationUIModel: ConversationUIModel
+    @Environment(\.appEnvironmentModels) private var appEnvironmentModels
     @Environment(\.scenePhase) private var scenePhase
 
     @Binding var showSidebar: Bool
-    @Binding var messageText: String
+    let draftModel: ComposerDraftModel
     @Binding var selectedMessageSender: String?
     @Binding var selectedMessageSenderID: PeerID?
     @Binding var imagePreviewURL: URL?
-    @Binding var windowCountPublic: Int
     @Binding var windowCountPrivate: [PeerID: Int]
     @Binding var isAtBottomPrivate: Bool
     var isTextFieldFocused: FocusState<Bool>.Binding
     @ObservedObject var voiceRecordingVM: VoiceRecordingViewModel
-    @Binding var autocompleteDebounceTimer: Timer?
     @State private var showVerifySheet = false
     @ThemedPalette private var palette
 
@@ -130,16 +128,14 @@ struct ContentPeopleSheetView: View {
                     #if os(iOS)
                     ContentPrivateChatSheetView(
                         showSidebar: $showSidebar,
-                        messageText: $messageText,
+                        draftModel: draftModel,
                         selectedMessageSender: $selectedMessageSender,
                         selectedMessageSenderID: $selectedMessageSenderID,
                         imagePreviewURL: $imagePreviewURL,
-                        windowCountPublic: $windowCountPublic,
                         windowCountPrivate: $windowCountPrivate,
                         isAtBottomPrivate: $isAtBottomPrivate,
                         isTextFieldFocused: isTextFieldFocused,
                         voiceRecordingVM: voiceRecordingVM,
-                        autocompleteDebounceTimer: $autocompleteDebounceTimer,
                         headerHeight: headerHeight,
                         onSendMessage: onSendMessage,
                         showImagePicker: $showImagePicker,
@@ -148,16 +144,14 @@ struct ContentPeopleSheetView: View {
                     #else
                     ContentPrivateChatSheetView(
                         showSidebar: $showSidebar,
-                        messageText: $messageText,
+                        draftModel: draftModel,
                         selectedMessageSender: $selectedMessageSender,
                         selectedMessageSenderID: $selectedMessageSenderID,
                         imagePreviewURL: $imagePreviewURL,
-                        windowCountPublic: $windowCountPublic,
                         windowCountPrivate: $windowCountPrivate,
                         isAtBottomPrivate: $isAtBottomPrivate,
                         isTextFieldFocused: isTextFieldFocused,
                         voiceRecordingVM: voiceRecordingVM,
-                        autocompleteDebounceTimer: $autocompleteDebounceTimer,
                         headerHeight: headerHeight,
                         onSendMessage: onSendMessage,
                         showMacImagePicker: $showMacImagePicker
@@ -178,7 +172,8 @@ struct ContentPeopleSheetView: View {
                     }
                 }
             )) {
-                if let peerID = appChromeModel.showingFingerprintFor {
+                if let peerID = appChromeModel.showingFingerprintFor,
+                   let verificationModel = appEnvironmentModels?.verificationModel {
                     FingerprintView(peerID: peerID)
                         .environmentObject(verificationModel)
                 }
@@ -312,10 +307,9 @@ struct ContentPeopleSheetView: View {
 private struct ContentPeopleListView: View {
     @EnvironmentObject private var appChromeModel: AppChromeModel
     @EnvironmentObject private var privateConversationModel: PrivateConversationModel
-    @EnvironmentObject private var verificationModel: VerificationModel
-    @EnvironmentObject private var conversationUIModel: ConversationUIModel
     @EnvironmentObject private var locationChannelsModel: LocationChannelsModel
     @EnvironmentObject private var peerListModel: PeerListModel
+    @Environment(\.appEnvironmentModels) private var appEnvironmentModels
     @Environment(\.dismiss) private var dismiss
     @ThemedPalette private var palette
 
@@ -412,9 +406,9 @@ private struct ContentPeopleListView: View {
                             },
                             onToggleBlock: { peer in
                                 if peer.isBlocked {
-                                    conversationUIModel.unblock(peerID: peer.peerID, displayName: peer.displayName)
+                                    appEnvironmentModels?.conversationUIModel.unblock(peerID: peer.peerID, displayName: peer.displayName)
                                 } else {
-                                    conversationUIModel.block(peerID: peer.peerID, displayName: peer.displayName)
+                                    appEnvironmentModels?.conversationUIModel.block(peerID: peer.peerID, displayName: peer.displayName)
                                 }
                             }
                         )
@@ -454,8 +448,10 @@ private struct ContentPeopleListView: View {
             }
         }
         .sheet(isPresented: $showVerifySheet) {
-            VerificationSheetView(isPresented: $showVerifySheet)
-                .environmentObject(verificationModel)
+            if let verificationModel = appEnvironmentModels?.verificationModel {
+                VerificationSheetView(isPresented: $showVerifySheet)
+                    .environmentObject(verificationModel)
+            }
         }
     }
 }
@@ -471,16 +467,14 @@ private struct ContentPrivateChatSheetView: View {
     @EnvironmentObject private var privateConversationModel: PrivateConversationModel
 
     @Binding var showSidebar: Bool
-    @Binding var messageText: String
+    let draftModel: ComposerDraftModel
     @Binding var selectedMessageSender: String?
     @Binding var selectedMessageSenderID: PeerID?
     @Binding var imagePreviewURL: URL?
-    @Binding var windowCountPublic: Int
     @Binding var windowCountPrivate: [PeerID: Int]
     @Binding var isAtBottomPrivate: Bool
     var isTextFieldFocused: FocusState<Bool>.Binding
     @ObservedObject var voiceRecordingVM: VoiceRecordingViewModel
-    @Binding var autocompleteDebounceTimer: Timer?
     @Environment(\.appTheme) private var theme
     @ThemedPalette private var palette
 
@@ -561,14 +555,12 @@ private struct ContentPrivateChatSheetView: View {
                 .modifier(PrivateHeaderChrome())
             }
 
-            MessageListView(
+            PrivateMessageListView(
                 privatePeer: privateConversationModel.selectedPeerID,
                 isAtBottom: $isAtBottomPrivate,
-                messageText: $messageText,
                 selectedMessageSender: $selectedMessageSender,
                 selectedMessageSenderID: $selectedMessageSenderID,
                 imagePreviewURL: $imagePreviewURL,
-                windowCountPublic: $windowCountPublic,
                 windowCountPrivate: $windowCountPrivate,
                 showSidebar: $showSidebar,
                 isTextFieldFocused: isTextFieldFocused
@@ -589,20 +581,18 @@ private struct ContentPrivateChatSheetView: View {
 
             #if os(iOS)
             ContentComposerView(
-                messageText: $messageText,
+                draftModel: draftModel,
                 isTextFieldFocused: isTextFieldFocused,
                 voiceRecordingVM: voiceRecordingVM,
-                autocompleteDebounceTimer: $autocompleteDebounceTimer,
                 onSendMessage: onSendMessage,
                 showImagePicker: $showImagePicker,
                 imagePickerSourceType: $imagePickerSourceType
             )
             #else
             ContentComposerView(
-                messageText: $messageText,
+                draftModel: draftModel,
                 isTextFieldFocused: isTextFieldFocused,
                 voiceRecordingVM: voiceRecordingVM,
-                autocompleteDebounceTimer: $autocompleteDebounceTimer,
                 onSendMessage: onSendMessage,
                 showMacImagePicker: $showMacImagePicker
             )

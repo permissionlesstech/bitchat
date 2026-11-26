@@ -223,7 +223,19 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, SynchronousMessage
     // Computed properties for compatibility
     @MainActor
     var connectedPeers: Set<PeerID> { unifiedPeerService.connectedPeerIDs }
-    @Published var allPeers: [BitchatPeer] = []
+    /// Monotonic counter incremented only when `allPeers`'s peer-ID membership
+    /// changes, allowing `ChatMessageFormatter` to skip O(N) mesh palette
+    /// seed rebuilds on every row lookup.
+    private(set) var meshPeerMembershipRevision: UInt64 = 0
+    @Published var allPeers: [BitchatPeer] = [] {
+        didSet {
+            guard oldValue.count != allPeers.count
+                || zip(oldValue, allPeers).contains(where: { $0.peerID != $1.peerID }) else {
+                return
+            }
+            meshPeerMembershipRevision &+= 1
+        }
+    }
     /// Nickname of whoever is talking live in the public mesh channel right
     /// now (floor-courtesy indicator on the composer mic), nil when nobody.
     @Published var activePublicVoiceTalker: String?
