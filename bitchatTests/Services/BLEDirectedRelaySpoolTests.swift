@@ -104,6 +104,34 @@ struct BLEDirectedRelaySpoolTests {
         #expect(drained.map { $0.packet.payload.first } == [1, 2])
     }
 
+    /// A decoded packet keeps its received wire bytes for relay, and a valid
+    /// DEFLATE stream can be far larger than the payload it inflates to, so
+    /// the budget must charge the larger of the two.
+    @Test
+    func enqueueChargesRetainedWireBytesNotJustThePayload() {
+        let recipient = PeerID(str: "1122334455667788")
+        let now = Date()
+        var spool = BLEDirectedRelaySpool(capacity: 10, byteBudget: 250)
+
+        // Three bytes of payload carried by a 200-byte stream: 200 against the budget.
+        var inflated = makePacket(payload: [0x01, 0x02, 0x03])
+        inflated.wirePayload = WirePayload(bytes: Data(repeating: 0xAB, count: 200), compressed: true, forPayload: inflated.payload)
+        let first = spool.enqueue(packet: inflated, recipient: recipient, messageID: "inflated-1", enqueuedAt: now)
+        #expect(first)
+
+        // A second one would reach 400 > 250: the first is evicted, not kept beside it.
+        let second = spool.enqueue(packet: inflated, recipient: recipient, messageID: "inflated-2", enqueuedAt: now.addingTimeInterval(1))
+        #expect(second)
+        #expect(spool.count == 1)
+
+        // Larger than the whole budget: refused outright, as an oversized payload would be.
+        var oversized = makePacket(payload: [0x04])
+        oversized.wirePayload = WirePayload(bytes: Data(repeating: 0xCD, count: 251), compressed: true, forPayload: oversized.payload)
+        let refused = spool.enqueue(packet: oversized, recipient: recipient, messageID: "oversized", enqueuedAt: now)
+        #expect(!refused)
+        #expect(spool.count == 1)
+    }
+
     @Test
     func enqueueEvictsOldestPastTheCountCap() {
         let now = Date()

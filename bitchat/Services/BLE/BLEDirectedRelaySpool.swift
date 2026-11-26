@@ -12,6 +12,9 @@ struct BLEDirectedRelaySpoolEntry {
 /// spooled noiseEncrypted packet keeps the framed-file decompression cap, so
 /// a ~1 KB compressed frame can decode to ~1 MB, and a window-only bound let
 /// a stream of such frames pin gigabytes before the first entry expired.
+/// The bytes charged are `retainedPayloadBytes`: a decoded packet also keeps
+/// its received wire bytes for relay, and a DEFLATE stream can be larger
+/// than the payload it inflates to.
 struct BLEDirectedRelaySpool {
     private struct Key: Hashable {
         let recipient: PeerID
@@ -31,7 +34,7 @@ struct BLEDirectedRelaySpool {
     private var packets: [Key: StoredPacket] = [:]
     /// Enqueue order, oldest first: the eviction order, and the drain order.
     private var order: [Key] = []
-    /// Sum of spooled payload sizes, maintained on every insert/remove.
+    /// Sum of spooled `retainedPayloadBytes`, maintained on every insert/remove.
     private var payloadBytes = 0
 
     init(
@@ -61,17 +64,17 @@ struct BLEDirectedRelaySpool {
         enqueuedAt: Date
     ) -> Bool {
         let key = Key(recipient: recipient, messageID: messageID)
-        guard packets[key] == nil, packet.payload.count <= byteBudget else {
+        guard packets[key] == nil, packet.retainedPayloadBytes <= byteBudget else {
             return false
         }
 
         packets[key] = StoredPacket(packet: packet, enqueuedAt: enqueuedAt)
         order.append(key)
-        payloadBytes += packet.payload.count
+        payloadBytes += packet.retainedPayloadBytes
         while order.count > capacity || payloadBytes > byteBudget {
             let victim = order.removeFirst()
             if let evicted = packets.removeValue(forKey: victim) {
-                payloadBytes -= evicted.packet.payload.count
+                payloadBytes -= evicted.packet.retainedPayloadBytes
             }
         }
         return true
@@ -100,7 +103,7 @@ struct BLEDirectedRelaySpool {
                 freshOrder.append(key)
             } else {
                 packets.removeValue(forKey: key)
-                payloadBytes -= stored.packet.payload.count
+                payloadBytes -= stored.packet.retainedPayloadBytes
             }
         }
         order = freshOrder
