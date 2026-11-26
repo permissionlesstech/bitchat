@@ -638,6 +638,32 @@ final class SecureIdentityStateManagerTests: XCTestCase {
         XCTAssertEqual(reloaded.getSocialIdentity(for: fingerprint)?.claimedNickname, "Bob")
     }
 
+    func test_clearAllIdentityData_clearsPendingSaveAfterFailedWrite() async {
+        let keychain = FailingCacheSaveKeychain(shouldFailCacheSave: true)
+        let manager = SecureIdentityStateManager(keychain)
+        let noisePublicKey = Data(repeating: 0x62, count: 32)
+        let signingPublicKey = Data(repeating: 0x63, count: 32)
+        let fingerprint = noisePublicKey.sha256Fingerprint()
+
+        manager.upsertCryptographicIdentity(
+            fingerprint: fingerprint,
+            noisePublicKey: noisePublicKey,
+            signingPublicKey: signingPublicKey,
+            claimedNickname: "Carol"
+        )
+        let attemptedInitial = await waitUntil { keychain.cacheSaveCount == 1 }
+        XCTAssertTrue(attemptedInitial)
+
+        // Panic wipe while a failed save is still pending must not let a later
+        // flush recreate the cache item in Keychain.
+        manager.clearAllIdentityData()
+        keychain.setShouldFailCacheSave(false)
+        manager.forceSave()
+
+        XCTAssertEqual(keychain.cacheSaveCount, 1)
+        XCTAssertNil(keychain.getIdentityKey(forKey: "bitchat.identityCache.v2"))
+    }
+
     private func waitUntil(
         timeout: TimeInterval = TestConstants.settleTimeout,
         condition: @escaping () -> Bool

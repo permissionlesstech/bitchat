@@ -687,6 +687,7 @@ final class SecureIdentityStateManager: SecureIdentityStateManagerProtocol {
         queue.sync(flags: .barrier) {
             self.cache = IdentityCache()
             self.ephemeralSessions.removeAll()
+            self.pendingSave = false
 
             // Delete from keychain
             let deleted = self.keychain.deleteIdentityKey(forKey: self.cacheKey)

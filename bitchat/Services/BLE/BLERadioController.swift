@@ -101,6 +101,20 @@ final class BLERadioController {
         )
     }
 
+    #if os(iOS)
+    /// Stops any active scan and restarts it with current options on `bleQueue`.
+    func restartScanning() {
+        guard delegate?.radioIsPanicSuspended() == false,
+              let central,
+              central.state == .poweredOn else { return }
+        if central.isScanning {
+            central.stopScan()
+        }
+        lastScanAllowDuplicates = nil
+        startScanning()
+    }
+    #endif
+
     /// Ensures scanning is active with up-to-date options (e.g. if Low Power
     /// Mode toggled while a scan was already running).
     private func ensureScanningWithCurrentOptions() {

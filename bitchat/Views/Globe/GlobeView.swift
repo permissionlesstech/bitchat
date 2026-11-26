@@ -157,9 +157,10 @@ private struct GlobeCrosshair: View {
     let isInMotion: Bool
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.scenePhase) private var scenePhase
+    @State private var isLowPowerMode = ProcessInfo.processInfo.isLowPowerModeEnabled
 
     private var isPaused: Bool {
-        isInMotion || reduceMotion || scenePhase != .active || ProcessInfo.processInfo.isLowPowerModeEnabled
+        isInMotion || reduceMotion || scenePhase != .active || isLowPowerMode
     }
 
     var body: some View {
@@ -183,6 +184,12 @@ private struct GlobeCrosshair: View {
                 context.stroke(path, with: shading, lineWidth: 1.6)
                 context.fill(Path(ellipseIn: CGRect(x: cx - 1.8, y: cy - 1.8, width: 3.6, height: 3.6)), with: shading)
             }
+        }
+        .onReceive(
+            NotificationCenter.default.publisher(for: .NSProcessInfoPowerStateDidChange)
+                .receive(on: RunLoop.main)
+        ) { _ in
+            isLowPowerMode = ProcessInfo.processInfo.isLowPowerModeEnabled
         }
     }
 

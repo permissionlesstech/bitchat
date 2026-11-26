@@ -464,18 +464,21 @@ final class GossipSyncManager {
             isPacketFresh(pkt, nowMs: nowMs)
         }
 
+        func sendIfMissing(_ packet: BitchatPacket, hash64: UInt64) {
+            guard !mightContain(hash64: hash64) else { return }
+            var toSend = packet
+            toSend.ttl = 0
+            toSend.isRSR = true // Mark as solicited response
+            delegate?.sendPacket(to: peerID, packet: toSend)
+        }
+
         // Announces are exempt from the since-cursor: they carry the signing
         // keys needed to verify everything else, and there is at most one per
         // peer, so the resend cost is negligible.
         if requestedTypes.contains(.announce) {
             for (_, entry) in latestAnnouncementByPeer {
                 guard isFresh(entry.packet) else { continue }
-                if !mightContain(hash64: entry.hash64) {
-                    var toSend = entry.packet
-                    toSend.ttl = 0
-                    toSend.isRSR = true // Mark as solicited response
-                    delegate?.sendPacket(to: peerID, packet: toSend)
-                }
+                sendIfMissing(entry.packet, hash64: entry.hash64)
             }
         }
 
@@ -483,12 +486,7 @@ final class GossipSyncManager {
             let toSendMsgs = messages.allEntries(isFresh: isFresh)
             for entry in toSendMsgs {
                 if let since, entry.packet.timestamp < since { continue }
-                if !mightContain(hash64: entry.hash64) {
-                    var toSend = entry.packet
-                    toSend.ttl = 0
-                    toSend.isRSR = true // Mark as solicited response
-                    delegate?.sendPacket(to: peerID, packet: toSend)
-                }
+                sendIfMissing(entry.packet, hash64: entry.hash64)
             }
         }
 
@@ -506,12 +504,7 @@ final class GossipSyncManager {
                 } else if let since, entry.packet.timestamp < since {
                     continue
                 }
-                if !mightContain(hash64: entry.hash64) {
-                    var toSend = entry.packet
-                    toSend.ttl = 0
-                    toSend.isRSR = true // Mark as solicited response
-                    delegate?.sendPacket(to: peerID, packet: toSend)
-                }
+                sendIfMissing(entry.packet, hash64: entry.hash64)
             }
         }
 
@@ -519,12 +512,7 @@ final class GossipSyncManager {
             let files = fileTransfers.allEntries(isFresh: isFresh)
             for entry in files {
                 if let since, entry.packet.timestamp < since { continue }
-                if !mightContain(hash64: entry.hash64) {
-                    var toSend = entry.packet
-                    toSend.ttl = 0
-                    toSend.isRSR = true // Mark as solicited response
-                    delegate?.sendPacket(to: peerID, packet: toSend)
-                }
+                sendIfMissing(entry.packet, hash64: entry.hash64)
             }
         }
 
@@ -532,12 +520,7 @@ final class GossipSyncManager {
             let groupPkts = groupMessages.allEntries(isFresh: isFresh)
             for entry in groupPkts {
                 if let since, entry.packet.timestamp < since { continue }
-                if !mightContain(hash64: entry.hash64) {
-                    var toSend = entry.packet
-                    toSend.ttl = 0
-                    toSend.isRSR = true // Mark as solicited response
-                    delegate?.sendPacket(to: peerID, packet: toSend)
-                }
+                sendIfMissing(entry.packet, hash64: entry.hash64)
             }
         }
         // Like announces, prekey bundles are exempt from the since-cursor:
@@ -547,12 +530,7 @@ final class GossipSyncManager {
         if requestedTypes.contains(.prekeyBundle) {
             for (_, entry) in latestPrekeyBundleByPeer {
                 guard isFresh(entry.packet) else { continue }
-                if !mightContain(hash64: entry.hash64) {
-                    var toSend = entry.packet
-                    toSend.ttl = 0
-                    toSend.isRSR = true // Mark as solicited response
-                    delegate?.sendPacket(to: peerID, packet: toSend)
-                }
+                sendIfMissing(entry.packet, hash64: entry.hash64)
             }
         }
         if requestedTypes.contains(.boardPost) {
@@ -561,13 +539,7 @@ final class GossipSyncManager {
             let boardPackets = boardPacketsProvider?() ?? []
             for pkt in boardPackets {
                 if let since, pkt.timestamp < since { continue }
-                let hash64 = GCSFilter.hash64(PacketIdUtil.computeId(pkt))
-                if !mightContain(hash64: hash64) {
-                    var toSend = pkt
-                    toSend.ttl = 0
-                    toSend.isRSR = true // Mark as solicited response
-                    delegate?.sendPacket(to: peerID, packet: toSend)
-                }
+                sendIfMissing(pkt, hash64: GCSFilter.hash64(PacketIdUtil.computeId(pkt)))
             }
         }
     }

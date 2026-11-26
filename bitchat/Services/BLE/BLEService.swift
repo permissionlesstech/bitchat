@@ -581,6 +581,14 @@ final class BLEService: NSObject {
         // any access from another queue (cross-queue reads use readLinkState).
         linkStateStore.assumeOwnership(of: bleQueue)
 
+        // Immediately refresh BLE scan options and idle cadence when Low Power Mode toggles.
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(powerStateDidChange),
+            name: .NSProcessInfoPowerStateDidChange,
+            object: nil
+        )
+
         if !startSuspendedForPanicRecovery {
             initializeBluetoothManagersIfNeeded()
         }
@@ -978,9 +986,32 @@ final class BLEService: NSObject {
         timer.schedule(deadline: .now() + targetInterval, repeating: targetInterval, leeway: targetLeeway)
     }
 
+    /// Shared idle predicate (bleQueue-confined): true only when no physical links,
+    /// known peers, queued candidates, or pending outbound buffers remain.
+    private func isCompletelyIdle(hasActiveLinks: Bool, hasNoPeers: Bool) -> Bool {
+        !hasActiveLinks
+            && hasNoPeers
+            && radio.candidateCount == 0
+            && pendingNotifications.isEmpty
+            && pendingPeripheralWrites.isEmpty
+    }
+
     /// Snaps maintenance cadence back to active when a link comes online on `bleQueue`.
     func wakeMaintenanceCadenceIfNeeded() {
         updateMaintenanceCadence(isIdle: false)
+    }
+
+    @objc private func powerStateDidChange() {
+        bleQueue.async { [weak self] in
+            guard let self, !self.isPanicSuspended else { return }
+            let (connectedCount, hasNoPeers) = self.peerRegistry.read { ($0.connectedCount, $0.isEmpty) }
+            self.radio.updateScanningDutyCycle(connectedCount: connectedCount)
+            let isIdle = self.isCompletelyIdle(
+                hasActiveLinks: self.linkStateStore.hasActiveLinks,
+                hasNoPeers: hasNoPeers
+            )
+            self.updateMaintenanceCadence(isIdle: isIdle)
+        }
     }
 
     func startServices() {
@@ -5300,14 +5331,13 @@ extension BLEService {
     @objc private func appDidBecomeActive() {
         isAppActive = true
         refreshCachedBackgroundTimeRemaining()
-        // Restart scanning with allow duplicates when app becomes active
-        if centralManager?.state == .poweredOn {
-            centralManager?.stopScan()
-            radio.startScanning()
-        }
-        radio.cancelStalePendingConnects()
+        // Restart scanning and refresh link-layer state on bleQueue so
+        // BLERadioController state stays strictly bleQueue-confined.
         bleQueue.async { [weak self] in
-            self?.updateMaintenanceCadence(isIdle: false)
+            guard let self else { return }
+            self.radio.restartScanning()
+            self.radio.cancelStalePendingConnects()
+            self.updateMaintenanceCadence(isIdle: false)
         }
         logBluetoothStatus("became-active")
         scheduleBluetoothStatusSample(after: 5.0, context: "active-5s")
@@ -5321,14 +5351,12 @@ extension BLEService {
         bleQueue.async { [weak self] in
             guard let self else { return }
             self.radio.stopDutyCycle()
-            if self.centralManager?.state == .poweredOn {
-                self.centralManager?.stopScan()
-                self.radio.startScanning()
-            }
-            let isIdle = !self.linkStateStore.hasActiveLinks
-                && self.radio.candidateCount == 0
-                && self.pendingNotifications.isEmpty
-                && self.pendingPeripheralWrites.isEmpty
+            self.radio.restartScanning()
+            let hasNoPeers = self.peerRegistry.read(\.isEmpty)
+            let isIdle = self.isCompletelyIdle(
+                hasActiveLinks: self.linkStateStore.hasActiveLinks,
+                hasNoPeers: hasNoPeers
+            )
             self.updateMaintenanceCadence(isIdle: isIdle)
         }
         radio.armPendingBackgroundConnects()
@@ -7148,8 +7176,10 @@ extension BLEService {
             radio.tryConnectFromQueue()
         }
         
-        // Check peer connectivity only when peers or topology state exist.
-        if !hasNoPeers || !meshTopology.isEmpty {
+        // Check peer connectivity only when peers or remote topology nodes exist
+        // (ignoring our own self-entry so idle maintenance stops dispatching after
+        // the last peer expires).
+        if !hasNoPeers || meshTopology.hasRemoteNodes(excluding: myPeerID.routingData) {
             checkPeerConnectivity()
         }
         
@@ -7169,12 +7199,8 @@ extension BLEService {
         drainAllPendingWrites()
 
         // Adapt maintenance wakeup cadence to idle vs active mesh state.
-        let isCompletelyIdle = !hasActiveLinks
-            && hasNoPeers
-            && radio.candidateCount == 0
-            && pendingNotifications.isEmpty
-            && pendingPeripheralWrites.isEmpty
-        updateMaintenanceCadence(isIdle: isCompletelyIdle)
+        let isIdle = isCompletelyIdle(hasActiveLinks: hasActiveLinks, hasNoPeers: hasNoPeers)
+        updateMaintenanceCadence(isIdle: isIdle)
         
         // Reset counter to prevent overflow
         if plan.shouldResetCounter {
