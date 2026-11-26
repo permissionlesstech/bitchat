@@ -6,6 +6,12 @@ on:
       - main
   pull_request:
 
+# A new push to a PR cancels the PR's older run. Other events get the run id
+# as a unique group, so a run on main is never cancelled.
+concurrency:
+  group: dead-code-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: true
+
 jobs:
   periphery:
     name: Periphery scan

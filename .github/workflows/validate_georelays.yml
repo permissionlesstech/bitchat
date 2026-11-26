@@ -18,8 +18,7 @@ on:
 permissions:
   contents: read
 
-# A superseded run has nothing left to report; the sibling PR workflows do not
-# set this, so drop it if the repo prefers them uniform.
+# A superseded run has nothing left to report.
 concurrency:
   group: validate-georelays-${{ github.ref }}
   cancel-in-progress: true
