@@ -154,6 +154,7 @@ final class NostrTransport: Transport, @unchecked Sendable {
 
     // Reachability Cache (thread-safe)
     private var reachablePeers: Set<PeerID> = []
+    private var reachableShortPeers: Set<PeerID> = []
     // Mirror of the relay manager's connection state, cached here because
     // canDeliverPromptly is called synchronously off the main actor.
     private var relaysConnected = false
@@ -175,9 +176,12 @@ final class NostrTransport: Transport, @unchecked Sendable {
         let reachable = favorites.values
             .filter { $0.peerNostrPublicKey != nil }
             .map { PeerID(publicKey: $0.peerNoisePublicKey) }
+        let reachableSet = Set(reachable)
+        let reachableShortSet = Set(reachable.map { $0.toShort() })
             
         queue.sync(flags: .barrier) {
-            self.reachablePeers = Set(reachable)
+            self.reachablePeers = reachableSet
+            self.reachableShortPeers = reachableShortSet
         }
 
         relayConnectivityCancellable = self.dependencies.relayConnectivity()
@@ -204,14 +208,18 @@ final class NostrTransport: Transport, @unchecked Sendable {
     }
 
     private func refreshReachablePeers() {
-        Task { @MainActor [self] in
+        Task { @MainActor [weak self] in
+            guard let self else { return }
             let favorites = dependencies.loadFavorites()
             let reachable = favorites.values
                 .filter { $0.peerNostrPublicKey != nil }
                 .map { PeerID(publicKey: $0.peerNoisePublicKey) }
+            let reachableSet = Set(reachable)
+            let reachableShortSet = Set(reachable.map { $0.toShort() })
             
             self.queue.async(flags: .barrier) { [weak self] in
-                self?.reachablePeers = Set(reachable)
+                self?.reachablePeers = reachableSet
+                self?.reachableShortPeers = reachableShortSet
             }
         }
     }
@@ -239,8 +247,7 @@ final class NostrTransport: Transport, @unchecked Sendable {
         // 64-hex noise key (offline favorites), so compare in short form.
         let short = peerID.toShort()
         return queue.sync {
-            if reachablePeers.contains(peerID) { return true }
-            return reachablePeers.contains(where: { $0.toShort() == short })
+            reachablePeers.contains(peerID) || reachableShortPeers.contains(short)
         }
     }
 
@@ -362,17 +369,36 @@ extension NostrTransport {
         }
     }
 
-    /// Creates and sends a gift-wrapped private message event
+    /// Creates and sends a gift-wrapped private message event.
+    /// The NIP-17 wrap (2× ECDH + ChaCha20 + 2× Schnorr) runs off the main actor
+    /// while fencing delivery against panic-wipe generation bumps.
     @MainActor
-    private func sendWrappedMessage(content: String, recipientHex: String, senderIdentity: NostrIdentity, registerPending: Bool = false) {
-        guard let event = try? NostrProtocol.createPrivateMessage(content: content, recipientPubkey: recipientHex, senderIdentity: senderIdentity) else {
-            SecureLogger.error("NostrTransport: failed to build Nostr event", category: .session)
-            return
+    private func sendWrappedMessage(
+        content: String,
+        recipientHex: String,
+        senderIdentity: NostrIdentity,
+        registerPending: Bool = false,
+        expectedGeneration: UInt64? = nil
+    ) {
+        let generation = expectedGeneration ?? dependencies.ackPacer.currentGeneration()
+        let dependencies = self.dependencies
+        Task.detached(priority: .userInitiated) {
+            guard let event = try? NostrProtocol.createPrivateMessage(
+                content: content,
+                recipientPubkey: recipientHex,
+                senderIdentity: senderIdentity
+            ) else {
+                SecureLogger.error("NostrTransport: failed to build Nostr event", category: .session)
+                return
+            }
+            await MainActor.run {
+                guard dependencies.ackPacer.currentGeneration() == generation else { return }
+                if registerPending {
+                    dependencies.registerPendingGiftWrap(event.id)
+                }
+                dependencies.sendEvent(event)
+            }
         }
-        if registerPending {
-            dependencies.registerPendingGiftWrap(event.id)
-        }
-        dependencies.sendEvent(event)
     }
 
 
@@ -392,7 +418,7 @@ extension NostrTransport {
                     SecureLogger.error("NostrTransport: failed to embed READ ack", category: .session)
                     return
                 }
-                sendWrappedMessage(content: ack, recipientHex: recipientHex, senderIdentity: senderIdentity)
+                sendWrappedMessage(content: ack, recipientHex: recipientHex, senderIdentity: senderIdentity, expectedGeneration: generation)
 
             case .deliveredDirect(let messageID, let peerID):
                 guard let recipientNpub = resolveRecipientNpub(for: peerID),
@@ -403,17 +429,17 @@ extension NostrTransport {
                     SecureLogger.error("NostrTransport: failed to embed DELIVERED ack", category: .session)
                     return
                 }
-                sendWrappedMessage(content: ack, recipientHex: recipientHex, senderIdentity: senderIdentity)
+                sendWrappedMessage(content: ack, recipientHex: recipientHex, senderIdentity: senderIdentity, expectedGeneration: generation)
 
             case .deliveredGeohash(let messageID, let recipientHex, let identity):
                 SecureLogger.debug("GeoDM: send DELIVERED mid=\(messageID.prefix(8))…", category: .session)
                 guard let embedded = NostrEmbeddedBitChat.encodeAckForNostrNoRecipient(type: .delivered, messageID: messageID) else { return }
-                sendWrappedMessage(content: embedded, recipientHex: recipientHex, senderIdentity: identity, registerPending: true)
+                sendWrappedMessage(content: embedded, recipientHex: recipientHex, senderIdentity: identity, registerPending: true, expectedGeneration: generation)
 
             case .readGeohash(let messageID, let recipientHex, let identity):
                 SecureLogger.debug("GeoDM: send READ mid=\(messageID.prefix(8))…", category: .session)
                 guard let embedded = NostrEmbeddedBitChat.encodeAckForNostrNoRecipient(type: .readReceipt, messageID: messageID) else { return }
-                sendWrappedMessage(content: embedded, recipientHex: recipientHex, senderIdentity: identity, registerPending: true)
+                sendWrappedMessage(content: embedded, recipientHex: recipientHex, senderIdentity: identity, registerPending: true, expectedGeneration: generation)
             }
         }
     }

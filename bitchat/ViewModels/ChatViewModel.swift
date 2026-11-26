@@ -340,6 +340,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, SynchronousMessage
     let locationManager: LocationChannelManager
 
     var nostrRelayManager: NostrRelayManager?
+    var geohashNostrTransportStorage: NostrTransport?
     private let userDefaults = UserDefaults.standard
     let keychain: KeychainManagerProtocol
     private let panicRecoveryOperations: PanicRecoveryOperations
@@ -1733,6 +1734,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, SynchronousMessage
         // dropped at the main-actor delivery hop instead of landing here.
         nostrCoordinator.inbound.invalidateInFlightDecrypts()
         nostrRelayManager = nil
+        geohashNostrTransportStorage = nil
 
         // Clear Nostr identity associations
         idBridge.clearAllAssociations()

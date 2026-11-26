@@ -248,6 +248,9 @@ enum TransportConfig {
     static let nostrRelayInitialBackoffSeconds: TimeInterval = 1.0
     static let nostrRelayMaxBackoffSeconds: TimeInterval = 300.0
     static let nostrRelayBackoffMultiplier: Double = 2.0
+    // Grace period before closing a non-default (geohash/notes) relay socket
+    // with zero active/pending subscriptions or outbound work.
+    static let nostrIdleRelayTeardownSeconds: TimeInterval = 30.0
     static let nostrRelayMaxReconnectAttempts: Int = 10
     // Reconnect delays get ±20% random jitter so relays that dropped together
     // (e.g. a network blip) don't thundering-herd the same reconnect instant.

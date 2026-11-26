@@ -97,7 +97,8 @@ struct NostrProtocol {
     /// Returns the content, sender pubkey, and the actual message timestamp (not the randomized outer timestamp)
     static func decryptPrivateMessage(
         giftWrap: NostrEvent,
-        recipientIdentity: NostrIdentity
+        recipientIdentity: NostrIdentity,
+        outerSignatureAlreadyVerified: Bool = false
     ) throws -> (content: String, senderPubkey: String, timestamp: Int) {
 
         // 0. Validate the untrusted outer envelope before any decryption work.
@@ -110,7 +111,7 @@ struct NostrProtocol {
         }
         guard giftWrap.kind == EventKind.giftWrap.rawValue,
               giftWrap.tags == [["p", recipientIdentity.publicKeyHex]],
-              giftWrap.isValidSignature() else {
+              (outerSignatureAlreadyVerified || giftWrap.isValidSignature()) else {
             SecureLogger.error("❌ Rejecting DM: malformed or misbound outer envelope", category: .session)
             throw NostrError.invalidEvent
         }

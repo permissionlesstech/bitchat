@@ -110,4 +110,24 @@ final class FavoritesPersistenceServiceTests: XCTestCase {
         let decoded = try JSONDecoder().decode([FavoritesPersistenceService.FavoriteRelationship].self, from: cleaned)
         XCTAssertEqual(decoded.count, 1)
     }
+
+    func test_noisePublicKey_indexesBothNpubAndHexKeys() throws {
+        let service = FavoritesPersistenceService(keychain: MockKeychain())
+        let peerKey = Data((160..<192).map(UInt8.init))
+        let identity = try NostrIdentity.generate()
+
+        service.addFavorite(
+            peerNoisePublicKey: peerKey,
+            peerNostrPublicKey: identity.npub,
+            peerNickname: "Frank"
+        )
+
+        XCTAssertEqual(service.noisePublicKey(forNostrPubkey: identity.npub), peerKey)
+        XCTAssertEqual(service.noisePublicKey(forNostrPubkey: identity.publicKeyHex), peerKey)
+        XCTAssertEqual(service.noisePublicKey(forNostrPubkey: identity.publicKeyHex.uppercased()), peerKey)
+
+        service.removeFavorite(peerNoisePublicKey: peerKey)
+        XCTAssertNil(service.noisePublicKey(forNostrPubkey: identity.npub))
+        XCTAssertNil(service.noisePublicKey(forNostrPubkey: identity.publicKeyHex))
+    }
 }

@@ -746,6 +746,80 @@ final class NostrRelayManagerTests: XCTestCase {
         XCTAssertTrue(resubscribed)
     }
 
+    func test_unsubscribe_tearsDownIdleNonDefaultRelayAfterGracePeriod() async {
+        let relayURL = "wss://idle-geo.example"
+        let context = makeContext(permission: .denied)
+        let filter = makeFilter()
+
+        context.manager.subscribe(filter: filter, id: "geo-sub", relayUrls: [relayURL], handler: { _ in })
+        let subscribed = await waitUntil {
+            context.sessionFactory.latestConnection(for: relayURL)?.sentStrings.count == 1
+        }
+        XCTAssertTrue(subscribed)
+
+        context.manager.unsubscribe(id: "geo-sub")
+        let closeSent = await waitUntil {
+            context.sessionFactory.latestConnection(for: relayURL)?.sentStrings.count == 2
+        }
+        XCTAssertTrue(closeSent)
+        XCTAssertEqual(context.scheduler.scheduled.last?.delay, TransportConfig.nostrIdleRelayTeardownSeconds)
+
+        context.scheduler.runNext()
+        let tornDown = await waitUntil {
+            context.manager.relays.allSatisfy { $0.url != relayURL } &&
+            (context.sessionFactory.latestConnection(for: relayURL)?.cancelCallCount ?? 0) >= 1
+        }
+        XCTAssertTrue(tornDown)
+    }
+
+    func test_unsubscribe_cancelsIdleTeardownWhenResubscribedBeforeGracePeriodExpires() async {
+        let relayURL = "wss://reused-geo.example"
+        let context = makeContext(permission: .denied)
+        let filter = makeFilter()
+
+        context.manager.subscribe(filter: filter, id: "geo-sub", relayUrls: [relayURL], handler: { _ in })
+        let subscribed = await waitUntil {
+            context.sessionFactory.latestConnection(for: relayURL)?.sentStrings.count == 1
+        }
+        XCTAssertTrue(subscribed)
+
+        context.manager.unsubscribe(id: "geo-sub")
+        XCTAssertEqual(context.scheduler.scheduled.count, 1)
+
+        // Resubscribe before the idle grace period expires.
+        context.clock.now = context.clock.now.addingTimeInterval(0.2)
+        context.manager.subscribe(filter: filter, id: "geo-sub", relayUrls: [relayURL], handler: { _ in })
+        let resubscribed = await waitUntil {
+            context.sessionFactory.latestConnection(for: relayURL)?.sentStrings.count == 3
+        }
+        XCTAssertTrue(resubscribed)
+
+        // Firing the stale teardown timer must be a no-op.
+        context.scheduler.runNext()
+        try? await Task.sleep(nanoseconds: 20_000_000)
+        XCTAssertTrue(context.manager.relays.contains(where: { $0.url == relayURL && $0.isConnected }))
+        XCTAssertEqual(context.sessionFactory.latestConnection(for: relayURL)?.cancelCallCount, 0)
+    }
+
+    func test_unsubscribe_doesNotTearDownDefaultRelayWhenIdle() async {
+        let context = makeContext(permission: .authorized)
+        let connected = await waitUntil {
+            context.manager.relays.count == self.expectedDefaultRelayCount &&
+            context.manager.relays.allSatisfy(\.isConnected)
+        }
+        XCTAssertTrue(connected)
+
+        context.manager.subscribe(filter: makeFilter(), id: "default-sub", handler: { _ in })
+        let subscribed = await waitUntil {
+            context.sessionFactory.allConnections.allSatisfy { $0.sentStrings.count == 1 }
+        }
+        XCTAssertTrue(subscribed)
+
+        let scheduledBefore = context.scheduler.scheduled.count
+        context.manager.unsubscribe(id: "default-sub")
+        XCTAssertEqual(context.scheduler.scheduled.count, scheduledBefore)
+    }
+
     func test_receiveEvent_deliversHandlerAndTracksReceivedCount() async throws {
         let relayURL = "wss://events.example"
         let context = makeContext(permission: .denied)

@@ -265,31 +265,59 @@ final class LocationNotesManager: ObservableObject {
         dependencies.subscribe(filter, subID, relays, { [weak self] event in
             guard let self = self else { return }
             guard event.kind == NostrProtocol.EventKind.textNote.rawValue else { return }
-            // Ensure matching tag - accept any of our 9 geohashes
-            guard let matchedGeohash = event.tags.first(where: { tag in
-                tag.count >= 2 && tag[0].lowercased() == "g" && validGeohashes.contains(tag[1].lowercased())
-            })?[1].lowercased() else { return }
             guard !self.noteIDs.contains(event.id) else { return }
+
+            // Single pass over tags: match any of our 9 cells + extract nick/expiration/urgent.
+            var matchedGeohash: String?
+            var nick: String?
+            var expiresAt: Date?
+            var urgent = false
+            for tag in event.tags where tag.count >= 2 {
+                let key = tag[0].lowercased()
+                switch key {
+                case "g":
+                    if matchedGeohash == nil {
+                        let candidate = tag[1].lowercased()
+                        if validGeohashes.contains(candidate) {
+                            matchedGeohash = candidate
+                        }
+                    }
+                case "n":
+                    if nick == nil {
+                        nick = tag[1]
+                    }
+                case "expiration":
+                    if expiresAt == nil, let seconds = TimeInterval(tag[1]) {
+                        expiresAt = Date(timeIntervalSince1970: seconds)
+                    }
+                case "t":
+                    if !urgent && tag[1].lowercased() == "urgent" {
+                        urgent = true
+                    }
+                default:
+                    break
+                }
+            }
+            guard let matchedGeohash else { return }
             // NIP-40: relays are not required to enforce expiration — drop
             // expired notes client-side so 24h dead drops actually vanish.
-            let expiresAt = Self.expirationDate(of: event)
-            if let expiresAt, expiresAt <= self.dependencies.now() { return }
-            self.noteIDs.insert(event.id)
-            let nick = event.tags.first(where: { $0.first?.lowercased() == "n" && $0.count >= 2 })?.dropFirst().first
+            let now = self.dependencies.now()
+            if let expiresAt, expiresAt <= now { return }
+            self.recordNoteID(event.id)
             // created_at is author-chosen; clamp so a future-dated note can't
             // hold the top of the newest-first list past the memory cap. The
             // bound is the board's clock-skew allowance: a bridged copy of an
             // accepted board post must keep its timestamp, or
             // UnifiedNotices.merge no longer recognizes it as the same notice.
-            let latestAccepted = self.dependencies.now()
+            let latestAccepted = now
                 .addingTimeInterval(TimeInterval(BoardStore.Limits.clockSkewMs) / 1000)
             let ts = min(Date(timeIntervalSince1970: TimeInterval(event.created_at)), latestAccepted)
-            let urgent = event.tags.contains { $0.count >= 2 && $0[0].lowercased() == "t" && $0[1].lowercased() == "urgent" }
             let note = Note(id: event.id, pubkey: event.pubkey, content: event.content, createdAt: ts, nickname: nick, geohash: matchedGeohash, expiresAt: expiresAt, isUrgent: urgent)
-            self.notes.append(note)
-            self.notes.sort { $0.createdAt > $1.createdAt }
+            self.insertNoteSorted(note)
             self.enforceMemoryCap()
-            self.state = .ready
+            if self.state != .ready {
+                self.state = .ready
+            }
         }, { [weak self] in
             guard let self = self else { return }
             self.initialLoadComplete = true
@@ -300,10 +328,35 @@ final class LocationNotesManager: ObservableObject {
             if self.notes.isEmpty, !self.dependencies.anyRelayConnected(relays) {
                 self.state = .connecting
                 self.scheduleConnectivityRetry(relays: relays)
-            } else {
+            } else if self.state != .ready {
                 self.state = .ready
             }
         })
+    }
+
+    /// Inserts a note in descending `createdAt` order via binary search
+    /// ($O(\log N)$ compare instead of re-sorting the entire array per note).
+    private func insertNoteSorted(_ note: Note) {
+        var low = 0
+        var high = notes.count
+        while low < high {
+            let mid = (low + high) / 2
+            if notes[mid].createdAt >= note.createdAt {
+                low = mid + 1
+            } else {
+                high = mid
+            }
+        }
+        notes.insert(note, at: low)
+    }
+
+    private func recordNoteID(_ id: String) {
+        noteIDs.insert(id)
+        if noteIDs.count > maxNotesInMemory * 4 {
+            // Keep all currently visible note IDs so active notes never duplicate.
+            let liveIDs = Set(notes.map(\.id))
+            noteIDs = liveIDs.union([id])
+        }
     }
 
     /// While `.connecting`, poll for a live target relay and re-subscribe as
@@ -409,14 +462,6 @@ final class LocationNotesManager: ObservableObject {
             SecureLogger.error("LocationNotesManager: failed to delete note: \(error)", category: .session)
             return false
         }
-    }
-
-    /// The NIP-40 `expiration` tag as a date, if the event carries one.
-    static func expirationDate(of event: NostrEvent) -> Date? {
-        guard let tag = event.tags.first(where: { $0.count >= 2 && $0[0].lowercased() == "expiration" }),
-              let seconds = TimeInterval(tag[1])
-        else { return nil }
-        return Date(timeIntervalSince1970: seconds)
     }
 
     /// Enforces defensive memory cap on notes array (keeps newest).

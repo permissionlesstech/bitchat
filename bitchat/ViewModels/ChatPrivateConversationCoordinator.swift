@@ -230,7 +230,12 @@ extension ChatViewModel: ChatPrivateConversationContext {
     /// inbound account DMs sent through here) must never carry the mesh
     /// peer ID. The recipient-less encoders fill that field with random bytes.
     private func makeGeohashNostrTransport() -> NostrTransport {
-        NostrTransport(keychain: keychain, idBridge: idBridge)
+        if let existing = geohashNostrTransportStorage {
+            return existing
+        }
+        let transport = NostrTransport(keychain: keychain, idBridge: idBridge)
+        geohashNostrTransportStorage = transport
+        return transport
     }
 }
 

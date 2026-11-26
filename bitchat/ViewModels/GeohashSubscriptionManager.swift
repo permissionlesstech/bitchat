@@ -159,7 +159,11 @@ final class GeohashSubscriptionManager {
                 self.inbound.subscribeNostrEvent(event, isHistoryReplay: self.replayingGeoSubscriptionID == subID)
                 // Gateway downlink: rebroadcast relay events for the viewed
                 // channel onto the mesh (no-op unless gateway mode is on).
-                GatewayService.shared.rebroadcastRelayEvent(event, geohash: channel.geohash)
+                GatewayService.shared.rebroadcastRelayEvent(
+                    event,
+                    geohash: channel.geohash,
+                    signatureAlreadyVerified: true
+                )
             }
         }, onEOSE: { [weak self] in
             Task { @MainActor [weak self] in
@@ -181,7 +185,11 @@ final class GeohashSubscriptionManager {
             )
             NostrRelayManager.shared.subscribe(filter: dmFilter, id: dmSub) { [weak self] giftWrap in
                 Task { @MainActor [weak self] in
-                    self?.inbound.subscribeGiftWrap(giftWrap, id: identity)
+                    self?.inbound.subscribeGiftWrap(
+                        giftWrap,
+                        id: identity,
+                        outerSignatureAlreadyVerified: true
+                    )
                 }
             }
         }
@@ -258,7 +266,11 @@ final class GeohashSubscriptionManager {
                 self.inbound.handleNostrEvent(event, isHistoryReplay: self.replayingGeoSubscriptionID == subID)
                 // Gateway downlink: rebroadcast relay events for the viewed
                 // channel onto the mesh (no-op unless gateway mode is on).
-                GatewayService.shared.rebroadcastRelayEvent(event, geohash: channel.geohash)
+                GatewayService.shared.rebroadcastRelayEvent(
+                    event,
+                    geohash: channel.geohash,
+                    signatureAlreadyVerified: true
+                )
             }
         }, onEOSE: { [weak self] in
             Task { @MainActor [weak self] in
@@ -285,7 +297,11 @@ final class GeohashSubscriptionManager {
         )
         NostrRelayManager.shared.subscribe(filter: dmFilter, id: dmSub) { [weak self] giftWrap in
             Task { @MainActor [weak self] in
-                self?.inbound.handleGiftWrap(giftWrap, id: identity)
+                self?.inbound.handleGiftWrap(
+                    giftWrap,
+                    id: identity,
+                    outerSignatureAlreadyVerified: true
+                )
             }
         }
     }
@@ -420,7 +436,7 @@ final class GeohashSubscriptionManager {
 
         context.nostrRelayManager?.subscribe(filter: filter, id: "chat-messages") { [weak self] event in
             Task { @MainActor [weak self] in
-                self?.inbound.handleNostrMessage(event)
+                self?.inbound.handleNostrMessage(event, outerSignatureAlreadyVerified: true)
             }
         }
     }

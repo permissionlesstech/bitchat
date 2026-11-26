@@ -463,7 +463,7 @@ final class BridgeService: ObservableObject {
     /// Entry point for every event the rendezvous subscription delivers.
     /// Handles presence accounting, timeline injection, and — when acting as
     /// the island's gateway — downlink rebroadcast.
-    func handleRendezvousEvent(_ event: NostrEvent) {
+    func handleRendezvousEvent(_ event: NostrEvent, signatureAlreadyVerified: Bool = false) {
         guard isEnabled else { return }
         // The subscription spans our cell + neighbors; trust only the
         // event's own signed `r` tag, and only within that ring.
@@ -483,7 +483,7 @@ final class BridgeService: ObservableObject {
             publishedEventIDs.insert(event.id) // never downlink it either
             return
         }
-        guard allowSignatureVerificationAttempt(), verifyEventSignature(event) else { return }
+        guard signatureAlreadyVerified || (allowSignatureVerificationAttempt() && verifyEventSignature(event)) else { return }
         guard receivedEventIDs.insert(event.id), allowInboundEvent(from: event.pubkey) else { return }
         guard let kind = classify(event, cell: cell) else { return }
 
