@@ -1233,6 +1233,42 @@ struct MessageRouterTests {
         #expect(sentIDs.filter { $0 == "recovery-write-failure-known" }.count == 1)
         #expect(sentIDs.filter { $0 == "recovery-write-failure-unseen" }.count == 1)
     }
+
+    @Test @MainActor
+    func duplicateAckSkipsOutboxDiskWriteWhenLoaded() {
+        let fileURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("router-skip-noop-ack-\(UUID().uuidString).sealed")
+        defer { try? FileManager.default.removeItem(at: fileURL) }
+        let keychain = MockKeychain()
+        var writeCount = 0
+        let store = MessageOutboxStore(
+            keychain: keychain,
+            fileURL: fileURL,
+            writeData: { data, url, options in
+                writeCount += 1
+                try data.write(to: url, options: options)
+            }
+        )
+        let transport = MockTransport()
+        let peerA = PeerID(str: "00000000000000e5")
+        let peerB = PeerID(str: "00000000000000e6")
+        let router = MessageRouter(transports: [transport], outboxStore: store)
+
+        router.sendPrivate("keep-a", to: peerA, recipientNickname: "A", messageID: "keep-a")
+        router.sendPrivate("keep-b", to: peerB, recipientNickname: "B", messageID: "keep-b")
+        let writesAfterEnqueue = writeCount
+        #expect(writesAfterEnqueue == 2)
+
+        // Duplicate / unknown acks when the durable baseline is loaded must not rewrite disk.
+        router.markDelivered("already-gone")
+        router.markDelivered("already-gone", from: [peerA])
+        #expect(writeCount == writesAfterEnqueue)
+
+        // flushAllOutbox across multiple reachable peers persists once, not once per peer.
+        transport.reachablePeers.formUnion([peerA, peerB])
+        router.flushAllOutbox()
+        #expect(writeCount == writesAfterEnqueue + 1)
+    }
 }
 
 /// Mutable wall clock injected into `MessageRouter` so TTL expiry is testable

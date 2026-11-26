@@ -177,6 +177,14 @@ final class MessageOutboxStore {
 
     // MARK: - API (call from the router's actor; IO is small and atomic)
 
+    /// True while protected-data deferral or recovery may still hide durable
+    /// entries not yet visible in `MessageRouter`'s in-memory outbox.
+    var hasDeferredDiskState: Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        return diskState != .loaded || recoveryDeliveryPending || unseenRecoveryPendingPersistence
+    }
+
     func load() -> Snapshot {
         lock.lock()
         defer { lock.unlock() }

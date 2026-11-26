@@ -176,6 +176,7 @@ extension BLEService: CBPeripheralManagerDelegate {
         SecureLogger.debug("📤 Central unsubscribed: \(centralID.prefix(8))…", category: .session)
         // bleQueue: physical retirement now.
         pendingNotifications.removeTarget { $0.identifier.uuidString == centralID }
+        pendingWriteBuffers.remove(for: centralID)
         linkStateStore.removeSubscribedCentral(central)
 
         // Ensure we're still advertising for other devices to find us

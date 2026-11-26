@@ -187,7 +187,7 @@ final class CourierStore {
         }
 
         return queue.sync {
-            pruneExpiredLocked(at: date)
+            let pruned = pruneExpiredLocked(at: date)
 
             // Identical ciphertext is the same envelope. Before any spray,
             // a carry-only copy may legitimately arrive ahead of the original
@@ -196,10 +196,13 @@ final class CourierStore {
             // packet must never replenish spent copies: that would defeat
             // spray-and-wait and let `sprayedTo` grow without bound.
             if let existing = envelopes.firstIndex(where: { $0.ciphertext == envelope.ciphertext }) {
+                let previousCopies = envelopes[existing].copies
                 if envelopes[existing].sprayedTo.isEmpty {
-                    envelopes[existing].copies = max(envelopes[existing].copies, envelope.copies)
+                    envelopes[existing].copies = max(previousCopies, envelope.copies)
                 }
-                persistLocked()
+                if pruned || envelopes[existing].copies != previousCopies {
+                    persistLocked()
+                }
                 return true
             }
 
@@ -439,18 +442,22 @@ final class CourierStore {
 
     // MARK: - Internals (call only on `queue`)
 
-    private func pruneExpiredLocked(at date: Date) {
+    @discardableResult
+    private func pruneExpiredLocked(at date: Date) -> Bool {
         let before = envelopes.count
         envelopes.removeAll { $0.envelope.isExpired(at: date) }
         if envelopes.count != before {
             SecureLogger.debug("📦 Courier store pruned \(before - envelopes.count) expired envelope(s)", category: .session)
+            return true
         }
+        return false
     }
 
     private func publishCountLocked() {
         let count = envelopes.count
         DispatchQueue.main.async { [weak self] in
-            self?.carriedCount = count
+            guard let self, self.carriedCount != count else { return }
+            self.carriedCount = count
         }
     }
 

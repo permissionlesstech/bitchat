@@ -9,6 +9,11 @@ struct BLEOutboundFragmentTransferRequest {
     let transferId: String?
     let requireDirectPeerLink: Bool
     let requireNoiseAuthenticatedPeerLink: Bool
+    let resolvedTransferId: String?
+    /// Content identity independent of the caller-chosen transfer ID: the
+    /// same file resent through another path (gossip-sync replay, retry)
+    /// arrives with a different explicit transferId but identical payload.
+    let contentKey: String?
 
     init(
         packet: BitchatPacket,
@@ -26,20 +31,11 @@ struct BLEOutboundFragmentTransferRequest {
         self.transferId = transferId
         self.requireDirectPeerLink = requireDirectPeerLink
         self.requireNoiseAuthenticatedPeerLink = requireNoiseAuthenticatedPeerLink
-    }
-
-    var resolvedTransferId: String? {
-        if let transferId { return transferId }
-        guard packet.type == MessageType.fileTransfer.rawValue else { return nil }
-        return packet.payload.sha256Hex()
-    }
-
-    /// Content identity independent of the caller-chosen transfer ID: the
-    /// same file resent through another path (gossip-sync replay, retry)
-    /// arrives with a different explicit transferId but identical payload.
-    var contentKey: String? {
-        guard packet.type == MessageType.fileTransfer.rawValue else { return nil }
-        return packet.payload.sha256Hex()
+        let payloadHash: String? = packet.type == MessageType.fileTransfer.rawValue
+            ? packet.payload.sha256Hex()
+            : nil
+        self.contentKey = payloadHash
+        self.resolvedTransferId = transferId ?? payloadHash
     }
 }
 

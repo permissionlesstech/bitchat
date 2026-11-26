@@ -126,6 +126,49 @@ struct BLEInboundWriteBufferTests {
         }
     }
 
+    @Test
+    func removeForCentralDropsOnlyThatCentralsPartialBuffer() throws {
+        var buffer = BLEInboundWriteBuffer()
+        let packet = makePacket(timestamp: 0x123456)
+        let frame = try #require(packet.toBinaryData(padding: false))
+        let splitIndex = max(1, frame.count / 2)
+
+        _ = buffer.append(
+            chunks: [BLEInboundWriteChunk(offset: 0, data: frame.prefix(splitIndex))],
+            for: "central-1",
+            capBytes: 1024
+        )
+        _ = buffer.append(
+            chunks: [BLEInboundWriteChunk(offset: 0, data: frame.prefix(splitIndex))],
+            for: "central-2",
+            capBytes: 1024
+        )
+
+        buffer.remove(for: "central-1")
+
+        let c1Result = buffer.append(
+            chunks: [BLEInboundWriteChunk(offset: splitIndex, data: frame.suffix(from: splitIndex))],
+            for: "central-1",
+            capBytes: 1024
+        )
+        if case .waiting = c1Result {
+            // Expected: central-1's partial buffer was cleared on disconnect.
+        } else {
+            Issue.record("Expected central-1 partial buffer to be cleared")
+        }
+
+        let c2Result = buffer.append(
+            chunks: [BLEInboundWriteChunk(offset: splitIndex, data: frame.suffix(from: splitIndex))],
+            for: "central-2",
+            capBytes: 1024
+        )
+        if case let .decoded(decoded, _) = c2Result {
+            #expect(decoded.timestamp == packet.timestamp)
+        } else {
+            Issue.record("Expected central-2 partial buffer to remain intact")
+        }
+    }
+
     private func makePacket(timestamp: UInt64 = 0x0102030405) -> BitchatPacket {
         BitchatPacket(
             type: MessageType.message.rawValue,
