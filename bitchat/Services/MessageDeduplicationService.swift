@@ -149,15 +149,15 @@ enum ContentNormalizer {
             simplified = lowered
         }
 
-        // Single-pass Unicode-scalar trim + whitespace collapse (exact parity with
-        // `\s+` regex without recompiling NSRegularExpression), followed by
-        // grapheme-cluster prefix truncation so combining marks following a
-        // collapsed space are never split at the prefix boundary.
+        // Preserve exact Foundation boundary trimming (including U+200B), then
+        // collapse interior whitespace over Unicode scalars (`\s+` parity without
+        // compiling NSRegularExpression) before grapheme-cluster prefix truncation.
+        let trimmed = simplified.trimmed
         var collapsedScalars = String.UnicodeScalarView()
-        collapsedScalars.reserveCapacity(simplified.unicodeScalars.count)
+        collapsedScalars.reserveCapacity(trimmed.unicodeScalars.count)
         var hasContent = false
         var pendingSpace = false
-        for scalar in simplified.unicodeScalars {
+        for scalar in trimmed.unicodeScalars {
             if scalar.properties.isWhitespace {
                 if hasContent {
                     pendingSpace = true

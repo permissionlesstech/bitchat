@@ -54,6 +54,7 @@ final class BLERadioController {
     private var dutyOnDuration: TimeInterval = TransportConfig.bleDutyOnDuration
     private var dutyOffDuration: TimeInterval = TransportConfig.bleDutyOffDuration
     private var dutyActive: Bool = false
+    private var lastScanAllowDuplicates: Bool?
 
     init(
         queue: DispatchQueue,
@@ -79,21 +80,40 @@ final class BLERadioController {
 
     // MARK: - Scanning
 
+    private var desiredAllowDuplicates: Bool {
+        // Allow duplicates while active for faster discovery, except under
+        // Low Power Mode where coalesced CoreBluetooth discoveries avoid
+        // waking the CPU on every BLE advertising beacon.
+        (delegate?.radioIsAppActive() ?? true) && !ProcessInfo.processInfo.isLowPowerModeEnabled
+    }
+
     func startScanning() {
         guard delegate?.radioIsPanicSuspended() == false,
               let central,
               central.state == .poweredOn,
               !central.isScanning else { return }
 
-        // Allow duplicates while active for faster discovery, except under
-        // Low Power Mode where coalesced CoreBluetooth discoveries avoid
-        // waking the CPU on every BLE advertising beacon.
-        let isLowPower = ProcessInfo.processInfo.isLowPowerModeEnabled
-        let allowDuplicates = (delegate?.radioIsAppActive() ?? true) && !isLowPower
+        let allowDuplicates = desiredAllowDuplicates
+        lastScanAllowDuplicates = allowDuplicates
         central.scanForPeripherals(
             withServices: [BLEService.serviceUUID],
             options: [CBCentralManagerScanOptionAllowDuplicatesKey: allowDuplicates]
         )
+    }
+
+    /// Ensures scanning is active with up-to-date options (e.g. if Low Power
+    /// Mode toggled while a scan was already running).
+    private func ensureScanningWithCurrentOptions() {
+        guard delegate?.radioIsPanicSuspended() == false,
+              let central,
+              central.state == .poweredOn else { return }
+        let desired = desiredAllowDuplicates
+        if central.isScanning {
+            guard lastScanAllowDuplicates != desired else { return }
+            central.stopScan()
+            lastScanAllowDuplicates = nil
+        }
+        startScanning()
     }
 
     func updateScanningDutyCycle(connectedCount: Int) {
@@ -122,14 +142,17 @@ final class BLERadioController {
             if scanDutyTimer == nil {
                 // Start with scanning ON; turn OFF after onDuration.
                 let t = DispatchSource.makeTimerSource(queue: queue)
-                if !central.isScanning { startScanning() }
+                ensureScanningWithCurrentOptions()
                 dutyActive = true
                 // 1s leeway allows OS timer coalescing and reduces idle CPU wakeups.
                 t.schedule(deadline: .now() + dutyOnDuration, repeating: dutyOnDuration + dutyOffDuration, leeway: .seconds(1))
                 t.setEventHandler { [weak self] in
                     guard let self, let c = self.central else { return }
                     if self.dutyActive {
-                        if c.isScanning { c.stopScan() }
+                        if c.isScanning {
+                            c.stopScan()
+                            self.lastScanAllowDuplicates = nil
+                        }
                         self.dutyActive = false
                         self.dutyResumeWorkItem?.cancel()
                         let resumeWork = DispatchWorkItem { [weak self] in
@@ -150,13 +173,15 @@ final class BLERadioController {
                 dutyResumeWorkItem?.cancel()
                 dutyResumeWorkItem = nil
                 scanDutyTimer?.schedule(deadline: .now() + dutyOnDuration, repeating: dutyOnDuration + dutyOffDuration, leeway: .seconds(1))
-                if !central.isScanning { startScanning() }
+                ensureScanningWithCurrentOptions()
                 dutyActive = true
+            } else if dutyActive {
+                ensureScanningWithCurrentOptions()
             }
         case .continuous:
-            // Cancel duty cycle and ensure scanning is ON for discovery.
+            // Cancel duty cycle and ensure scanning is ON with current options.
             stopDutyCycle()
-            if !central.isScanning { startScanning() }
+            ensureScanningWithCurrentOptions()
         }
     }
 

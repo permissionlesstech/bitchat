@@ -929,28 +929,37 @@ final class BLEService: NSObject {
     // MARK: Lifecycle
     
     /// Creates and starts the periodic maintenance timer if it is not already
-    /// running. Idempotent so it can be called from both `init` and
-    /// `startServices()` — the latter matters after a panic reset, where
-    /// `stopServices()` cancels and nils the timer.
+    /// running. Serialized onto `bleQueue` so `maintenanceTimer` and
+    /// `maintenanceIntervalSeconds` stay strictly bleQueue-confined across
+    /// start, cadence updates, and shutdown.
     private func startMaintenanceTimer() {
-        guard !isPanicSuspended,
-              meshBackgroundEnabled,
-              maintenanceTimer == nil else { return }
-        let timer = DispatchSource.makeTimerSource(queue: bleQueue)
-        maintenanceIntervalSeconds = TransportConfig.bleMaintenanceInterval
-        timer.schedule(deadline: .now() + TransportConfig.bleMaintenanceInterval,
-                       repeating: TransportConfig.bleMaintenanceInterval,
-                       leeway: .seconds(TransportConfig.bleMaintenanceLeewaySeconds))
-        timer.setEventHandler { [weak self] in
-            self?.performMaintenance()
+        let start = { [weak self] in
+            guard let self,
+                  !self.isPanicSuspended,
+                  self.meshBackgroundEnabled,
+                  self.maintenanceTimer == nil else { return }
+            let timer = DispatchSource.makeTimerSource(queue: self.bleQueue)
+            self.maintenanceIntervalSeconds = TransportConfig.bleMaintenanceInterval
+            timer.schedule(deadline: .now() + TransportConfig.bleMaintenanceInterval,
+                           repeating: TransportConfig.bleMaintenanceInterval,
+                           leeway: .seconds(TransportConfig.bleMaintenanceLeewaySeconds))
+            timer.setEventHandler { [weak self] in
+                self?.performMaintenance()
+            }
+            timer.resume()
+            self.maintenanceTimer = timer
         }
-        timer.resume()
-        maintenanceTimer = timer
+        if isOnBLEQueue {
+            start()
+        } else {
+            bleQueue.sync(execute: start)
+        }
     }
 
     /// Stretches the maintenance timer when completely idle (no active links,
-    /// no known peers, no pending buffers) or under Low Power Mode, and snaps
-    /// back to the responsive cadence as soon as peers or traffic return.
+    /// no known peers, no queued candidates, no pending buffers) and snaps
+    /// back to the standard active cadence as soon as peers, candidates, or
+    /// traffic return so fragment stall recovery and retries stay unchanged.
     /// Must run on `bleQueue`.
     private func updateMaintenanceCadence(isIdle: Bool) {
         guard let timer = maintenanceTimer else { return }
@@ -960,12 +969,6 @@ final class BLEService: NSObject {
         if isIdle {
             targetInterval = isLowPower ? 20.0 : 15.0
             targetLeeway = .seconds(3)
-        } else if isLowPower {
-            // 8s interval with cleanup every 2nd cycle (~16s) keeps fragment
-            // stall recovery well ahead of the 30s fragment lifetime while
-            // still cutting active LPM wakeups by ~37%.
-            targetInterval = 8.0
-            targetLeeway = .seconds(1)
         } else {
             targetInterval = TransportConfig.bleMaintenanceInterval
             targetLeeway = .seconds(TransportConfig.bleMaintenanceLeewaySeconds)
@@ -2333,13 +2336,20 @@ final class BLEService: NSObject {
         let subscribedCentrals = characteristic == nil ? [] : centralSnapshot.centrals
 
         // Fast path when no physical links are active: skip ingress SHA-256,
-        // binding dictionaries, and fanout planning; only spool directed Noise
-        // packets that may forward when a link returns.
+        // binding dictionaries, and fanout planning; delegate the spooling
+        // decision to the planner so both paths share the exact same rule.
         if connectedStates.isEmpty && subscribedCentrals.isEmpty {
-            if !requireDirectPeerLink && !requireNoiseAuthenticatedPeerLink,
-               (packet.type == MessageType.noiseEncrypted.rawValue || packet.type == MessageType.noiseHandshake.rawValue),
-               let only = BLEOutboundLinkPlanner.directedPeerHint(for: packet, explicitPeer: directedOnlyPeer) {
-                spoolDirectedPacket(packet, recipientPeerID: only, precomputedMessageID: precomputedMessageID)
+            if !requireNoiseAuthenticatedPeerLink {
+                let directedPeerHint = BLEOutboundLinkPlanner.directedPeerHint(for: packet, explicitPeer: directedOnlyPeer)
+                let emptySelection = BLEFanoutSelection(peripheralIDs: [], centralIDs: [])
+                if let only = directedPeerHint,
+                   BLEOutboundLinkPlanner.shouldSpoolDirectedPacket(
+                       directedPeerHint: directedPeerHint,
+                       selectedLinks: emptySelection,
+                       packetType: packet.type
+                   ) {
+                    spoolDirectedPacket(packet, recipientPeerID: only, precomputedMessageID: precomputedMessageID)
+                }
             }
             return false
         }
@@ -5315,7 +5325,11 @@ extension BLEService {
                 self.centralManager?.stopScan()
                 self.radio.startScanning()
             }
-            self.updateMaintenanceCadence(isIdle: !self.linkStateStore.hasActiveLinks)
+            let isIdle = !self.linkStateStore.hasActiveLinks
+                && self.radio.candidateCount == 0
+                && self.pendingNotifications.isEmpty
+                && self.pendingPeripheralWrites.isEmpty
+            self.updateMaintenanceCadence(isIdle: isIdle)
         }
         radio.armPendingBackgroundConnects()
         // Backgrounding may precede a kill; flush the public-history archive
@@ -7139,13 +7153,8 @@ extension BLEService {
             checkPeerConnectivity()
         }
         
-        // Cleanup & fragment stall recovery: every 3rd cycle (~15s normal), or
-        // every 2nd cycle (~16s) when active cadence is stretched under Low Power Mode
-        // so stalled broadcast fragments are requested well before the 30s expiry.
-        let shouldRunStretchedCleanup = maintenanceIntervalSeconds > TransportConfig.bleMaintenanceInterval
-            && hasActiveLinks
-            && (maintenanceCounter % 2 == 0)
-        if plan.shouldRunCleanup || shouldRunStretchedCleanup {
+        // Every 3 cycles (~15s active): cleanup & fragment stall recovery.
+        if plan.shouldRunCleanup {
             performCleanup()
         }
 

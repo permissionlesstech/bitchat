@@ -21,13 +21,7 @@ struct BLEReceivePipeline {
         // post-handshake flush sends queued messages, delivery and read receipts
         // back-to-back within a single millisecond; without the digest every
         // packet after the first would be silently dropped.
-        let messageID: String
-        if let precomputedMessageID {
-            messageID = precomputedMessageID
-        } else {
-            let digestPrefix = packet.payload.sha256PrefixHex(bytes: 4)
-            messageID = "\(senderID)-\(packet.timestamp)-\(packet.type)-\(digestPrefix)"
-        }
+        let messageID = precomputedMessageID ?? BLEIngressLinkRegistry.messageID(for: packet)
         let messageType = MessageType(rawValue: packet.type)
         let allowSelfSyncReplay = packet.ttl == 0 && senderID == localPeerID
         let shouldDeduplicate = messageType != .fragment && !allowSelfSyncReplay

@@ -272,6 +272,16 @@ struct ContentNormalizerTests {
         let grave = base + "\n\u{0300}"
         #expect(ContentNormalizer.normalizedKey(acute) != ContentNormalizer.normalizedKey(grave))
     }
+
+    @Test func normalizedKey_trimsBoundaryZeroWidthSpacesLikeFoundation() {
+        let plain = ContentNormalizer.normalizedKey("hello mesh")
+        let leading = ContentNormalizer.normalizedKey("\u{200B}hello mesh")
+        let trailing = ContentNormalizer.normalizedKey("hello mesh\u{200B}")
+        let both = ContentNormalizer.normalizedKey("\u{200B} hello mesh \u{200B}")
+        #expect(leading == plain)
+        #expect(trailing == plain)
+        #expect(both == plain)
+    }
 }
 
 // MARK: - Message Deduplication Service Tests
