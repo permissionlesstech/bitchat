@@ -30,14 +30,23 @@ struct BLEOutboundWriteBuffer {
         case oversized(bytes: Int)
     }
 
-    private var writesByPeripheralID: [String: [BLEPendingWrite]] = [:]
+    private struct PeripheralWriteQueue {
+        var items: [BLEPendingWrite] = []
+        var totalBytes: Int = 0
+    }
+
+    private var queuesByPeripheralID: [String: PeripheralWriteQueue] = [:]
+
+    var isEmpty: Bool {
+        queuesByPeripheralID.isEmpty
+    }
 
     var peripheralIDs: [String] {
-        Array(writesByPeripheralID.keys)
+        Array(queuesByPeripheralID.keys)
     }
 
     mutating func removeAll() {
-        writesByPeripheralID.removeAll()
+        queuesByPeripheralID.removeAll()
     }
 
     mutating func enqueue(
@@ -67,42 +76,45 @@ struct BLEOutboundWriteBuffer {
             return (.oversized(bytes: data.count), false)
         }
 
-        var queue = writesByPeripheralID[peripheralID] ?? []
+        var entry = queuesByPeripheralID[peripheralID] ?? PeripheralWriteQueue()
         let item = BLEPendingWrite(priority: priority, data: data)
-        let insertIndex = queue.firstIndex { item.priority < $0.priority } ?? queue.count
-        queue.insert(item, at: insertIndex)
+        let insertIndex = entry.items.firstIndex { item.priority < $0.priority } ?? entry.items.count
+        entry.items.insert(item, at: insertIndex)
+        entry.totalBytes += data.count
 
-        var total = queue.reduce(0) { $0 + $1.data.count }
         var trimmedBytes = 0
-
-        while total > capBytes && !queue.isEmpty {
-            let removed = queue.removeLast()
+        while entry.totalBytes > capBytes && !entry.items.isEmpty {
+            let removed = entry.items.removeLast()
             trimmedBytes += removed.data.count
-            total -= removed.data.count
+            entry.totalBytes -= removed.data.count
         }
 
-        writesByPeripheralID[peripheralID] = queue.isEmpty ? nil : queue
-        let accepted = insertIndex < queue.count
-        return (.enqueued(trimmedBytes: trimmedBytes, remainingBytes: total), accepted)
+        if entry.items.isEmpty {
+            queuesByPeripheralID[peripheralID] = nil
+        } else {
+            queuesByPeripheralID[peripheralID] = entry
+        }
+        let accepted = insertIndex < entry.items.count
+        return (.enqueued(trimmedBytes: trimmedBytes, remainingBytes: entry.totalBytes), accepted)
     }
 
     mutating func takeAll(for peripheralID: String) -> [BLEPendingWrite] {
-        let items = writesByPeripheralID[peripheralID] ?? []
-        writesByPeripheralID[peripheralID] = nil
-        return items
+        queuesByPeripheralID.removeValue(forKey: peripheralID)?.items ?? []
     }
 
     /// Drops link-specific ciphertext when that physical link is gone. Keeping
     /// the dictionary entry would let rotating peripheral UUIDs accumulate a
     /// fresh per-link byte cap indefinitely.
     mutating func discardAll(for peripheralID: String) {
-        writesByPeripheralID[peripheralID] = nil
+        queuesByPeripheralID[peripheralID] = nil
     }
 
     mutating func prepend(_ items: [BLEPendingWrite], for peripheralID: String) {
         guard !items.isEmpty else { return }
-        var existing = writesByPeripheralID[peripheralID] ?? []
-        existing.insert(contentsOf: items, at: 0)
-        writesByPeripheralID[peripheralID] = existing
+        var entry = queuesByPeripheralID[peripheralID] ?? PeripheralWriteQueue()
+        let addedBytes = items.reduce(0) { $0 + $1.data.count }
+        entry.items.insert(contentsOf: items, at: 0)
+        entry.totalBytes += addedBytes
+        queuesByPeripheralID[peripheralID] = entry
     }
 }

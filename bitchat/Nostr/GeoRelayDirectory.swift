@@ -193,7 +193,26 @@ final class GeoRelayDirectory {
 
     static let shared = GeoRelayDirectory()
 
-    private(set) var entries: [Entry] = []
+    private struct ClosestRelaysCacheKey: Hashable {
+        let geohash: String
+        let count: Int
+
+        static func == (lhs: Self, rhs: Self) -> Bool {
+            lhs.count == rhs.count && lhs.geohash == rhs.geohash
+        }
+
+        func hash(into hasher: inout Hasher) {
+            hasher.combine(geohash)
+            hasher.combine(count)
+        }
+    }
+
+    private(set) var entries: [Entry] = [] {
+        didSet {
+            closestRelaysCache.removeAll(keepingCapacity: true)
+        }
+    }
+    private var closestRelaysCache: [ClosestRelaysCacheKey: [String]] = [:]
     private let lastFetchKey = "georelay.lastFetchAt"
     private let dependencies: GeoRelayDirectoryDependencies
     private let cleanupState: CleanupState
@@ -225,8 +244,18 @@ final class GeoRelayDirectory {
 
     /// Returns up to `count` relay URLs (wss://) closest to the geohash center.
     func closestRelays(toGeohash geohash: String, count: Int = 5) -> [String] {
+        guard !entries.isEmpty, count > 0 else { return [] }
+        let key = ClosestRelaysCacheKey(geohash: geohash, count: count)
+        if let cached = closestRelaysCache[key] {
+            return cached
+        }
         let center = Geohash.decodeCenter(geohash)
-        return closestRelays(toLat: center.lat, lon: center.lon, count: count)
+        let result = closestRelays(toLat: center.lat, lon: center.lon, count: count)
+        if closestRelaysCache.count >= 64 {
+            closestRelaysCache.removeAll(keepingCapacity: true)
+        }
+        closestRelaysCache[key] = result
+        return result
     }
 
     /// Returns up to `count` relay URLs (wss://) closest to the given coordinate.
@@ -235,9 +264,22 @@ final class GeoRelayDirectory {
     func closestRelays(toLat lat: Double, lon: Double, count: Int = 5) -> [String] {
         guard !entries.isEmpty, count > 0 else { return [] }
 
+        let rad = Double.pi / 180.0
+        let lat1Rad = lat * rad
+        let cosLat1 = cos(lat1Rad)
+
+        // Haversine distance is strictly monotonic in `a`, so ranking by `a`
+        // preserves exact order while avoiding `sqrt` + `atan2` for every relay.
         return entries
-            .map { (entry: $0, distance: haversineKm(lat, lon, $0.lat, $0.lon)) }
-            .sorted { ($0.distance, $0.entry.host) < ($1.distance, $1.entry.host) }
+            .map { entry -> (entry: Entry, score: Double) in
+                let dLat = (entry.lat - lat) * rad * 0.5
+                let dLon = (entry.lon - lon) * rad * 0.5
+                let sinDLat = sin(dLat)
+                let sinDLon = sin(dLon)
+                let score = sinDLat * sinDLat + cosLat1 * cos(entry.lat * rad) * sinDLon * sinDLon
+                return (entry: entry, score: score)
+            }
+            .sorted { ($0.score, $0.entry.host) < ($1.score, $1.entry.host) }
             .prefix(count)
             .map { "wss://\($0.entry.host)" }
     }
@@ -520,6 +562,8 @@ final class GeoRelayDirectory {
         }
     }
 
+    nonisolated private static let allowedHostLabelCharacters = CharacterSet(charactersIn: "abcdefghijklmnopqrstuvwxyz0123456789-")
+
     nonisolated private static func validatedDirectoryAddress(_ rawValue: String) -> String? {
         let value = rawValue.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !value.isEmpty,
@@ -554,7 +598,7 @@ final class GeoRelayDirectory {
         }
 
         let labels = host.split(separator: ".", omittingEmptySubsequences: false)
-        let allowed = CharacterSet(charactersIn: "abcdefghijklmnopqrstuvwxyz0123456789-")
+        let allowed = allowedHostLabelCharacters
         guard labels.count >= 2,
               !labels.allSatisfy({ $0.allSatisfy(\.isNumber) }),
               labels.allSatisfy({ label in
@@ -615,15 +659,18 @@ final class GeoRelayDirectory {
                 self.prefetchIfNeeded()
             }
         }
+        timer.tolerance = min(300.0, interval * 0.1)
         cleanupState.refreshTimer = timer
         RunLoop.main.add(timer, forMode: .common)
     }
 
     /// Panic-wipe hook: stop scheduled retries, clear the last-fetch timestamp,
-    /// and remove the cached relay CSV from Application Support.
+    /// drop cached geohash lookups from memory, and remove the cached relay CSV
+    /// from Application Support.
     func resetForPanic() {
         cancelRetry()
         retryAttempt = 0
+        closestRelaysCache.removeAll(keepingCapacity: false)
         dependencies.userDefaults.removeObject(forKey: lastFetchKey)
         if let cacheURL = dependencies.cacheURL() {
             try? FileManager.default.removeItem(at: cacheURL)
@@ -633,14 +680,5 @@ final class GeoRelayDirectory {
     var debugRetryAttempt: Int { retryAttempt }
     var debugHasRetryTask: Bool { cleanupState.retryTask != nil }
     var debugObserverCount: Int { cleanupState.observers.count }
-}
-
-// MARK: - Distance
-private func haversineKm(_ lat1: Double, _ lon1: Double, _ lat2: Double, _ lon2: Double) -> Double {
-    let r = 6371.0 // Earth radius in km
-    let dLat = (lat2 - lat1) * .pi / 180
-    let dLon = (lon2 - lon1) * .pi / 180
-    let a = sin(dLat/2) * sin(dLat/2) + cos(lat1 * .pi/180) * cos(lat2 * .pi/180) * sin(dLon/2) * sin(dLon/2)
-    let c = 2 * atan2(sqrt(a), sqrt(1 - a))
-    return r * c
+    var debugClosestRelaysCacheCount: Int { closestRelaysCache.count }
 }

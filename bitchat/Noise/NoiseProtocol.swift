@@ -193,8 +193,16 @@ final class NoiseCipherState {
             let shift = Int(receivedNonce - highestReceivedNonce)
             
             if shift >= Self.REPLAY_WINDOW_SIZE {
-                // Clear entire window - shift is too large
-                replayWindow = Array(repeating: 0, count: Self.REPLAY_WINDOW_BYTES)
+                // Clear entire window in place - avoid heap allocation
+                for i in 0..<Self.REPLAY_WINDOW_BYTES {
+                    replayWindow[i] = 0
+                }
+            } else if shift == 1 {
+                // Fast path for in-order packets (~99% of traffic)
+                for i in stride(from: Self.REPLAY_WINDOW_BYTES - 1, through: 1, by: -1) {
+                    replayWindow[i] = (replayWindow[i] << 1) | (replayWindow[i - 1] >> 7)
+                }
+                replayWindow[0] <<= 1
             } else {
                 // Age every recorded nonce by `shift`. Bit `offset % 8` of byte
                 // `offset / 8` marks the nonce `offset` below the highest one
@@ -202,14 +210,17 @@ final class NoiseCipherState {
                 // within a byte and carries into the low end of the next byte.
                 // Shifting the other way files each nonce under the wrong
                 // offset: recent replays pass and late packets are refused.
+                let byteShift = shift >> 3
+                let bitShift = shift & 7
+                let invBitShift = 8 - bitShift
                 for i in stride(from: Self.REPLAY_WINDOW_BYTES - 1, through: 0, by: -1) {
-                    let sourceByteIndex = i - shift / 8
+                    let sourceByteIndex = i - byteShift
                     var newByte: UInt8 = 0
                     
                     if sourceByteIndex >= 0 {
-                        newByte = replayWindow[sourceByteIndex] << (shift % 8)
-                        if sourceByteIndex > 0 && shift % 8 != 0 {
-                            newByte |= replayWindow[sourceByteIndex - 1] >> (8 - shift % 8)
+                        newByte = replayWindow[sourceByteIndex] << bitShift
+                        if sourceByteIndex > 0 && bitShift != 0 {
+                            newByte |= replayWindow[sourceByteIndex - 1] >> invBitShift
                         }
                     }
                     
@@ -236,35 +247,34 @@ final class NoiseCipherState {
         guard combinedPayload.count >= Self.NONCE_SIZE_BYTES else {
             return nil
         }
-        
-        // Extract 4-byte nonce (big-endian)
-        let nonceData = combinedPayload.prefix(Self.NONCE_SIZE_BYTES)
-        let extractedNonce = nonceData.withUnsafeBytes { (bytes: UnsafeRawBufferPointer) -> UInt64 in
-            let byteArray = bytes.bindMemory(to: UInt8.self)
-            var result: UInt64 = 0
-            for i in 0..<Self.NONCE_SIZE_BYTES {
-                result = (result << 8) | UInt64(byteArray[i])
-            }
-            return result
+
+        // Extract 4-byte nonce (big-endian) without extra intermediate Data copies
+        let extractedNonce: UInt64 = combinedPayload.withUnsafeBytes { raw in
+            let bytes = raw.bindMemory(to: UInt8.self)
+            return (UInt64(bytes[0]) << 24)
+                | (UInt64(bytes[1]) << 16)
+                | (UInt64(bytes[2]) << 8)
+                | UInt64(bytes[3])
         }
-        
-        // Extract ciphertext (remaining bytes)
+
+        // Slice remaining bytes (zero-copy view into combinedPayload)
         let ciphertext = combinedPayload.dropFirst(Self.NONCE_SIZE_BYTES)
-        
-        return (nonce: extractedNonce, ciphertext: Data(ciphertext))
+        return (nonce: extractedNonce, ciphertext: ciphertext)
     }
-    
-    /// Convert nonce to 4-byte array (big-endian)
-    private func nonceToBytes(_ nonce: UInt64) -> Data {
-        var bytes = Data(count: Self.NONCE_SIZE_BYTES)
-        withUnsafeBytes(of: nonce.bigEndian) { ptr in
-            // Copy only the last 4 bytes from the 8-byte UInt64
-            let sourceBytes = ptr.bindMemory(to: UInt8.self)
-            bytes.replaceSubrange(0..<Self.NONCE_SIZE_BYTES, with: sourceBytes.suffix(Self.NONCE_SIZE_BYTES))
+
+    /// Builds the 12-byte Noise ChaChaPoly nonce (4 zero bytes + 8-byte LE counter)
+    /// directly on the stack using three UInt32s (exact 12 bytes, zero padding).
+    private func makeChaChaNonce(for value: UInt64) throws -> ChaChaPoly.Nonce {
+        var nonceWords: (UInt32, UInt32, UInt32) = (
+            0,
+            UInt32(truncatingIfNeeded: value).littleEndian,
+            UInt32(truncatingIfNeeded: value >> 32).littleEndian
+        )
+        return try withUnsafeBytes(of: &nonceWords) { raw in
+            try ChaChaPoly.Nonce(data: raw)
         }
-        return bytes
     }
-    
+
     func encrypt(plaintext: Data, associatedData: Data = Data()) throws -> Data {
         guard let key = self.key else {
             throw NoiseError.uninitializedCipher
@@ -278,24 +288,21 @@ final class NoiseCipherState {
             throw NoiseError.nonceExceeded
         }
         
-        // Create nonce from counter
-        var nonceData = Data(count: 12)
-        withUnsafeBytes(of: currentNonce.littleEndian) { bytes in
-            nonceData.replaceSubrange(4..<12, with: bytes)
-        }
+        let chachaNonce = try makeChaChaNonce(for: currentNonce)
         
-        let sealedBox = try ChaChaPoly.seal(plaintext, using: key, nonce: ChaChaPoly.Nonce(data: nonceData), authenticating: associatedData)
+        let sealedBox = try ChaChaPoly.seal(plaintext, using: key, nonce: chachaNonce, authenticating: associatedData)
         // increment local nonce
         nonce += 1
         
-        // Create combined payload: <nonce><ciphertext>
-        let combinedPayload: Data
-        if (useExtractedNonce) {
-            let nonceBytes = nonceToBytes(currentNonce)
-            combinedPayload = nonceBytes + sealedBox.ciphertext + sealedBox.tag
-        } else {
-            combinedPayload = sealedBox.ciphertext + sealedBox.tag
+        // Build combined payload in one pre-sized allocation: [<nonce>]<ciphertext><tag>
+        let prefixLen = useExtractedNonce ? Self.NONCE_SIZE_BYTES : 0
+        var combinedPayload = Data(capacity: prefixLen + sealedBox.ciphertext.count + sealedBox.tag.count)
+        if useExtractedNonce {
+            var nonceBE = UInt32(currentNonce).bigEndian
+            withUnsafeBytes(of: &nonceBE) { combinedPayload.append($0.bindMemory(to: UInt8.self)) }
         }
+        combinedPayload.append(sealedBox.ciphertext)
+        combinedPayload.append(sealedBox.tag)
         
         // Log high nonce values that might indicate issues
         if currentNonce > Self.HIGH_NONCE_WARNING_THRESHOLD {
@@ -338,7 +345,7 @@ final class NoiseCipherState {
             guard actualCiphertext.count >= 16 else {
                 throw NoiseError.invalidCiphertext
             }
-            // Split ciphertext and tag
+            // Split ciphertext and tag (zero-copy Data slices)
             encryptedData = actualCiphertext.prefix(actualCiphertext.count - 16)
             tag = actualCiphertext.suffix(16)
             decryptionNonce = extractedNonce
@@ -349,14 +356,10 @@ final class NoiseCipherState {
             decryptionNonce = nonce
         }
         
-        // Create nonce from counter
-        var nonceData = Data(count: 12)
-        withUnsafeBytes(of: decryptionNonce.littleEndian) { bytes in
-            nonceData.replaceSubrange(4..<12, with: bytes)
-        }
+        let chachaNonce = try makeChaChaNonce(for: decryptionNonce)
         
         let sealedBox = try ChaChaPoly.SealedBox(
-            nonce: ChaChaPoly.Nonce(data: nonceData),
+            nonce: chachaNonce,
             ciphertext: encryptedData,
             tag: tag
         )
@@ -445,7 +448,10 @@ final class NoiseSymmetricState {
     }
     
     func mixHash(_ data: Data) {
-        hash = (hash + data).sha256Hash()
+        var hasher = SHA256()
+        hasher.update(data: hash)
+        hasher.update(data: data)
+        hash = Data(hasher.finalize())
     }
     
     func mixKeyAndHash(_ inputKeyMaterial: Data) {

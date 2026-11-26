@@ -32,23 +32,35 @@ struct MessagePadding {
         guard paddingNeeded > 0 && paddingNeeded <= 255 else { return data }
         
         var padded = data
-        // PKCS#7: All pad bytes are equal to the pad length
-        padded.append(contentsOf: Array(repeating: UInt8(paddingNeeded), count: paddingNeeded))
+        let oldCount = padded.count
+        padded.count = targetSize
+        // PKCS#7: fill tail directly via memset-equivalent without temp Array allocation.
+        padded.withUnsafeMutableBytes { raw in
+            guard let base = raw.baseAddress else { return }
+            base.advanced(by: oldCount).initializeMemory(as: UInt8.self, repeating: UInt8(paddingNeeded), count: paddingNeeded)
+        }
         return padded
     }
     
     // Remove padding from data
     static func unpad(_ data: Data) -> Data {
-        guard !data.isEmpty else { return data }
-        let last = data.last!
-        let paddingLength = Int(last)
-        // Must have at least 1 pad byte and not exceed data length
-        guard paddingLength > 0 && paddingLength <= data.count else { return data }
-        // Verify PKCS#7: all last N bytes equal to pad length
-        let start = data.count - paddingLength
-        let tail = data[start...]
-        for b in tail { if b != last { return data } }
-        return Data(data[..<start])
+        let count = data.count
+        guard count > 0 else { return data }
+        let start = data.withUnsafeBytes { raw -> Int? in
+            guard let bytes = raw.baseAddress?.assumingMemoryBound(to: UInt8.self) else { return nil }
+            let last = bytes[count &- 1]
+            let paddingLength = Int(last)
+            guard paddingLength > 0 && paddingLength <= count else { return nil }
+            let startIdx = count &- paddingLength
+            var i = startIdx
+            while i < count {
+                if bytes[i] != last { return nil }
+                i &+= 1
+            }
+            return startIdx
+        }
+        guard let start else { return data }
+        return Data(data[data.startIndex..<(data.startIndex + start)])
     }
     
     // Find optimal block size for data

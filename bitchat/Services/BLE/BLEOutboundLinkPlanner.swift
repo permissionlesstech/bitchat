@@ -23,12 +23,20 @@ enum BLEOutboundLinkPlanner {
         preferredPeripheralPerPeer: [PeerID: String] = [:],
         directAnnounceTTL: UInt8 = TransportConfig.messageTTLDefault,
         directedOnlyPeer: PeerID?,
-        requireDirectPeerLink: Bool = false
+        requireDirectPeerLink: Bool = false,
+        precomputedMessageID: String? = nil
     ) -> BLEOutboundLinkPlan {
         let directedPeerHint = directedPeerHint(for: packet, explicitPeer: directedOnlyPeer)
         // Direct announces bypass the per-peer duplicate-link collapse so
         // every live link gets bound (see BLEFanoutSelector.selectLinks).
         let isDirectAnnounce = packet.type == MessageType.announce.rawValue && packet.ttl == directAnnounceTTL
+        // Only compute messageID (which SHA-256 hashes payload) when subsetting
+        // might actually need it or when already precomputed by the caller.
+        let needsSubsetSeed = BLEFanoutSelector.shouldSubset(
+            packetType: packet.type,
+            directedPeerHint: directedPeerHint
+        ) && (peripheralIDs.count > 2 || centralIDs.count > 2)
+        let messageID = precomputedMessageID ?? (needsSubsetSeed ? BLEOutboundPacketPolicy.messageID(for: packet) : "")
         let selectedLinks = BLEFanoutSelector.selectLinks(
             peripheralIDs: peripheralIDs,
             centralIDs: centralIDs,
@@ -41,30 +49,25 @@ enum BLEOutboundLinkPlanner {
             directedPeerHint: directedPeerHint,
             requireDirectPeerLink: requireDirectPeerLink,
             packetType: packet.type,
-            messageID: BLEOutboundPacketPolicy.messageID(for: packet)
+            messageID: messageID
         )
 
         // Fragment only for links that this packet can actually use. Looking
         // at every connected link before directed-peer selection lets an
         // unrelated peer's MTU make an oversized directed send look routable,
         // even though every resulting fragment will select zero target links.
-        let selectedPeripheralLimits = zip(peripheralIDs, peripheralWriteLimits).compactMap { id, limit in
-            selectedLinks.peripheralIDs.contains(id) ? limit : nil
-        }
-        let selectedCentralLimits = zip(centralIDs, centralNotifyLimits).compactMap { id, limit in
-            selectedLinks.centralIDs.contains(id) ? limit : nil
-        }
-        if let minLimit = minimumLinkLimit(
-            peripheralWriteLimits: selectedPeripheralLimits,
-            centralNotifyLimits: selectedCentralLimits
-        ), packet.type != MessageType.fragment.rawValue,
-           dataCount > minLimit {
-            return BLEOutboundLinkPlan(
-                directedPeerHint: directedPeerHint,
-                fragmentChunkSize: BLEOutboundPacketPolicy.fragmentChunkSize(forLinkLimit: minLimit),
-                selectedLinks: selectedLinks,
-                shouldSpoolDirectedPacket: false
-            )
+        if packet.type != MessageType.fragment.rawValue {
+            var minLimit: Int?
+            updateMinimumLimit(&minLimit, ids: peripheralIDs, limits: peripheralWriteLimits, selected: selectedLinks.peripheralIDs)
+            updateMinimumLimit(&minLimit, ids: centralIDs, limits: centralNotifyLimits, selected: selectedLinks.centralIDs)
+            if let minLimit, dataCount > minLimit {
+                return BLEOutboundLinkPlan(
+                    directedPeerHint: directedPeerHint,
+                    fragmentChunkSize: BLEOutboundPacketPolicy.fragmentChunkSize(forLinkLimit: minLimit),
+                    selectedLinks: selectedLinks,
+                    shouldSpoolDirectedPacket: false
+                )
+            }
         }
 
         return BLEOutboundLinkPlan(
@@ -77,6 +80,24 @@ enum BLEOutboundLinkPlanner {
                 packetType: packet.type
             )
         )
+    }
+
+    private static func updateMinimumLimit(
+        _ minLimit: inout Int?,
+        ids: [String],
+        limits: [Int],
+        selected: Set<String>
+    ) {
+        guard !selected.isEmpty else { return }
+        let count = min(ids.count, limits.count)
+        for i in 0..<count where selected.contains(ids[i]) {
+            let limit = limits[i]
+            if let current = minLimit {
+                if limit < current { minLimit = limit }
+            } else {
+                minLimit = limit
+            }
+        }
     }
 
     static func directedPeerHint(for packet: BitchatPacket, explicitPeer: PeerID?) -> PeerID? {

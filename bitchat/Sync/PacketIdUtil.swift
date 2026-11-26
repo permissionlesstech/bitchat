@@ -7,12 +7,15 @@ import CryptoKit
 enum PacketIdUtil {
     static func computeId(_ packet: BitchatPacket) -> Data {
         var hasher = SHA256()
-        hasher.update(data: Data([packet.type]))
+        var typeByte = packet.type
+        withUnsafeBytes(of: &typeByte) { hasher.update(bufferPointer: $0) }
         hasher.update(data: packet.senderID)
         var tsBE = packet.timestamp.bigEndian
-        withUnsafeBytes(of: &tsBE) { raw in hasher.update(data: Data(raw)) }
+        withUnsafeBytes(of: &tsBE) { hasher.update(bufferPointer: $0) }
         hasher.update(data: packet.payload)
         let digest = hasher.finalize()
-        return Data(digest.prefix(16))
+        return digest.withUnsafeBytes { raw in
+            Data(bytes: raw.baseAddress!, count: 16)
+        }
     }
 }

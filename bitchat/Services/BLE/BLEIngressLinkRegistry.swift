@@ -37,6 +37,10 @@ struct BLEIngressLinkRegistry {
         ingressByMessageID[Self.messageID(for: packet)]
     }
 
+    func record(forMessageID messageID: String) -> BLEIngressLinkRecord? {
+        ingressByMessageID[messageID]
+    }
+
     func link(for packet: BitchatPacket) -> BLEIngressLinkID? {
         record(for: packet)?.link
     }
@@ -52,7 +56,22 @@ struct BLEIngressLinkRegistry {
         now: Date = Date(),
         lifetime: TimeInterval
     ) -> Bool {
-        let messageID = Self.messageID(for: packet)
+        recordIfNew(
+            messageID: Self.messageID(for: packet),
+            link: link,
+            peerID: peerID,
+            now: now,
+            lifetime: lifetime
+        )
+    }
+
+    mutating func recordIfNew(
+        messageID: String,
+        link: BLEIngressLinkID,
+        peerID: PeerID,
+        now: Date = Date(),
+        lifetime: TimeInterval
+    ) -> Bool {
         if let existing = ingressByMessageID[messageID],
            now.timeIntervalSince(existing.timestamp) <= lifetime {
             return false
@@ -105,7 +124,7 @@ struct BLEIngressLinkRegistry {
 
     static func messageID(for packet: BitchatPacket) -> String {
         let senderID = packet.senderID.hexEncodedString()
-        let digestPrefix = packet.payload.sha256Hash().prefix(4).hexEncodedString()
+        let digestPrefix = packet.payload.sha256PrefixHex(bytes: 4)
         return "\(senderID)-\(packet.timestamp)-\(packet.type)-\(digestPrefix)"
     }
 
@@ -147,18 +166,22 @@ final class BLEIngressLinkStore: @unchecked Sendable {
         lock.withLock { registry.record(for: packet) }
     }
 
+    func record(forMessageID messageID: String) -> BLEIngressLinkRecord? {
+        lock.withLock { registry.record(forMessageID: messageID) }
+    }
+
     func link(for packet: BitchatPacket) -> BLEIngressLinkID? {
         lock.withLock { registry.link(for: packet) }
     }
 
     func recordIfNew(
-        _ packet: BitchatPacket,
+        messageID: String,
         link: BLEIngressLinkID,
         peerID: PeerID,
         lifetime: TimeInterval
     ) -> Bool {
         lock.withLock {
-            registry.recordIfNew(packet, link: link, peerID: peerID, lifetime: lifetime)
+            registry.recordIfNew(messageID: messageID, link: link, peerID: peerID, lifetime: lifetime)
         }
     }
 

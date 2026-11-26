@@ -640,13 +640,14 @@ final class LocationStateManager: NSObject, CLLocationManagerDelegate, Observabl
         selectedChannel = .mesh
     }
 
+    private static let allowedGeohashCharacters = Set("0123456789bcdefghjkmnpqrstuvwxyz")
+
     private static func normalizeGeohash(_ s: String) -> String {
-        let allowed = Set("0123456789bcdefghjkmnpqrstuvwxyz")
         return s
             .trimmed
             .lowercased()
             .replacingOccurrences(of: "#", with: "")
-            .filter { allowed.contains($0) }
+            .filter { allowedGeohashCharacters.contains($0) }
     }
 }
 

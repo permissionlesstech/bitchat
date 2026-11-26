@@ -120,36 +120,79 @@ enum ContentNormalizer {
     ) -> String {
         // Lowercase for case-insensitive comparison
         let lowered = content.lowercased()
-        let ns = lowered as NSString
-        let range = NSRange(location: 0, length: ns.length)
 
-        // Simplify URLs by stripping query/fragment
-        var simplified = ""
-        var last = 0
-        for match in simplifyHTTPURL.matches(in: lowered, options: [], range: range) {
-            if match.range.location > last {
-                simplified += ns.substring(with: NSRange(location: last, length: match.range.location - last))
+        // Fast path: skip NSString bridging + URL regex when no scheme separator is present
+        let simplified: String
+        if lowered.contains("://") {
+            let ns = lowered as NSString
+            let range = NSRange(location: 0, length: ns.length)
+            var out = ""
+            out.reserveCapacity(lowered.count)
+            var last = 0
+            for match in simplifyHTTPURL.matches(in: lowered, options: [], range: range) {
+                if match.range.location > last {
+                    out += ns.substring(with: NSRange(location: last, length: match.range.location - last))
+                }
+                let url = ns.substring(with: match.range)
+                if let queryIndex = url.firstIndex(where: { $0 == "?" || $0 == "#" }) {
+                    out += url[..<queryIndex]
+                } else {
+                    out += url
+                }
+                last = match.range.location + match.range.length
             }
-            let url = ns.substring(with: match.range)
-            if let queryIndex = url.firstIndex(where: { $0 == "?" || $0 == "#" }) {
-                simplified += String(url[..<queryIndex])
-            } else {
-                simplified += url
+            if last < ns.length {
+                out += ns.substring(with: NSRange(location: last, length: ns.length - last))
             }
-            last = match.range.location + match.range.length
-        }
-        if last < ns.length {
-            simplified += ns.substring(with: NSRange(location: last, length: ns.length - last))
+            simplified = out
+        } else {
+            simplified = lowered
         }
 
-        // Trim and collapse whitespace
+        // Preserve exact Foundation boundary trimming (including U+200B), then
+        // collapse interior whitespace over Unicode scalars (`\s+` parity without
+        // compiling NSRegularExpression) before grapheme-cluster prefix truncation.
         let trimmed = simplified.trimmed
-        let collapsed = trimmed.replacingOccurrences(of: "\\s+", with: " ", options: .regularExpression)
+        var collapsedScalars = String.UnicodeScalarView()
+        collapsedScalars.reserveCapacity(trimmed.unicodeScalars.count)
+        var hasContent = false
+        var pendingSpace = false
+        for scalar in trimmed.unicodeScalars {
+            if scalar.properties.isWhitespace {
+                if hasContent {
+                    pendingSpace = true
+                }
+                continue
+            }
+            if pendingSpace {
+                collapsedScalars.append(" ")
+                pendingSpace = false
+            }
+            collapsedScalars.append(scalar)
+            hasContent = true
+        }
 
-        // Take prefix and hash
-        let prefix = String(collapsed.prefix(prefixLength))
+        let collapsed = String(collapsedScalars)
+        let prefix = prefixLength > 0 ? String(collapsed.prefix(prefixLength)) : ""
         let hash = prefix.djb2()
-        return String(format: "h:%016llx", hash)
+        return formatHashKey(hash)
+    }
+
+    private static func formatHashKey(_ hash: UInt64) -> String {
+        String(unsafeUninitializedCapacity: 18) { buffer in
+            guard let dst = buffer.baseAddress else { return 0 }
+            dst[0] = UInt8(ascii: "h")
+            dst[1] = UInt8(ascii: ":")
+            var value = hash
+            var i = 17
+            while i >= 2 {
+                let nibble = UInt8(value & 0x0f)
+                dst[i] = nibble < 10 ? nibble &+ 48 : nibble &+ 87
+                value >>= 4
+                i &-= 1
+            }
+            return 18
+        }
     }
 }
 

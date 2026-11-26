@@ -279,6 +279,53 @@ final class NearbyNotesCounterTests: XCTestCase {
         XCTAssertEqual(endCount, 1)
     }
 
+    func test_noticesGeoSession_backgroundPausesAndForegroundResumesLiveRefresh() {
+        let relays = SubscriptionRecorder()
+        let manager = LocationNotesManager(geohash: "u4pruydq", dependencies: relays.dependencies)
+        var beginCount = 0
+        var endCount = 0
+
+        let backgrounded = NoticesView.reconcileGeoSession(
+            tab: .geo,
+            needsDeviceLocation: true,
+            permissionState: .authorized,
+            notesEnabled: true,
+            geohash: "u4pruydq",
+            manager: manager,
+            ownsLiveRefresh: true,
+            isAppActive: false,
+            beginLiveRefresh: { beginCount += 1 },
+            endLiveRefresh: { endCount += 1 },
+            acquire: { _ in XCTFail("active manager should be reused"); return manager },
+            release: { _ in XCTFail("backgrounding must not release active notes manager") }
+        )
+
+        XCTAssertTrue(backgrounded.manager === manager)
+        XCTAssertFalse(backgrounded.ownsLiveRefresh)
+        XCTAssertEqual(beginCount, 0)
+        XCTAssertEqual(endCount, 1)
+
+        let foregrounded = NoticesView.reconcileGeoSession(
+            tab: .geo,
+            needsDeviceLocation: true,
+            permissionState: .authorized,
+            notesEnabled: true,
+            geohash: "u4pruydq",
+            manager: backgrounded.manager,
+            ownsLiveRefresh: backgrounded.ownsLiveRefresh,
+            isAppActive: true,
+            beginLiveRefresh: { beginCount += 1 },
+            endLiveRefresh: { endCount += 1 },
+            acquire: { _ in XCTFail("active manager should be reused"); return manager },
+            release: { _ in XCTFail("foregrounding must not release active notes manager") }
+        )
+
+        XCTAssertTrue(foregrounded.manager === manager)
+        XCTAssertTrue(foregrounded.ownsLiveRefresh)
+        XCTAssertEqual(beginCount, 1)
+        XCTAssertEqual(endCount, 1)
+    }
+
     func test_pool_sharesOneManagerPerGeohash_andCancelsOnLastRelease() {
         let relays = SubscriptionRecorder()
         let pool = LocationNotesPool(

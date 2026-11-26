@@ -263,6 +263,25 @@ struct ContentNormalizerTests {
         let key2 = ContentNormalizer.normalizedKey(content2)
         #expect(key1 == key2)
     }
+
+    @Test func normalizedKey_combiningMarkAfterCollapsedWhitespaceAtPrefixBoundary() {
+        // 255 ASCII chars + newline + combining mark: after collapsing whitespace,
+        // the space and combining mark form grapheme cluster #256 and must not collide.
+        let base = String(repeating: "a", count: TransportConfig.contentKeyPrefixLength - 1)
+        let acute = base + "\n\u{0301}"
+        let grave = base + "\n\u{0300}"
+        #expect(ContentNormalizer.normalizedKey(acute) != ContentNormalizer.normalizedKey(grave))
+    }
+
+    @Test func normalizedKey_trimsBoundaryZeroWidthSpacesLikeFoundation() {
+        let plain = ContentNormalizer.normalizedKey("hello mesh")
+        let leading = ContentNormalizer.normalizedKey("\u{200B}hello mesh")
+        let trailing = ContentNormalizer.normalizedKey("hello mesh\u{200B}")
+        let both = ContentNormalizer.normalizedKey("\u{200B} hello mesh \u{200B}")
+        #expect(leading == plain)
+        #expect(trailing == plain)
+        #expect(both == plain)
+    }
 }
 
 // MARK: - Message Deduplication Service Tests

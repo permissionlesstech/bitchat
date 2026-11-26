@@ -14,6 +14,9 @@ protocol BLERadioControllerDelegate: AnyObject {
     /// the link's transport bookkeeping — write buffers, link-auth proof,
     /// reconnect epoch, and the link-state entry itself.
     func radioTearDownPeripheralLink(_ peripheralID: String)
+    /// A discovery entered the connection candidate queue; wake maintenance
+    /// from idle cadence so the first weak peer is drained promptly.
+    func radioDidQueueConnectionCandidate()
 }
 
 /// bleQueue-confined owner of the central-role radio policy: discovery
@@ -46,10 +49,12 @@ final class BLERadioController {
 
     // Adaptive scanning duty-cycle
     private var scanDutyTimer: DispatchSourceTimer?
+    private var dutyResumeWorkItem: DispatchWorkItem?
     private var dutyEnabled: Bool = true
     private var dutyOnDuration: TimeInterval = TransportConfig.bleDutyOnDuration
     private var dutyOffDuration: TimeInterval = TransportConfig.bleDutyOffDuration
     private var dutyActive: Bool = false
+    private var lastScanAllowDuplicates: Bool?
 
     init(
         queue: DispatchQueue,
@@ -61,6 +66,11 @@ final class BLERadioController {
         self.recentTraffic = recentTraffic
     }
 
+    deinit {
+        dutyResumeWorkItem?.cancel()
+        scanDutyTimer?.cancel()
+    }
+
     // MARK: - Advertising
 
     static func advertisementData() -> [String: Any] {
@@ -70,26 +80,61 @@ final class BLERadioController {
 
     // MARK: - Scanning
 
+    private var desiredAllowDuplicates: Bool {
+        // Allow duplicates while active for faster discovery, except under
+        // Low Power Mode where coalesced CoreBluetooth discoveries avoid
+        // waking the CPU on every BLE advertising beacon.
+        (delegate?.radioIsAppActive() ?? true) && !ProcessInfo.processInfo.isLowPowerModeEnabled
+    }
+
     func startScanning() {
         guard delegate?.radioIsPanicSuspended() == false,
               let central,
               central.state == .poweredOn,
               !central.isScanning else { return }
 
-        // Allow duplicates while active for faster discovery: immediate
-        // discovery events instead of coalesced ones.
-        let allowDuplicates = delegate?.radioIsAppActive() ?? true
+        let allowDuplicates = desiredAllowDuplicates
+        lastScanAllowDuplicates = allowDuplicates
         central.scanForPeripherals(
             withServices: [BLEService.serviceUUID],
             options: [CBCentralManagerScanOptionAllowDuplicatesKey: allowDuplicates]
         )
     }
 
+    #if os(iOS)
+    /// Stops any active scan and restarts it with current options on `bleQueue`.
+    func restartScanning() {
+        guard delegate?.radioIsPanicSuspended() == false,
+              let central,
+              central.state == .poweredOn else { return }
+        if central.isScanning {
+            central.stopScan()
+        }
+        lastScanAllowDuplicates = nil
+        startScanning()
+    }
+    #endif
+
+    /// Ensures scanning is active with up-to-date options (e.g. if Low Power
+    /// Mode toggled while a scan was already running).
+    private func ensureScanningWithCurrentOptions() {
+        guard delegate?.radioIsPanicSuspended() == false,
+              let central,
+              central.state == .poweredOn else { return }
+        let desired = desiredAllowDuplicates
+        if central.isScanning {
+            guard lastScanAllowDuplicates != desired else { return }
+            central.stopScan()
+            lastScanAllowDuplicates = nil
+        }
+        startScanning()
+    }
+
     func updateScanningDutyCycle(connectedCount: Int) {
         guard let central, central.state == .poweredOn else { return }
         // Duty cycle only when the app is active and at least one peer is
-        // connected; force full-time scanning with few neighbors or very
-        // recent traffic.
+        // connected (or in Low Power Mode); force full-time scanning during
+        // active traffic bursts.
         let hasRecentTraffic = recentTraffic.hasTraffic(
             within: TransportConfig.bleRecentTrafficForceScanSeconds,
             now: Date()
@@ -98,7 +143,8 @@ final class BLERadioController {
             dutyEnabled: dutyEnabled,
             appIsActive: delegate?.radioIsAppActive() ?? true,
             connectedCount: connectedCount,
-            hasRecentTraffic: hasRecentTraffic
+            hasRecentTraffic: hasRecentTraffic,
+            lowPowerMode: ProcessInfo.processInfo.isLowPowerModeEnabled
         )
 
         switch scanPlan {
@@ -110,38 +156,55 @@ final class BLERadioController {
             if scanDutyTimer == nil {
                 // Start with scanning ON; turn OFF after onDuration.
                 let t = DispatchSource.makeTimerSource(queue: queue)
-                if !central.isScanning { startScanning() }
+                ensureScanningWithCurrentOptions()
                 dutyActive = true
-                t.schedule(deadline: .now() + dutyOnDuration, repeating: dutyOnDuration + dutyOffDuration)
+                // 1s leeway allows OS timer coalescing and reduces idle CPU wakeups.
+                t.schedule(deadline: .now() + dutyOnDuration, repeating: dutyOnDuration + dutyOffDuration, leeway: .seconds(1))
                 t.setEventHandler { [weak self] in
                     guard let self, let c = self.central else { return }
                     if self.dutyActive {
-                        if c.isScanning { c.stopScan() }
+                        if c.isScanning {
+                            c.stopScan()
+                            self.lastScanAllowDuplicates = nil
+                        }
                         self.dutyActive = false
-                        self.queue.asyncAfter(deadline: .now() + self.dutyOffDuration) {
+                        self.dutyResumeWorkItem?.cancel()
+                        let resumeWork = DispatchWorkItem { [weak self] in
+                            guard let self else { return }
+                            self.dutyResumeWorkItem = nil
+                            guard self.scanDutyTimer != nil,
+                                  self.delegate?.radioIsPanicSuspended() == false else { return }
                             if self.central?.state == .poweredOn { self.startScanning() }
                             self.dutyActive = true
                         }
+                        self.dutyResumeWorkItem = resumeWork
+                        self.queue.asyncAfter(deadline: .now() + self.dutyOffDuration, execute: resumeWork)
                     }
                 }
                 t.resume()
                 scanDutyTimer = t
             } else if durationsChanged {
-                scanDutyTimer?.schedule(deadline: .now() + dutyOnDuration, repeating: dutyOnDuration + dutyOffDuration)
-                if !central.isScanning { startScanning() }
+                dutyResumeWorkItem?.cancel()
+                dutyResumeWorkItem = nil
+                scanDutyTimer?.schedule(deadline: .now() + dutyOnDuration, repeating: dutyOnDuration + dutyOffDuration, leeway: .seconds(1))
+                ensureScanningWithCurrentOptions()
                 dutyActive = true
+            } else if dutyActive {
+                ensureScanningWithCurrentOptions()
             }
         case .continuous:
-            // Cancel duty cycle and ensure scanning is ON for discovery.
-            scanDutyTimer?.cancel()
-            scanDutyTimer = nil
-            if !central.isScanning { startScanning() }
+            // Cancel duty cycle and ensure scanning is ON with current options.
+            stopDutyCycle()
+            ensureScanningWithCurrentOptions()
         }
     }
 
     func stopDutyCycle() {
+        dutyResumeWorkItem?.cancel()
+        dutyResumeWorkItem = nil
         scanDutyTimer?.cancel()
         scanDutyTimer = nil
+        dutyActive = false
     }
 
     func updateRSSIThreshold(connectedCount: Int) {
@@ -184,7 +247,10 @@ final class BLERadioController {
             peripheralState: peripheral.state.connectionSchedulerState,
             now: candidate.discoveredAt
         ) {
-        case .ignore, .queued:
+        case .ignore:
+            return
+        case .queued:
+            delegate?.radioDidQueueConnectionCandidate()
             return
         case .scheduleRetry(let delay):
             queue.asyncAfter(deadline: .now() + delay) { [weak self] in

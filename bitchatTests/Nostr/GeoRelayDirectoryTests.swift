@@ -543,6 +543,24 @@ final class GeoRelayDirectoryTests: XCTestCase {
         XCTAssertFalse(directory.debugHasRetryTask)
     }
 
+    func test_resetForPanic_clearsCachedGeohashLookups() {
+        let harness = makeHarness(
+            bundleCSV: """
+            relay url,lat,lon
+            near.example,37.77,-122.41
+            far.example,52.52,13.40
+            """
+        )
+        let directory = GeoRelayDirectory(dependencies: harness.dependencies)
+
+        let relays = directory.closestRelays(toGeohash: "9q8yyk8y", count: 2)
+        XCTAssertEqual(relays, ["wss://near.example", "wss://far.example"])
+        XCTAssertEqual(directory.debugClosestRelaysCacheCount, 1)
+
+        directory.resetForPanic()
+        XCTAssertEqual(directory.debugClosestRelaysCacheCount, 0)
+    }
+
     private func makeHarness(
         cacheCSV: String? = nil,
         bundleCSV: String? = nil,

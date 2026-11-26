@@ -155,11 +155,18 @@ private struct GlobeStarfield: View, Equatable {
 private struct GlobeCrosshair: View {
     let color: Color
     let isInMotion: Bool
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.scenePhase) private var scenePhase
+    @State private var isLowPowerMode = ProcessInfo.processInfo.isLowPowerModeEnabled
+
+    private var isPaused: Bool {
+        isInMotion || reduceMotion || scenePhase != .active || isLowPowerMode
+    }
 
     var body: some View {
-        TimelineView(.animation(minimumInterval: nil, paused: isInMotion)) { timeline in
+        TimelineView(.animation(minimumInterval: 1.0 / 20.0, paused: isPaused)) { timeline in
             Canvas { context, size in
-                let alpha = isInMotion ? 0.9 : Self.pulse(at: timeline.date)
+                let alpha = isPaused ? 0.9 : Self.pulse(at: timeline.date)
                 let shading = GraphicsContext.Shading.color(color.opacity(alpha))
                 let cx = size.width / 2
                 let cy = size.height / 2
@@ -177,6 +184,12 @@ private struct GlobeCrosshair: View {
                 context.stroke(path, with: shading, lineWidth: 1.6)
                 context.fill(Path(ellipseIn: CGRect(x: cx - 1.8, y: cy - 1.8, width: 3.6, height: 3.6)), with: shading)
             }
+        }
+        .onReceive(
+            NotificationCenter.default.publisher(for: .NSProcessInfoPowerStateDidChange)
+                .receive(on: RunLoop.main)
+        ) { _ in
+            isLowPowerMode = ProcessInfo.processInfo.isLowPowerModeEnabled
         }
     }
 

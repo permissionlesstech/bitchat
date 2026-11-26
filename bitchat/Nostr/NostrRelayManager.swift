@@ -186,7 +186,10 @@ final class NostrRelayManager: ObservableObject {
         defaultRelaySet = Set(defaultRelays)
     }
 
-    @Published private(set) var relays: [Relay] = []
+    // Kept non-@Published: no UI observes `$relays`, and mutating per-relay
+    // packet counters (`messagesReceived`/`messagesSent`) on every frame
+    // previously triggered `objectWillChange` storms on the main actor.
+    private(set) var relays: [Relay] = []
     @Published private(set) var isConnected = false
     /// Whether a relay that carries private messages is connected. DMs
     /// target the default (gift-wrap-capable) relay set, so a connected
@@ -564,9 +567,19 @@ final class NostrRelayManager: ObservableObject {
 
         // Attempt immediate send to relays with active connections; queue the rest
         var stillPending = Set<String>()
+        var encodedMessage: String?
         for relayUrl in targetRelays {
             if let connection = connectedConnection(for: relayUrl) {
-                sendToRelay(event: event, connection: connection, relayUrl: relayUrl)
+                if encodedMessage == nil {
+                    guard let encoded = encodeEventMessage(event) else { return }
+                    encodedMessage = encoded
+                }
+                sendEncodedToRelay(
+                    event: event,
+                    encodedMessage: encodedMessage!,
+                    connection: connection,
+                    relayUrl: relayUrl
+                )
             } else {
                 stillPending.insert(relayUrl)
             }
@@ -606,6 +619,10 @@ final class NostrRelayManager: ObservableObject {
             completion(false)
             return
         }
+        guard let encodedMessage = encodeEventMessage(event) else {
+            completion(false)
+            return
+        }
 
         let token = UUID()
         let eventID = event.id
@@ -624,7 +641,12 @@ final class NostrRelayManager: ObservableObject {
         }
 
         for (relayUrl, connection) in connectedTargets {
-            sendToRelay(event: event, connection: connection, relayUrl: relayUrl) { [weak self] succeeded in
+            sendEncodedToRelay(
+                event: event,
+                encodedMessage: encodedMessage,
+                connection: connection,
+                relayUrl: relayUrl
+            ) { [weak self] succeeded in
                 guard let self else { return }
                 // Success only means the bytes reached the socket; wait for
                 // the matching relay OK. A failed write settles this target
@@ -1361,38 +1383,58 @@ final class NostrRelayManager: ObservableObject {
         }
     }
     
+    private func encodeEventMessage(_ event: NostrEvent) -> String? {
+        let req = NostrRequest.event(event)
+        do {
+            let data = try encoder.encode(req)
+            return String(data: data, encoding: .utf8) ?? ""
+        } catch {
+            SecureLogger.error("Failed to encode event: \(error)", category: .session)
+            return nil
+        }
+    }
+
     private func sendToRelay(
         event: NostrEvent,
         connection: NostrRelayConnectionProtocol,
         relayUrl: String,
         completion: ((Bool) -> Void)? = nil
     ) {
-        let req = NostrRequest.event(event)
-        
-        do {
-            let data = try encoder.encode(req)
-            let message = String(data: data, encoding: .utf8) ?? ""
-            
-            SecureLogger.debug("📤 Send kind=\(event.kind) id=\(event.id.prefix(16))… relay=\(relayUrl)", category: .session)
-            
-            connection.send(.string(message)) { [weak self] error in
-                DispatchQueue.main.async {
-                    if let error = error {
-                        SecureLogger.error("❌ Failed to send event to \(relayUrl): \(error)", category: .session)
-                        completion?(false)
-                    } else {
-                        // SecureLogger.debug("✅ Event sent to relay: \(relayUrl)", category: .session)
-                        // Update relay stats
-                        if let index = self?.relays.firstIndex(where: { $0.url == relayUrl }) {
-                            self?.relays[index].messagesSent += 1
-                        }
-                        completion?(true)
+        guard let message = encodeEventMessage(event) else {
+            completion?(false)
+            return
+        }
+        sendEncodedToRelay(
+            event: event,
+            encodedMessage: message,
+            connection: connection,
+            relayUrl: relayUrl,
+            completion: completion
+        )
+    }
+
+    private func sendEncodedToRelay(
+        event: NostrEvent,
+        encodedMessage: String,
+        connection: NostrRelayConnectionProtocol,
+        relayUrl: String,
+        completion: ((Bool) -> Void)? = nil
+    ) {
+        SecureLogger.debug("📤 Send kind=\(event.kind) id=\(event.id.prefix(16))… relay=\(relayUrl)", category: .session)
+
+        connection.send(.string(encodedMessage)) { [weak self] error in
+            DispatchQueue.main.async {
+                if let error = error {
+                    SecureLogger.error("❌ Failed to send event to \(relayUrl): \(error)", category: .session)
+                    completion?(false)
+                } else {
+                    // Update relay stats
+                    if let index = self?.relays.firstIndex(where: { $0.url == relayUrl }) {
+                        self?.relays[index].messagesSent += 1
                     }
+                    completion?(true)
                 }
             }
-        } catch {
-            SecureLogger.error("Failed to encode event: \(error)", category: .session)
-            completion?(false)
         }
     }
     
@@ -1415,10 +1457,16 @@ final class NostrRelayManager: ObservableObject {
     }
     
     private func updateConnectionStatus() {
-        isConnected = relays.contains { $0.isConnected }
+        let nextConnected = relays.contains { $0.isConnected }
+        if nextConnected != isConnected {
+            isConnected = nextConnected
+        }
         // Relay URLs are normalized before entries are created, so direct
         // set membership is sound.
-        isDMRelayConnected = relays.contains { $0.isConnected && defaultRelaySet.contains($0.url) }
+        let nextDMConnected = relays.contains { $0.isConnected && defaultRelaySet.contains($0.url) }
+        if nextDMConnected != isDMRelayConnected {
+            isDMRelayConnected = nextDMConnected
+        }
     }
     
     /// A relay that drops before sending EOSE must not stall initial-load

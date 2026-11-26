@@ -199,12 +199,14 @@ final class GeohashParticipantTracker: ObservableObject {
     /// Start the periodic refresh timer: expires people who went quiet.
     func startRefreshTimer(interval: TimeInterval = 30.0) {
         stopRefreshTimer()
-        refreshTimer = Timer.scheduledTimer(withTimeInterval: interval, repeats: true) { [weak self] _ in
+        let timer = Timer.scheduledTimer(withTimeInterval: interval, repeats: true) { [weak self] _ in
             Task { @MainActor in
                 self?.pruneExpired()
                 self?.refresh()
             }
         }
+        timer.tolerance = min(5.0, interval * 0.2)
+        refreshTimer = timer
     }
 
     /// Stop the periodic refresh timer

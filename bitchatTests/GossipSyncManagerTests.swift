@@ -1101,11 +1101,39 @@ struct GossipSyncManagerTests {
         #expect(erased)
     }
 
+    @Test func periodicSyncSkipsWorkWhenNoSyncTargetsExist() throws {
+        let requestSyncManager = RequestSyncManager()
+        let manager = GossipSyncManager(myPeerID: myPeerID, requestSyncManager: requestSyncManager)
+        let delegate = RecordingDelegate()
+        delegate.syncTargetsAvailable = false
+        manager.delegate = delegate
+
+        let senderID = try #require(Data(hexString: "1122334455667788"))
+        manager.onPublicPacketSeen(BitchatPacket(
+            type: MessageType.message.rawValue,
+            senderID: senderID,
+            recipientID: nil,
+            timestamp: UInt64(Date().timeIntervalSince1970 * 1000),
+            payload: Data([0x01, 0x02]),
+            signature: nil,
+            ttl: 1
+        ))
+
+        manager._performMaintenanceSynchronously(now: Date())
+        #expect(delegate.packets.isEmpty)
+
+        // Once a sync target appears, periodic sync resumes sending.
+        delegate.syncTargetsAvailable = true
+        manager._performMaintenanceSynchronously(now: Date())
+        #expect(!delegate.packets.isEmpty)
+    }
+
 }
 
 private final class RecordingDelegate: GossipSyncManager.Delegate {
     var onSend: (() -> Void)?
     var connectedPeers: [PeerID] = []
+    var syncTargetsAvailable = true
     private(set) var lastPacket: BitchatPacket?
     private(set) var packets: [BitchatPacket] = []
     private let lock = NSLock()
@@ -1132,5 +1160,9 @@ private final class RecordingDelegate: GossipSyncManager.Delegate {
     
     func getConnectedPeers() -> [PeerID] {
         return connectedPeers
+    }
+
+    func hasSyncTargets() -> Bool {
+        syncTargetsAvailable
     }
 }
