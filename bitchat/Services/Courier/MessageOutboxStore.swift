@@ -608,6 +608,7 @@ final class MessageOutboxStore {
         recoveryRouterSnapshot = [:]
         unreportedRecoveredSnapshot = nil
         lifecycleGeneration &+= 1
+        cachedEncryptionKey = nil
         if let fileURL {
             try? FileManager.default.removeItem(at: fileURL)
         }
@@ -617,6 +618,8 @@ final class MessageOutboxStore {
 
     // MARK: - Internals
 
+    private var cachedEncryptionKey: SymmetricKey?
+
     private func encryptionKey(createIfMissing: Bool) -> SymmetricKey? {
         switch readEncryptionKey() {
         case .available(let key):
@@ -625,6 +628,7 @@ final class MessageOutboxStore {
             break
         case .invalid:
             guard createIfMissing else { return nil }
+            cachedEncryptionKey = nil
             keychain.delete(key: Self.keychainKey, service: Self.keychainService)
         case .unavailable:
             return nil
@@ -651,14 +655,20 @@ final class MessageOutboxStore {
             SecureLogger.error("Outbox encryption key was not retained by Keychain", category: .session)
             return nil
         }
+        cachedEncryptionKey = key
         return key
     }
 
     private func readEncryptionKey() -> EncryptionKeyReadResult {
+        if let cachedEncryptionKey {
+            return .available(cachedEncryptionKey)
+        }
         switch keychain.loadWithResult(key: Self.keychainKey, service: Self.keychainService) {
         case .success(let data):
             guard data.count == 32 else { return .invalid }
-            return .available(SymmetricKey(data: data))
+            let key = SymmetricKey(data: data)
+            cachedEncryptionKey = key
+            return .available(key)
         case .itemNotFound:
             return .missing
         case .deviceLocked, .authenticationFailed:

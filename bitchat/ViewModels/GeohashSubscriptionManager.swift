@@ -37,7 +37,7 @@ protocol GeohashSubscriptionContext: AnyObject {
     // MARK: Nostr identity & dedup
     func deriveNostrIdentity(forGeohash geohash: String) throws -> NostrIdentity
     func currentNostrIdentity() -> NostrIdentity?
-    func recordProcessedNostrEvent(_ eventID: String)
+    func recordProcessedEphemeralNostrEvent(_ eventID: String)
     func clearProcessedNostrEvents()
     /// Records the Nostr pubkey behind a (possibly virtual) peer ID.
     func registerNostrKeyMapping(_ pubkey: String, for peerID: PeerID)
@@ -341,7 +341,7 @@ final class GeohashSubscriptionManager {
             )
         }
 
-        context.recordProcessedNostrEvent(event.id)
+        context.recordProcessedEphemeralNostrEvent(event.id)
     }
 
     @MainActor

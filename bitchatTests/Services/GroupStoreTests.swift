@@ -170,6 +170,18 @@ struct GroupStoreTests {
         #expect(reloaded.key(forGroupID: group.groupID) != nil)
     }
 
+    @Test func cachedKeyReadsDoNotRequeryKeychain() throws {
+        let keychain = MockKeychain()
+        let store = GroupStore(keychain: keychain, persistsToDisk: false)
+        let group = try #require(store.createGroup(named: "cached", creator: makeMember(seed: 0xC1)))
+        let readsAfterCreate = keychain.getIdentityKeyCallCount
+
+        for _ in 0..<10 {
+            #expect(store.key(forGroupID: group.groupID) != nil)
+        }
+        #expect(keychain.getIdentityKeyCallCount == readsAfterCreate)
+    }
+
     @Test func groupsWithoutKeysAreDroppedOnLoad() throws {
         let keychain = MockKeychain()
         let fileURL = tempFileURL()

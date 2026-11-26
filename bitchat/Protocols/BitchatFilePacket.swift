@@ -26,23 +26,42 @@ struct BitchatFilePacket {
         case content = 0x04
     }
 
+    /// Zero-allocation preflight check matching `encode()` validation rules.
+    var canEncode: Bool {
+        let resolvedSize = fileSize ?? UInt64(content.count)
+        guard resolvedSize <= UInt64(UInt32.max) else { return false }
+        guard resolvedSize <= UInt64(FileTransferLimits.maxPayloadBytes) else { return false }
+        guard content.count <= Int(UInt32.max) else { return false }
+        return FileTransferLimits.isValidPayload(content.count)
+    }
+
     /// Encodes the packet using v2 canonical TLVs (4-byte FILE_SIZE, 4-byte CONTENT length).
     /// Returns `nil` when fields exceed protocol limits (e.g., content > UInt32.max).
     func encode() -> Data? {
+        guard canEncode else { return nil }
         let resolvedSize = fileSize ?? UInt64(content.count)
-        guard resolvedSize <= UInt64(UInt32.max) else { return nil }
-        guard resolvedSize <= UInt64(FileTransferLimits.maxPayloadBytes) else { return nil }
-        guard content.count <= Int(UInt32.max) else { return nil }
-        guard FileTransferLimits.isValidPayload(content.count) else { return nil }
 
         func appendBE<T: FixedWidthInteger>(_ value: T, into data: inout Data) {
             var big = value.bigEndian
             withUnsafeBytes(of: &big) { data.append(contentsOf: $0) }
         }
 
-        var encoded = Data()
+        let nameData: Data? = {
+            guard let name = fileName, let d = name.data(using: .utf8), d.count <= Int(UInt16.max) else { return nil }
+            return d
+        }()
+        let mimeData: Data? = {
+            guard let mime = mimeType, let d = mime.data(using: .utf8), d.count <= Int(UInt16.max) else { return nil }
+            return d
+        }()
 
-        if let name = fileName, let nameData = name.data(using: .utf8), nameData.count <= Int(UInt16.max) {
+        let capacity = (nameData.map { 3 + $0.count } ?? 0)
+            + 7
+            + (mimeData.map { 3 + $0.count } ?? 0)
+            + 5 + content.count
+        var encoded = Data(capacity: capacity)
+
+        if let nameData {
             encoded.append(TLVType.fileName.rawValue)
             appendBE(UInt16(nameData.count), into: &encoded)
             encoded.append(nameData)
@@ -52,7 +71,7 @@ struct BitchatFilePacket {
         appendBE(UInt16(4), into: &encoded)
         appendBE(UInt32(resolvedSize), into: &encoded)
 
-        if let mime = mimeType, let mimeData = mime.data(using: .utf8), mimeData.count <= Int(UInt16.max) {
+        if let mimeData {
             encoded.append(TLVType.mimeType.rawValue)
             appendBE(UInt16(mimeData.count), into: &encoded)
             encoded.append(mimeData)

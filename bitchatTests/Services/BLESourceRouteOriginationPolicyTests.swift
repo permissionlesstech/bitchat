@@ -95,4 +95,49 @@ struct BLESourceRouteOriginationPolicyTests {
         #expect(sawComputeRoute)
         #expect(route(packet: makePacket(), computedRoute: []) == nil)
     }
+
+    @Test func fragmentPacketNeverGetsRoute() {
+        var sawComputeRoute = false
+        let fragment = BitchatPacket(
+            type: MessageType.fragment.rawValue,
+            senderID: localPeerIDData,
+            recipientID: Data(hexString: "1112131415161718"),
+            timestamp: UInt64(Date().timeIntervalSince1970 * 1000),
+            payload: Data(repeating: 0xAB, count: 32),
+            signature: nil,
+            ttl: 7
+        )
+        let result = BLESourceRouteOriginationPolicy.route(
+            for: fragment,
+            to: recipient,
+            localPeerIDData: localPeerIDData,
+            isRecipientConnected: { _ in false },
+            shouldAttemptRoute: { _ in true },
+            computeRoute: { _ in
+                sawComputeRoute = true
+                return [self.hop]
+            }
+        )
+        #expect(result == nil)
+        #expect(!sawComputeRoute)
+    }
+
+    @Test func alreadyRoutedPacketNeverGetsRoute() {
+        var sawComputeRoute = false
+        var routed = makePacket()
+        routed.route = [hop]
+        let result = BLESourceRouteOriginationPolicy.route(
+            for: routed,
+            to: recipient,
+            localPeerIDData: localPeerIDData,
+            isRecipientConnected: { _ in false },
+            shouldAttemptRoute: { _ in true },
+            computeRoute: { _ in
+                sawComputeRoute = true
+                return [self.hop]
+            }
+        )
+        #expect(result == nil)
+        #expect(!sawComputeRoute)
+    }
 }

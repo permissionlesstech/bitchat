@@ -145,7 +145,7 @@ struct BlockRevealImageView: View {
     @ViewBuilder
     private var imageContent: some View {
         if let image = platformImage {
-            Image(platformImage: image)
+            let baseImage = Image(platformImage: image)
                 .resizable()
                 .aspectRatio(aspectRatio, contentMode: .fit)
                 .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
@@ -153,15 +153,22 @@ struct BlockRevealImageView: View {
                     RoundedRectangle(cornerRadius: 16, style: .continuous)
                         .stroke(Color.gray.opacity(0.2), lineWidth: 1)
                 )
-                .mask(
-                    BlockRevealMask(
-                        fraction: fraction,
-                        columns: 24,
-                        rows: 16
-                    )
-                    .animation(.easeOut(duration: 0.2), value: fraction)
-                )
-                .blur(radius: isBlurred ? 20 : 0)
+            Group {
+                if fraction < 1 {
+                    baseImage
+                        .mask(
+                            BlockRevealMask(
+                                fraction: fraction,
+                                columns: 24,
+                                rows: 16
+                            )
+                            .animation(.easeOut(duration: 0.2), value: fraction)
+                        )
+                } else {
+                    baseImage
+                }
+            }
+            .blur(radius: isBlurred ? 20 : 0)
                 .overlay {
                     if isBlurred {
                         RoundedRectangle(cornerRadius: 16, style: .continuous)
@@ -299,17 +306,24 @@ private struct BlockRevealMask: Shape {
         let totalBlocks = columns * rows
         let revealCount = max(0, min(totalBlocks, Int(ceil(fraction * Double(totalBlocks)))))
         guard revealCount > 0 else { return path }
+        if revealCount >= totalBlocks {
+            path.addRect(rect)
+            return path
+        }
         let blockWidth = rect.width / CGFloat(columns)
         let blockHeight = rect.height / CGFloat(rows)
-        var remaining = revealCount
-        for row in 0..<rows {
-            for column in 0..<columns {
-                if remaining <= 0 { return path }
-                let x = CGFloat(column) * blockWidth
-                let y = CGFloat(row) * blockHeight
-                path.addRect(CGRect(x: x, y: y, width: blockWidth, height: blockHeight))
-                remaining -= 1
-            }
+        let fullRows = revealCount / columns
+        let partialColumns = revealCount % columns
+        if fullRows > 0 {
+            path.addRect(CGRect(x: 0, y: 0, width: rect.width, height: CGFloat(fullRows) * blockHeight))
+        }
+        if partialColumns > 0 {
+            path.addRect(CGRect(
+                x: 0,
+                y: CGFloat(fullRows) * blockHeight,
+                width: CGFloat(partialColumns) * blockWidth,
+                height: blockHeight
+            ))
         }
         return path
     }

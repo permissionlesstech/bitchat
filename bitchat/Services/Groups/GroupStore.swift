@@ -23,6 +23,7 @@ final class GroupStore: ObservableObject {
 
     private let keychain: KeychainManagerProtocol
     private let fileURL: URL?
+    private var keyCache: [Data: Data] = [:]
 
     /// - Parameter fileURL: Overrides the on-disk location (tests). Ignored
     ///   when `persistsToDisk` is false.
@@ -43,9 +44,16 @@ final class GroupStore: ObservableObject {
         return group(withID: groupID)
     }
 
-    /// Current-epoch symmetric key for the group, from the keychain.
+    /// Current-epoch symmetric key for the group, cached in memory after first keychain read.
     func key(forGroupID groupID: Data) -> Data? {
-        keychain.getIdentityKey(forKey: Self.keychainKey(for: groupID))
+        if let cached = keyCache[groupID] {
+            return cached
+        }
+        guard let fetched = keychain.getIdentityKey(forKey: Self.keychainKey(for: groupID)) else {
+            return nil
+        }
+        keyCache[groupID] = fetched
+        return fetched
     }
 
     // MARK: - Mutations
@@ -86,6 +94,7 @@ final class GroupStore: ObservableObject {
             SecureLogger.error("Failed to store group key in keychain", category: .security)
             return false
         }
+        keyCache[group.groupID] = key
         if let index = groups.firstIndex(where: { $0.groupID == group.groupID }) {
             groups[index] = group
         } else {
@@ -123,6 +132,7 @@ final class GroupStore: ObservableObject {
 
     func removeGroup(withID groupID: Data) {
         groups.removeAll { $0.groupID == groupID }
+        keyCache.removeValue(forKey: groupID)
         _ = keychain.deleteIdentityKey(forKey: Self.keychainKey(for: groupID))
         persist()
     }
@@ -135,6 +145,7 @@ final class GroupStore: ObservableObject {
             _ = keychain.deleteIdentityKey(forKey: Self.keychainKey(for: group.groupID))
         }
         groups.removeAll()
+        keyCache.removeAll()
         if let fileURL {
             try? FileManager.default.removeItem(at: fileURL)
         }

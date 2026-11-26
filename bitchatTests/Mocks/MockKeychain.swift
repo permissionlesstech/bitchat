@@ -20,14 +20,19 @@ final class MockKeychain: KeychainManagerProtocol {
     var simulatedGenericReadError: KeychainReadResult?
     var simulatedDeleteAllResult = true
     private(set) var deleteAllCallCount = 0
+    private(set) var saveIdentityKeyCallCount = 0
+    private(set) var getIdentityKeyCallCount = 0
+    private(set) var loadCallCount = 0
 
     func saveIdentityKey(_ keyData: Data, forKey key: String) -> Bool {
+        saveIdentityKeyCallCount += 1
         storage[key] = keyData
         return true
     }
 
     func getIdentityKey(forKey key: String) -> Data? {
-        storage[key]
+        getIdentityKeyCallCount += 1
+        return storage[key]
     }
 
     func deleteIdentityKey(forKey key: String) -> Bool {
@@ -57,6 +62,7 @@ final class MockKeychain: KeychainManagerProtocol {
 
     // BCH-01-009: New methods with proper error classification
     func getIdentityKeyWithResult(forKey key: String) -> KeychainReadResult {
+        getIdentityKeyCallCount += 1
         if let simulated = simulatedReadError {
             return simulated
         }
@@ -67,6 +73,7 @@ final class MockKeychain: KeychainManagerProtocol {
     }
 
     func saveIdentityKeyWithResult(_ keyData: Data, forKey key: String) -> KeychainSaveResult {
+        saveIdentityKeyCallCount += 1
         if let simulated = simulatedSaveError {
             return simulated
         }
@@ -84,10 +91,12 @@ final class MockKeychain: KeychainManagerProtocol {
     }
 
     func load(key: String, service: String) -> Data? {
-        serviceStorage[service]?[key]
+        loadCallCount += 1
+        return serviceStorage[service]?[key]
     }
 
     func loadWithResult(key: String, service: String) -> KeychainReadResult {
+        loadCallCount += 1
         if let simulatedGenericReadError {
             return simulatedGenericReadError
         }
