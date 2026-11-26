@@ -17,17 +17,22 @@ struct MeshRadarView: View {
     var height: CGFloat = 72
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.scenePhase) private var scenePhase
     @ThemedPalette private var palette
 
     private let ringCount = 3
     private let period: TimeInterval = 3.0
 
+    private var shouldAnimate: Bool {
+        !reduceMotion && scenePhase == .active && !ProcessInfo.processInfo.isLowPowerModeEnabled
+    }
+
     var body: some View {
         Group {
-            if reduceMotion {
+            if !shouldAnimate {
                 radar(at: 0.35)
             } else {
-                TimelineView(.animation(minimumInterval: 1.0 / 20.0)) { context in
+                TimelineView(.animation(minimumInterval: 1.0 / 12.0)) { context in
                     radar(at: context.date.timeIntervalSinceReferenceDate)
                 }
             }

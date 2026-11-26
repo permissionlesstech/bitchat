@@ -202,6 +202,7 @@ final class AppRuntime: ObservableObject {
             record(.scenePhaseChanged(.background))
             TorManager.shared.setAppForeground(false)
             TorManager.shared.goDormantOnBackground()
+            LocationStateManager.shared.endLiveRefresh()
             chatViewModel.endGeohashSampling()
             NostrRelayManager.shared.disconnect()
             didEnterBackground = true

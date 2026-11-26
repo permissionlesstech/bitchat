@@ -54,15 +54,29 @@ struct BLEPeerRegistry {
     }
 
     var connectedCount: Int {
-        peers.values.filter(\.isConnected).count
+        var count = 0
+        for peer in peers.values where peer.isConnected {
+            count += 1
+        }
+        return count
     }
 
     var connectedPeerIDs: [PeerID] {
-        peers.values.compactMap { $0.isConnected ? $0.peerID : nil }
+        var result: [PeerID] = []
+        for peer in peers.values where peer.isConnected {
+            result.append(peer.peerID)
+        }
+        return result
     }
 
     var connectedRoutingData: [Data] {
-        peers.values.filter(\.isConnected).compactMap { $0.peerID.routingData }
+        var result: [Data] = []
+        for peer in peers.values where peer.isConnected {
+            if let data = peer.peerID.routingData {
+                result.append(data)
+            }
+        }
+        return result
     }
 
     var snapshotByID: [PeerID: BLEPeerInfo] {

@@ -561,6 +561,46 @@ final class SecureIdentityStateManagerTests: XCTestCase {
         XCTAssertFalse(reloaded.isFavorite(fingerprint: fingerprint))
     }
 
+    func test_upsertCryptographicIdentity_skipsRedundantKeychainWritesWhenUnchanged() async {
+        let keychain = FailingCacheSaveKeychain(shouldFailCacheSave: false)
+        let manager = SecureIdentityStateManager(keychain)
+        let noisePublicKey = Data(repeating: 0x42, count: 32)
+        let signingPublicKey = Data(repeating: 0x43, count: 32)
+        let fingerprint = noisePublicKey.sha256Fingerprint()
+
+        manager.upsertCryptographicIdentity(
+            fingerprint: fingerprint,
+            noisePublicKey: noisePublicKey,
+            signingPublicKey: signingPublicKey,
+            claimedNickname: "Alice"
+        )
+        let savedInitial = await waitUntil { keychain.cacheSaveCount == 1 }
+        XCTAssertTrue(savedInitial)
+
+        // Repeated identical periodic announces must not re-encrypt and flush the Keychain cache.
+        for _ in 0..<5 {
+            manager.upsertCryptographicIdentity(
+                fingerprint: fingerprint,
+                noisePublicKey: noisePublicKey,
+                signingPublicKey: signingPublicKey,
+                claimedNickname: "Alice"
+            )
+        }
+        // Fence barrier writes with a synchronous read.
+        XCTAssertEqual(manager.getSocialIdentity(for: fingerprint)?.claimedNickname, "Alice")
+        XCTAssertEqual(keychain.cacheSaveCount, 1)
+
+        // A real mutation (nickname update) still persists.
+        manager.upsertCryptographicIdentity(
+            fingerprint: fingerprint,
+            noisePublicKey: noisePublicKey,
+            signingPublicKey: signingPublicKey,
+            claimedNickname: "Alice2"
+        )
+        let savedUpdate = await waitUntil { keychain.cacheSaveCount == 2 }
+        XCTAssertTrue(savedUpdate)
+    }
+
     private func waitUntil(
         timeout: TimeInterval = TestConstants.settleTimeout,
         condition: @escaping () -> Bool
@@ -577,12 +617,30 @@ final class SecureIdentityStateManagerTests: XCTestCase {
 }
 
 private final class FailingCacheSaveKeychain: KeychainManagerProtocol {
+    private let shouldFailCacheSave: Bool
+    private let lock = NSLock()
+    private var _cacheSaveCount = 0
     private var storage: [String: Data] = [:]
     private var serviceStorage: [String: [String: Data]] = [:]
 
+    init(shouldFailCacheSave: Bool = true) {
+        self.shouldFailCacheSave = shouldFailCacheSave
+    }
+
+    var cacheSaveCount: Int {
+        lock.lock()
+        defer { lock.unlock() }
+        return _cacheSaveCount
+    }
+
     func saveIdentityKey(_ keyData: Data, forKey key: String) -> Bool {
         if key == "bitchat.identityCache.v2" {
-            return false
+            lock.lock()
+            _cacheSaveCount += 1
+            lock.unlock()
+            if shouldFailCacheSave {
+                return false
+            }
         }
         storage[key] = keyData
         return true

@@ -9,6 +9,7 @@ struct LocationChannelsSheet: View {
     @Binding var isPresented: Bool
     @EnvironmentObject private var locationChannelsModel: LocationChannelsModel
     @EnvironmentObject private var peerListModel: PeerListModel
+    @Environment(\.scenePhase) private var scenePhase
     @ThemedPalette private var palette
     @State private var customGeohash: String = ""
     @State private var customError: String? = nil
@@ -187,16 +188,20 @@ struct LocationChannelsSheet: View {
         #endif
         .themedSheetBackground()
         .onAppear {
-            // Refresh channels when opening
-            if locationChannelsModel.permissionState == .authorized {
-                locationChannelsModel.refreshChannels()
-            }
-            // Begin periodic refresh while sheet is open
+            // beginLiveRefresh already performs an immediate one-shot refresh
+            // when authorized, so avoid double-triggering CoreLocation here.
             locationChannelsModel.beginLiveRefresh()
             // Geohash sampling is now managed by ChatViewModel globally
         }
         .onDisappear {
             locationChannelsModel.endLiveRefresh()
+        }
+        .onChange(of: scenePhase) { newPhase in
+            if newPhase == .active {
+                locationChannelsModel.beginLiveRefresh()
+            } else {
+                locationChannelsModel.endLiveRefresh()
+            }
         }
         .onChange(of: locationChannelsModel.permissionState) { newValue in
             if newValue == .authorized {
@@ -289,8 +294,14 @@ struct LocationChannelsSheet: View {
     /// anything this sheet observes, so re-read them every few seconds while
     /// the sheet is open.
     private var channelList: some View {
-        TimelineView(.periodic(from: .now, by: 5)) { _ in
-            channelListContent
+        Group {
+            if scenePhase == .active {
+                TimelineView(.periodic(from: .now, by: 5)) { _ in
+                    channelListContent
+                }
+            } else {
+                channelListContent
+            }
         }
     }
 

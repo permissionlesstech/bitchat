@@ -66,10 +66,15 @@ struct BLEFragmentAssemblyBuffer {
         let isBroadcast: Bool
         var lastFragmentAt: Date
         var lastResyncRequestAt: Date?
+        var totalBytes: Int = 0
     }
 
     private var fragmentsByKey: [BLEFragmentKey: [Int: Data]] = [:]
     private var metadataByKey: [BLEFragmentKey: Metadata] = [:]
+
+    var isEmpty: Bool {
+        metadataByKey.isEmpty
+    }
 
     mutating func removeAll() {
         fragmentsByKey.removeAll()
@@ -78,6 +83,7 @@ struct BLEFragmentAssemblyBuffer {
 
     @discardableResult
     mutating func removeExpired(before cutoff: Date) -> Int {
+        guard !metadataByKey.isEmpty else { return 0 }
         let expiredKeys = metadataByKey
             .filter { $0.value.timestamp < cutoff }
             .map(\.key)
@@ -97,13 +103,12 @@ struct BLEFragmentAssemblyBuffer {
     ) -> AppendResult {
         let started = startAssemblyIfNeeded(for: header, maxInFlightAssemblies: maxInFlightAssemblies, now: now)
 
-        let held = fragmentsByKey[header.key]
-        let currentSize = held?.values.reduce(0) { $0 + $1.count } ?? 0
+        let currentSize = metadataByKey[header.key]?.totalBytes ?? 0
         let limit = Self.assemblyLimit(for: header.originalType)
         // A re-delivered index replaces what it held rather than adding to
         // it: fragments bypass dedup and sync re-serves held indexes, so a
         // duplicate near the cap must not tip a valid assembly over it.
-        let replacedSize = held?[header.index]?.count ?? 0
+        let replacedSize = fragmentsByKey[header.key]?[header.index]?.count ?? 0
         let projectedSize = currentSize - replacedSize + header.fragmentData.count
 
         guard projectedSize <= limit else {
@@ -118,6 +123,7 @@ struct BLEFragmentAssemblyBuffer {
         // REQUEST_SYNC for a stalled stream.
         let isNewIndex = fragmentsByKey[header.key]?[header.index] == nil
         fragmentsByKey[header.key]?[header.index] = header.fragmentData
+        metadataByKey[header.key]?.totalBytes = projectedSize
         if isNewIndex {
             metadataByKey[header.key]?.lastFragmentAt = now
         }
@@ -127,9 +133,11 @@ struct BLEFragmentAssemblyBuffer {
             return .stored(header: header, started: started)
         }
 
-        let reassembled = (0..<header.total).reduce(into: Data()) { data, index in
+        var reassembled = Data()
+        reassembled.reserveCapacity(projectedSize)
+        for index in 0..<header.total {
             if let fragment = fragments[index] {
-                data.append(fragment)
+                reassembled.append(fragment)
             }
         }
 

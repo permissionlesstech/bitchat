@@ -109,6 +109,8 @@ enum ContentNormalizer {
         options: [.caseInsensitive]
     )
 
+    private static let hexDigits: [UInt8] = Array("0123456789abcdef".utf8)
+
     /// Normalizes content for deduplication comparison.
     /// - Parameters:
     ///   - content: The raw message content
@@ -120,36 +122,75 @@ enum ContentNormalizer {
     ) -> String {
         // Lowercase for case-insensitive comparison
         let lowered = content.lowercased()
-        let ns = lowered as NSString
-        let range = NSRange(location: 0, length: ns.length)
 
-        // Simplify URLs by stripping query/fragment
-        var simplified = ""
-        var last = 0
-        for match in simplifyHTTPURL.matches(in: lowered, options: [], range: range) {
-            if match.range.location > last {
-                simplified += ns.substring(with: NSRange(location: last, length: match.range.location - last))
+        // Fast path: skip NSString bridging + URL regex when no scheme separator is present
+        let simplified: String
+        if lowered.contains("://") {
+            let ns = lowered as NSString
+            let range = NSRange(location: 0, length: ns.length)
+            var out = ""
+            out.reserveCapacity(lowered.count)
+            var last = 0
+            for match in simplifyHTTPURL.matches(in: lowered, options: [], range: range) {
+                if match.range.location > last {
+                    out += ns.substring(with: NSRange(location: last, length: match.range.location - last))
+                }
+                let url = ns.substring(with: match.range)
+                if let queryIndex = url.firstIndex(where: { $0 == "?" || $0 == "#" }) {
+                    out += url[..<queryIndex]
+                } else {
+                    out += url
+                }
+                last = match.range.location + match.range.length
             }
-            let url = ns.substring(with: match.range)
-            if let queryIndex = url.firstIndex(where: { $0 == "?" || $0 == "#" }) {
-                simplified += String(url[..<queryIndex])
-            } else {
-                simplified += url
+            if last < ns.length {
+                out += ns.substring(with: NSRange(location: last, length: ns.length - last))
             }
-            last = match.range.location + match.range.length
-        }
-        if last < ns.length {
-            simplified += ns.substring(with: NSRange(location: last, length: ns.length - last))
+            simplified = out
+        } else {
+            simplified = lowered
         }
 
-        // Trim and collapse whitespace
-        let trimmed = simplified.trimmed
-        let collapsed = trimmed.replacingOccurrences(of: "\\s+", with: " ", options: .regularExpression)
+        // Single-pass trim + whitespace collapse + prefix truncation (avoids
+        // compiling a `\s+` NSRegularExpression on every message).
+        var prefix = ""
+        if prefixLength > 0 {
+            prefix.reserveCapacity(min(simplified.utf8.count, prefixLength))
+            var count = 0
+            var pendingSpace = false
+            for ch in simplified {
+                if ch.isWhitespace || ch.isNewline {
+                    if count > 0 {
+                        pendingSpace = true
+                    }
+                    continue
+                }
+                if pendingSpace {
+                    prefix.append(" ")
+                    count += 1
+                    pendingSpace = false
+                    if count >= prefixLength { break }
+                }
+                prefix.append(ch)
+                count += 1
+                if count >= prefixLength { break }
+            }
+        }
 
-        // Take prefix and hash
-        let prefix = String(collapsed.prefix(prefixLength))
         let hash = prefix.djb2()
-        return String(format: "h:%016llx", hash)
+        return formatHashKey(hash)
+    }
+
+    private static func formatHashKey(_ hash: UInt64) -> String {
+        var bytes = [UInt8](repeating: 0, count: 18)
+        bytes[0] = UInt8(ascii: "h")
+        bytes[1] = UInt8(ascii: ":")
+        var value = hash
+        for i in stride(from: 17, through: 2, by: -1) {
+            bytes[i] = hexDigits[Int(value & 0x0f)]
+            value >>= 4
+        }
+        return String(decoding: bytes, as: UTF8.self)
     }
 }
 

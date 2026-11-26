@@ -46,6 +46,7 @@ final class BLERadioController {
 
     // Adaptive scanning duty-cycle
     private var scanDutyTimer: DispatchSourceTimer?
+    private var dutyResumeWorkItem: DispatchWorkItem?
     private var dutyEnabled: Bool = true
     private var dutyOnDuration: TimeInterval = TransportConfig.bleDutyOnDuration
     private var dutyOffDuration: TimeInterval = TransportConfig.bleDutyOffDuration
@@ -59,6 +60,11 @@ final class BLERadioController {
         self.queue = queue
         self.linkStateStore = linkStateStore
         self.recentTraffic = recentTraffic
+    }
+
+    deinit {
+        dutyResumeWorkItem?.cancel()
+        scanDutyTimer?.cancel()
     }
 
     // MARK: - Advertising
@@ -76,9 +82,11 @@ final class BLERadioController {
               central.state == .poweredOn,
               !central.isScanning else { return }
 
-        // Allow duplicates while active for faster discovery: immediate
-        // discovery events instead of coalesced ones.
-        let allowDuplicates = delegate?.radioIsAppActive() ?? true
+        // Allow duplicates while active for faster discovery, except under
+        // Low Power Mode where coalesced CoreBluetooth discoveries avoid
+        // waking the CPU on every BLE advertising beacon.
+        let isLowPower = ProcessInfo.processInfo.isLowPowerModeEnabled
+        let allowDuplicates = (delegate?.radioIsAppActive() ?? true) && !isLowPower
         central.scanForPeripherals(
             withServices: [BLEService.serviceUUID],
             options: [CBCentralManagerScanOptionAllowDuplicatesKey: allowDuplicates]
@@ -88,8 +96,8 @@ final class BLERadioController {
     func updateScanningDutyCycle(connectedCount: Int) {
         guard let central, central.state == .poweredOn else { return }
         // Duty cycle only when the app is active and at least one peer is
-        // connected; force full-time scanning with few neighbors or very
-        // recent traffic.
+        // connected (or in Low Power Mode); force full-time scanning during
+        // active traffic bursts.
         let hasRecentTraffic = recentTraffic.hasTraffic(
             within: TransportConfig.bleRecentTrafficForceScanSeconds,
             now: Date()
@@ -98,7 +106,8 @@ final class BLERadioController {
             dutyEnabled: dutyEnabled,
             appIsActive: delegate?.radioIsAppActive() ?? true,
             connectedCount: connectedCount,
-            hasRecentTraffic: hasRecentTraffic
+            hasRecentTraffic: hasRecentTraffic,
+            lowPowerMode: ProcessInfo.processInfo.isLowPowerModeEnabled
         )
 
         switch scanPlan {
@@ -112,36 +121,46 @@ final class BLERadioController {
                 let t = DispatchSource.makeTimerSource(queue: queue)
                 if !central.isScanning { startScanning() }
                 dutyActive = true
-                t.schedule(deadline: .now() + dutyOnDuration, repeating: dutyOnDuration + dutyOffDuration)
+                // 1s leeway allows OS timer coalescing and reduces idle CPU wakeups.
+                t.schedule(deadline: .now() + dutyOnDuration, repeating: dutyOnDuration + dutyOffDuration, leeway: .seconds(1))
                 t.setEventHandler { [weak self] in
                     guard let self, let c = self.central else { return }
                     if self.dutyActive {
                         if c.isScanning { c.stopScan() }
                         self.dutyActive = false
-                        self.queue.asyncAfter(deadline: .now() + self.dutyOffDuration) {
+                        self.dutyResumeWorkItem?.cancel()
+                        let resumeWork = DispatchWorkItem { [weak self] in
+                            guard let self else { return }
+                            self.dutyResumeWorkItem = nil
                             if self.central?.state == .poweredOn { self.startScanning() }
                             self.dutyActive = true
                         }
+                        self.dutyResumeWorkItem = resumeWork
+                        self.queue.asyncAfter(deadline: .now() + self.dutyOffDuration, execute: resumeWork)
                     }
                 }
                 t.resume()
                 scanDutyTimer = t
             } else if durationsChanged {
-                scanDutyTimer?.schedule(deadline: .now() + dutyOnDuration, repeating: dutyOnDuration + dutyOffDuration)
+                dutyResumeWorkItem?.cancel()
+                dutyResumeWorkItem = nil
+                scanDutyTimer?.schedule(deadline: .now() + dutyOnDuration, repeating: dutyOnDuration + dutyOffDuration, leeway: .seconds(1))
                 if !central.isScanning { startScanning() }
                 dutyActive = true
             }
         case .continuous:
             // Cancel duty cycle and ensure scanning is ON for discovery.
-            scanDutyTimer?.cancel()
-            scanDutyTimer = nil
+            stopDutyCycle()
             if !central.isScanning { startScanning() }
         }
     }
 
     func stopDutyCycle() {
+        dutyResumeWorkItem?.cancel()
+        dutyResumeWorkItem = nil
         scanDutyTimer?.cancel()
         scanDutyTimer = nil
+        dutyActive = false
     }
 
     func updateRSSIThreshold(connectedCount: Int) {

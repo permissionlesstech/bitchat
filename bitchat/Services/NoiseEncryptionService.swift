@@ -1056,9 +1056,11 @@ final class NoiseEncryptionService {
     // MARK: - Session Maintenance
     
     private func startRekeyTimer() {
-        rekeyTimer = Timer.scheduledTimer(withTimeInterval: rekeyCheckInterval, repeats: true) { [weak self] _ in
+        let timer = Timer.scheduledTimer(withTimeInterval: rekeyCheckInterval, repeats: true) { [weak self] _ in
             self?.checkSessionsForRekey()
         }
+        timer.tolerance = min(15.0, rekeyCheckInterval * 0.25)
+        rekeyTimer = timer
     }
     
     private func stopRekeyTimer() {

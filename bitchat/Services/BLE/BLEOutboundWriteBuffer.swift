@@ -31,6 +31,11 @@ struct BLEOutboundWriteBuffer {
     }
 
     private var writesByPeripheralID: [String: [BLEPendingWrite]] = [:]
+    private var bytesByPeripheralID: [String: Int] = [:]
+
+    var isEmpty: Bool {
+        writesByPeripheralID.isEmpty
+    }
 
     var peripheralIDs: [String] {
         Array(writesByPeripheralID.keys)
@@ -38,6 +43,7 @@ struct BLEOutboundWriteBuffer {
 
     mutating func removeAll() {
         writesByPeripheralID.removeAll()
+        bytesByPeripheralID.removeAll()
     }
 
     mutating func enqueue(
@@ -72,7 +78,7 @@ struct BLEOutboundWriteBuffer {
         let insertIndex = queue.firstIndex { item.priority < $0.priority } ?? queue.count
         queue.insert(item, at: insertIndex)
 
-        var total = queue.reduce(0) { $0 + $1.data.count }
+        var total = (bytesByPeripheralID[peripheralID] ?? 0) + data.count
         var trimmedBytes = 0
 
         while total > capBytes && !queue.isEmpty {
@@ -81,14 +87,20 @@ struct BLEOutboundWriteBuffer {
             total -= removed.data.count
         }
 
-        writesByPeripheralID[peripheralID] = queue.isEmpty ? nil : queue
+        if queue.isEmpty {
+            writesByPeripheralID[peripheralID] = nil
+            bytesByPeripheralID[peripheralID] = nil
+        } else {
+            writesByPeripheralID[peripheralID] = queue
+            bytesByPeripheralID[peripheralID] = total
+        }
         let accepted = insertIndex < queue.count
         return (.enqueued(trimmedBytes: trimmedBytes, remainingBytes: total), accepted)
     }
 
     mutating func takeAll(for peripheralID: String) -> [BLEPendingWrite] {
-        let items = writesByPeripheralID[peripheralID] ?? []
-        writesByPeripheralID[peripheralID] = nil
+        let items = writesByPeripheralID.removeValue(forKey: peripheralID) ?? []
+        bytesByPeripheralID.removeValue(forKey: peripheralID)
         return items
     }
 
@@ -97,12 +109,15 @@ struct BLEOutboundWriteBuffer {
     /// fresh per-link byte cap indefinitely.
     mutating func discardAll(for peripheralID: String) {
         writesByPeripheralID[peripheralID] = nil
+        bytesByPeripheralID[peripheralID] = nil
     }
 
     mutating func prepend(_ items: [BLEPendingWrite], for peripheralID: String) {
         guard !items.isEmpty else { return }
         var existing = writesByPeripheralID[peripheralID] ?? []
+        let addedBytes = items.reduce(0) { $0 + $1.data.count }
         existing.insert(contentsOf: items, at: 0)
         writesByPeripheralID[peripheralID] = existing
+        bytesByPeripheralID[peripheralID] = (bytesByPeripheralID[peripheralID] ?? 0) + addedBytes
     }
 }

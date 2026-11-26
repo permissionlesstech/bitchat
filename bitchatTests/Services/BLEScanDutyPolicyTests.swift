@@ -72,4 +72,35 @@ struct BLEScanDutyPolicyTests {
             offDuration: TransportConfig.bleDutyOffDurationDense
         ))
     }
+
+    @Test
+    func lowPowerModeDutyCyclesEvenWhenDisconnectedOrSparse() {
+        let idlePlan = BLEScanDutyPolicy.plan(
+            dutyEnabled: true,
+            appIsActive: true,
+            connectedCount: 0,
+            hasRecentTraffic: false,
+            lowPowerMode: true
+        )
+        #expect(idlePlan == .dutyCycle(onDuration: 3.0, offDuration: 15.0))
+
+        let densePlan = BLEScanDutyPolicy.plan(
+            dutyEnabled: true,
+            appIsActive: true,
+            connectedCount: TransportConfig.bleHighDegreeThreshold,
+            hasRecentTraffic: false,
+            lowPowerMode: true
+        )
+        #expect(densePlan == .dutyCycle(onDuration: 2.0, offDuration: 20.0))
+
+        // Active traffic still keeps continuous scanning so conversations stay snappy.
+        let activePlan = BLEScanDutyPolicy.plan(
+            dutyEnabled: true,
+            appIsActive: true,
+            connectedCount: 3,
+            hasRecentTraffic: true,
+            lowPowerMode: true
+        )
+        #expect(activePlan == .continuous)
+    }
 }

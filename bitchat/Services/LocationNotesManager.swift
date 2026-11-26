@@ -170,11 +170,13 @@ final class LocationNotesManager: ObservableObject {
         // NIP-40 notes can expire while displayed (a 24h dead drop crossing
         // its boundary); ingest-time filtering alone would keep it visible
         // until the subscription is recreated.
-        expiryPruneTimer = Timer.scheduledTimer(withTimeInterval: 60, repeats: true) { [weak self] _ in
+        let pruneTimer = Timer.scheduledTimer(withTimeInterval: 60, repeats: true) { [weak self] _ in
             Task { @MainActor [weak self] in
                 self?.pruneExpiredNotes()
             }
         }
+        pruneTimer.tolerance = 10.0
+        expiryPruneTimer = pruneTimer
     }
 
     deinit {
@@ -309,7 +311,7 @@ final class LocationNotesManager: ObservableObject {
     /// with the state: any subscribe/cancel invalidates it.
     private func scheduleConnectivityRetry(relays: [String]) {
         connectivityRetryTimer?.invalidate()
-        connectivityRetryTimer = Timer.scheduledTimer(
+        let retryTimer = Timer.scheduledTimer(
             withTimeInterval: TransportConfig.uiGeoNotesConnectivityRetrySeconds,
             repeats: true
         ) { [weak self] _ in
@@ -317,6 +319,8 @@ final class LocationNotesManager: ObservableObject {
                 self?.retryIfRelaysAvailable(relays: relays)
             }
         }
+        retryTimer.tolerance = min(2.0, TransportConfig.uiGeoNotesConnectivityRetrySeconds * 0.25)
+        connectivityRetryTimer = retryTimer
     }
 
     func retryIfRelaysAvailable(relays: [String]) {

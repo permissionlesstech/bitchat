@@ -142,6 +142,7 @@ extension BLEService: CBPeripheralManagerDelegate {
         let centralUUID = central.identifier.uuidString
         SecureLogger.debug("📥 Central subscribed: \(centralUUID.prefix(8))…", category: .session)
         linkStateStore.addSubscribedCentral(central)
+        wakeMaintenanceCadenceIfNeeded()
 
         // BCH-01-004: Rate-limit subscription-triggered announces to prevent enumeration attacks
         let now = Date()
@@ -202,7 +203,7 @@ extension BLEService: CBPeripheralManagerDelegate {
     }
 
     func drainPendingNotifications(logPrefix: String) {
-        bleQueue.async { [weak self] in
+        let work = { [weak self] in
             guard let self = self,
                   let characteristic = self.characteristic,
                   !self.pendingNotifications.isEmpty else { return }
@@ -213,6 +214,11 @@ extension BLEService: CBPeripheralManagerDelegate {
             if sentCount > 0 {
                 self.logBackpressureSampled("\(logPrefix) \(sentCount) pending notifications from retry queue (\(self.pendingNotifications.count) still pending)")
             }
+        }
+        if isOnBLEQueue {
+            work()
+        } else {
+            bleQueue.async(execute: work)
         }
     }
 
@@ -310,6 +316,7 @@ extension BLEService: CBPeripheralManagerDelegate {
         // whether or not it subscribed; track it so directed replies and
         // the fanout planner can reach it.
         linkStateStore.addSubscribedCentral(central)
+        wakeMaintenanceCadenceIfNeeded()
         // Attribution is engine work (the engine owns the bindings).
         emitLinkEvent(.frameDecoded(
             packet,
