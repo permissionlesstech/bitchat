@@ -157,6 +157,50 @@ final class PanicWipeCoverageTests: XCTestCase {
         XCTAssertEqual(box.fired(), [1, 3])
     }
 
+    func test_nostrTransport_resetForPanic_cancelsInFlightMainActorGeohashAck() async throws {
+        let dequeued = DispatchSemaphore(value: 0)
+        let pacer = NostrTransport.AckPacer { _, _ in
+            dequeued.signal()
+        }
+        var sentEvents: [NostrEvent] = []
+        let sender = try NostrIdentity.generate()
+        let recipient = try NostrIdentity.generate()
+        let transport = NostrTransport(
+            keychain: PreviewKeychainManager(),
+            idBridge: NostrIdentityBridge(keychain: PreviewKeychainManager()),
+            dependencies: NostrTransport.Dependencies(
+                notificationCenter: NotificationCenter(),
+                loadFavorites: { [:] },
+                favoriteStatusForNoiseKey: { _ in nil },
+                favoriteStatusForPeerID: { _ in nil },
+                currentIdentity: { sender },
+                registerPendingGiftWrap: { _ in },
+                sendEvent: { sentEvents.append($0) },
+                scheduleAfter: { _, _ in },
+                relayConnectivity: { Just(true).eraseToAnyPublisher() },
+                ackPacer: pacer
+            )
+        )
+
+        // Enqueue a geohash ACK and wait until AckPacer has dequeued it and
+        // handed off `Task { @MainActor in ... }` while we still hold MainActor.
+        transport.sendDeliveryAckGeohash(
+            for: "pre-panic-mid",
+            toRecipientHex: recipient.publicKeyHex,
+            from: sender
+        )
+        XCTAssertEqual(dequeued.wait(timeout: .now() + TestConstants.settleTimeout), .success)
+
+        // Panic runs on MainActor BEFORE the handed-off ACK task executes.
+        pacer.resetForPanic()
+
+        // Yield so the already-queued MainActor ACK task gets a turn to run.
+        await Task.yield()
+        try? await Task.sleep(nanoseconds: 50_000_000)
+
+        XCTAssertTrue(sentEvents.isEmpty, "Pre-panic MainActor ACK task must not publish after resetForPanic()")
+    }
+
     func test_verificationService_resetForPanic_evictsCachedQRString() throws {
         let transport = MockTransport()
         let service = VerificationService()
