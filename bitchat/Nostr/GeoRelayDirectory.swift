@@ -91,29 +91,13 @@ private extension GeoRelayDirectoryDependencies {
             },
             makeFetchData: {
                 let session = TorURLSession.shared.session
+                let maximumBytes = validationPolicy.maximumBytes
                 return { request in
-                    let (bytes, response) = try await session.bytes(for: request)
-                    guard let response = response as? HTTPURLResponse,
-                          (200...299).contains(response.statusCode),
-                          response.url == request.url else {
-                        throw URLError(.badServerResponse)
-                    }
-
-                    let maximumBytes = validationPolicy.maximumBytes
-                    guard response.expectedContentLength <= Int64(maximumBytes) else {
-                        throw URLError(.dataLengthExceedsMaximum)
-                    }
-                    var data = Data()
-                    if response.expectedContentLength > 0 {
-                        data.reserveCapacity(Int(response.expectedContentLength))
-                    }
-                    for try await byte in bytes {
-                        guard data.count < maximumBytes else {
-                            throw URLError(.dataLengthExceedsMaximum)
-                        }
-                        data.append(byte)
-                    }
-                    return data
+                    try await BoundedHTTPDataReader.fetch(
+                        request: request,
+                        using: session,
+                        maximumBytes: maximumBytes
+                    )
                 }
             },
             readData: { try? Data(contentsOf: $0) },
@@ -521,6 +505,7 @@ final class GeoRelayDirectory {
         }
 
         var entriesByHost: [String: Entry] = [:]
+        entriesByHost.reserveCapacity(min(lines.count, policy.maximumEntries))
         for line in lines.dropFirst() {
             let parts = line
                 .split(separator: ",", omittingEmptySubsequences: false)
@@ -562,33 +547,59 @@ final class GeoRelayDirectory {
         }
     }
 
-    nonisolated private static let allowedHostLabelCharacters = CharacterSet(charactersIn: "abcdefghijklmnopqrstuvwxyz0123456789-")
+    nonisolated private static func isAllowedHostLabelByte(_ byte: UInt8) -> Bool {
+        (byte >= 0x61 && byte <= 0x7A) // a-z
+            || (byte >= 0x30 && byte <= 0x39) // 0-9
+            || byte == 0x2D // '-'
+    }
 
     nonisolated private static func validatedDirectoryAddress(_ rawValue: String) -> String? {
         let value = rawValue.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !value.isEmpty,
-              value.unicodeScalars.allSatisfy({
-                  $0.isASCII && !CharacterSet.controlCharacters.contains($0)
-              }) else {
+        guard !value.isEmpty else { return nil }
+        // Printable ASCII only (0x20...0x7E) — rejects all non-ASCII and control chars.
+        for scalar in value.unicodeScalars {
+            guard scalar.value >= 0x20 && scalar.value < 0x7F else { return nil }
+        }
+
+        var remainder: Substring = value[...]
+        if let schemeRange = remainder.range(of: "://") {
+            let scheme = remainder[..<schemeRange.lowerBound].lowercased()
+            guard scheme == "wss" || scheme == "https" else { return nil }
+            remainder = remainder[schemeRange.upperBound...]
+        }
+
+        // Reject userinfo, query, fragment, whitespace, and non-root paths.
+        if remainder.hasSuffix("/") {
+            remainder = remainder.dropLast()
+        }
+        guard !remainder.isEmpty,
+              !remainder.contains("/"),
+              !remainder.contains("@"),
+              !remainder.contains("?"),
+              !remainder.contains("#"),
+              !remainder.contains(" ") else {
             return nil
         }
 
-        let candidate = value.contains("://") ? value : "wss://\(value)"
-        guard let components = URLComponents(string: candidate),
-              let scheme = components.scheme?.lowercased(),
-              scheme == "wss" || scheme == "https",
-              components.user == nil,
-              components.password == nil,
-              components.query == nil,
-              components.fragment == nil,
-              components.path.isEmpty || components.path == "/",
-              let rawHost = components.host else {
-            return nil
+        let hostPart: Substring
+        let port: Int?
+        if let colonIndex = remainder.firstIndex(of: ":") {
+            hostPart = remainder[..<colonIndex]
+            let portPart = remainder[remainder.index(after: colonIndex)...]
+            guard !portPart.isEmpty,
+                  portPart.utf8.allSatisfy({ $0 >= 0x30 && $0 <= 0x39 }),
+                  let parsedPort = Int(portPart),
+                  (1...65_535).contains(parsedPort) else {
+                return nil
+            }
+            port = parsedPort
+        } else {
+            hostPart = remainder
+            port = nil
         }
 
-        let host = rawHost.lowercased()
+        let host = hostPart.lowercased()
         guard !host.isEmpty, host.count <= 253,
-              host.unicodeScalars.allSatisfy({ $0.isASCII }),
               !host.hasSuffix("."),
               host != "localhost",
               !host.hasSuffix(".localhost"),
@@ -598,21 +609,19 @@ final class GeoRelayDirectory {
         }
 
         let labels = host.split(separator: ".", omittingEmptySubsequences: false)
-        let allowed = allowedHostLabelCharacters
         guard labels.count >= 2,
-              !labels.allSatisfy({ $0.allSatisfy(\.isNumber) }),
+              !labels.allSatisfy({ $0.utf8.allSatisfy { $0 >= 0x30 && $0 <= 0x39 } }),
               labels.allSatisfy({ label in
                   (1...63).contains(label.count) &&
                   label.first != "-" &&
                   label.last != "-" &&
-                  label.unicodeScalars.allSatisfy { allowed.contains($0) }
+                  label.utf8.allSatisfy(isAllowedHostLabelByte)
               }) else {
             return nil
         }
 
-        if let port = components.port {
-            guard (1...65_535).contains(port) else { return nil }
-            if port != 443 { return "\(host):\(port)" }
+        if let port, port != 443 {
+            return "\(host):\(port)"
         }
         return host
     }
@@ -681,4 +690,145 @@ final class GeoRelayDirectory {
     var debugHasRetryTask: Bool { cleanupState.retryTask != nil }
     var debugObserverCount: Int { cleanupState.observers.count }
     var debugClosestRelaysCacheCount: Int { closestRelaysCache.count }
+}
+
+/// Chunked, strictly byte-bounded HTTP body reader for `GeoRelayDirectory`.
+/// Replaces byte-by-byte `AsyncBytes` iteration (~50k async suspensions for
+/// the relay CSV) while still enforcing `maximumBytes` before unbounded memory
+/// allocation and rejecting HTTP errors or unexpected redirect URLs.
+private final class BoundedHTTPDataReader: NSObject, URLSessionDataDelegate, @unchecked Sendable {
+    private let expectedURL: URL?
+    private let maximumBytes: Int
+    private let lock = NSLock()
+    private var buffer = Data()
+    private var continuation: CheckedContinuation<Data, Error>?
+    private var settled = false
+    private weak var task: URLSessionDataTask?
+
+    private init(expectedURL: URL?, maximumBytes: Int) {
+        self.expectedURL = expectedURL
+        self.maximumBytes = maximumBytes
+    }
+
+    static func fetch(
+        request: URLRequest,
+        using session: URLSession,
+        maximumBytes: Int
+    ) async throws -> Data {
+        let reader = BoundedHTTPDataReader(expectedURL: request.url, maximumBytes: maximumBytes)
+        return try await withTaskCancellationHandler {
+            try await withCheckedThrowingContinuation { continuation in
+                let dataTask = session.dataTask(with: request)
+                reader.start(task: dataTask, continuation: continuation)
+            }
+        } onCancel: {
+            reader.cancel()
+        }
+    }
+
+    private func start(task: URLSessionDataTask, continuation: CheckedContinuation<Data, Error>) {
+        lock.lock()
+        if settled {
+            lock.unlock()
+            task.cancel()
+            continuation.resume(throwing: CancellationError())
+            return
+        }
+        self.task = task
+        self.continuation = continuation
+        lock.unlock()
+
+        task.delegate = self
+        task.resume()
+    }
+
+    private func cancel() {
+        let activeTask: URLSessionDataTask?
+        let pendingContinuation: CheckedContinuation<Data, Error>?
+        lock.lock()
+        activeTask = task
+        if !settled {
+            settled = true
+            pendingContinuation = continuation
+            continuation = nil
+        } else {
+            pendingContinuation = nil
+        }
+        lock.unlock()
+
+        activeTask?.cancel()
+        pendingContinuation?.resume(throwing: CancellationError())
+    }
+
+    private func finish(with result: Result<Data, Error>) {
+        let pendingContinuation: CheckedContinuation<Data, Error>?
+        lock.lock()
+        guard !settled else {
+            lock.unlock()
+            return
+        }
+        settled = true
+        pendingContinuation = continuation
+        continuation = nil
+        lock.unlock()
+
+        pendingContinuation?.resume(with: result)
+    }
+
+    func urlSession(
+        _ session: URLSession,
+        dataTask: URLSessionDataTask,
+        didReceive response: URLResponse,
+        completionHandler: @escaping (URLSession.ResponseDisposition) -> Void
+    ) {
+        _ = session
+        guard let http = response as? HTTPURLResponse,
+              (200...299).contains(http.statusCode),
+              http.url == expectedURL else {
+            completionHandler(.cancel)
+            finish(with: .failure(URLError(.badServerResponse)))
+            return
+        }
+        guard http.expectedContentLength <= Int64(maximumBytes) else {
+            completionHandler(.cancel)
+            finish(with: .failure(URLError(.dataLengthExceedsMaximum)))
+            return
+        }
+        if http.expectedContentLength > 0 {
+            lock.lock()
+            buffer.reserveCapacity(Int(http.expectedContentLength))
+            lock.unlock()
+        }
+        completionHandler(.allow)
+    }
+
+    func urlSession(_ session: URLSession, dataTask: URLSessionDataTask, didReceive data: Data) {
+        _ = session
+        lock.lock()
+        guard !settled else {
+            lock.unlock()
+            return
+        }
+        if buffer.count + data.count > maximumBytes {
+            lock.unlock()
+            dataTask.cancel()
+            finish(with: .failure(URLError(.dataLengthExceedsMaximum)))
+            return
+        }
+        buffer.append(data)
+        lock.unlock()
+    }
+
+    func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: Error?) {
+        _ = session
+        _ = task
+        if let error {
+            finish(with: .failure(error))
+            return
+        }
+        lock.lock()
+        let resultData = buffer
+        lock.unlock()
+        finish(with: .success(resultData))
+    }
 }

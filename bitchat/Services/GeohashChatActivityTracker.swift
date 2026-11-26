@@ -62,12 +62,15 @@ final class GeohashChatActivityTracker: ObservableObject {
         timestamp: Date
     ) {
         let gh = geohash.lowercased()
-        let clamped = min(timestamp, now())
-        guard now().timeIntervalSince(clamped) < window else { return }
+        let currentNow = now()
+        let clamped = min(timestamp, currentNow)
+        let cutoff = currentNow.addingTimeInterval(-window)
+        guard currentNow.timeIntervalSince(clamped) < window else { return }
 
         var times = messageTimes[gh] ?? []
         times.append(clamped)
-        messageTimes[gh] = prune(times)
+        times.removeAll { $0 < cutoff }
+        messageTimes[gh] = times
 
         if let existing = lastMessages[gh], existing.timestamp > clamped {
             // Keep the newer preview.
@@ -81,14 +84,16 @@ final class GeohashChatActivityTracker: ObservableObject {
         // one entry per distinct geohash ever observed. Sweep other geohashes
         // here so activity that has fully aged out gets evicted instead of
         // sitting in memory for the rest of the process's lifetime.
-        pruneStaleGeohashes(except: gh)
+        pruneStaleGeohashes(except: gh, cutoff: cutoff)
 
         objectWillChange.send()
     }
 
     /// Messages seen in the window for one geohash.
     func messageCount(for geohash: String) -> Int {
-        prune(messageTimes[geohash.lowercased()] ?? []).count
+        guard let times = messageTimes[geohash.lowercased()], !times.isEmpty else { return 0 }
+        let cutoff = now().addingTimeInterval(-window)
+        return times.reduce(0) { $1 >= cutoff ? $0 + 1 : $0 }
     }
 
     func lastMessage(for geohash: String) -> GeohashChatPreview? {
@@ -124,17 +129,23 @@ final class GeohashChatActivityTracker: ObservableObject {
         objectWillChange.send()
     }
 
-    private func prune(_ times: [Date]) -> [Date] {
-        let cutoff = now().addingTimeInterval(-window)
-        return times.filter { $0 >= cutoff }
-    }
-
     /// Drops any tracked geohash (other than `keep`) whose messages have all
     /// aged out of the window, so the maps stay bounded to recently-active
     /// geohashes instead of growing for the life of the process.
-    private func pruneStaleGeohashes(except keep: String) {
-        for gh in Array(messageTimes.keys) where gh != keep {
-            guard prune(messageTimes[gh] ?? []).isEmpty else { continue }
+    private func pruneStaleGeohashes(except keep: String, cutoff: Date) {
+        var stale: [String] = []
+        for (gh, times) in messageTimes where gh != keep {
+            // `lastMessages[gh]` tracks the newest timestamp recorded for `gh`,
+            // so checking it avoids allocating a filtered `[Date]` per geohash.
+            if let newest = lastMessages[gh]?.timestamp {
+                if newest < cutoff {
+                    stale.append(gh)
+                }
+            } else if !times.contains(where: { $0 >= cutoff }) {
+                stale.append(gh)
+            }
+        }
+        for gh in stale {
             messageTimes.removeValue(forKey: gh)
             lastMessages.removeValue(forKey: gh)
         }

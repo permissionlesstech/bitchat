@@ -85,15 +85,21 @@ public final class TorManager: ObservableObject {
     private var startPendingAfterShutdown = false
     private var wipeDataDirectoryOnShutdown = false
     private var bootstrapMonitorStarted = false
-    // Fences the detached poll loop: shutdown, dormancy, and restart each bump
-    // this, so a loop from a previous attempt cannot run out its deadline and
-    // report a stall over state that a newer lifecycle event already owns.
+    // Fences detached lifecycle tasks (start, bootstrap poll, SOCKS probe):
+    // shutdown, dormancy, and restart each bump this, so work from a previous
+    // attempt cannot overwrite state owned by a newer lifecycle event.
     private var bootstrapGeneration = 0
     private var pathMonitor: NWPathMonitor?
     private var isAppForeground: Bool = true
     private var lastRestartAt: Date? = nil
     private var startedAt: Date? = nil  // Tracks initial startup time for grace period
     private(set) var allowAutoStart: Bool = false
+
+    private struct ReadyWaiter {
+        let continuation: CheckedContinuation<Bool, Never>
+        let timeoutTask: Task<Void, Never>
+    }
+    private var readyWaiters: [UUID: ReadyWaiter] = [:]
 
     private init() {}
 
@@ -115,8 +121,9 @@ public final class TorManager: ObservableObject {
         SecureLogger.debug("TorManager: startIfNeeded() - startedAt set", category: .session)
         lastError = nil
         NotificationCenter.default.post(name: .TorWillStart, object: nil)
-        ensureFilesystemLayout()
-        startArti()
+        bootstrapGeneration += 1
+        let generation = bootstrapGeneration
+        startArti(generation: generation)
         startPathMonitorIfNeeded()
     }
 
@@ -130,21 +137,68 @@ public final class TorManager: ObservableObject {
     // Default matches the bootstrap monitor deadline (75s); a shorter wait here
     // reports "not ready" while Arti is still legitimately bootstrapping.
     public func awaitReady(timeout: TimeInterval = 75.0) async -> Bool {
-        await MainActor.run {
+        let alreadyPermitted: Bool = await MainActor.run {
             if self.isAppForeground { self.startIfNeeded() }
+            return self.networkPermitted
         }
-        let deadline = Date().addingTimeInterval(timeout)
-        if await MainActor.run(body: { self.networkPermitted }) { return true }
-        while Date() < deadline {
-            try? await Task.sleep(nanoseconds: 200_000_000)
-            if await MainActor.run(body: { self.networkPermitted }) { return true }
+        if alreadyPermitted { return true }
+        guard timeout > 0 else { return false }
+
+        let waiterID = UUID()
+        let cancellationFlag = AtomicOnceFlag()
+        let timeoutNanoseconds = UInt64(max(0, timeout) * 1_000_000_000)
+
+        return await withTaskCancellationHandler {
+            await withCheckedContinuation { continuation in
+                Task { @MainActor in
+                    if cancellationFlag.isSet {
+                        continuation.resume(returning: false)
+                        return
+                    }
+                    if self.networkPermitted {
+                        continuation.resume(returning: true)
+                        return
+                    }
+                    let timeoutTask = Task { @MainActor [weak self] in
+                        try? await Task.sleep(nanoseconds: timeoutNanoseconds)
+                        guard !Task.isCancelled, let self else { return }
+                        if let pending = self.readyWaiters.removeValue(forKey: waiterID) {
+                            pending.continuation.resume(returning: self.networkPermitted)
+                        }
+                    }
+                    self.readyWaiters[waiterID] = ReadyWaiter(
+                        continuation: continuation,
+                        timeoutTask: timeoutTask
+                    )
+                }
+            }
+        } onCancel: {
+            _ = cancellationFlag.trySet()
+            Task { @MainActor in
+                self.cancelReadyWaiter(id: waiterID)
+            }
         }
-        return await MainActor.run(body: { self.networkPermitted })
+    }
+
+    private func cancelReadyWaiter(id: UUID) {
+        guard let pending = readyWaiters.removeValue(forKey: id) else { return }
+        pending.timeoutTask.cancel()
+        pending.continuation.resume(returning: false)
+    }
+
+    private func resumeAllReadyWaiters() {
+        guard !readyWaiters.isEmpty else { return }
+        let waiters = readyWaiters
+        readyWaiters.removeAll()
+        for waiter in waiters.values {
+            waiter.timeoutTask.cancel()
+            waiter.continuation.resume(returning: true)
+        }
     }
 
     // MARK: - Filesystem
 
-    func dataDirectoryURL() -> URL? {
+    nonisolated func dataDirectoryURL() -> URL? {
         do {
             let base = try FileManager.default.url(
                 for: .applicationSupportDirectory,
@@ -159,8 +213,7 @@ public final class TorManager: ObservableObject {
         }
     }
 
-    private func ensureFilesystemLayout() {
-        guard let dir = dataDirectoryURL() else { return }
+    nonisolated private static func ensureFilesystemLayout(at dir: URL) {
         do {
             try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         } catch {
@@ -170,40 +223,54 @@ public final class TorManager: ObservableObject {
 
     // MARK: - Arti Integration
 
-    private func startArti() {
-        guard let dir = dataDirectoryURL()?.path else {
+    private func startArti(generation: Int) {
+        guard let dirURL = dataDirectoryURL() else {
             isStarting = false
             lastError = NSError(domain: "TorManager", code: -1, userInfo: [NSLocalizedDescriptionKey: "No data directory"])
             return
         }
+        let host = socksHost
+        let port = socksPort
 
-        // Check if already running
-        if arti_is_running() != 0 {
-            SecureLogger.info("TorManager: Arti already running", category: .session)
-            startBootstrapMonitor()
-            return
-        }
-
-        let result = dir.withCString { dptr in
-            arti_start(dptr, UInt16(socksPort))
-        }
-
-        if result != 0 {
-            SecureLogger.error("TorManager: arti_start failed rc=\(result)", category: .session)
-            isStarting = false
-            lastError = NSError(domain: "TorManager", code: Int(result), userInfo: [NSLocalizedDescriptionKey: "Arti start failed"])
-            return
-        }
-
-        SecureLogger.info("TorManager: arti_start OK (SOCKS \(socksHost):\(socksPort))", category: .session)
-        startBootstrapMonitor()
-
-        // Start SOCKS readiness probe fenced to this bootstrap generation so
-        // an in-flight probe cannot mark Tor ready after a shutdown or restart.
-        let generation = bootstrapGeneration
+        // Run directory creation and Arti FFI startup off the main actor so
+        // launch/foreground recovery never stalls UI rendering.
         Task.detached(priority: .userInitiated) { [weak self] in
             guard let self else { return }
-            let ready = await self.waitForSocksReady(timeout: 60.0)
+            Self.ensureFilesystemLayout(at: dirURL)
+
+            let alreadyRunning = arti_is_running() != 0
+            if alreadyRunning {
+                SecureLogger.info("TorManager: Arti already running", category: .session)
+                await MainActor.run {
+                    guard generation == self.bootstrapGeneration else { return }
+                    self.startBootstrapMonitor(generation: generation)
+                }
+                return
+            }
+
+            let result = dirURL.path.withCString { dptr in
+                arti_start(dptr, UInt16(port))
+            }
+
+            if result != 0 {
+                SecureLogger.error("TorManager: arti_start failed rc=\(result)", category: .session)
+                await MainActor.run {
+                    guard generation == self.bootstrapGeneration else { return }
+                    self.isStarting = false
+                    self.lastError = NSError(domain: "TorManager", code: Int(result), userInfo: [NSLocalizedDescriptionKey: "Arti start failed"])
+                }
+                return
+            }
+
+            SecureLogger.info("TorManager: arti_start OK (SOCKS \(host):\(port))", category: .session)
+            await MainActor.run {
+                guard generation == self.bootstrapGeneration else { return }
+                self.startBootstrapMonitor(generation: generation)
+            }
+
+            // Probe SOCKS readiness off-main, fenced to this bootstrap generation
+            // so an in-flight probe cannot mark Tor ready after shutdown/restart.
+            let ready = await self.waitForSocksReady(port: port, timeout: 60.0)
             await MainActor.run {
                 guard generation == self.bootstrapGeneration else { return }
                 self.socksReady = ready
@@ -217,16 +284,26 @@ public final class TorManager: ObservableObject {
         }
     }
 
-    private func waitForSocksReady(timeout: TimeInterval) async -> Bool {
+    nonisolated private func waitForSocksReady(port: Int, timeout: TimeInterval) async -> Bool {
         let deadline = Date().addingTimeInterval(timeout)
+        var attempts = 0
         while Date() < deadline {
-            if await probeSocksOnce() { return true }
-            try? await Task.sleep(nanoseconds: 250_000_000)
+            if arti_is_running() == 0 {
+                return false
+            }
+            if await Self.probeSocksOnce(port: port) {
+                return true
+            }
+            attempts += 1
+            // Probe quickly for the first second, then ease to 1s intervals so
+            // slow or blocked networks do not spam loopback sockets.
+            let sleepNs: UInt64 = attempts < 4 ? 250_000_000 : 1_000_000_000
+            try? await Task.sleep(nanoseconds: sleepNs)
         }
         return false
     }
 
-    private func probeSocksOnce() async -> Bool {
+    nonisolated private static func probeSocksOnce(port socksPort: Int) async -> Bool {
         #if canImport(Network)
         await withCheckedContinuation { cont in
             let params = NWParameters.tcp
@@ -238,12 +315,10 @@ public final class TorManager: ObservableObject {
             let endpoint = NWEndpoint.hostPort(host: host, port: port)
             let conn = NWConnection(to: endpoint, using: params)
 
-            var resumed = false
-            let resumeOnce: (Bool) -> Void = { value in
-                if !resumed {
-                    resumed = true
-                    cont.resume(returning: value)
-                }
+            let resumed = AtomicOnceFlag()
+            let resumeOnce: @Sendable (Bool) -> Void = { value in
+                guard resumed.trySet() else { return }
+                cont.resume(returning: value)
             }
 
             conn.stateUpdateHandler = { state in
@@ -267,34 +342,55 @@ public final class TorManager: ObservableObject {
             conn.start(queue: DispatchQueue.global(qos: .utility))
         }
         #else
+        _ = socksPort
         return false
         #endif
     }
 
     // MARK: - Bootstrap Monitoring
 
-    private func startBootstrapMonitor() {
+    private func startBootstrapMonitor(generation: Int) {
         guard !bootstrapMonitorStarted else { return }
         bootstrapMonitorStarted = true
-        bootstrapGeneration += 1
-        let generation = bootstrapGeneration
         Task.detached(priority: .utility) { [weak self] in
             await self?.bootstrapPollLoop(generation: generation)
         }
     }
 
-    private func bootstrapPollLoop(generation: Int) async {
+    nonisolated private func bootstrapPollLoop(generation: Int) async {
         let deadline = Date().addingTimeInterval(75)
         var didComplete = false
-        while Date() < deadline {
-            guard generation == bootstrapGeneration else { return }
-            let progress = Int(arti_bootstrap_progress())
-            let summary = getBootstrapSummary()
+        var lastPublishedProgress: Int?
+        var lastPublishedSummary: String?
 
-            self.bootstrapProgress = progress
-            self.bootstrapSummary = summary
-            if progress >= 100 { self.isStarting = false }
-            self.recomputeReady()
+        while Date() < deadline {
+            let progress = Int(arti_bootstrap_progress())
+            let summary = Self.readBootstrapSummary()
+
+            if progress != lastPublishedProgress || summary != lastPublishedSummary || progress >= 100 {
+                lastPublishedProgress = progress
+                lastPublishedSummary = summary
+                let stillCurrent: Bool = await MainActor.run {
+                    guard generation == self.bootstrapGeneration else { return false }
+                    if self.bootstrapProgress != progress {
+                        self.bootstrapProgress = progress
+                    }
+                    if self.bootstrapSummary != summary {
+                        self.bootstrapSummary = summary
+                    }
+                    if progress >= 100, self.isStarting {
+                        self.isStarting = false
+                    }
+                    self.recomputeReady()
+                    return true
+                }
+                guard stillCurrent else { return }
+            } else {
+                let stillCurrent: Bool = await MainActor.run {
+                    generation == self.bootstrapGeneration
+                }
+                guard stillCurrent else { return }
+            }
 
             if progress >= 100 {
                 didComplete = true
@@ -308,18 +404,20 @@ public final class TorManager: ObservableObject {
         // blocked network was indistinguishable from a slow one. A deliberate
         // shutdown mid-bootstrap is not a stall, hence the generation check.
         if !didComplete {
-            guard generation == bootstrapGeneration else { return }
-            self.isStarting = false
-            self.bootstrapDidStall = true
-            SecureLogger.warning(
-                "TorManager: bootstrap did not complete within its deadline (progress=\(self.bootstrapProgress)); network may be blocking Tor",
-                category: .session
-            )
-            NotificationCenter.default.post(name: .TorBootstrapDidStall, object: nil)
+            await MainActor.run {
+                guard generation == self.bootstrapGeneration else { return }
+                if self.isStarting { self.isStarting = false }
+                if !self.bootstrapDidStall { self.bootstrapDidStall = true }
+                SecureLogger.warning(
+                    "TorManager: bootstrap did not complete within its deadline (progress=\(self.bootstrapProgress)); network may be blocking Tor",
+                    category: .session
+                )
+                NotificationCenter.default.post(name: .TorBootstrapDidStall, object: nil)
+            }
         }
     }
 
-    private func getBootstrapSummary() -> String {
+    nonisolated private static func readBootstrapSummary() -> String {
         var buf = [CChar](repeating: 0, count: 256)
         let len = arti_bootstrap_summary(&buf, Int32(buf.count))
         if len > 0 {
@@ -360,12 +458,10 @@ public final class TorManager: ObservableObject {
         // iOS will suspend the runtime anyway. On foreground we do a full restart.
         // Clear isStarting so foreground recovery can proceed if bootstrap was interrupted.
         SecureLogger.debug("TorManager: goDormantOnBackground() called", category: .session)
-        Task { @MainActor in
-            self.bootstrapGeneration += 1
-            self.isReady = false
-            self.socksReady = false
-            self.isStarting = false
-        }
+        bootstrapGeneration += 1
+        isReady = false
+        socksReady = false
+        isStarting = false
     }
 
     public func shutdownCompletely() {
@@ -436,7 +532,7 @@ public final class TorManager: ObservableObject {
         try? FileManager.default.removeItem(at: dir)
     }
 
-    private func restartArti() async {
+    nonisolated private func restartArti() async {
         SecureLogger.debug("TorManager: restartArti() starting", category: .session)
         await MainActor.run {
             NotificationCenter.default.post(name: .TorWillRestart, object: nil)
@@ -452,7 +548,7 @@ public final class TorManager: ObservableObject {
 
         _ = arti_stop()
 
-        // Wait for stop
+        // Wait for stop off the main actor.
         var waited = 0
         while arti_is_running() != 0 && waited < 40 {
             try? await Task.sleep(nanoseconds: 100_000_000)
@@ -462,9 +558,8 @@ public final class TorManager: ObservableObject {
         await MainActor.run {
             self.bootstrapMonitorStarted = false
             self.didStart = false
+            self.startIfNeeded()
         }
-
-        await MainActor.run { self.startIfNeeded() }
     }
 
     private func recomputeReady() {
@@ -475,6 +570,7 @@ public final class TorManager: ObservableObject {
             }
             isReady = ready
             if ready {
+                resumeAllReadyWaiters()
                 NotificationCenter.default.post(name: .TorDidBecomeReady, object: nil)
             }
         }
@@ -516,6 +612,25 @@ public final class TorManager: ObservableObject {
         if isReady { return }
         SecureLogger.debug("TorManager: pokeTorOnPathChange() - Arti not ready, initiating recovery", category: .session)
         ensureRunningOnForeground()
+    }
+}
+
+private final class AtomicOnceFlag: @unchecked Sendable {
+    private let lock = NSLock()
+    private var flag = false
+
+    var isSet: Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        return flag
+    }
+
+    func trySet() -> Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        guard !flag else { return false }
+        flag = true
+        return true
     }
 }
 
