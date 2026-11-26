@@ -401,4 +401,83 @@ struct PrekeyEndToEndTests {
         #expect(!cached)
         #expect(!alice._test_hasGossipPrekeyBundle(for: bob.myPeerID))
     }
+    @Test(arguments: [false, true]) @MainActor
+    func panicDropsUnboundPrekeyPacketsButAcceptsFreshBundles(_ performPanic: Bool) async throws {
+        let fm = FileManager.default
+        let root = fm.temporaryDirectory.appendingPathComponent("deferred-prekey-\(UUID().uuidString)")
+        defer { try? fm.removeItem(at: root) }
+        let keychain = MockKeychain()
+        let bridge = NostrIdentityBridge(keychain: MockKeychainHelper())
+        let identity = MockIdentityManager(keychain)
+        let alice = BLEService(
+            keychain: keychain, idBridge: bridge, identityManager: identity,
+            initializeBluetoothManagers: false,
+            incomingFileStore: BLEIncomingFileStore(baseDirectory: root.appendingPathComponent("media"))
+        )
+        alice.courierStore = CourierStore(persistsToDisk: false)
+        let file = root.appendingPathComponent("prekeys/bundles.json")
+        alice.prekeyBundleStore = PrekeyBundleStore(fileURL: file)
+        let bob = makeService()
+        defer { alice.stopServices(); bob.stopServices() }
+        let tap = PacketTap()
+        bob._test_onOutboundPacket = tap.record
+        let captured = try await captureAnnounceAndBundle(from: bob, tap: tap)
+        let peerKey = bob.noiseStaticPublicKeyData()
+        let metadata = PanicMetadataWipeOperations(
+            wipeCourier: { true }, wipeBridge: { true }, wipeGossip: { true },
+            wipeGroups: { true }, wipeBoard: { true }, wipeEvents: { true },
+            wipePrekeys: { alice.prekeyBundleStore.wipe() }
+        )
+        let recovery = PanicRecoveryOperations(isPending: { false }, begin: {
+            PanicRecoveryIntent(fileMarkerEstablished: true, externalMarkerEstablished: true)
+        }, wipeMedia: { _ in }, complete: {})
+        let viewModel = ChatViewModel(
+            keychain: keychain, idBridge: bridge, identityManager: identity, transport: alice,
+            panicRecoveryOperations: recovery, panicMetadataWipeOperations: metadata,
+            panicNetworkLifecycle: .noop
+        )
+        // The production receive handler runs, without a preseeded owner binding.
+        alice._test_handlePacket(captured.bundle, fromPeerID: bob.myPeerID, preseedPeer: false)
+        await fencePrekeyProbe(alice)
+        #expect(!alice.prekeyBundleStore.hasUsableBundle(for: peerKey))
+        #expect(!fm.fileExists(atPath: file.path))
+        if performPanic {
+            #expect(viewModel.panicClearAllData(restartServices: false))
+            #expect(!fm.fileExists(atPath: file.path))
+        }
+        alice._test_handlePacket(captured.announce, fromPeerID: bob.myPeerID, preseedPeer: false)
+        await fencePrekeyProbe(alice)
+        #expect(alice.prekeyBundleStore.hasUsableBundle(for: peerKey) == !performPanic,
+                "Panic must discard a pre-panic unbound bundle before a later announce can drain it")
+        #expect(PrekeyBundleStore(fileURL: file).hasUsableBundle(for: peerKey) == !performPanic,
+                "A later announce alone must not persist a pre-panic deferred bundle")
+        if performPanic {
+            let fresh = bob.signPacketForBroadcast(BitchatPacket(
+                type: captured.bundle.type, senderID: captured.bundle.senderID,
+                recipientID: nil, timestamp: captured.bundle.timestamp + 1,
+                payload: captured.bundle.payload, signature: nil, ttl: captured.bundle.ttl
+            ))
+            #expect(fresh.signature != nil)
+            alice._test_handlePacket(fresh, fromPeerID: bob.myPeerID, preseedPeer: false)
+            await fencePrekeyProbe(alice)
+            #expect(PrekeyBundleStore(fileURL: file).hasUsableBundle(for: peerKey),
+                    "A fresh post-panic bundle must remain persistable")
+        }
+    }
+
+    private final class PrekeyProbeService: @unchecked Sendable {
+        let service: BLEService
+        init(_ service: BLEService) { self.service = service }
+    }
+
+    private func fencePrekeyProbe(_ service: BLEService) async {
+        let box = PrekeyProbeService(service)
+        await withCheckedContinuation { continuation in
+            DispatchQueue.global().async {
+                box.service._test_fenceEngine()
+                continuation.resume()
+            }
+        }
+    }
+
 }

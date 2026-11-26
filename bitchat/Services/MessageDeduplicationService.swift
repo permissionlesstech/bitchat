@@ -313,12 +313,13 @@ final class MessageDeduplicationService {
 
     /// Clears all caches. This is the wipe/panic path: the persisted
     /// private-envelope record goes with everything else.
-    func clearAll() {
+    @discardableResult
+    func clearAll() -> Bool {
         contentCache.clear()
         nostrEventCache.clear()
         nostrAckCache.clear()
         pendingPersistIDs.removeAll()
-        nostrEventStore?.wipe()
+        return nostrEventStore?.wipe() ?? true
     }
 
     /// Clears only the in-memory Nostr caches (events and ACKs). Runs on

@@ -550,11 +550,12 @@ final class MessageRouter {
         retryBridgeCourierDeposits()
     }
 
-    /// Panic wipe: forget queued mail on disk and in memory.
-    func wipeOutbox() {
+    /// Clears queued mail and reports persistent cleanup when a store is configured.
+    @discardableResult
+    func wipeOutbox() -> Bool {
         outbox.removeAll()
         secureTransmissions.removeAll()
-        outboxStore?.wipe()
+        return outboxStore?.wipe() ?? true
     }
 
     /// Returns true only when the receipt was handed to a reachable transport.

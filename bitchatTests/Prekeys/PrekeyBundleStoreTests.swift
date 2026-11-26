@@ -118,6 +118,113 @@ struct PrekeyBundleStoreTests {
         #expect(store.hasUsableBundle(for: keys[2]))
     }
 
+    private func panicBundle(noiseKey: Data, generatedAt: UInt64) -> PrekeyBundle {
+        PrekeyBundle(
+            noiseStaticPublicKey: noiseKey,
+            prekeys: [.init(id: 1, publicKey: Data(repeating: 0x41, count: 32))],
+            generatedAt: generatedAt,
+            signature: Data(count: PrekeyBundle.signatureLength)
+        )
+    }
+
+    @Test func deniedPanicDeletionClearsMemoryAndRetriesWithoutRemovingSibling() throws {
+        let fm = FileManager.default
+        let root = fm.temporaryDirectory.appendingPathComponent("prekey-panic-\(UUID().uuidString)")
+        try fm.createDirectory(at: root, withIntermediateDirectories: true)
+        defer {
+            try? fm.setAttributes([.posixPermissions: 0o700], ofItemAtPath: root.path)
+            try? fm.removeItem(at: root)
+        }
+        let file = root.appendingPathComponent("bundles.json")
+        let sibling = root.appendingPathComponent("keep.txt")
+        let siblingBytes = Data("SYNTHETIC_UNRELATED_FILE".utf8)
+        try siblingBytes.write(to: sibling)
+        let current = Date(timeIntervalSince1970: 1_800_000_000)
+        let noiseKey = Data(repeating: 0xD1, count: 32)
+        let store = PrekeyBundleStore(fileURL: file, now: { current })
+        #expect(store.ingest(panicBundle(noiseKey: noiseKey, generatedAt: 1_800_000_000_000)))
+        let original = try Data(contentsOf: file)
+        #expect(PrekeyBundleStore(fileURL: file, now: { current }).hasUsableBundle(for: noiseKey))
+
+        try fm.setAttributes([.posixPermissions: 0o500], ofItemAtPath: root.path)
+        #expect(!store.wipe(), "Denied prekey file removal must be reported")
+        #expect(!store.hasUsableBundle(for: noiseKey), "Prekey memory must clear even when file removal fails")
+        #expect(store.assignPrekey(messageID: "synthetic-after-wipe", recipientNoiseKey: noiseKey) == nil)
+        #expect(try Data(contentsOf: file) == original)
+        #expect(PrekeyBundleStore(fileURL: file, now: { current }).hasUsableBundle(for: noiseKey))
+        #expect(try Data(contentsOf: sibling) == siblingBytes)
+
+        try fm.setAttributes([.posixPermissions: 0o700], ofItemAtPath: root.path)
+        #expect(store.wipe(), "Prekey deletion must succeed after access is restored")
+        #expect(!fm.fileExists(atPath: file.path))
+        #expect(store.wipe(), "An absent prekey file must count as successful cleanup")
+        #expect(try Data(contentsOf: sibling) == siblingBytes)
+    }
+
+    @Test func unresolvedPanicLocationRetriesAndRetainsRecoveredPersistenceLocation() throws {
+        let fm = FileManager.default
+        let root = fm.temporaryDirectory.appendingPathComponent("prekey-location-\(UUID().uuidString)")
+        defer { try? fm.removeItem(at: root) }
+        let file = root.appendingPathComponent("bundles.json")
+        let current = Date(timeIntervalSince1970: 1_800_000_000)
+        let oldKey = Data(repeating: 0xD2, count: 32)
+        let freshKey = Data(repeating: 0xD3, count: 32)
+        let seed = PrekeyBundleStore(fileURL: file, now: { current })
+        #expect(seed.ingest(panicBundle(noiseKey: oldKey, generatedAt: 1_800_000_000_000)))
+        let original = try Data(contentsOf: file)
+        var available = false
+        var lookups = 0
+        let store = PrekeyBundleStore(now: { current }, resolveDefaultFileURL: {
+            lookups += 1
+            return available ? file : nil
+        })
+        #expect(lookups == 1)
+        #expect(store.ingest(panicBundle(noiseKey: oldKey, generatedAt: 1_800_000_000_000)))
+        #expect(!store.wipe(), "An unresolved persistent prekey location must fail cleanup")
+        #expect(lookups == 2, "Panic must retry the unresolved prekey location")
+        #expect(!store.hasUsableBundle(for: oldKey))
+        #expect(try Data(contentsOf: file) == original)
+
+        available = true
+        #expect(store.wipe(), "A later panic attempt must resolve and remove the prekey file")
+        #expect(lookups == 3)
+        #expect(!fm.fileExists(atPath: file.path))
+        available = false
+        #expect(store.ingest(panicBundle(noiseKey: freshKey, generatedAt: 1_800_000_000_000)))
+        #expect(lookups == 3)
+        let reopened = PrekeyBundleStore(fileURL: file, now: { current })
+        #expect(reopened.hasUsableBundle(for: freshKey), "Fresh bundles must persist at the recovered location")
+        #expect(!reopened.hasUsableBundle(for: oldKey))
+        #expect(store.wipe())
+        #expect(lookups == 3, "The recovered prekey location must remain cached")
+        #expect(!fm.fileExists(atPath: file.path))
+    }
+
+    @Test func memoryOnlyPanicIgnoresOverrideAndDefaultResolver() throws {
+        let fm = FileManager.default
+        let root = fm.temporaryDirectory.appendingPathComponent("prekey-memory-\(UUID().uuidString)")
+        try fm.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? fm.removeItem(at: root) }
+        let override = root.appendingPathComponent("override.json")
+        let resolved = root.appendingPathComponent("resolved.json")
+        let sentinel = Data("SYNTHETIC_UNRELATED_FILE".utf8)
+        try sentinel.write(to: override)
+        try sentinel.write(to: resolved)
+        var lookups = 0
+        let current = Date(timeIntervalSince1970: 1_800_000_000)
+        let noiseKey = Data(repeating: 0xD4, count: 32)
+        let store = PrekeyBundleStore(persistsToDisk: false, fileURL: override, now: { current },
+                                     resolveDefaultFileURL: { lookups += 1; return resolved })
+        #expect(store.ingest(panicBundle(noiseKey: noiseKey, generatedAt: 1_800_000_000_000)))
+        #expect(store.hasUsableBundle(for: noiseKey))
+        #expect(store.wipe(), "Intentional memory-only prekeys need no disk cleanup")
+        #expect(!store.hasUsableBundle(for: noiseKey))
+        #expect(store.wipe())
+        #expect(lookups == 0, "Memory-only prekeys must not resolve a disk location")
+        #expect(try Data(contentsOf: override) == sentinel)
+        #expect(try Data(contentsOf: resolved) == sentinel)
+    }
+
     @Test func persistsAcrossInstancesAndWipes() throws {
         let dir = FileManager.default.temporaryDirectory
             .appendingPathComponent("prekey-bundle-store-tests-\(UUID().uuidString)", isDirectory: true)
@@ -133,7 +240,7 @@ struct PrekeyBundleStoreTests {
         let second = PrekeyBundleStore(fileURL: fileURL)
         #expect(second.assignPrekey(messageID: "m2", recipientNoiseKey: noiseKey)?.id == 2)
 
-        second.wipe()
+        #expect(second.wipe())
         #expect(!FileManager.default.fileExists(atPath: fileURL.path))
         let third = PrekeyBundleStore(fileURL: fileURL)
         #expect(!third.hasUsableBundle(for: noiseKey))

@@ -202,7 +202,8 @@ final class BridgeCourierService: ObservableObject {
     }
 
     /// Panic wipe: forget queued drops and the persisted dedup record.
-    func wipe() {
+    @discardableResult
+    func wipe() -> Bool {
         cancelActivePublishes()
         rejectedDropKeys = ExpiringIDSet(
             capacity: Limits.maxTrackedIDs,
@@ -210,7 +211,7 @@ final class BridgeCourierService: ObservableObject {
         )
         publishedDropKeys = ExpiringIDSet(capacity: Limits.maxTrackedIDs, lifetime: CourierEnvelope.maxLifetimeSeconds)
         seenDropEventIDs = ExpiringIDSet(capacity: Limits.maxTrackedIDs, lifetime: CourierEnvelope.maxLifetimeSeconds)
-        dedupStore.wipe()
+        return dedupStore.wipe()
     }
 
     // MARK: - Sender role

@@ -243,6 +243,85 @@ struct MessageOutboxStoreTests {
         #expect(relaunched[otherPeer]?.map(\.messageID) == ["shared-id"])
     }
 
+    @Test func deniedPanicDeletionRetainsCiphertextButClearsMemoryAndMockedKey() throws {
+        let fm = FileManager.default
+        let root = fm.temporaryDirectory.appendingPathComponent("outbox-panic-\(UUID().uuidString)")
+        try fm.createDirectory(at: root, withIntermediateDirectories: true)
+        defer {
+            try? fm.setAttributes([.posixPermissions: 0o700], ofItemAtPath: root.path)
+            try? fm.removeItem(at: root)
+        }
+        let file = root.appendingPathComponent("outbox.sealed")
+        let sibling = root.appendingPathComponent("keep.txt")
+        let siblingBytes = Data("SYNTHETIC_UNRELATED_FILE".utf8)
+        try siblingBytes.write(to: sibling)
+        let keychain = MockKeychain()
+        let peerID = PeerID(str: "0000000000000001")
+        let store = MessageOutboxStore(keychain: keychain, fileURL: file)
+        store.save([peerID: [makeMessage("synthetic-before-panic")]])
+        #expect(store.load()[peerID]?.map(\.messageID) == ["synthetic-before-panic"])
+        #expect(keychain.load(key: "outbox-encryption-key", service: "chat.bitchat.outbox") != nil)
+        let ciphertext = try Data(contentsOf: file)
+
+        try fm.setAttributes([.posixPermissions: 0o500], ofItemAtPath: root.path)
+        #expect(!store.wipe(), "Denied outbox byte deletion must be reported")
+        #expect(store.load().isEmpty, "Outbox memory must clear despite failed byte deletion")
+        #expect(keychain.load(key: "outbox-encryption-key", service: "chat.bitchat.outbox") == nil,
+                "Failed byte deletion must still attempt mocked key deletion")
+        #expect(try Data(contentsOf: file) == ciphertext)
+        let reopened = MessageOutboxStore(keychain: keychain, fileURL: file)
+        #expect(reopened.load().isEmpty, "The retained ciphertext must not recover messages without its mocked key")
+        #expect(try Data(contentsOf: file) == ciphertext)
+        #expect(try Data(contentsOf: sibling) == siblingBytes)
+
+        try fm.setAttributes([.posixPermissions: 0o700], ofItemAtPath: root.path)
+        #expect(store.wipe(), "Outbox byte deletion must succeed after access is restored")
+        #expect(!fm.fileExists(atPath: file.path))
+        #expect(store.wipe(), "An absent outbox file must count as successful cleanup")
+        #expect(try Data(contentsOf: sibling) == siblingBytes)
+        store.save([peerID: [makeMessage("synthetic-after-panic")]])
+        let fresh = MessageOutboxStore(keychain: keychain, fileURL: file).load()
+        #expect(fresh[peerID]?.map(\.messageID) == ["synthetic-after-panic"])
+    }
+
+    @Test func unresolvedPanicLocationRetriesAndRetainsRecoveredOutboxLocation() throws {
+        let fm = FileManager.default
+        let root = fm.temporaryDirectory.appendingPathComponent("outbox-location-\(UUID().uuidString)")
+        defer { try? fm.removeItem(at: root) }
+        let file = root.appendingPathComponent("outbox.sealed")
+        let keychain = MockKeychain()
+        let peerID = PeerID(str: "0000000000000001")
+        MessageOutboxStore(keychain: keychain, fileURL: file)
+            .save([peerID: [makeMessage("synthetic-before-panic")]])
+        let ciphertext = try Data(contentsOf: file)
+        var available = false
+        var lookups = 0
+        let store = MessageOutboxStore(keychain: keychain, resolveDefaultFileURL: {
+            lookups += 1
+            return available ? file : nil
+        })
+        #expect(lookups == 1)
+        #expect(!store.wipe(), "An unresolved outbox location must fail panic cleanup")
+        #expect(lookups == 2, "Panic must retry an unresolved outbox location")
+        #expect(store.load().isEmpty)
+        #expect(try Data(contentsOf: file) == ciphertext)
+        #expect(keychain.load(key: "outbox-encryption-key", service: "chat.bitchat.outbox") == nil)
+
+        available = true
+        #expect(store.wipe(), "A later panic attempt must resolve and remove the outbox file")
+        #expect(lookups == 3)
+        #expect(!fm.fileExists(atPath: file.path))
+        available = false
+        store.save([peerID: [makeMessage("synthetic-after-panic")]])
+        #expect(lookups == 3)
+        let reopened = MessageOutboxStore(keychain: keychain, fileURL: file).load()
+        #expect(reopened[peerID]?.map(\.messageID) == ["synthetic-after-panic"],
+                "Fresh outbox messages must persist at the recovered location")
+        #expect(store.wipe())
+        #expect(lookups == 3, "The recovered outbox location must remain cached")
+        #expect(!fm.fileExists(atPath: file.path))
+    }
+
     @Test func wipeRemovesFileAndKey() {
         let fileURL = makeTempURL()
         let keychain = MockKeychain()
@@ -250,8 +329,10 @@ struct MessageOutboxStoreTests {
         store.save([PeerID(str: "0000000000000001"): [makeMessage("m1")]])
         #expect(FileManager.default.fileExists(atPath: fileURL.path))
 
-        store.wipe()
+        #expect(keychain.load(key: "outbox-encryption-key", service: "chat.bitchat.outbox") != nil)
+        #expect(store.wipe())
         #expect(!FileManager.default.fileExists(atPath: fileURL.path))
+        #expect(keychain.load(key: "outbox-encryption-key", service: "chat.bitchat.outbox") == nil)
         #expect(store.load().isEmpty)
     }
 
