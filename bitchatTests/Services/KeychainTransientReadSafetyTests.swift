@@ -31,10 +31,6 @@ final class KeychainTransientReadSafetyTests: XCTestCase {
             backing.secureClear(&data)
         }
 
-        func secureClear(_ string: inout String) {
-            backing.secureClear(&string)
-        }
-
         func verifyIdentityKeyExists() -> Bool {
             backing.verifyIdentityKeyExists()
         }
