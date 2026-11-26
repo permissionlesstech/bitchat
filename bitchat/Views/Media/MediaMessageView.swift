@@ -123,6 +123,14 @@ struct MediaMessageView: View {
                             onDelete: !isFromMe ? { conversationUIModel.deleteMediaMessage(messageID: message.id) } : nil
                         )
                         .frame(maxWidth: 280)
+                    case .video(let url):
+                        VideoMessageView(
+                            message: message,
+                            url: url,
+                            isSending: state.isSending,
+                            sendProgress: state.progress,
+                            onCancel: cancelAction
+                        )
                     }
                 }
             }

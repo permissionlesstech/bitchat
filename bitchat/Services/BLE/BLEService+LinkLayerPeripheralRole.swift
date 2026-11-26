@@ -142,6 +142,9 @@ extension BLEService: CBPeripheralManagerDelegate {
         let centralUUID = central.identifier.uuidString
         SecureLogger.debug("📥 Central subscribed: \(centralUUID.prefix(8))…", category: .session)
         linkStateStore.addSubscribedCentral(central)
+        if liveMediaBoostHolders > 0 {
+            applyLiveMediaConnectionLatency(to: [central])
+        }
 
         // BCH-01-004: Rate-limit subscription-triggered announces to prevent enumeration attacks
         let now = Date()

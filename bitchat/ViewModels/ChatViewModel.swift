@@ -215,6 +215,13 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, SynchronousMessage
         context: self,
         sweepsOnInit: !TestEnvironment.isRunningTests
     )
+    lazy var liveVideoCoordinator = ChatLiveVideoCoordinator(
+        context: self,
+        linkBoost: { [weak self] active in
+            (self?.meshService as? MeshVideoStreaming)?.setLiveMediaLinkBoost(active)
+        },
+        sweepsOnInit: !TestEnvironment.isRunningTests
+    )
     lazy var verificationCoordinator = ChatVerificationCoordinator(context: self)
     lazy var groupCoordinator = ChatGroupCoordinator(context: self)
     lazy var vouchCoordinator = ChatVouchCoordinator(context: self)
@@ -663,12 +670,14 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, SynchronousMessage
         // arrival rather than unlinking its capture or removing its bubble.
         let messages = privateMessages(for: peerID).filter {
             !liveVoiceCoordinator.isLiveVoiceMessage($0)
+                && !liveVideoCoordinator.isLiveVideoMessage($0)
         }
         let localPeerID = meshService.myPeerID.toShort()
         let currentNickname = nickname
         let mediaPrefixes = [
             MimeType.Category.audio.messagePrefix,
             MimeType.Category.image.messagePrefix,
+            MimeType.Category.video.messagePrefix,
             MimeType.Category.file.messagePrefix
         ]
         let outgoingMedia = messages.filter { message in
@@ -758,6 +767,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, SynchronousMessage
         let mediaPrefixes = [
             MimeType.Category.audio.messagePrefix,
             MimeType.Category.image.messagePrefix,
+            MimeType.Category.video.messagePrefix,
             MimeType.Category.file.messagePrefix
         ]
         let localPeerID = request.localPeerID
@@ -1584,6 +1594,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, SynchronousMessage
         // handles before clearing state or removing the media directory.
         mediaTransferCoordinator.resetForPanic()
         liveVoiceCoordinator.resetForPanic()
+        liveVideoCoordinator.resetForPanic()
         privateChatClearGeneration &+= 1
         queuedPrivateChatClears.removeAll(keepingCapacity: false)
         privateChatClearInFlight = false
@@ -2097,6 +2108,19 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, SynchronousMessage
                 timestamp: timestamp
             )
 
+        case let .publicVideoFrameReceived(
+            peerID,
+            nickname,
+            payload,
+            timestamp
+        ):
+            liveVideoCoordinator.handlePublicVideoFramePayload(
+                from: peerID,
+                nickname: nickname,
+                payload: payload,
+                timestamp: timestamp
+            )
+
         case .peerConnected(let peerID):
             transportEventCoordinator.didConnectToPeerSynchronously(peerID)
             mediaTransferCoordinator.peerDidReconnect(peerID)
@@ -2163,6 +2187,17 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, SynchronousMessage
     func didReceivePublicVoiceFrame(from peerID: PeerID, nickname: String, payload: Data, timestamp: Date) {
         Task { @MainActor [weak self] in
             self?.liveVoiceCoordinator.handlePublicVoiceFramePayload(
+                from: peerID,
+                nickname: nickname,
+                payload: payload,
+                timestamp: timestamp
+            )
+        }
+    }
+
+    func didReceivePublicVideoFrame(from peerID: PeerID, nickname: String, payload: Data, timestamp: Date) {
+        Task { @MainActor [weak self] in
+            self?.liveVideoCoordinator.handlePublicVideoFramePayload(
                 from: peerID,
                 nickname: nickname,
                 payload: payload,
@@ -2340,6 +2375,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, SynchronousMessage
         // A finalized voice note whose burst already streamed in live swaps
         // into the existing bubble instead of appearing twice.
         if liveVoiceCoordinator.absorbFinalizedVoiceNote(message) { return }
+        if liveVideoCoordinator.absorbFinalizedVideo(message) { return }
         publicConversationCoordinator.handlePublicMessage(message)
     }
 

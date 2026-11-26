@@ -130,6 +130,8 @@ struct BLEIncomingFileStore: @unchecked Sendable {
         "voicenotes/outgoing",
         "images/incoming",
         "images/outgoing",
+        "videos/incoming",
+        "videos/outgoing",
         "files/incoming",
         "files/outgoing"
     ]
@@ -139,6 +141,12 @@ struct BLEIncomingFileStore: @unchecked Sendable {
     /// and kills playback — and the coordinator's startup sweep deletes any
     /// orphans a previous session left behind.
     static let liveCapturePrefix = "voice_live_"
+    /// Same contract for live video reconstructions (`ChatLiveVideoCoordinator`).
+    static let liveVideoCapturePrefix = "video_live_"
+
+    static func isLiveCapture(_ fileName: String) -> Bool {
+        fileName.hasPrefix(liveCapturePrefix) || fileName.hasPrefix(liveVideoCapturePrefix)
+    }
 
     /// Media payloads follow the same at-rest posture as the app's other
     /// persistence layers (courier, outbox, receipt index): protected until
@@ -477,6 +485,7 @@ struct BLEIncomingFileStore: @unchecked Sendable {
         let incomingDirectories = [
             "voicenotes/incoming",
             "images/incoming",
+            "videos/incoming",
             "files/incoming"
         ]
         guard incomingDirectories.contains(where: { relativeDirectory in
@@ -533,6 +542,7 @@ struct BLEIncomingFileStore: @unchecked Sendable {
             let incomingDirs = [
                 base.appendingPathComponent("voicenotes/incoming", isDirectory: true),
                 base.appendingPathComponent("images/incoming", isDirectory: true),
+                base.appendingPathComponent("videos/incoming", isDirectory: true),
                 base.appendingPathComponent("files/incoming", isDirectory: true)
             ]
             var allFiles: [(url: URL, size: Int64, modified: Date)] = []
@@ -567,7 +577,7 @@ struct BLEIncomingFileStore: @unchecked Sendable {
             var freedSpace: Int64 = 0
             for file in allFiles.sorted(by: { $0.modified < $1.modified }) {
                 guard freedSpace < needToFree else { break }
-                guard !file.url.lastPathComponent.hasPrefix(Self.liveCapturePrefix) else { continue }
+                guard !Self.isLiveCapture(file.url.lastPathComponent) else { continue }
                 guard !protectedPaths.contains(
                     file.url.standardizedFileURL.path
                 ) else {
@@ -635,7 +645,7 @@ struct BLEIncomingFileStore: @unchecked Sendable {
                         forKeys: [.contentModificationDateKey]
                     ).contentModificationDate else { continue }
                     guard modified < cutoff else { continue }
-                    guard !fileURL.lastPathComponent.hasPrefix(Self.liveCapturePrefix) else { continue }
+                    guard !Self.isLiveCapture(fileURL.lastPathComponent) else { continue }
                     guard !protectedPaths.contains(
                         fileURL.standardizedFileURL.path
                     ) else { continue }
@@ -695,7 +705,7 @@ struct BLEIncomingFileStore: @unchecked Sendable {
             )) ?? []
             stamped += stampProtectionIfWeaker(dir, requireRegularFile: false, attributes: attributes)
             for fileURL in files {
-                guard !fileURL.lastPathComponent.hasPrefix(Self.liveCapturePrefix) else { continue }
+                guard !Self.isLiveCapture(fileURL.lastPathComponent) else { continue }
                 stamped += stampProtectionIfWeaker(fileURL, requireRegularFile: true, attributes: attributes)
             }
         }

@@ -323,6 +323,7 @@ final class ChatPublicConversationCoordinator: PublicMessagePipelineDelegate {
                 let outgoingDirs = [
                     filesDir.appendingPathComponent("voicenotes/outgoing", isDirectory: true),
                     filesDir.appendingPathComponent("images/outgoing", isDirectory: true),
+                    filesDir.appendingPathComponent("videos/outgoing", isDirectory: true),
                     filesDir.appendingPathComponent("files/outgoing", isDirectory: true)
                 ]
 

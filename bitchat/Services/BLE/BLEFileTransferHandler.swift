@@ -473,6 +473,8 @@ final class BLEFileTransferHandler {
             return .audio
         case MimeType.Category.image.mediaDir:
             return .image
+        case MimeType.Category.video.mediaDir:
+            return .video
         case MimeType.Category.file.mediaDir:
             return .file
         default:

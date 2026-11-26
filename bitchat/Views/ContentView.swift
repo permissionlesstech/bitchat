@@ -405,6 +405,13 @@ struct ContentView: View {
             }
             .ignoresSafeArea()
         }
+        .fullScreenCover(isPresented: Binding(
+            get: { conversationUIModel.isVideoStudioPresented && !showSidebar && selectedPrivatePeerID == nil },
+            set: { if !$0 { conversationUIModel.isVideoStudioPresented = false } }
+        )) {
+            VideoStudioView()
+                .environmentObject(conversationUIModel)
+        }
         #endif
         #if os(macOS)
         .sheet(isPresented: Binding(

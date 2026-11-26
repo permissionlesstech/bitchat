@@ -22,6 +22,13 @@ struct BLEOutboundWritePriority: Comparable {
 struct BLEPendingWrite {
     let priority: BLEOutboundWritePriority
     let data: Data
+    /// Live media only: a write still queued past this uptime is stale and
+    /// dropped instead of sent late (nil = no deadline).
+    var deadline: TimeInterval? = nil
+
+    func isExpired(at uptime: TimeInterval) -> Bool {
+        deadline.map { uptime > $0 } ?? false
+    }
 }
 
 struct BLEOutboundWriteBuffer {
@@ -36,6 +43,12 @@ struct BLEOutboundWriteBuffer {
         Array(writesByPeripheralID.keys)
     }
 
+    /// Writes waiting on the busiest peripheral link; live media senders
+    /// treat growth as congestion.
+    var deepestQueueCount: Int {
+        writesByPeripheralID.values.map(\.count).max() ?? 0
+    }
+
     mutating func removeAll() {
         writesByPeripheralID.removeAll()
     }
@@ -44,13 +57,15 @@ struct BLEOutboundWriteBuffer {
         data: Data,
         for peripheralID: String,
         priority: BLEOutboundWritePriority,
-        capBytes: Int
+        capBytes: Int,
+        deadline: TimeInterval? = nil
     ) -> EnqueueResult {
         enqueueReportingAcceptance(
             data: data,
             for: peripheralID,
             priority: priority,
-            capBytes: capBytes
+            capBytes: capBytes,
+            deadline: deadline
         ).result
     }
 
@@ -61,14 +76,15 @@ struct BLEOutboundWriteBuffer {
         data: Data,
         for peripheralID: String,
         priority: BLEOutboundWritePriority,
-        capBytes: Int
+        capBytes: Int,
+        deadline: TimeInterval? = nil
     ) -> (result: EnqueueResult, accepted: Bool) {
         guard data.count <= capBytes else {
             return (.oversized(bytes: data.count), false)
         }
 
         var queue = writesByPeripheralID[peripheralID] ?? []
-        let item = BLEPendingWrite(priority: priority, data: data)
+        let item = BLEPendingWrite(priority: priority, data: data, deadline: deadline)
         let insertIndex = queue.firstIndex { item.priority < $0.priority } ?? queue.count
         queue.insert(item, at: insertIndex)
 
@@ -86,10 +102,11 @@ struct BLEOutboundWriteBuffer {
         return (.enqueued(trimmedBytes: trimmedBytes, remainingBytes: total), accepted)
     }
 
-    mutating func takeAll(for peripheralID: String) -> [BLEPendingWrite] {
+    /// Takes the link's queue, minus live writes whose deadline passed.
+    mutating func takeAll(for peripheralID: String, uptime: TimeInterval = ProcessInfo.processInfo.systemUptime) -> [BLEPendingWrite] {
         let items = writesByPeripheralID[peripheralID] ?? []
         writesByPeripheralID[peripheralID] = nil
-        return items
+        return items.filter { !$0.isExpired(at: uptime) }
     }
 
     /// Drops link-specific ciphertext when that physical link is gone. Keeping
