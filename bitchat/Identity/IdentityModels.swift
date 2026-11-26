@@ -117,7 +117,7 @@ struct CryptographicIdentity: Codable {
     let fingerprint: String     // SHA256 of public key
     let publicKey: Data         // Noise static public key
     // Optional Ed25519 signing public key (used to authenticate public messages)
-    var signingPublicKey: Data? = nil
+    var signingPublicKey: Data?
     let firstSeen: Date
 }
 
@@ -193,26 +193,26 @@ struct IdentityCache: Codable {
     // recovery path that discards everything.
 
     // Vouchee fingerprint -> accepted vouches (capped per vouchee)
-    var vouchesByVouchee: [String: [VouchRecord]]? = nil
+    var vouchesByVouchee: [String: [VouchRecord]]?
 
     // Peer fingerprint -> when we last sent them a vouch batch (rate limit)
-    var vouchBatchSentAt: [String: Date]? = nil
+    var vouchBatchSentAt: [String: Date]?
 
     // Fingerprint -> when we verified it (orders outgoing vouch batches;
     // entries verified before this field exists sort as oldest)
-    var verifiedAt: [String: Date]? = nil
+    var verifiedAt: [String: Date]?
 
     // Stable Noise fingerprints that proved encrypted private-media support
     // inside an authenticated Noise session. Optional for decoding caches
     // written before this migration. Entries are monotonic until a panic wipe
     // so an old/replayed announce cannot silently downgrade a peer.
-    var privateMediaCapableFingerprints: Set<String>? = nil
+    var privateMediaCapableFingerprints: Set<String>?
 
     // Noise-fingerprint -> Ed25519 announcement key, learned only from the
     // authenticated peer-state payload. This prevents a self-signed announce
     // containing a copied public Noise key from replacing a previously bound
     // public-message signing identity. Optional for old cache compatibility.
-    var authenticatedSigningKeysByFingerprint: [String: Data]? = nil
+    var authenticatedSigningKeysByFingerprint: [String: Data]?
 
     // Fingerprint -> Cryptographic identity (noise + pinned signing key).
     // Persisting the signing-key pin is security-critical: it must survive

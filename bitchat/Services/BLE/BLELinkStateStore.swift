@@ -13,7 +13,7 @@ struct BLEPeripheralLinkState {
     /// exactly the signal redundant-link consolidation needs: a restored
     /// link lives on an old BLE address the peer no longer advertises,
     /// so it must never be kept over a freshly connected duplicate.
-    var lastConnectedAt: Date? = nil
+    var lastConnectedAt: Date?
     var assembler: NotificationStreamAssembler
 }
 

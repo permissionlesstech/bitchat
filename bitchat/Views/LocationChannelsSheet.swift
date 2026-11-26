@@ -12,7 +12,7 @@ struct LocationChannelsSheet: View {
     @Environment(\.scenePhase) private var scenePhase
     @ThemedPalette private var palette
     @State private var customGeohash: String = ""
-    @State private var customError: String? = nil
+    @State private var customError: String?
     /// Geohash waiting on the fine-precision OpSec confirmation before share.
     @State private var pendingShareGeohash: String?
     @State private var showSharePrecisionWarning = false
