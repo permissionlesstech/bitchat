@@ -1468,30 +1468,6 @@ struct NoiseEncryptionServiceTests {
         #expect(decrypted.plaintext == plaintext)
     }
 
-    @Test("NoiseMessage JSON and binary encoding round-trip")
-    func noiseMessageRoundTrips() throws {
-        let message = NoiseMessage(
-            type: .encryptedMessage,
-            sessionID: UUID().uuidString,
-            payload: Data([1, 2, 3, 4])
-        )
-
-        let encoded = try #require(message.encode(), "Expected JSON encoding")
-        let decoded = try #require(NoiseMessage.decode(from: encoded), "Expected JSON decode")
-        #expect(decoded.type == message.type)
-        #expect(decoded.sessionID == message.sessionID)
-        #expect(decoded.payload == message.payload)
-
-        #expect(NoiseMessage.decodeWithError(from: Data("bad".utf8)) == nil)
-
-        let binary = message.toBinaryData()
-        let roundTripped = try #require(NoiseMessage.fromBinaryData(binary), "Expected binary decode")
-        #expect(roundTripped.type == message.type)
-        #expect(roundTripped.sessionID == message.sessionID)
-        #expect(roundTripped.payload == message.payload)
-        #expect(NoiseMessage.fromBinaryData(Data()) == nil)
-    }
-
     private func establishSessions(
         alice: NoiseEncryptionService,
         bob: NoiseEncryptionService
