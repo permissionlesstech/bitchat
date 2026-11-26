@@ -65,6 +65,15 @@ struct MeshTopologySnapshot: Equatable {
     let edges: [MeshTopologyEdge]
 }
 
+/// Which binding a refused announce's signing key contradicted.
+enum SigningKeyRefusalReason: Equatable {
+    /// The signing key first seen for this peer (trust on first use).
+    case pinnedKey
+    /// The signing key bound to this Noise identity inside an authenticated
+    /// Noise session.
+    case authenticatedKey
+}
+
 enum TransportEvent: @unchecked Sendable {
     case messageReceived(BitchatMessage)
     case publicMessageReceived(peerID: PeerID, nickname: String, content: String, timestamp: Date, messageID: String?)
@@ -81,6 +90,15 @@ enum TransportEvent: @unchecked Sendable {
     case peerSnapshotsUpdated([TransportPeerSnapshot])
     case messageDeliveryStatusUpdated(messageID: String, status: DeliveryStatus)
     case bluetoothStateUpdated(CBManagerState)
+    /// An announce claimed this peer's Noise identity with a signing key other
+    /// than the one bound to it, and was refused. Carries the refused key so
+    /// the chat warns once per offending key.
+    case signingKeyRefused(
+        peerID: PeerID,
+        noisePublicKey: Data,
+        signingPublicKey: Data,
+        reason: SigningKeyRefusalReason
+    )
 }
 
 /// Downgrade-safe decision for a private-media recipient. Callers ask before
@@ -300,6 +318,8 @@ extension BitchatDelegate {
             didUpdateMessageDeliveryStatus(messageID, status: status)
         case .bluetoothStateUpdated(let state):
             didUpdateBluetoothState(state)
+        case .signingKeyRefused:
+            break
         }
     }
 }

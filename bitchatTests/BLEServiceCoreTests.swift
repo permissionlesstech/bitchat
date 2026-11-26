@@ -151,6 +151,54 @@ struct BLEServiceCoreTests {
         #expect(ble.currentPeerSnapshots().isEmpty)
     }
 
+    /// Real path: an announce replaying a known peer's Noise identity with
+    /// another signing key is refused, and the refusal leaves the service as
+    /// a transport event carrying the refused key.
+    @Test @MainActor
+    func refusedSigningKeyReachesTheEventDelegate() async throws {
+        let ble = makeService()
+        let delegate = RefusedSigningKeyCaptureDelegate()
+        ble.eventDelegate = delegate
+        let alice = NoiseEncryptionService(keychain: MockKeychain())
+        let mallory = NoiseEncryptionService(keychain: MockKeychain())
+        let aliceNoiseKey = alice.getStaticPublicKeyData()
+        let alicePeerID = PeerID(publicKey: aliceNoiseKey)
+        ble._test_seedConnectedPeer(alicePeerID, nickname: "alice", noisePublicKey: aliceNoiseKey)
+
+        // Alice's Noise identity, Mallory's signing key, validly self-signed.
+        let announcement = AnnouncementPacket(
+            nickname: "alice",
+            noisePublicKey: aliceNoiseKey,
+            signingPublicKey: mallory.getSigningPublicKeyData(),
+            directNeighbors: nil
+        )
+        let packet = BitchatPacket(
+            type: MessageType.announce.rawValue,
+            senderID: Data(hexString: alicePeerID.id) ?? Data(),
+            recipientID: nil,
+            timestamp: UInt64(Date().timeIntervalSince1970 * 1000),
+            payload: try #require(announcement.encode(), "Failed to encode announcement"),
+            signature: nil,
+            ttl: 7
+        )
+        let signed = try #require(mallory.signPacket(packet), "Failed to sign announce packet")
+
+        // Pins Alice's real signing key on the seeded entry before handling.
+        ble._test_handlePacket(signed, fromPeerID: alicePeerID, signingPublicKey: alice.getSigningPublicKeyData())
+
+        let reported = await TestHelpers.waitUntil(
+            { !delegate.refusals.isEmpty },
+            timeout: TestConstants.settleTimeout
+        )
+        #expect(reported)
+        #expect(delegate.refusals.count == 1)
+        let refusal = try #require(delegate.refusals.first)
+        #expect(refusal.peerID == alicePeerID)
+        #expect(refusal.noisePublicKey == aliceNoiseKey)
+        #expect(refusal.signingPublicKey == mallory.getSigningPublicKeyData())
+        #expect(refusal.reason == .pinnedKey)
+    }
+
     @Test
     func unsignedAndBadSignatureLeaveDoNotEvictOrRelayClaimedPeer() async throws {
         let ble = makeService()
@@ -1609,5 +1657,14 @@ private final class TransportEventCaptureDelegate: TransportEventDelegate {
     func didReceiveTransportEvent(_ event: TransportEvent) {
         guard case .messageReceived(let message) = event else { return }
         messageIDs.append(message.id)
+    }
+}
+
+private final class RefusedSigningKeyCaptureDelegate: TransportEventDelegate {
+    private(set) var refusals: [(peerID: PeerID, noisePublicKey: Data, signingPublicKey: Data, reason: SigningKeyRefusalReason)] = []
+
+    func didReceiveTransportEvent(_ event: TransportEvent) {
+        guard case let .signingKeyRefused(peerID, noisePublicKey, signingPublicKey, reason) = event else { return }
+        refusals.append((peerID, noisePublicKey, signingPublicKey, reason))
     }
 }

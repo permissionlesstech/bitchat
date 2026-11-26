@@ -27,6 +27,15 @@ struct BLEAnnounceHandlerEnvironment {
     let authenticatedSigningPublicKey: (_ noisePublicKey: Data) -> Data?
     /// Verifies the packet signature against the announced signing key.
     let verifySignature: (_ packet: BitchatPacket, _ signingPublicKey: Data) -> Bool
+    /// Reports an announce refused because its signing key contradicts the
+    /// one bound to this peer, so the chat can warn. A Noise-key mismatch is
+    /// not reported: it stays log-only.
+    let reportRefusedSigningKey: (
+        _ peerID: PeerID,
+        _ noisePublicKey: Data,
+        _ signingPublicKey: Data,
+        _ reason: SigningKeyRefusalReason
+    ) -> Void
     /// Direct link state for the peer (BLE-queue read).
     let linkState: (PeerID) -> (hasPeripheral: Bool, hasCentral: Bool)
     /// Whether the link this packet arrived on is already bound to a
@@ -162,11 +171,23 @@ final class BLEAnnounceHandler {
         }
         if case .reject(.signingKeyMismatch) = trustDecision {
             SecureLogger.warning("🚨 Announce signing-key mismatch for \(peerID.id.prefix(8))… — refusing to replace pinned signing key (possible impersonation attempt)", category: .security)
+            env.reportRefusedSigningKey(
+                peerID,
+                announcement.noisePublicKey,
+                announcement.signingPublicKey,
+                .pinnedKey
+            )
         }
         if case .reject(.authenticatedSigningKeyMismatch) = trustDecision {
             SecureLogger.warning(
                 "⚠️ Announce signing-key replacement rejected for Noise-authenticated peer \(peerID.id.prefix(8))…",
                 category: .security
+            )
+            env.reportRefusedSigningKey(
+                peerID,
+                announcement.noisePublicKey,
+                announcement.signingPublicKey,
+                .authenticatedKey
             )
         }
         var verifiedAnnounce = trustDecision.isVerified
