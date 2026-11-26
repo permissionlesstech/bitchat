@@ -109,7 +109,7 @@ Not addressed, and deliberately out of scope here:
 
 ## Panic Wipe Coverage
 
-The panic action clears identity/session state, preferences, location state, groups, prekeys, outbox mail, courier mail, bridge dedup state, gossip archive, board data, managed media, hand-added relays, and active subscriptions/transports. Managed media deletion completes synchronously, after active media work has been invalidated. Keychain secrets use device-only accessibility, and an install marker detects and clears app keys that survive uninstall before a later reinstall can use them. New persistent stores must add an explicit wipe hook and a regression test.
+The panic action clears identity/session state, preferences, location state, groups, prekeys, outbox mail, courier mail, bridge dedup state, gossip archive, board data, managed media, hand-added relays, and active subscriptions/transports. It also rewrites the logo-gesture mode (`panic.gestureMode`) to `instant` — deliberately not the install default, so a device wiped under duress comes back armed and retains no trace of the previous setting. Managed media deletion completes synchronously, after active media work has been invalidated. Keychain secrets use device-only accessibility, and an install marker detects and clears app keys that survive uninstall before a later reinstall can use them. New persistent stores must add an explicit wipe hook and a regression test.
 
 ## Release Review Checklist
 
