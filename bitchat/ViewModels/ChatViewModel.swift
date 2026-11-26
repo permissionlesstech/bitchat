@@ -1317,6 +1317,12 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, SynchronousMessage
             _ = panicClearAllData(restartServices: false)
         }
 
+        // Eagerly initialize coordinators before transports attach so non-main
+        // BitchatDelegate callers (e.g. test transports like MockTransport or
+        // any future off-main delegate delivery) cannot race Swift lazy var init.
+        _ = transportEventCoordinator
+        _ = peerListCoordinator
+
         if networkActivationAllowed {
             ChatViewModelBootstrapper(viewModel: self).configure()
         }

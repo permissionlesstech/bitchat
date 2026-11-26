@@ -9,21 +9,28 @@
 import Foundation
 
 final class SecureNoiseSession: NoiseSession {
-    private(set) var messageCount: UInt64 = 0
-    private var sessionStartTime = Date()
-    private(set) var lastActivityTime = Date()
-    
+    private let stateLock = NSLock()
+    private var _messageCount: UInt64 = 0
+    private var _sessionStartTime = Date()
+    private var _lastActivityTime = Date()
+
     override func encrypt(_ plaintext: Data) throws -> Data {
+        let now = Date()
+        stateLock.lock()
+        let startTime = _sessionStartTime
+        let count = _messageCount
+        stateLock.unlock()
+
         // Check session age
-        if Date().timeIntervalSince(sessionStartTime) > NoiseSecurityConstants.sessionTimeout {
+        if now.timeIntervalSince(startTime) > NoiseSecurityConstants.sessionTimeout {
             throw NoiseSecurityError.sessionExpired
         }
-        
+
         // Check message count
-        if messageCount >= NoiseSecurityConstants.maxMessagesPerSession {
+        if count >= NoiseSecurityConstants.maxMessagesPerSession {
             throw NoiseSecurityError.sessionExhausted
         }
-        
+
         // Ordinary Noise messages keep the protocol ceiling. Finalized media
         // is the sole typed-payload extension and remains under the framed-file
         // cap enforced again at the service and file-decoder layers.
@@ -32,20 +39,27 @@ final class SecureNoiseSession: NoiseSession {
         guard NoiseSecurityValidator.validateMessageSize(plaintext) || isPrivateFile else {
             throw NoiseSecurityError.messageTooLarge
         }
-        
+
         let encrypted = try super.encrypt(plaintext)
-        messageCount += 1
-        lastActivityTime = Date()
-        
+        stateLock.lock()
+        _messageCount += 1
+        _lastActivityTime = Date()
+        stateLock.unlock()
+
         return encrypted
     }
-    
+
     override func decrypt(_ ciphertext: Data) throws -> Data {
+        let now = Date()
+        stateLock.lock()
+        let startTime = _sessionStartTime
+        stateLock.unlock()
+
         // Check session age
-        if Date().timeIntervalSince(sessionStartTime) > NoiseSecurityConstants.sessionTimeout {
+        if now.timeIntervalSince(startTime) > NoiseSecurityConstants.sessionTimeout {
             throw NoiseSecurityError.sessionExpired
         }
-        
+
         // The payload type is encrypted, so a large candidate can only be
         // bounded here; `NoiseEncryptionService.decrypt` authenticates it and
         // then requires the resulting type to be `.privateFile`.
@@ -53,22 +67,31 @@ final class SecureNoiseSession: NoiseSession {
                 || NoiseSecurityValidator.validatePrivateFileCiphertextSize(ciphertext) else {
             throw NoiseSecurityError.messageTooLarge
         }
-        
+
         let decrypted = try super.decrypt(ciphertext)
-        lastActivityTime = Date()
-        
+        stateLock.lock()
+        _lastActivityTime = Date()
+        stateLock.unlock()
+
         return decrypted
     }
-    
+
     func needsRenegotiation() -> Bool {
+        let now = Date()
+        stateLock.lock()
+        let count = _messageCount
+        let lastActivity = _lastActivityTime
+        let startTime = _sessionStartTime
+        stateLock.unlock()
+
         // Check if we've used more than 90% of message limit
         let messageThreshold = UInt64(Double(NoiseSecurityConstants.maxMessagesPerSession) * 0.9)
-        if messageCount >= messageThreshold {
+        if count >= messageThreshold {
             return true
         }
 
         // Check if last activity exceeded sessionTimeout
-        if Date().timeIntervalSince(lastActivityTime) > NoiseSecurityConstants.sessionTimeout {
+        if now.timeIntervalSince(lastActivity) > NoiseSecurityConstants.sessionTimeout {
             return true
         }
 
@@ -80,25 +103,31 @@ final class SecureNoiseSession: NoiseSession {
         // (checked every 60s, see NoiseEncryptionService.rekeyCheckInterval)
         // room to complete a full handshake well before the old session
         // starts throwing sessionExpired on every call.
-        if Date().timeIntervalSince(sessionStartTime) > NoiseSecurityConstants.sessionTimeout * 0.9 {
+        if now.timeIntervalSince(startTime) > NoiseSecurityConstants.sessionTimeout * 0.9 {
             return true
         }
 
         return false
     }
-    
+
     // MARK: - Testing Support
     #if DEBUG
     func setLastActivityTimeForTesting(_ date: Date) {
-        lastActivityTime = date
+        stateLock.lock()
+        _lastActivityTime = date
+        stateLock.unlock()
     }
-    
+
     func setMessageCountForTesting(_ count: UInt64) {
-        messageCount = count
+        stateLock.lock()
+        _messageCount = count
+        stateLock.unlock()
     }
 
     func setSessionStartTimeForTesting(_ date: Date) {
-        sessionStartTime = date
+        stateLock.lock()
+        _sessionStartTime = date
+        stateLock.unlock()
     }
     #endif
 }

@@ -491,15 +491,22 @@ final class BLEService: NSObject {
     )
     
     // Debounced publish to coalesce rapid changes
+    private let peerPublishCoalescerLock = NSLock()
     private var peerPublishCoalescer = BLEPeerPublishCoalescer()
     private func requestPeerDataPublish() {
-        switch peerPublishCoalescer.requestPublish(now: Date()) {
+        peerPublishCoalescerLock.lock()
+        let action = peerPublishCoalescer.requestPublish(now: Date())
+        peerPublishCoalescerLock.unlock()
+
+        switch action {
         case .publishNow:
             publishFullPeerData()
         case .schedule(let delay):
             engineScheduler.schedule(after: delay) { [weak self] in
                 guard let self = self else { return }
+                self.peerPublishCoalescerLock.lock()
                 self.peerPublishCoalescer.scheduledPublishFired(now: Date())
+                self.peerPublishCoalescerLock.unlock()
                 self.publishFullPeerData()
             }
         case .skip:
@@ -1088,9 +1095,12 @@ final class BLEService: NSObject {
                 }
             }
 
-            // Send to centrals subscribed to us as peripheral
+            // Send to centrals subscribed to us as peripheral (on bleQueue to
+            // stay affine with CBPeripheralManager delegate callbacks).
             if centralsCount > 0, let ch = char {
-                peripheralManager?.updateValue(data, for: ch, onSubscribedCentrals: nil)
+                bleQueue.sync {
+                    _ = self.peripheralManager?.updateValue(data, for: ch, onSubscribedCentrals: nil)
+                }
             }
         }
 
@@ -2241,12 +2251,18 @@ final class BLEService: NSObject {
         }
 
         // Notify via central link (dual-role)
-        if let characteristic = characteristic, !sentEncrypted, let recipientCentral {
-            let success = peripheralManager?.updateValue(data, for: characteristic, onSubscribedCentrals: [recipientCentral]) ?? false
-            if success {
+        if !sentEncrypted,
+           let recipientCentral,
+           let localCharacteristic = readLinkState({ _ in self.characteristic }) {
+            let accepted = notifyOrEnqueueIfAccepted(
+                data: data,
+                centrals: [recipientCentral],
+                characteristic: localCharacteristic,
+                context: "encrypted",
+                requiredAuthenticatedPeer: nil
+            )
+            if accepted {
                 sentEncrypted = true
-            } else {
-                enqueuePendingNotification(data: data, centrals: [recipientCentral], context: "encrypted")
             }
         }
 
@@ -2363,6 +2379,28 @@ final class BLEService: NSObject {
         return bleQueue.sync(execute: accept)
     }
 
+    private func notifyOrEnqueueOnBLEQueue(
+        data: Data,
+        centrals: [CBCentral],
+        characteristic: CBMutableCharacteristic,
+        context: String
+    ) {
+        guard !isPanicSuspended else { return }
+        bleQueue.async { [weak self] in
+            guard let self = self, !self.isPanicSuspended else { return }
+            let success = self.peripheralManager?.updateValue(
+                data,
+                for: characteristic,
+                onSubscribedCentrals: centrals
+            ) ?? false
+            if !success {
+                // Notification queue full - queue for retry to prevent silent packet loss
+                // This is critical for fragment delivery reliability
+                self.enqueuePendingNotification(data: data, centrals: centrals, context: context)
+            }
+        }
+    }
+
     /// Returns true only when the packet was accepted by at least one current
     /// physical link (including its link-specific backpressure queue). A
     /// process-local directed spool is deliberately not success: callers
@@ -2387,7 +2425,8 @@ final class BLEService: NSObject {
         // silently dropped if its bound link is still mid-rediscovery.
         let connectedStates = states.filter { $0.isConnected && $0.characteristic != nil }
         let centralSnapshot = allLinks.centralSnapshot
-        let subscribedCentrals = characteristic == nil ? [] : centralSnapshot.centrals
+        let localCharacteristic = allLinks.characteristic
+        let subscribedCentrals = localCharacteristic == nil ? [] : centralSnapshot.centrals
 
         // Fast path when no physical links are active: skip ingress SHA-256,
         // binding dictionaries, and fanout planning; delegate the spooling
@@ -2491,7 +2530,7 @@ final class BLEService: NSObject {
             }
         }
         // Notify selected subscribed centrals
-        if let ch = characteristic {
+        if let ch = localCharacteristic {
             let targets = subscribedCentrals.filter { plan.selectedLinks.centralIDs.contains($0.identifier.uuidString) }
             if !targets.isEmpty {
                 if requireDirectPeerLink || requireNoiseAuthenticatedPeerLink {
@@ -2503,13 +2542,13 @@ final class BLEService: NSObject {
                         requiredAuthenticatedPeer: requireNoiseAuthenticatedPeerLink ? directedOnlyPeer : nil
                     ) || acceptedByPhysicalLink
                 } else {
-                    let success = peripheralManager?.updateValue(data, for: ch, onSubscribedCentrals: targets) ?? false
-                    if !success {
-                        // Notification queue full - queue for retry to prevent silent packet loss
-                        // This is critical for fragment delivery reliability
-                        let context = packet.type == MessageType.fragment.rawValue ? "fragment" : "broadcast"
-                        enqueuePendingNotification(data: data, centrals: targets, context: context)
-                    }
+                    let context = packet.type == MessageType.fragment.rawValue ? "fragment" : "broadcast"
+                    notifyOrEnqueueOnBLEQueue(
+                        data: data,
+                        centrals: targets,
+                        characteristic: ch,
+                        context: context
+                    )
                 }
             }
         }
@@ -5209,16 +5248,24 @@ extension BLEService {
         }
     }
 
-    /// Snapshots both physical link tables in a single `bleQueue.sync` hop
-    /// alongside the engine's central-UUID bindings. Engine-confined.
-    private func snapshotAllLinks() -> (peripheralStates: [BLEPeripheralLinkState], centralSnapshot: BLESubscribedCentralSnapshot) {
-        let (peripherals, centrals) = readLinkState { ($0.peripheralStates, $0.subscribedCentrals) }
+    /// Snapshots both physical link tables and the peripheral characteristic in
+    /// a single `bleQueue.sync` hop alongside the engine's central-UUID bindings.
+    /// Engine-confined.
+    private func snapshotAllLinks() -> (
+        peripheralStates: [BLEPeripheralLinkState],
+        centralSnapshot: BLESubscribedCentralSnapshot,
+        characteristic: CBMutableCharacteristic?
+    ) {
+        let (peripherals, centrals, localCharacteristic) = readLinkState {
+            ($0.peripheralStates, $0.subscribedCentrals, self.characteristic)
+        }
         return (
             peripheralStates: peripherals,
             centralSnapshot: BLESubscribedCentralSnapshot(
                 centrals: centrals,
                 peerIDsByCentralUUID: linkBindings.centralPeersByUUID
-            )
+            ),
+            characteristic: localCharacteristic
         )
     }
 

@@ -274,7 +274,9 @@ public final class TorManager: ObservableObject {
             // already-running Arti instances (fenced to this bootstrap
             // generation) so `socksReady` cannot remain stuck at `false`
             // after dormancy or an overlapping restart.
-            let ready = await self.waitForSocksReady(port: port, timeout: 60.0)
+            // Timeout exceeds bootstrapPollLoop's 75s deadline because Arti
+            // binds the SOCKS port only after bootstrap reaches 100%.
+            let ready = await self.waitForSocksReady(port: port, timeout: 80.0)
             await MainActor.run {
                 guard generation == self.bootstrapGeneration else { return }
                 self.socksReady = ready
@@ -318,6 +320,7 @@ public final class TorManager: ObservableObject {
             }
             let endpoint = NWEndpoint.hostPort(host: host, port: port)
             let conn = NWConnection(to: endpoint, using: params)
+            let probeQueue = DispatchQueue(label: "chat.bitchat.tor.socks-probe", qos: .utility)
 
             let resumed = AtomicOnceFlag()
             let resumeOnce: @Sendable (Bool) -> Void = { value in
@@ -338,12 +341,12 @@ public final class TorManager: ObservableObject {
                 }
             }
 
-            DispatchQueue.global(qos: .utility).asyncAfter(deadline: .now() + 1.0) {
+            probeQueue.asyncAfter(deadline: .now() + 1.0) {
                 resumeOnce(false)
                 conn.cancel()
             }
 
-            conn.start(queue: DispatchQueue.global(qos: .utility))
+            conn.start(queue: probeQueue)
         }
         #else
         _ = socksPort
