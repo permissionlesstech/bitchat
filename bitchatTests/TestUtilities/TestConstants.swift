@@ -58,6 +58,21 @@ struct TestConstants {
     /// expect to succeed reintroduces exactly the flake class it sits next to.
     static let negativeWaitWindow: TimeInterval = 1.0
 
+    /// For an injected **production timer or time window** that must not
+    /// elapse while a test is still stepping through the state it guards.
+    ///
+    /// A test drives a handshake as consecutive synchronous calls, and the
+    /// product arms a teardown timer on the first of them. A starved runner
+    /// can stall between any two calls for longer than any value sized to the
+    /// work — 1 s was outrun, and so was the 20 s production default — so the
+    /// timer wins, the half-open state is torn down, and the next call fails
+    /// in a way that reads like a product bug. Raising the value only scales
+    /// with the stall. Inject this instead, and where expiry is the behaviour
+    /// under test, fire it through the product's DEBUG hook.
+    ///
+    /// Longer than any CI job is allowed to run, so no test run can outlive it.
+    static let unlosableInterval: TimeInterval = 3600
+
 
     static let testNickname1 = "Alice"
     static let testNickname2 = "Bob"
