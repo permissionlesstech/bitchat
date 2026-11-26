@@ -28,6 +28,10 @@ pub async fn handle_socks_connection(
     peer_addr: SocketAddr,
     client: Arc<TorClient<PreferredRuntime>>,
 ) -> io::Result<()> {
+    // Disable Nagle on the local loopback socket to avoid delayed-ACK stalls on
+    // small SOCKS5 handshake replies and WebSocket control/event frames.
+    let _ = stream.set_nodelay(true);
+
     // --- Greeting ---
     // Client sends: VER | NMETHODS | METHODS
     let mut greeting = [0u8; 2];

@@ -7,12 +7,33 @@ struct NostrIdentity: Codable {
     let privateKey: Data
     let publicKey: Data
     let npub: String // Bech32-encoded public key
+    /// Precomputed lowercase hex representation of `publicKey` (32-byte x-only),
+    /// stored once at construction instead of re-encoding on every render/lookup.
+    let publicKeyHex: String
+
+    private enum CodingKeys: String, CodingKey {
+        case privateKey
+        case publicKey
+        case npub
+    }
 
     /// Memberwise initializer
     init(privateKey: Data, publicKey: Data, npub: String, createdAt _: Date) {
         self.privateKey = privateKey
         self.publicKey = publicKey
         self.npub = npub
+        self.publicKeyHex = publicKey.hexEncodedString()
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        let privateKey = try container.decode(Data.self, forKey: .privateKey)
+        let publicKey = try container.decode(Data.self, forKey: .publicKey)
+        let npub = try container.decode(String.self, forKey: .npub)
+        self.privateKey = privateKey
+        self.publicKey = publicKey
+        self.npub = npub
+        self.publicKeyHex = publicKey.hexEncodedString()
     }
     
     /// Generate a new Nostr identity
@@ -38,16 +59,11 @@ struct NostrIdentity: Codable {
         self.privateKey = privateKeyData
         self.publicKey = xOnlyPubkey
         self.npub = try Bech32.encode(hrp: "npub", data: xOnlyPubkey)
+        self.publicKeyHex = xOnlyPubkey.hexEncodedString()
     }
     
     /// Get Schnorr signing key for Nostr event signatures
     func schnorrSigningKey() throws -> P256K.Schnorr.PrivateKey {
         try P256K.Schnorr.PrivateKey(dataRepresentation: privateKey)
-    }
-    
-    /// Get hex-encoded public key (for Nostr events)
-    var publicKeyHex: String {
-        // Public key is already stored as x-only (32 bytes)
-        return publicKey.hexEncodedString()
     }
 }

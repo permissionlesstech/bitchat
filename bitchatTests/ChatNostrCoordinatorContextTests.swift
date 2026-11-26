@@ -139,6 +139,10 @@ private final class MockChatNostrContext: ChatNostrContext {
         recordedNostrEventIDs.append(eventID)
     }
 
+    func recordProcessedEphemeralNostrEvent(_ eventID: String) {
+        recordProcessedNostrEvent(eventID)
+    }
+
     func clearProcessedNostrEvents() {
         processedNostrEventIDs.removeAll()
         clearProcessedNostrEventsCount += 1

@@ -9,12 +9,14 @@
 import SwiftUI
 
 extension Color {
+    private static let maxPeerColorCacheEntries = 512
     private static var peerColorCache: [String: Color] = [:]
-    
+
     init(peerSeed: String, isDark: Bool) {
         let cacheKey = peerSeed + (isDark ? "|dark" : "|light")
         if let cached = Self.peerColorCache[cacheKey] {
             self = cached
+            return
         }
         let h = peerSeed.djb2()
         var hue = Double(h % 1000) / 1000.0
@@ -31,6 +33,9 @@ extension Color {
         let saturation = min(1.0, max(0.50, sBase + (sRand - 0.5) * sRange))
         let brightness = min(1.0, max(0.35, bBase + (bRand - 0.5) * bRange))
         let c = Color(hue: hue, saturation: saturation, brightness: brightness)
+        if Self.peerColorCache.count >= Self.maxPeerColorCacheEntries {
+            Self.peerColorCache.removeAll(keepingCapacity: true)
+        }
         Self.peerColorCache[cacheKey] = c
         self = c
     }

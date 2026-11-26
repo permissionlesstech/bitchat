@@ -13,6 +13,7 @@ protocol NostrInboundPipelineContext: AnyObject {
     // MARK: Event dedup
     func hasProcessedNostrEvent(_ eventID: String) -> Bool
     func recordProcessedNostrEvent(_ eventID: String)
+    func recordProcessedEphemeralNostrEvent(_ eventID: String)
 
     // MARK: Nostr identity & blocking
     func deriveNostrIdentity(forGeohash geohash: String) throws -> NostrIdentity
@@ -69,7 +70,11 @@ extension ChatViewModel: NostrInboundPipelineContext {
     }
 
     func recordProcessedNostrEvent(_ eventID: String) {
-        deduplicationService.recordNostrEvent(eventID)
+        deduplicationService.recordNostrEvent(eventID, persist: true)
+    }
+
+    func recordProcessedEphemeralNostrEvent(_ eventID: String) {
+        deduplicationService.recordNostrEvent(eventID, persist: false)
     }
 
     func setGeoNickname(_ nickname: String, forPubkey pubkeyHex: String) {
@@ -138,7 +143,7 @@ final class NostrInboundPipeline {
             return
         }
 
-        context.recordProcessedNostrEvent(event.id)
+        context.recordProcessedEphemeralNostrEvent(event.id)
 
         if let gh = context.currentGeohash,
            let myGeoIdentity = try? context.deriveNostrIdentity(forGeohash: gh),
@@ -223,7 +228,7 @@ final class NostrInboundPipeline {
             return
         }
         if context.hasProcessedNostrEvent(event.id) { return }
-        context.recordProcessedNostrEvent(event.id)
+        context.recordProcessedEphemeralNostrEvent(event.id)
 
         let powBits = NostrPoW.validatedDifficulty(idHex: event.id, tags: event.tags)
 

@@ -27,6 +27,8 @@ enum BLESourceRouteOriginationPolicy {
         shouldAttemptRoute: (PeerID) -> Bool,
         computeRoute: (PeerID) -> [Data]?
     ) -> [Data]? {
+        guard packet.route == nil,
+              packet.type != MessageType.fragment.rawValue else { return nil }
         guard packet.senderID == localPeerIDData else { return nil }
         guard let recipientData = packet.recipientID,
               recipientData.count == 8,

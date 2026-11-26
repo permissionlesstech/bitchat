@@ -308,10 +308,14 @@ final class MessageDeduplicationService {
     }
 
     /// Records a Nostr event as processed.
-    /// - Parameter eventId: The event ID
-    func recordNostrEvent(_ eventId: String) {
+    /// - Parameters:
+    ///   - eventId: The event ID
+    ///   - persist: Whether to persist the ID across launches (true for
+    ///     private-envelope kind 1059 DMs; false for ephemeral geohash
+    ///     chat/presence kinds 20000/20001).
+    func recordNostrEvent(_ eventId: String, persist: Bool = true) {
         nostrEventCache.record(eventId, value: true)
-        if nostrEventStore != nil {
+        if persist, nostrEventStore != nil {
             pendingPersistIDs.append(eventId)
             schedulePersistIfNeeded()
         }
