@@ -215,7 +215,8 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, SynchronousMessage
     lazy var liveVoiceCoordinator = ChatLiveVoiceCoordinator(
         context: self,
         sweepsOnInit: !TestEnvironment.isRunningTests,
-        asyncStartupSweep: true
+        asyncStartupSweep: true,
+        asyncQuotaEnforcement: !TestEnvironment.isRunningTests
     )
     lazy var verificationCoordinator = ChatVerificationCoordinator(context: self)
     lazy var groupCoordinator = ChatGroupCoordinator(context: self)
@@ -1708,6 +1709,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, SynchronousMessage
         LocationNotesPool.shared.resetForPanic()
         LocationNotesDependencies.clearCachedIdentitiesForPanic()
         WaveformCache.shared.resetForPanic()
+        ImageDownsampler.resetForPanic()
 
         // Drop private group keys and rosters (keychain + disk)
         groupStore.wipe()

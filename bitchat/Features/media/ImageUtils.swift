@@ -17,17 +17,38 @@ enum ImageUtils {
     private static let targetImageBytes: Int = 45_000
     private static let maxSourceImageBytes: Int = 10 * 1024 * 1024
 
+    private static let timestampFormatterLock = NSLock()
+    private static let timestampFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.dateFormat = "yyyyMMdd_HHmmss"
+        return formatter
+    }()
+
     static func processImage(at url: URL, maxDimension: CGFloat = 448, outputDirectory: URL? = nil) throws -> URL {
         try validateImageSource(at: url)
 
-        let data = try Data(contentsOf: url)
-        #if os(iOS)
-        guard let image = UIImage(data: data) else { throw ImageUtilsError.invalidImage }
-        return try processImage(image, maxDimension: maxDimension, outputDirectory: outputDirectory)
-        #else
-        guard let image = NSImage(data: data) else { throw ImageUtilsError.invalidImage }
-        return try processImage(image, maxDimension: maxDimension, outputDirectory: outputDirectory)
-        #endif
+        return try autoreleasepool {
+            let sourceOptions = [kCGImageSourceShouldCache: false] as CFDictionary
+            guard let source = CGImageSourceCreateWithURL(url as CFURL, sourceOptions),
+                  ImageContainerValidator.validateDimensions(of: source) == nil else {
+                throw ImageUtilsError.invalidImage
+            }
+
+            // Downsample directly through ImageIO so sending a 12-48 MP photo never
+            // decodes the full-resolution bitmap into memory.
+            let maxPixelSize = max(1, Int(ceil(maxDimension)))
+            let thumbnailOptions: [CFString: Any] = [
+                kCGImageSourceCreateThumbnailFromImageAlways: true,
+                kCGImageSourceCreateThumbnailWithTransform: true,
+                kCGImageSourceShouldCacheImmediately: false,
+                kCGImageSourceThumbnailMaxPixelSize: maxPixelSize
+            ]
+            guard let cgImage = CGImageSourceCreateThumbnailAtIndex(source, 0, thumbnailOptions as CFDictionary) else {
+                throw ImageUtilsError.invalidImage
+            }
+            return try encodeAndWriteJPEG(from: cgImage, outputDirectory: outputDirectory)
+        }
     }
 
     static func validateImageSource(at url: URL) throws {
@@ -57,25 +78,7 @@ enum ImageUtils {
                 throw ImageUtilsError.encodingFailed
             }
 
-            // Use CGImageDestination to encode without metadata (same as macOS)
-            var quality = compressionQuality
-            guard var jpegData = encodeJPEG(from: cgImage, quality: quality) else {
-                throw ImageUtilsError.encodingFailed
-            }
-
-            // Compress to target size
-            while jpegData.count > targetImageBytes && quality > 0.3 {
-                quality -= 0.1
-                autoreleasepool {
-                    if let next = encodeJPEG(from: cgImage, quality: quality) {
-                        jpegData = next
-                    }
-                }
-            }
-
-            let outputURL = try makeOutputURL(outputDirectory: outputDirectory)
-            try jpegData.write(to: outputURL, options: .atomic)
-            return outputURL
+            return try encodeAndWriteJPEG(from: cgImage, outputDirectory: outputDirectory)
         }
     }
 
@@ -92,27 +95,6 @@ enum ImageUtils {
         let rendered = UIGraphicsGetImageFromCurrentImageContext()
         UIGraphicsEndImageContext()
         return rendered ?? image
-    }
-
-    // Shared EXIF-stripping JPEG encoder for both iOS and macOS
-    private static func encodeJPEG(from cgImage: CGImage, quality: CGFloat) -> Data? {
-        guard let data = CFDataCreateMutable(nil, 0) else {
-            return nil
-        }
-        guard let destination = CGImageDestinationCreateWithData(data, UTType.jpeg.identifier as CFString, 1, nil) else {
-            return nil
-        }
-        // Security: Strip ALL metadata (EXIF, GPS, TIFF, IPTC, XMP)
-        // By only specifying compression quality and no metadata keys,
-        // we ensure a clean JPEG with no privacy-leaking information
-        let options: [CFString: Any] = [
-            kCGImageDestinationLossyCompressionQuality: quality
-        ]
-        CGImageDestinationAddImage(destination, cgImage, options as CFDictionary)
-        guard CGImageDestinationFinalize(destination) else {
-            return nil
-        }
-        return data as Data
     }
     #else
     static func processImage(_ image: NSImage, maxDimension: CGFloat = 448, outputDirectory: URL? = nil) throws -> URL {
@@ -139,21 +121,7 @@ enum ImageUtils {
             guard let cgImage = context.makeImage() else {
                 throw ImageUtilsError.encodingFailed
             }
-            var quality = compressionQuality
-            guard var jpegData = encodeJPEG(from: cgImage, quality: quality) else {
-                throw ImageUtilsError.encodingFailed
-            }
-            while jpegData.count > targetImageBytes && quality > 0.3 {
-                quality -= 0.1
-                autoreleasepool {
-                    if let next = encodeJPEG(from: cgImage, quality: quality) {
-                        jpegData = next
-                    }
-                }
-            }
-            let outputURL = try makeOutputURL(outputDirectory: outputDirectory)
-            try jpegData.write(to: outputURL, options: .atomic)
-            return outputURL
+            return try encodeAndWriteJPEG(from: cgImage, outputDirectory: outputDirectory)
         }
     }
 
@@ -171,6 +139,28 @@ enum ImageUtils {
                    fraction: 1.0)
         scaledImage.unlockFocus()
         return scaledImage
+    }
+    #endif
+
+    private static func encodeAndWriteJPEG(from cgImage: CGImage, outputDirectory: URL?) throws -> URL {
+        var quality = compressionQuality
+        guard var jpegData = encodeJPEG(from: cgImage, quality: quality) else {
+            throw ImageUtilsError.encodingFailed
+        }
+
+        // Compress to target size
+        while jpegData.count > targetImageBytes && quality > 0.3 {
+            quality -= 0.1
+            autoreleasepool {
+                if let next = encodeJPEG(from: cgImage, quality: quality) {
+                    jpegData = next
+                }
+            }
+        }
+
+        let outputURL = try makeOutputURL(outputDirectory: outputDirectory)
+        try jpegData.write(to: outputURL, options: .atomic)
+        return outputURL
     }
 
     // Shared EXIF-stripping JPEG encoder for both iOS and macOS
@@ -193,12 +183,12 @@ enum ImageUtils {
         }
         return data as Data
     }
-    #endif
 
     private static func makeOutputURL(outputDirectory: URL? = nil) throws -> URL {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "yyyyMMdd_HHmmss"
-        let fileName = "img_\(formatter.string(from: Date()))_\(UUID().uuidString).jpg"
+        let timestamp = timestampFormatterLock.withLock {
+            timestampFormatter.string(from: Date())
+        }
+        let fileName = "img_\(timestamp)_\(UUID().uuidString).jpg"
 
         let directory: URL
         if let outputDirectory {

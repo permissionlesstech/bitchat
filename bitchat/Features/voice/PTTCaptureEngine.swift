@@ -189,7 +189,8 @@ final class PTTCaptureEngine: @unchecked Sendable {
         }
 
         engine.inputNode.installTap(onBus: 0, bufferSize: 4096, format: inputFormat) { [weak self] buffer, _ in
-            self?.queue.async { self?.process(buffer, generation: generation) }
+            guard let copied = Self.copyPCMBuffer(buffer) else { return }
+            self?.queue.async { self?.process(copied, generation: generation) }
         }
         // Route/category changes reconfigure the engine underneath the tap;
         // stop and finalize cleanly — the .m4a captured so far still sends.
@@ -322,5 +323,27 @@ final class PTTCaptureEngine: @unchecked Sendable {
             try? FileManager.default.removeItem(at: url)
         }
         fileURL = nil
+    }
+
+    /// Copies PCM samples from CoreAudio's tap buffer into an owned buffer before
+    /// handing off asynchronously so CoreAudio cannot recycle storage mid-encode.
+    private static func copyPCMBuffer(_ buffer: AVAudioPCMBuffer) -> AVAudioPCMBuffer? {
+        let frameLength = buffer.frameLength
+        guard frameLength > 0,
+              let copy = AVAudioPCMBuffer(pcmFormat: buffer.format, frameCapacity: frameLength)
+        else { return nil }
+        copy.frameLength = frameLength
+        let srcList = UnsafeMutableAudioBufferListPointer(buffer.mutableAudioBufferList)
+        let dstList = UnsafeMutableAudioBufferListPointer(copy.mutableAudioBufferList)
+        guard srcList.count == dstList.count else { return nil }
+        for index in 0..<srcList.count {
+            let byteCount = Int(srcList[index].mDataByteSize)
+            guard byteCount > 0,
+                  let srcData = srcList[index].mData,
+                  let dstData = dstList[index].mData else { continue }
+            memcpy(dstData, srcData, byteCount)
+            dstList[index].mDataByteSize = srcList[index].mDataByteSize
+        }
+        return copy
     }
 }

@@ -9,6 +9,7 @@
 @preconcurrency import AVFoundation
 import BitLogger
 import Foundation
+import os
 
 /// The engine operations behind live-burst playback, abstracted so the
 /// player's lifecycle (jitter start, category-escalation restart, stop) is
@@ -127,26 +128,59 @@ private final class PTTPlaybackCompletionState: @unchecked Sendable {
         case retired
     }
 
-    private let lock = NSLock()
+    private let lock: UnsafeMutablePointer<os_unfair_lock>
     private var state: State = .scheduled
+
+    init() {
+        lock = UnsafeMutablePointer<os_unfair_lock>.allocate(capacity: 1)
+        lock.initialize(to: os_unfair_lock())
+    }
+
+    deinit {
+        lock.deinitialize(count: 1)
+        lock.deallocate()
+    }
 
     /// Returns true exactly once when playback completion wins the race with
     /// an engine rebuild or stop.
     func complete() -> Bool {
-        lock.withLock {
-            guard case .scheduled = state else { return false }
-            state = .completed
-            return true
-        }
+        os_unfair_lock_lock(lock)
+        defer { os_unfair_lock_unlock(lock) }
+        guard case .scheduled = state else { return false }
+        state = .completed
+        return true
     }
 
     /// Returns true exactly once when a rebuild or stop claims this
     /// still-pending schedule. Later callbacks from that engine are stale.
     func retireIfPending() -> Bool {
-        lock.withLock {
-            guard case .scheduled = state else { return false }
-            state = .retired
-            return true
+        os_unfair_lock_lock(lock)
+        defer { os_unfair_lock_unlock(lock) }
+        guard case .scheduled = state else { return false }
+        state = .retired
+        return true
+    }
+}
+
+/// Confines stateful AAC decoding to a private serial queue off `@MainActor`.
+private final class PTTDecodeWorker: @unchecked Sendable {
+    private let queue = DispatchQueue(label: "chat.bitchat.ptt.decode", qos: .userInitiated)
+    private let decoder: PTTFrameDecoder
+
+    init(decoder: PTTFrameDecoder) {
+        self.decoder = decoder
+    }
+
+    func decode(_ frames: [Data], completion: @escaping @Sendable ([AVAudioPCMBuffer]) -> Void) {
+        queue.async { [decoder] in
+            var decoded: [AVAudioPCMBuffer] = []
+            decoded.reserveCapacity(frames.count)
+            for frame in frames {
+                if let pcm = decoder.decode(frame) {
+                    decoded.append(pcm)
+                }
+            }
+            completion(decoded)
         }
     }
 }
@@ -173,7 +207,7 @@ final class PTTBurstPlayer {
 
     private let makeEngine: @MainActor () -> PTTPlaybackEngine
     private var engine: PTTPlaybackEngine
-    private let decoder: PTTFrameDecoder
+    private let decodeWorker: PTTDecodeWorker
     private let coordinator: AudioSessionCoordinator
     /// Injectable so tests don't fight over the app-wide exclusive-playback
     /// slot (a parallel test's `play()` would stop this player mid-test).
@@ -181,6 +215,9 @@ final class PTTBurstPlayer {
 
     private var queuedBuffers: [AVAudioPCMBuffer] = []
     private var queuedDuration: TimeInterval = 0
+    /// Number of frame batches currently decoding on `decodeWorker`. Keeps
+    /// `finishAfterDrain()` from treating an in-flight decode as already drained.
+    private var pendingDecodeCount = 0
     private struct ScheduledBuffer {
         let id: UInt64
         let buffer: AVAudioPCMBuffer
@@ -223,7 +260,7 @@ final class PTTBurstPlayer {
         makeEngine: (@MainActor () -> PTTPlaybackEngine)? = nil
     ) {
         guard let format = PTTAudioFormat.pcmFormat, let decoder = PTTFrameDecoder() else { return nil }
-        self.decoder = decoder
+        self.decodeWorker = PTTDecodeWorker(decoder: decoder)
         self.coordinator = coordinator ?? .shared
         self.exclusivity = exclusivity ?? .shared
         let factory = makeEngine ?? { SystemPTTPlaybackEngine(format: format) }
@@ -251,20 +288,28 @@ final class PTTBurstPlayer {
         deadlineTask?.cancel()
     }
 
-    /// Decodes and queues frames (in burst order). Starts playback when the
-    /// jitter buffer fills.
+    /// Decodes frames off-main (in burst order) and schedules/queues them on
+    /// `@MainActor`. Starts playback when the jitter buffer fills.
     func enqueue(_ frames: [Data]) {
-        guard !stopped else { return }
-        for frame in frames {
-            guard let pcm = decoder.decode(frame) else { continue }
-            if engineStarted {
-                schedule(pcm)
-            } else {
-                queuedBuffers.append(pcm)
-                queuedDuration += Double(pcm.frameLength) / PTTAudioFormat.sampleRate
+        guard !stopped, !frames.isEmpty else { return }
+        pendingDecodeCount += 1
+        decodeWorker.decode(frames) { [weak self] decoded in
+            Task { @MainActor [weak self] in
+                guard let self else { return }
+                self.pendingDecodeCount = max(0, self.pendingDecodeCount - 1)
+                guard !self.stopped else { return }
+                for pcm in decoded {
+                    if self.engineStarted {
+                        self.schedule(pcm)
+                    } else {
+                        self.queuedBuffers.append(pcm)
+                        self.queuedDuration += Double(pcm.frameLength) / PTTAudioFormat.sampleRate
+                    }
+                }
+                self.startIfReady(force: self.finished)
+                self.stopIfDrained()
             }
         }
-        startIfReady(force: false)
     }
 
     /// The burst ended: stop once everything scheduled has played out.
@@ -283,6 +328,7 @@ final class PTTBurstPlayer {
     func stop() {
         guard !stopped else { return }
         stopped = true
+        pendingDecodeCount = 0
         deadlineTask?.cancel()
         removeConfigObserver()
         queuedBuffers = []
@@ -477,7 +523,11 @@ final class PTTBurstPlayer {
             guard completionState.complete() else { return }
             Task { @MainActor [weak self] in
                 guard let self, self.engineGeneration == generation else { return }
-                self.scheduledBuffers.removeAll { $0.id == id }
+                if self.scheduledBuffers.first?.id == id {
+                    self.scheduledBuffers.removeFirst()
+                } else {
+                    self.scheduledBuffers.removeAll { $0.id == id }
+                }
                 self.stopIfDrained()
             }
         }
@@ -492,7 +542,7 @@ final class PTTBurstPlayer {
     }
 
     private func stopIfDrained() {
-        guard finished, scheduledBuffers.isEmpty else { return }
+        guard finished, pendingDecodeCount == 0, scheduledBuffers.isEmpty else { return }
         // Started: everything scheduled has played out. Never started with
         // nothing queued or in flight (e.g. no decodable frames): nothing
         // will ever play. Otherwise the engine start is still pending (the

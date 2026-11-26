@@ -77,6 +77,13 @@ struct ImagePreviewView: View {
 
     private func loadImage() {
         let imageURL = url
+        if let cached = ImageDownsampler.cachedImage(
+            for: imageURL,
+            maxPixelSize: ImageDownsampler.fullScreenMaxPixelSize
+        ) {
+            self.platformImage = cached
+            return
+        }
         DispatchQueue.global(qos: .userInitiated).async {
             guard let image = ImageDownsampler.loadDownsampledImage(
                 from: imageURL,

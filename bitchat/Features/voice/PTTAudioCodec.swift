@@ -15,7 +15,9 @@ import Foundation
 /// Not thread-safe — confine to one queue.
 final class PTTFrameEncoder {
     private let converter: AVAudioConverter
+    private let outputBuffer: AVAudioCompressedBuffer
     private var pendingInput: [AVAudioPCMBuffer] = []
+    private var pendingIndex = 0
 
     init?() {
         guard let pcm = PTTAudioFormat.pcmFormat,
@@ -24,6 +26,11 @@ final class PTTFrameEncoder {
         else { return nil }
         converter.bitRate = PTTAudioFormat.bitRate
         self.converter = converter
+        self.outputBuffer = AVAudioCompressedBuffer(
+            format: converter.outputFormat,
+            packetCapacity: 8,
+            maximumPacketSize: max(converter.maximumOutputPacketSize, 1)
+        )
     }
 
     /// Feeds PCM (16 kHz mono float) and returns every complete AAC frame the
@@ -36,18 +43,20 @@ final class PTTFrameEncoder {
     private func drainConverter() -> [Data] {
         var frames: [Data] = []
         while true {
-            let output = AVAudioCompressedBuffer(
-                format: converter.outputFormat,
-                packetCapacity: 8,
-                maximumPacketSize: max(converter.maximumOutputPacketSize, 1)
-            )
+            outputBuffer.packetCount = 0
+            outputBuffer.byteLength = 0
             var error: NSError?
-            let status = converter.convert(to: output, error: &error) { [weak self] _, outStatus in
-                guard let self, let next = self.pendingInput.first else {
+            let status = converter.convert(to: outputBuffer, error: &error) { [weak self] _, outStatus in
+                guard let self, self.pendingIndex < self.pendingInput.count else {
                     outStatus.pointee = .noDataNow
                     return nil
                 }
-                self.pendingInput.removeFirst()
+                let next = self.pendingInput[self.pendingIndex]
+                self.pendingIndex += 1
+                if self.pendingIndex == self.pendingInput.count {
+                    self.pendingInput.removeAll(keepingCapacity: true)
+                    self.pendingIndex = 0
+                }
                 outStatus.pointee = .haveData
                 return next
             }
@@ -55,33 +64,33 @@ final class PTTFrameEncoder {
                 SecureLogger.error("PTT encode failed: \(error?.localizedDescription ?? "unknown")", category: .session)
                 return frames
             }
-            frames.append(contentsOf: Self.extractPackets(from: output))
+            Self.appendPackets(from: outputBuffer, to: &frames)
             // .haveData means the output buffer filled and more may be ready;
             // anything else means the converter wants more input.
             if status != .haveData { return frames }
         }
     }
 
-    private static func extractPackets(from buffer: AVAudioCompressedBuffer) -> [Data] {
-        guard buffer.packetCount > 0, let descriptions = buffer.packetDescriptions else { return [] }
-        var frames: [Data] = []
-        frames.reserveCapacity(Int(buffer.packetCount))
+    private static func appendPackets(from buffer: AVAudioCompressedBuffer, to frames: inout [Data]) {
+        guard buffer.packetCount > 0, let descriptions = buffer.packetDescriptions else { return }
+        frames.reserveCapacity(frames.count + Int(buffer.packetCount))
         for index in 0..<Int(buffer.packetCount) {
             let description = descriptions[index]
             guard description.mDataByteSize > 0 else { continue }
             let start = buffer.data.advanced(by: Int(description.mStartOffset))
             frames.append(Data(bytes: start, count: Int(description.mDataByteSize)))
         }
-        return frames
     }
 }
 
 /// Streaming AAC-LC -> PCM decoder for live voice. Stateful; one instance per
 /// inbound burst. Not thread-safe — confine to one queue/actor.
 final class PTTFrameDecoder {
+    private static let maxFrameBytes = 8 * 1024
+
     private let converter: AVAudioConverter
     private let pcmFormat: AVAudioFormat
-    private let aacFormat: AVAudioFormat
+    private let inputBuffer: AVAudioCompressedBuffer
 
     init?() {
         guard let pcm = PTTAudioFormat.pcmFormat,
@@ -90,22 +99,25 @@ final class PTTFrameDecoder {
         else { return nil }
         self.converter = converter
         self.pcmFormat = pcm
-        self.aacFormat = aac
+        self.inputBuffer = AVAudioCompressedBuffer(
+            format: aac,
+            packetCapacity: 1,
+            maximumPacketSize: Self.maxFrameBytes
+        )
     }
 
     /// Decodes one raw AAC frame to PCM. Returns nil for malformed input or
     /// while the decoder is still priming (the first frame of a stream).
     func decode(_ frame: Data) -> AVAudioPCMBuffer? {
-        guard !frame.isEmpty, frame.count <= 8 * 1024 else { return nil }
+        guard !frame.isEmpty, frame.count <= Self.maxFrameBytes else { return nil }
 
-        let input = AVAudioCompressedBuffer(format: aacFormat, packetCapacity: 1, maximumPacketSize: frame.count)
         frame.withUnsafeBytes { raw in
             guard let base = raw.baseAddress else { return }
-            input.data.copyMemory(from: base, byteCount: frame.count)
+            inputBuffer.data.copyMemory(from: base, byteCount: frame.count)
         }
-        input.byteLength = UInt32(frame.count)
-        input.packetCount = 1
-        input.packetDescriptions?.pointee = AudioStreamPacketDescription(
+        inputBuffer.byteLength = UInt32(frame.count)
+        inputBuffer.packetCount = 1
+        inputBuffer.packetDescriptions?.pointee = AudioStreamPacketDescription(
             mStartOffset: 0,
             mVariableFramesInPacket: 0,
             mDataByteSize: UInt32(frame.count)
@@ -125,7 +137,7 @@ final class PTTFrameDecoder {
             }
             consumed = true
             outStatus.pointee = .haveData
-            return input
+            return self.inputBuffer
         }
         guard status != .error else {
             SecureLogger.debug("PTT decode failed: \(error?.localizedDescription ?? "unknown")", category: .session)

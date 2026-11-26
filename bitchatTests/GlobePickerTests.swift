@@ -1,3 +1,4 @@
+import Combine
 import CoreGraphics
 import Foundation
 import Testing
@@ -481,5 +482,43 @@ struct GeohashPickerTargetTests {
         #expect(GeohashCoverage.level(forLength: 12) == .building)
         #expect(GeohashCoverage.string(forPrecision: 5, locale: Locale(identifier: "de_DE")) == "~4.9 km")
         #expect(GeohashCoverage.string(forPrecision: 2, locale: Locale(identifier: "en_US")) == "~777 mi")
+    }
+
+    @Test func worldDataSortsCitiesStablyByRankAscending() {
+        let cities = [
+            GlobeCity(name: "Low", lat: 0, lon: 0, rank: 4, capital: false, megacity: false),
+            GlobeCity(name: "TopA", lat: 1, lon: 1, rank: 1, capital: true, megacity: false),
+            GlobeCity(name: "Mid", lat: 2, lon: 2, rank: 3, capital: false, megacity: true),
+            GlobeCity(name: "TopB", lat: 3, lon: 3, rank: 1, capital: false, megacity: true)
+        ]
+        let world = GlobeWorldData(land: [], borders: [], cities: cities)
+        #expect(world.cities.map(\.name) == ["TopA", "TopB", "Mid", "Low"])
+    }
+
+    @Test func clipPolygonFastAcceptsInsideAndRejectsOutside() {
+        let rect = GlobeGeometry.ClipRect(left: 0, top: 0, right: 100, bottom: 100)
+        let inside = [CGPoint(x: 10, y: 10), CGPoint(x: 90, y: 10), CGPoint(x: 50, y: 90)]
+        #expect(GlobeGeometry.clipPolygon(inside, to: rect) == inside)
+
+        let outside = [CGPoint(x: 200, y: 200), CGPoint(x: 250, y: 200), CGPoint(x: 220, y: 250)]
+        #expect(GlobeGeometry.clipPolygon(outside, to: rect).isEmpty)
+    }
+
+    @Test func cameraDragWithinCellDoesNotInvalidateChromeObservable() {
+        let state = GlobeState(targetLat: 48.2, targetLon: 16.37, initialPrecision: 2, startZoomedOut: false)
+        state.setViewport(baseRadius: 200, screenMin: 400, animateIntro: false)
+        var chromeInvalidations = 0
+        var cameraInvalidations = 0
+        let chromeSub = state.objectWillChange.sink { chromeInvalidations += 1 }
+        let cameraSub = state.camera.objectWillChange.sink { cameraInvalidations += 1 }
+        defer {
+            chromeSub.cancel()
+            cameraSub.cancel()
+        }
+
+        // Tiny rotation stays within the same precision-2 geohash cell.
+        state.rotateBy(dx: 0.5, dy: 0.5)
+        #expect(cameraInvalidations == 1)
+        #expect(chromeInvalidations == 0)
     }
 }

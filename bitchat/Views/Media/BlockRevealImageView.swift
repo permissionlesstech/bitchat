@@ -247,6 +247,12 @@ struct BlockRevealImageView: View {
         loadGeneration &+= 1
         let generation = loadGeneration
         let imageURL = url
+        if let cached = ImageDownsampler.cachedImage(for: imageURL, maxPixelSize: maxPixelSize) {
+            self.platformImage = cached
+            self.loadedMaxPixelSize = maxPixelSize
+            self.aspectRatio = cached.size.height > 0 ? cached.size.width / cached.size.height : 1
+            return
+        }
         DispatchQueue.global(qos: .userInitiated).async {
             let image = ImageDownsampler.loadDownsampledImage(
                 from: imageURL,
