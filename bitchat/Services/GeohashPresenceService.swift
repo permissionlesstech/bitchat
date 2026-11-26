@@ -78,7 +78,7 @@ final class GeohashPresenceService: ObservableObject {
     ]
 
     private init() {
-        let idBridge = NostrIdentityBridge()
+        let idBridge = NostrIdentityBridge.shared
         self.availableChannelsProvider = { LocationStateManager.shared.availableChannels }
         self.locationChanges = LocationStateManager.shared.$availableChannels.eraseToAnyPublisher()
         self.torReadyPublisher = NotificationCenter.default.publisher(for: .TorDidBecomeReady)

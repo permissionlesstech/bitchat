@@ -61,7 +61,7 @@ final class AppRuntime: ObservableObject {
 
     init(
         keychain: KeychainManagerProtocol = KeychainManager.makeDefault(),
-        idBridge: NostrIdentityBridge = NostrIdentityBridge(),
+        idBridge: NostrIdentityBridge = .shared,
         sharedContentStore: SharedContentStore? = nil
     ) {
         self.idBridge = idBridge

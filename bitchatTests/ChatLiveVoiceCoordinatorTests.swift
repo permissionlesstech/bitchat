@@ -610,6 +610,26 @@ struct ChatLiveVoiceCoordinatorTests {
         #expect(FileManager.default.fileExists(atPath: promoted.path))
     }
 
+    @Test func asyncStartupSweepRemovesStaleLiveCapturesOffMain() async throws {
+        let (store, incoming, cleanup) = try makeTempStore()
+        defer { cleanup() }
+
+        let stale = incoming.appendingPathComponent("voice_live_00cc00cc00cc00cc_ddddeeeeffff0002_dm.aac")
+        let finalized = incoming.appendingPathComponent("voice_00112233445566ff.m4a")
+        try Data([0x01]).write(to: stale)
+        try Data([0x02]).write(to: finalized)
+
+        let context = MockChatLiveVoiceContext()
+        _ = ChatLiveVoiceCoordinator(context: context, fileStore: store, sweepsOnInit: true, asyncStartupSweep: true)
+
+        let swept = await TestHelpers.waitUntil(
+            { !FileManager.default.fileExists(atPath: stale.path) },
+            timeout: TestConstants.settleTimeout
+        )
+        #expect(swept)
+        #expect(FileManager.default.fileExists(atPath: finalized.path))
+    }
+
     @Test func finalizedFallbackSurvivesNextStartupSweep() throws {
         let (store, incoming, cleanup) = try makeTempStore()
         defer { cleanup() }

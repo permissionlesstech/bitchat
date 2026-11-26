@@ -167,7 +167,7 @@ final class BoardManager: ObservableObject {
             return nil
         }
         do {
-            let identity = try NostrIdentityBridge().deriveIdentity(forGeohash: geohash)
+            let identity = try NostrIdentityBridge.shared.deriveIdentity(forGeohash: geohash)
             let event = try NostrProtocol.createGeohashTextNote(
                 content: content,
                 geohash: geohash,
@@ -188,7 +188,7 @@ final class BoardManager: ObservableObject {
         let relays = GeoRelayDirectory.shared.closestRelays(toGeohash: geohash, count: TransportConfig.nostrGeoRelayCount)
         guard !relays.isEmpty else { return }
         do {
-            let identity = try NostrIdentityBridge().deriveIdentity(forGeohash: geohash)
+            let identity = try NostrIdentityBridge.shared.deriveIdentity(forGeohash: geohash)
             let deletion = try NostrProtocol.createDeleteEvent(ofEventID: eventID, senderIdentity: identity)
             NostrRelayManager.shared.sendEvent(deletion, to: relays)
         } catch {

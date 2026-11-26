@@ -223,6 +223,7 @@ final class MessageDeduplicationService {
     private var persistScheduled = false
     private var persistTask: Task<Void, Never>?
     private var pendingPersistIDs: [String] = []
+    private var clearAllGeneration: UInt64 = 0
 
     /// Creates a new deduplication service with specified capacities.
     /// - Parameters:
@@ -241,8 +242,15 @@ final class MessageDeduplicationService {
         self.nostrEventStore = nostrEventStore
         self.nostrEventCapacity = nostrEventCapacity
         if let nostrEventStore {
-            for eventID in nostrEventStore.load() {
-                nostrEventCache.record(eventID, value: true)
+            let generation = clearAllGeneration
+            nostrEventStore.loadAsync { [weak self] eventIDs in
+                guard !eventIDs.isEmpty else { return }
+                Task { @MainActor [weak self] in
+                    guard let self, self.clearAllGeneration == generation else { return }
+                    for eventID in eventIDs where !self.nostrEventCache.contains(eventID) {
+                        self.nostrEventCache.record(eventID, value: true)
+                    }
+                }
             }
         }
     }
@@ -363,6 +371,7 @@ final class MessageDeduplicationService {
     /// Clears all caches. This is the wipe/panic path: the persisted
     /// private-envelope record goes with everything else.
     func clearAll() {
+        clearAllGeneration &+= 1
         persistTask?.cancel()
         persistTask = nil
         persistScheduled = false

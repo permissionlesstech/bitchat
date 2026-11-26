@@ -150,6 +150,7 @@ final class GeoRelayDirectory {
         var observers: [NSObjectProtocol] = []
         var refreshTimer: Timer?
         var retryTask: Task<Void, Never>?
+        var localLoadTask: Task<Void, Never>?
 
         init(notificationCenter: NotificationCenter) {
             self.notificationCenter = notificationCenter
@@ -159,6 +160,7 @@ final class GeoRelayDirectory {
             observers.forEach { notificationCenter.removeObserver($0) }
             refreshTimer?.invalidate()
             retryTask?.cancel()
+            localLoadTask?.cancel()
         }
     }
 
@@ -201,13 +203,14 @@ final class GeoRelayDirectory {
     private let dependencies: GeoRelayDirectoryDependencies
     private let cleanupState: CleanupState
 
+    private var didCompleteLocalLoad = false
     private var retryAttempt: Int = 0
     private var isFetching: Bool = false
 
     private init() {
         self.dependencies = .live()
         self.cleanupState = CleanupState(notificationCenter: dependencies.notificationCenter)
-        entries = loadLocalEntries()
+        startAsyncLocalLoad()
         if dependencies.autoStart {
             registerObservers()
             startRefreshTimer()
@@ -219,6 +222,7 @@ final class GeoRelayDirectory {
         self.dependencies = dependencies
         self.cleanupState = CleanupState(notificationCenter: dependencies.notificationCenter)
         entries = loadLocalEntries()
+        didCompleteLocalLoad = true
         if dependencies.autoStart {
             registerObservers()
             startRefreshTimer()
@@ -226,8 +230,46 @@ final class GeoRelayDirectory {
         }
     }
 
+    private func startAsyncLocalLoad() {
+        let cacheURL = dependencies.cacheURL()
+        let bundleURLs = dependencies.bundledCSVURLs()
+        let cwd = dependencies.currentDirectoryPath()
+        let policy = dependencies.validationPolicy
+
+        cleanupState.localLoadTask = Task { [weak self] in
+            let loaded = await Task.detached(priority: .userInitiated) {
+                Self.loadLocalEntriesOffMain(
+                    cacheURL: cacheURL,
+                    bundleURLs: bundleURLs,
+                    currentDirectoryPath: cwd,
+                    policy: policy
+                )
+            }.value
+            guard !Task.isCancelled, let self else { return }
+            self.cleanupState.localLoadTask = nil
+            self.didCompleteLocalLoad = true
+            if self.entries.isEmpty && !loaded.isEmpty {
+                self.entries = loaded
+                self.dependencies.notificationCenter.post(name: .geoRelayDirectoryDidRefresh, object: nil)
+            }
+        }
+    }
+
+    private func ensureLocalEntriesLoaded() {
+        guard !didCompleteLocalLoad else { return }
+        cleanupState.localLoadTask?.cancel()
+        cleanupState.localLoadTask = nil
+        didCompleteLocalLoad = true
+        if entries.isEmpty {
+            entries = loadLocalEntries()
+        }
+    }
+
     /// Returns up to `count` relay URLs (wss://) closest to the geohash center.
     func closestRelays(toGeohash geohash: String, count: Int = 5) -> [String] {
+        if entries.isEmpty && !didCompleteLocalLoad {
+            ensureLocalEntriesLoaded()
+        }
         guard !entries.isEmpty, count > 0 else { return [] }
         let key = ClosestRelaysCacheKey(geohash: geohash, count: count)
         if let cached = closestRelaysCache[key] {
@@ -246,6 +288,9 @@ final class GeoRelayDirectory {
     /// Ties break by host so every device with the same directory picks the
     /// same relay set — publishers and subscribers must agree on relays.
     func closestRelays(toLat lat: Double, lon: Double, count: Int = 5) -> [String] {
+        if entries.isEmpty && !didCompleteLocalLoad {
+            ensureLocalEntriesLoaded()
+        }
         guard !entries.isEmpty, count > 0 else { return [] }
 
         let rad = Double.pi / 180.0
@@ -470,6 +515,35 @@ final class GeoRelayDirectory {
         return []
     }
 
+    nonisolated private static func loadLocalEntriesOffMain(
+        cacheURL: URL?,
+        bundleURLs: [URL],
+        currentDirectoryPath: String?,
+        policy: GeoRelayDirectoryValidationPolicy
+    ) -> [Entry] {
+        if let cacheURL,
+           let data = try? Data(contentsOf: cacheURL),
+           let entries = validatedEntries(from: data, policy: policy, minimumEntries: 1) {
+            return entries
+        }
+
+        for url in bundleURLs {
+            if let data = try? Data(contentsOf: url),
+               let entries = validatedEntries(from: data, policy: policy, minimumEntries: 1) {
+                return entries
+            }
+        }
+
+        if let cwd = currentDirectoryPath,
+           let data = try? Data(contentsOf: URL(fileURLWithPath: cwd).appendingPathComponent("relays/online_relays_gps.csv")),
+           let entries = validatedEntries(from: data, policy: policy, minimumEntries: 1) {
+            return entries
+        }
+
+        SecureLogger.warning("GeoRelayDirectory: no local CSV found; entries empty", category: .session)
+        return []
+    }
+
     /// Parses the fixed three-column format as an all-or-nothing trust unit.
     /// One malformed or conflicting row rejects the complete dataset rather
     /// than silently shrinking or partially replacing the current directory.
@@ -678,6 +752,8 @@ final class GeoRelayDirectory {
     /// from Application Support.
     func resetForPanic() {
         cancelRetry()
+        cleanupState.localLoadTask?.cancel()
+        cleanupState.localLoadTask = nil
         retryAttempt = 0
         closestRelaysCache.removeAll(keepingCapacity: false)
         dependencies.userDefaults.removeObject(forKey: lastFetchKey)

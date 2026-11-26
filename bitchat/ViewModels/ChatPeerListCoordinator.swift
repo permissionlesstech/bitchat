@@ -65,9 +65,7 @@ extension ChatViewModel: ChatPeerListContext {
     }
 
     func recordMeshSightings(peerIDs: [PeerID]) {
-        for peerID in peerIDs {
-            MeshSightingsTracker.shared.recordSighting(peerID: peerID)
-        }
+        MeshSightingsTracker.shared.recordSightings(peerIDs)
     }
 }
 
