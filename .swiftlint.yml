@@ -14,7 +14,6 @@ disabled_rules:
   - line_length
   - type_name
   - identifier_name
-  - statement_position
   - implicit_optional_initialization
   - force_try
   - vertical_whitespace
