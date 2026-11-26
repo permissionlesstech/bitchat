@@ -50,9 +50,16 @@ enum BLEPeerSenderDisplayName {
         localNickname: String,
         peers: [PeerID: BLEPeerInfo]
     ) -> String {
+        // Folded, for the same reason as `PeerDisplayNameResolver`: the suffix
+        // exists to make namesakes distinguishable, so a case variant or a
+        // fullwidth Ｍ has to count as a collision. This is the second place
+        // collisions are counted — it feeds sender names on file transfers —
+        // and it had the same exact-match blind spot.
+        let target = PeerDisplayNameResolver.collisionKey(collisionNickname)
         let hasCollision = peers.values.contains {
-            $0.isConnected && $0.nickname == collisionNickname && $0.peerID != peerID
-        } || localNickname == collisionNickname
+            $0.isConnected && PeerDisplayNameResolver.collisionKey($0.nickname) == target
+                && $0.peerID != peerID
+        } || PeerDisplayNameResolver.collisionKey(localNickname) == target
 
         guard hasCollision else { return displayName }
         return displayName + "#" + String(peerID.id.prefix(4))

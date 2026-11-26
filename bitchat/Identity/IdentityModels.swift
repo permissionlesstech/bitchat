@@ -202,6 +202,15 @@ struct IdentityCache: Codable {
     // entries verified before this field exists sort as oldest)
     var verifiedAt: [String: Date]? = nil
 
+    /// The self-claimed nickname each fingerprint was presenting at the moment
+    /// trust in it was established here — set on verification and on a first
+    /// accepted vouch. A trust badge means "this key was the Medic I checked",
+    /// so it has to be pinned to the name it was earned under; without this
+    /// baseline a vouched key can rename itself onto a name the user trusts and
+    /// keep rendering the seal beside it. Absent for peers trusted by older
+    /// builds, which is why a missing entry never suppresses a badge.
+    var trustedNicknames: [String: String]? = nil
+
     // Stable Noise fingerprints that proved encrypted private-media support
     // inside an authenticated Noise session. Optional for decoding caches
     // written before this migration. Entries are monotonic until a panic wipe
@@ -240,6 +249,7 @@ struct IdentityCache: Codable {
         vouchesByVouchee = try container.decodeIfPresent([String: [VouchRecord]].self, forKey: .vouchesByVouchee)
         vouchBatchSentAt = try container.decodeIfPresent([String: Date].self, forKey: .vouchBatchSentAt)
         verifiedAt = try container.decodeIfPresent([String: Date].self, forKey: .verifiedAt)
+        trustedNicknames = try container.decodeIfPresent([String: String].self, forKey: .trustedNicknames)
         privateMediaCapableFingerprints = try container.decodeIfPresent(Set<String>.self, forKey: .privateMediaCapableFingerprints)
         authenticatedSigningKeysByFingerprint = try container.decodeIfPresent([String: Data].self, forKey: .authenticatedSigningKeysByFingerprint)
         cryptographicIdentities = try container.decodeIfPresent([String: CryptographicIdentity].self, forKey: .cryptographicIdentities) ?? [:]
