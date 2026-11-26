@@ -125,9 +125,12 @@ enum BLEOutboundFragmentPlanner {
 
         if let requestedMaxChunk {
             guard requestedMaxChunk > 0 else { return nil }
-            // Honor explicit link-MTU-derived budgets for directed packets too
-            // so tight links never clamp upward past the physical MTU.
-            let chunk = packet.recipientID != nil
+            // Honor explicit link-MTU-derived budgets for directed packets and
+            // public file transfers so tight links never clamp upward past the
+            // physical MTU.
+            let honorsTightBudget = packet.recipientID != nil
+                || packet.type == MessageType.fileTransfer.rawValue
+            let chunk = honorsTightBudget
                 ? requestedMaxChunk
                 : max(minimumChunkSize, requestedMaxChunk)
             return (

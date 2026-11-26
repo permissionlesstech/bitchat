@@ -2078,18 +2078,34 @@ final class BLEService: NSObject {
         // reassembler can advertise its own ceiling instead of relying on the
         // capability/type proxy above.
         // Compute link-MTU-aware chunk sizing once so preflight and scheduling
-        // always evaluate the exact same fragment plan, and reject impossible
-        // trains (zero usable payload bytes or > 10,000 fragments) visibly
-        // before scheduler admission rather than substituting the default MTU.
+        // always evaluate the exact same fragment plan, distinguish legacy
+        // Android 256-fragment cap rejections from unusable-link-MTU failures,
+        // and unicast routed media to a healthy first hop without flooding
+        // unrelated alternate links.
+        let isLegacyDirectedFileTransfer = transferId != nil
+            && packetToSend.type == MessageType.fileTransfer.rawValue
+            && PeerID(hexData: packetToSend.recipientID) != nil
         let fileTransferLinkBudget: LinkAwareFragmentBudget = {
-            guard packetToSend.type == MessageType.fileTransfer.rawValue else { return .useDefault }
+            guard packetToSend.type == MessageType.fileTransfer.rawValue else { return .useDefault(routedFirstHop: nil) }
             return linkAwareFragmentBudget(
                 for: packetToSend,
                 pad: padForBLE,
                 targetPeer: PeerID(hexData: packetToSend.recipientID),
-                relayContext: relayContext
+                relayContext: relayContext,
+                legacyFragmentLimit: isLegacyDirectedFileTransfer ? BLEOutboundFragmentPlanner.privateMediaV1MaxFragments : nil
             )
         }()
+
+        let legacyFragmentLimitReason = String(
+            localized: "content.delivery.reason.private_media_too_many_fragments",
+            defaultValue: "File is too large for this contact's client (more than 256 mesh fragments)",
+            comment: "Failure reason when private media exceeds the Android-compatible fragment limit"
+        )
+        let linkDeliveryFailedReason = String(
+            localized: "content.delivery.reason.send_error",
+            defaultValue: "send error",
+            comment: "Failure reason when no connected link MTU can carry the file fragment train"
+        )
 
         func rejectBeforeTransferStart(transferId: String, reason: String) {
             TransferProgressManager.shared.rejectBeforeStart(id: transferId, reason: reason)
@@ -2098,28 +2114,42 @@ final class BLEService: NSObject {
             }
         }
 
-        if packetToSend.type == MessageType.fileTransfer.rawValue,
-           case .noCapableLink = fileTransferLinkBudget {
-            if let transferId {
-                SecureLogger.warning(
-                    "Private media rejected: no connected link MTU can carry fragment train",
-                    category: .security
-                )
-                rejectBeforeTransferStart(
-                    transferId: transferId,
-                    reason: String(
-                        localized: "content.delivery.reason.private_media_too_many_fragments",
-                        defaultValue: "File is too large for this contact's client (more than 256 mesh fragments)",
-                        comment: "Failure reason when private media exceeds the Android-compatible fragment limit"
+        if packetToSend.type == MessageType.fileTransfer.rawValue {
+            switch fileTransferLinkBudget {
+            case .noCapableLink:
+                if let transferId {
+                    SecureLogger.warning(
+                        "File transfer rejected: no connected link MTU can carry fragment train",
+                        category: .security
                     )
-                )
+                    rejectBeforeTransferStart(transferId: transferId, reason: linkDeliveryFailedReason)
+                }
+                return
+            case .exceedsLegacyFragmentLimit:
+                if let transferId {
+                    SecureLogger.warning(
+                        "Private media rejected: exceeds cross-platform 256-fragment limit",
+                        category: .security
+                    )
+                    rejectBeforeTransferStart(transferId: transferId, reason: legacyFragmentLimitReason)
+                }
+                return
+            case .useDefault, .maxChunk:
+                break
             }
-            return
         }
 
         let fileTransferLinkChunk: Int? = {
-            if case let .maxChunk(chunk) = fileTransferLinkBudget { return chunk }
+            if case let .maxChunk(chunk, _) = fileTransferLinkBudget { return chunk }
             return nil
+        }()
+        let fileTransferRoutedFirstHop: PeerID? = {
+            switch fileTransferLinkBudget {
+            case let .useDefault(firstHop), let .maxChunk(_, firstHop):
+                return firstHop
+            case .exceedsLegacyFragmentLimit, .noCapableLink:
+                return nil
+            }
         }()
 
         if let transferId,
@@ -2141,14 +2171,7 @@ final class BLEService: NSObject {
                     "Private media rejected: exceeds cross-platform 256-fragment limit",
                     category: .security
                 )
-                rejectBeforeTransferStart(
-                    transferId: transferId,
-                    reason: String(
-                        localized: "content.delivery.reason.private_media_too_many_fragments",
-                        defaultValue: "File is too large for this contact's client (more than 256 mesh fragments)",
-                        comment: "Failure reason when private media exceeds the Android-compatible fragment limit"
-                    )
-                )
+                rejectBeforeTransferStart(transferId: transferId, reason: legacyFragmentLimitReason)
                 return
             }
         }
@@ -2170,6 +2193,7 @@ final class BLEService: NSObject {
         // private media (both routed and direct recipients) before exposing
         // the outbound tap or admitting to the fragment scheduler.
         let encryptedPrivateMediaChunk: Int?
+        let encryptedPrivateMediaDirectedPeer: PeerID?
         if packetToSend.type == MessageType.noiseEncrypted.rawValue,
            let transferId,
            let recipientPeerID = PeerID(hexData: packetToSend.recipientID) {
@@ -2179,27 +2203,23 @@ final class BLEService: NSObject {
                 targetPeer: recipientPeerID,
                 relayContext: relayContext
             ) {
-            case .useDefault:
+            case let .useDefault(firstHop):
                 encryptedPrivateMediaChunk = nil
-            case let .maxChunk(chunk):
+                encryptedPrivateMediaDirectedPeer = firstHop ?? recipientPeerID
+            case let .maxChunk(chunk, firstHop):
                 encryptedPrivateMediaChunk = chunk
-            case .noCapableLink:
+                encryptedPrivateMediaDirectedPeer = firstHop ?? ((packetToSend.route?.isEmpty == false) ? nil : recipientPeerID)
+            case .exceedsLegacyFragmentLimit, .noCapableLink:
                 SecureLogger.warning(
                     "Encrypted private media rejected: no connected link MTU can carry fragment train",
                     category: .security
                 )
-                rejectBeforeTransferStart(
-                    transferId: transferId,
-                    reason: String(
-                        localized: "content.delivery.reason.private_media_too_many_fragments",
-                        defaultValue: "File is too large for this contact's client (more than 256 mesh fragments)",
-                        comment: "Failure reason when private media exceeds the Android-compatible fragment limit"
-                    )
-                )
+                rejectBeforeTransferStart(transferId: transferId, reason: linkDeliveryFailedReason)
                 return
             }
         } else {
             encryptedPrivateMediaChunk = nil
+            encryptedPrivateMediaDirectedPeer = nil
         }
 
         #if DEBUG
@@ -2211,7 +2231,7 @@ final class BLEService: NSObject {
                 packetToSend,
                 pad: padForBLE,
                 maxChunk: fileTransferLinkChunk,
-                directedOnlyPeer: nil,
+                directedOnlyPeer: fileTransferRoutedFirstHop,
                 transferId: transferId,
                 requiresPrivateMediaAdmission: requiresPrivateMediaAdmission,
                 relayContext: relayContext
@@ -2222,13 +2242,12 @@ final class BLEService: NSObject {
         // Always fragment that outer packet so the existing transfer scheduler
         // retains progress/cancel behavior without exposing the file TLVs.
         if packetToSend.type == MessageType.noiseEncrypted.rawValue,
-           let transferId,
-           let recipientPeerID = PeerID(hexData: packetToSend.recipientID) {
+           let transferId {
             sendFragmentedPacket(
                 packetToSend,
                 pad: padForBLE,
                 maxChunk: encryptedPrivateMediaChunk,
-                directedOnlyPeer: recipientPeerID,
+                directedOnlyPeer: encryptedPrivateMediaDirectedPeer,
                 transferId: transferId,
                 requiresPrivateMediaAdmission: requiresPrivateMediaAdmission
             )
@@ -2349,62 +2368,78 @@ final class BLEService: NSObject {
     }
 
     private enum LinkAwareFragmentBudget: Equatable {
-        case useDefault
-        case maxChunk(Int)
+        case useDefault(routedFirstHop: PeerID?)
+        case maxChunk(Int, routedFirstHop: PeerID?)
+        case exceedsLegacyFragmentLimit
         case noCapableLink
     }
 
     private struct BLEPhysicalLinkSnapshot {
-        let allPeripheralStates: [BLEPeripheralLinkState]
         let writablePeripheralStates: [BLEPeripheralLinkState]
+        let writablePeripheralIDs: [String]
+        let writablePeripheralLimits: [Int]
+        let liveConnectedPeripheralIDs: Set<String>
         let subscribedCentrals: [CBCentral]
         let activeCharacteristic: CBMutableCharacteristic?
         let centralIDs: [String]
         let centralNotifyLimits: [Int]
         let usesVirtualCentrals: Bool
-
-        var writablePeripheralIDs: [String] {
-            writablePeripheralStates.map { $0.peripheral.identifier.uuidString }
-        }
-
-        var writablePeripheralLimits: [Int] {
-            writablePeripheralStates.map { $0.peripheral.maximumWriteValueLength(for: .withoutResponse) }
-        }
     }
 
     /// Snapshots physical peripherals, subscribed centrals, the peripheral
-    /// characteristic, and (in DEBUG) virtual central MTUs atomically on
+    /// characteristic, and scalar link IDs + MTU limits atomically on
     /// `bleQueue` so preflight sizing and outbound link dispatch inspect the
-    /// exact same live writable-link inventory.
+    /// exact same live writable-link inventory and MTU values without crossing
+    /// queue boundaries.
     private func snapshotPhysicalLinks() -> BLEPhysicalLinkSnapshot {
         let raw = readLinkState { store -> (
-            peripherals: [BLEPeripheralLinkState],
+            writablePeripherals: [BLEPeripheralLinkState],
+            writablePeripheralIDs: [String],
+            writablePeripheralLimits: [Int],
+            liveConnectedPeripheralIDs: Set<String>,
             centrals: [CBCentral],
+            centralIDs: [String],
+            centralLimits: [Int],
             characteristic: CBMutableCharacteristic?
         ) in
             let ch = self.characteristic
+            let allPeripherals = store.peripheralStates
+            let writablePeripherals = allPeripherals.filter { $0.isConnected && $0.characteristic != nil }
+            let writableIDs = writablePeripherals.map { $0.peripheral.identifier.uuidString }
+            let writableLimits = writablePeripherals.map { $0.peripheral.maximumWriteValueLength(for: .withoutResponse) }
+            let liveConnectedIDs = Set(allPeripherals.filter(\.isConnected).map { $0.peripheral.identifier.uuidString })
             let centrals = ch == nil ? [] : store.subscribedCentrals
-            return (store.peripheralStates, centrals, ch)
+            let centralIDs = centrals.map { $0.identifier.uuidString }
+            let centralLimits = centrals.map { $0.maximumUpdateValueLength }
+            return (
+                writablePeripherals,
+                writableIDs,
+                writableLimits,
+                liveConnectedIDs,
+                centrals,
+                centralIDs,
+                centralLimits,
+                ch
+            )
         }
-        let writablePeripherals = raw.peripherals.filter { $0.isConnected && $0.characteristic != nil }
         #if DEBUG
         let virtualCentralIDs = shouldInitializeBluetoothManagers ? [] : (_test_virtualCentralIDs?() ?? [])
         let usesVirtualCentrals = raw.centrals.isEmpty && !virtualCentralIDs.isEmpty
-        let centralIDs = usesVirtualCentrals
-            ? virtualCentralIDs
-            : raw.centrals.map { $0.identifier.uuidString }
+        let centralIDs = usesVirtualCentrals ? virtualCentralIDs : raw.centralIDs
         let centralNotifyLimits = usesVirtualCentrals
             ? virtualCentralIDs.map { _test_virtualCentralMTU?($0) ?? bleMaxMTU }
-            : raw.centrals.map { $0.maximumUpdateValueLength }
+            : raw.centralLimits
         #else
         let usesVirtualCentrals = false
-        let centralIDs = raw.centrals.map { $0.identifier.uuidString }
-        let centralNotifyLimits = raw.centrals.map { $0.maximumUpdateValueLength }
+        let centralIDs = raw.centralIDs
+        let centralNotifyLimits = raw.centralLimits
         #endif
 
         return BLEPhysicalLinkSnapshot(
-            allPeripheralStates: raw.peripherals,
-            writablePeripheralStates: writablePeripherals,
+            writablePeripheralStates: raw.writablePeripherals,
+            writablePeripheralIDs: raw.writablePeripheralIDs,
+            writablePeripheralLimits: raw.writablePeripheralLimits,
+            liveConnectedPeripheralIDs: raw.liveConnectedPeripheralIDs,
             subscribedCentrals: raw.centrals,
             activeCharacteristic: raw.characteristic,
             centralIDs: centralIDs,
@@ -2413,92 +2448,210 @@ final class BLEService: NSObject {
         )
     }
 
+    /// Computes echo-excluded links (ingress link plus surviving sibling links
+    /// of the recorded ingress/previous-hop peer unless ingress was rebound to
+    /// another peer). Shared by `linkAwareFragmentBudget` and `sendOnAllLinks`
+    /// so preflight sizing never inspects a link that dispatch will exclude.
+    private func excludedEchoLinks(
+        ingressRecord: BLEIngressLinkRecord?,
+        effectiveIngressLink: BLEIngressLinkID?,
+        rawPreviousHop: PeerID?
+    ) -> Set<BLEIngressLinkID> {
+        var excluded = Set<BLEIngressLinkID>()
+        if let effectiveIngressLink {
+            excluded.insert(effectiveIngressLink)
+        }
+        let recordedEchoPeer = rawPreviousHop ?? ingressRecord?.peerID
+        let ingressReboundToOtherPeer: Bool = {
+            guard let effectiveIngressLink,
+                  let recordedEchoPeer,
+                  let currentOwner = linkBindings.boundPeer(for: effectiveIngressLink) else {
+                return false
+            }
+            return currentOwner != recordedEchoPeer
+        }()
+        if !ingressReboundToOtherPeer {
+            excluded.formUnion(links(to: ingressRecord?.peerID))
+            if let rawPreviousHop {
+                excluded.formUnion(links(to: rawPreviousHop))
+            }
+        }
+        return excluded
+    }
+
     /// Computes a link-MTU-aware fragment chunk budget for packets sent
     /// directly through `sendFragmentedPacket` (such as routed or directed
     /// `FILE_TRANSFER` and app-originated encrypted private media). Excludes
-    /// ingress links when relaying, prefers the immediate next hop (`route[0]`)
-    /// only for locally originated routed packets (or direct recipient when
-    /// unrouted), and returns `.noCapableLink` when candidate links exist but
-    /// none can carry the packet within the receiver's 10,000-fragment ceiling.
+    /// ingress and sibling echo links when relaying, prefers a capable link to
+    /// `route[0]` (falling back to alternate links if `route[0]`'s MTU cannot
+    /// carry the packet), picks the best viable sibling MTU for single-peer
+    /// targets so an undersized sibling does not trigger false rejection, and
+    /// distinguishes `.exceedsLegacyFragmentLimit` from `.noCapableLink`.
     private func linkAwareFragmentBudget(
         for packet: BitchatPacket,
         pad: Bool,
         targetPeer: PeerID? = nil,
-        relayContext: BLERelaySendContext? = nil
+        relayContext: BLERelaySendContext? = nil,
+        legacyFragmentLimit: Int? = nil
     ) -> LinkAwareFragmentBudget {
-        let dataCount = packet.toBinaryData(padding: pad)?.count
+        guard let dataCount = packet.toBinaryData(padding: pad)?.count else {
+            return .noCapableLink
+        }
         let isRouted = !(packet.route?.isEmpty ?? true)
         let isLocallyOriginated = relayContext == nil && PeerID(hexData: packet.senderID) == myPeerID
-        let ingressRecord = (packet.isRSR && packet.ttl == 0) ? nil : ingressLinks.record(for: packet)
-        let excludedIngressLink = (packet.isRSR && packet.ttl == 0) ? nil : (relayContext?.ingressLink ?? ingressRecord?.link)
-
-        let preferredPeer: PeerID? = {
-            if isLocallyOriginated,
-               let firstHopData = packet.route?.first,
-               let firstHopPeer = routingPeer(from: firstHopData) {
-                return firstHopPeer
-            }
-            if isLocallyOriginated || !isRouted {
-                return targetPeer
-            }
-            return nil
-        }()
+        let isSolicitedSyncReplay = packet.isRSR && packet.ttl == 0
+        let ingressRecord = isSolicitedSyncReplay ? nil : ingressLinks.record(for: packet)
+        let effectiveIngressLink = isSolicitedSyncReplay ? nil : (relayContext?.ingressLink ?? ingressRecord?.link)
+        let rawPreviousHop = isSolicitedSyncReplay
+            ? nil
+            : (relayContext != nil ? relayContext?.previousHopPeerID : ingressRecord?.previousHopPeerID)
+        let excludedLinks = excludedEchoLinks(
+            ingressRecord: ingressRecord,
+            effectiveIngressLink: effectiveIngressLink,
+            rawPreviousHop: rawPreviousHop
+        )
 
         let snapshot = snapshotPhysicalLinks()
         let peripheralEntries: [(id: String, limit: Int)] = zip(
             snapshot.writablePeripheralIDs,
             snapshot.writablePeripheralLimits
         ).compactMap { id, limit in
-            if excludedIngressLink == .peripheral(id) { return nil }
-            return (id, limit)
+            excludedLinks.contains(.peripheral(id)) ? nil : (id, limit)
         }
         let centralEntries: [(id: String, limit: Int)] = zip(
             snapshot.centralIDs,
             snapshot.centralNotifyLimits
         ).compactMap { id, limit in
-            if excludedIngressLink == .central(id) { return nil }
-            return (id, limit)
+            excludedLinks.contains(.central(id)) ? nil : (id, limit)
+        }
+        let allEligibleLimits = peripheralEntries.map(\.limit) + centralEntries.map(\.limit)
+        guard !allEligibleLimits.isEmpty else {
+            return .useDefault(routedFirstHop: nil)
         }
 
-        var candidateLimits: [Int] = []
-        if let preferredPeer {
+        func limits(for peer: PeerID) -> [Int] {
             let pLimits = peripheralEntries.compactMap { entry in
-                linkBindings.peer(forPeripheralID: entry.id) == preferredPeer ? entry.limit : nil
+                linkBindings.peer(forPeripheralID: entry.id) == peer ? entry.limit : nil
             }
             let cLimits = centralEntries.compactMap { entry in
-                linkBindings.peer(forCentralUUID: entry.id) == preferredPeer ? entry.limit : nil
+                linkBindings.peer(forCentralUUID: entry.id) == peer ? entry.limit : nil
             }
-            candidateLimits = pLimits + cLimits
-        }
-        if candidateLimits.isEmpty {
-            candidateLimits = peripheralEntries.map(\.limit) + centralEntries.map(\.limit)
-        }
-        guard !candidateLimits.isEmpty else {
-            return .useDefault
+            return pLimits + cLimits
         }
 
-        let capableLimits = candidateLimits.filter { limit in
-            if let dataCount, dataCount <= limit { return true }
-            return BLEOutboundPacketPolicy.fragmentChunkSize(
+        func evaluateLimits(
+            _ candidateLimits: [Int],
+            pickBestSinglePeerLink: Bool,
+            routedFirstHop: PeerID?
+        ) -> LinkAwareFragmentBudget {
+            let maxAllowed = legacyFragmentLimit ?? BLEOutboundFragmentPlanner.maxSupportedFragments
+            let receiverCapable = candidateLimits.filter { limit in
+                if dataCount <= limit { return true }
+                return BLEOutboundPacketPolicy.fragmentChunkSize(
+                    for: packet,
+                    linkLimit: limit,
+                    dataCount: dataCount,
+                    maxFragments: BLEOutboundFragmentPlanner.maxSupportedFragments
+                ) != nil
+            }
+            guard !receiverCapable.isEmpty else {
+                return .noCapableLink
+            }
+            let policyCapable: [Int]
+            if let legacyFragmentLimit {
+                policyCapable = receiverCapable.filter { limit in
+                    if dataCount <= limit { return true }
+                    return BLEOutboundPacketPolicy.fragmentChunkSize(
+                        for: packet,
+                        linkLimit: limit,
+                        dataCount: dataCount,
+                        maxFragments: legacyFragmentLimit
+                    ) != nil
+                }
+                guard !policyCapable.isEmpty else {
+                    return .exceedsLegacyFragmentLimit
+                }
+            } else {
+                policyCapable = receiverCapable
+            }
+            // For a single-peer target (`route[0]` or direct recipient),
+            // duplicate links collapse onto a single usable link, so pick the
+            // largest capable sibling MTU; for multi-peer broadcast/fallback,
+            // size to the smallest capable link so every target fits.
+            let chosenLimit = pickBestSinglePeerLink ? policyCapable.max() : policyCapable.min()
+            guard let chosenLimit else {
+                return .noCapableLink
+            }
+            guard chosenLimit < bleMaxMTU || isRouted else {
+                return .useDefault(routedFirstHop: routedFirstHop)
+            }
+            guard let chunk = BLEOutboundPacketPolicy.fragmentChunkSize(
                 for: packet,
-                linkLimit: limit,
-                dataCount: dataCount
-            ) != nil
+                linkLimit: chosenLimit,
+                dataCount: dataCount,
+                maxFragments: maxAllowed
+            ) else {
+                return legacyFragmentLimit != nil ? .exceedsLegacyFragmentLimit : .noCapableLink
+            }
+            return .maxChunk(chunk, routedFirstHop: routedFirstHop)
         }
-        guard let minLimit = capableLimits.min() else {
-            return .noCapableLink
+
+        // 1. Locally originated routed send: try `route[0]` first; if healthy
+        //    and capable, unicast to `route[0]` only. If `route[0]` cannot
+        //    carry the routed train (e.g., 54-byte MTU), fall back to checking
+        //    alternate non-excluded links for conservative broadcast fallback.
+        if isLocallyOriginated,
+           let firstHopData = packet.route?.first,
+           let firstHopPeer = routingPeer(from: firstHopData) {
+            let firstHopLimits = limits(for: firstHopPeer)
+            if !firstHopLimits.isEmpty {
+                let firstHopBudget = evaluateLimits(
+                    firstHopLimits,
+                    pickBestSinglePeerLink: true,
+                    routedFirstHop: firstHopPeer
+                )
+                switch firstHopBudget {
+                case .useDefault, .maxChunk:
+                    return firstHopBudget
+                case .exceedsLegacyFragmentLimit, .noCapableLink:
+                    // Check alternate links (excluding firstHop's incapable links)
+                    // before failing the transfer outright.
+                    let firstHopExcluded = links(to: firstHopPeer)
+                    let alternateLimits = peripheralEntries.compactMap {
+                        firstHopExcluded.contains(.peripheral($0.id)) ? nil : $0.limit
+                    } + centralEntries.compactMap {
+                        firstHopExcluded.contains(.central($0.id)) ? nil : $0.limit
+                    }
+                    if !alternateLimits.isEmpty {
+                        return evaluateLimits(
+                            alternateLimits,
+                            pickBestSinglePeerLink: false,
+                            routedFirstHop: nil
+                        )
+                    }
+                    return firstHopBudget
+                }
+            }
         }
-        guard minLimit < bleMaxMTU || isRouted else {
-            return .useDefault
+
+        // 2. Direct unrouted send to a bound peer: use its best capable sibling MTU.
+        if !isRouted, let targetPeer {
+            let directLimits = limits(for: targetPeer)
+            if !directLimits.isEmpty {
+                return evaluateLimits(
+                    directLimits,
+                    pickBestSinglePeerLink: true,
+                    routedFirstHop: nil
+                )
+            }
         }
-        guard let chunk = BLEOutboundPacketPolicy.fragmentChunkSize(
-            for: packet,
-            linkLimit: minLimit,
-            dataCount: dataCount
-        ) else {
-            return .noCapableLink
-        }
-        return .maxChunk(chunk)
+
+        // 3. Multi-peer broadcast or routed conservative flood fallback.
+        return evaluateLimits(
+            allEligibleLimits,
+            pickBestSinglePeerLink: false,
+            routedFirstHop: nil
+        )
     }
 
     private func sendGenericBroadcast(
@@ -2649,7 +2802,6 @@ final class BLEService: NSObject {
         // characteristic atomically on bleQueue so radio transitions cannot split
         // liveness checks from the write/notify targets.
         let physicalSnapshot = snapshotPhysicalLinks()
-        let states = physicalSnapshot.allPeripheralStates
         // A link without a discovered characteristic cannot be written to
         // (the write loop below skips it); offering it to the planner only
         // wastes fanout slots — and a peer's single collapsed copy would be
@@ -2668,7 +2820,7 @@ final class BLEService: NSObject {
         // Re-verify the ingress link binding against verified engine bindings
         // and the physical BLE link snapshot so a disconnected, unverified, or
         // rebound link cannot prune live neighbor paths.
-        let liveConnectedPeripheralIDs = Set(states.filter(\.isConnected).map { $0.peripheral.identifier.uuidString })
+        let liveConnectedPeripheralIDs = physicalSnapshot.liveConnectedPeripheralIDs
         let liveCentralIDs = Set(centralIDs)
         let verifiedPreviousHop = verifiedLivePreviousHop(
             for: effectiveIngressLink,
@@ -2681,21 +2833,13 @@ final class BLEService: NSObject {
         // before scheduling or mid-fragment-train), unless that ingress link
         // was rebound to a different peer. After a rebind, stop excluding the
         // old owner's sibling links too.
-        let recordedEchoPeer = rawPreviousHop ?? ingressRecord?.peerID
-        let ingressReboundToOtherPeer: Bool = {
-            guard let effectiveIngressLink,
-                  let recordedEchoPeer,
-                  let currentOwner = linkBindings.boundPeer(for: effectiveIngressLink) else {
-                return false
-            }
-            return currentOwner != recordedEchoPeer
-        }()
-        var excludedPeerLinks: Set<BLEIngressLinkID> = []
-        if !ingressReboundToOtherPeer {
-            excludedPeerLinks.formUnion(links(to: ingressRecord?.peerID))
-            if let rawPreviousHop {
-                excludedPeerLinks.formUnion(links(to: rawPreviousHop))
-            }
+        var excludedPeerLinks = excludedEchoLinks(
+            ingressRecord: ingressRecord,
+            effectiveIngressLink: effectiveIngressLink,
+            rawPreviousHop: rawPreviousHop
+        )
+        if let effectiveIngressLink {
+            excludedPeerLinks.remove(effectiveIngressLink)
         }
         if requireNoiseAuthenticatedPeerLink {
             guard let directedOnlyPeer else { return false }
@@ -2745,7 +2889,7 @@ final class BLEService: NSObject {
             packet: packet,
             dataCount: data.count,
             peripheralIDs: connectedPeripheralIDs,
-            peripheralWriteLimits: connectedStates.map { $0.peripheral.maximumWriteValueLength(for: .withoutResponse) },
+            peripheralWriteLimits: physicalSnapshot.writablePeripheralLimits,
             centralIDs: centralIDs,
             centralNotifyLimits: centralNotifyLimits,
             ingressRecord: effectiveIngressRecord,
@@ -6319,6 +6463,15 @@ extension BLEService {
                     to: directedPeer,
                     requireDirectPeerLink: true,
                     requireNoiseAuthenticatedPeerLink: request.requireNoiseAuthenticatedPeerLink
+                )
+            }
+            if let routedNextHop = request.directedPeer,
+               let route = fragmentPacket.route,
+               !route.isEmpty {
+                return self.sendPacketDirected(
+                    fragmentPacket,
+                    to: routedNextHop,
+                    requireDirectPeerLink: false
                 )
             }
             self.broadcastPacket(fragmentPacket, relayContext: request.relayContext)

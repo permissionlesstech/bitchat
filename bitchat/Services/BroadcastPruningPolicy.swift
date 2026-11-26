@@ -109,41 +109,23 @@ enum BroadcastPruningPolicy {
         now: Date? = nil
     ) -> Set<BLEIngressLinkID> {
         var excluded = Set<BLEIngressLinkID>()
+        let candidates: [(link: BLEIngressLinkID, peerID: PeerID?)] =
+            peripheralIDs.map { (.peripheral($0), peripheralPeerBindings[$0]) }
+            + centralIDs.map { (.central($0), centralPeerBindings[$0]) }
 
-        for peripheralID in peripheralIDs {
-            let link = BLEIngressLinkID.peripheral(peripheralID)
-            if shouldSkipTarget(
-                packet: packet,
-                localPeerID: localPeerID,
-                targetPeerID: peripheralPeerBindings[peripheralID],
-                targetLink: link,
-                ingressLink: ingressLink,
-                previousHopPeerID: previousHopPeerID,
-                skipNeighborPruning: skipNeighborPruning,
-                topology: topology,
-                edgeMaxAge: edgeMaxAge,
-                now: now
-            ) {
-                excluded.insert(link)
-            }
-        }
-
-        for centralID in centralIDs {
-            let link = BLEIngressLinkID.central(centralID)
-            if shouldSkipTarget(
-                packet: packet,
-                localPeerID: localPeerID,
-                targetPeerID: centralPeerBindings[centralID],
-                targetLink: link,
-                ingressLink: ingressLink,
-                previousHopPeerID: previousHopPeerID,
-                skipNeighborPruning: skipNeighborPruning,
-                topology: topology,
-                edgeMaxAge: edgeMaxAge,
-                now: now
-            ) {
-                excluded.insert(link)
-            }
+        for candidate in candidates where shouldSkipTarget(
+            packet: packet,
+            localPeerID: localPeerID,
+            targetPeerID: candidate.peerID,
+            targetLink: candidate.link,
+            ingressLink: ingressLink,
+            previousHopPeerID: previousHopPeerID,
+            skipNeighborPruning: skipNeighborPruning,
+            topology: topology,
+            edgeMaxAge: edgeMaxAge,
+            now: now
+        ) {
+            excluded.insert(candidate.link)
         }
 
         return excluded
