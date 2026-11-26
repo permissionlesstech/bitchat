@@ -18,6 +18,8 @@ protocol GeoPresenceContext: AnyObject {
     func deriveNostrIdentity(forGeohash geohash: String) throws -> NostrIdentity
     func isNostrBlocked(pubkeyHexLowercased: String) -> Bool
     func parseMentions(from content: String) -> [String]
+    /// Hides public spam; shared with the open channel's intake.
+    var spamFilter: SpamFilter { get }
 
     func recordGeoParticipant(pubkeyHex: String, geohash: String, seenAt: Date)
     func geoParticipantCount(for geohash: String) -> Int
@@ -127,6 +129,16 @@ final class GeoPresenceTracker {
         if context.isNostrBlocked(pubkeyHexLowercased: event.pubkey.lowercased()) { return }
         if let my = try? context.deriveNostrIdentity(forGeohash: gh),
            my.publicKeyHex.lowercased() == event.pubkey.lowercased() {
+            return
+        }
+        // Spam neither hints at a lively nearby chat nor notifies. Same
+        // event ID as the open channel's copy, so it is judged only once.
+        if context.spamFilter.check(
+            senderKey: SpamFilter.nostrSenderKey(pubkeyHex: event.pubkey),
+            messageID: event.id,
+            content: content,
+            timestamp: min(Date(timeIntervalSince1970: TimeInterval(event.created_at)), Date())
+        ).isSpam {
             return
         }
 

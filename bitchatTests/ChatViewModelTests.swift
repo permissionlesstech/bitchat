@@ -791,6 +791,9 @@ struct ChatViewModelRateLimitingTests {
     @Test @MainActor
     func handlePublicMessage_rateLimitsBurstBySender() async {
         let (viewModel, _) = makeTestableViewModel()
+        // "rate-msg-N" are near-copies the spam filter would hide; this
+        // measures the per-sender limiter alone.
+        viewModel.spamFilter.enabled = false
         let senderID = PeerID(str: "1122334455667788")
         let now = Date()
 

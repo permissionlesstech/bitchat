@@ -199,6 +199,8 @@ private final class MockChatPublicConversationContext: ChatPublicConversationCon
         return rateLimitAllowed
     }
 
+    let spamFilter = SpamFilter()
+
     func enqueuePublicMessage(_ message: BitchatMessage, to conversationID: ConversationID) {
         enqueuedMessages.append((message.id, conversationID))
     }
@@ -668,4 +670,86 @@ struct ChatPublicConversationCoordinatorContextTests {
         #expect(context.mentionNotifications.map(\.message) == ["hi @me", "yo @me"])
     }
 
+
+    // MARK: - Spam filter
+
+    @Test @MainActor
+    func handlePublicMessage_floodFromOneSender_hidesSpamAndItsMention() async {
+        let context = MockChatPublicConversationContext()
+        let coordinator = ChatPublicConversationCoordinator(context: context)
+        let words = ["apple", "bridge", "candle", "dolphin", "engine", "forest", "garden"]
+        let messages = words.enumerated().map { i, word in
+            BitchatMessage(
+                id: "flood-\(i)",
+                sender: "flooder",
+                content: "@me \(word) \(i)",
+                timestamp: Date(),
+                isRelay: false,
+                senderPeerID: PeerID(str: "aabbccddeeff0011"),
+                mentions: ["me"]
+            )
+        }
+
+        for message in messages {
+            coordinator.handlePublicMessage(message)
+            coordinator.checkForMentions(message)
+        }
+
+        // A burst of 6, then the 7th is over the message budget.
+        #expect(context.enqueuedMessageIDs == (0..<6).map { "flood-\($0)" })
+        #expect(context.mentionNotifications.count == 6)
+
+        // A duplicate of the hidden message keeps its verdict.
+        coordinator.handlePublicMessage(messages[6])
+        #expect(context.enqueuedMessageIDs.count == 6)
+    }
+
+    @Test @MainActor
+    func handlePublicMessage_sameTextFromManyGeohashIdentities_hidesTheFourth() async {
+        let context = MockChatPublicConversationContext()
+        let coordinator = ChatPublicConversationCoordinator(context: context)
+        context.activeChannel = .location(GeohashChannel(level: .city, geohash: "u4pruy"))
+        context.currentGeohash = "u4pruy"
+
+        for i in 0..<5 {
+            let pubkey = String(repeating: String(format: "%02x", i + 1), count: 32)
+            coordinator.handlePublicMessage(makePublicMessage(
+                id: "swarm-\(i)",
+                content: "Free sats for everyone at freesats dot example",
+                senderPeerID: PeerID(nostr: pubkey)
+            ))
+        }
+
+        #expect(context.enqueuedMessageIDs == ["swarm-0", "swarm-1", "swarm-2"])
+    }
+
+    @Test @MainActor
+    func handlePublicMessage_ownEchoesAndLocalNotices_areNotJudged() async {
+        let context = MockChatPublicConversationContext()
+        let coordinator = ChatPublicConversationCoordinator(context: context)
+
+        // Gossip replays of my own text, stamped with my peer ID.
+        for i in 0..<10 {
+            coordinator.handlePublicMessage(makePublicMessage(
+                id: "own-\(i)",
+                sender: "me",
+                content: "my own message number \(i)",
+                senderPeerID: context.myPeerID
+            ))
+        }
+        #expect(context.enqueuedMessageIDs.count == 10)
+        #expect(!context.spamFilter.wasHidden(messageID: "own-9"))
+    }
+
+    @Test @MainActor
+    func handlePublicMessage_filterOff_letsFloodThrough() async {
+        let context = MockChatPublicConversationContext()
+        let coordinator = ChatPublicConversationCoordinator(context: context)
+        context.spamFilter.enabled = false
+
+        for i in 0..<10 {
+            coordinator.handlePublicMessage(makePublicMessage(id: "off-\(i)", content: String(repeating: "A", count: 40) + "\(i)"))
+        }
+        #expect(context.enqueuedMessageIDs.count == 10)
+    }
 }

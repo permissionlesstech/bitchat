@@ -428,7 +428,9 @@ final class PerformanceBaselineTests: XCTestCase {
             return InboundPublic(
                 peerID: PeerID(str: String(format: "%016x", 0xC0DE_0000 + sender)),
                 nickname: "perfpeer\(sender)",
-                content: "public pipeline message \(i) from sender \(sender)",
+                // Distinct sentences: numbered copies of one template are
+                // near-copies across senders, which the spam filter hides.
+                content: Self.perfSentence(i),
                 timestamp: base.addingTimeInterval(Double(i)),
                 messageID: "perf-pub-\(i)"
             )
@@ -465,6 +467,25 @@ final class PerformanceBaselineTests: XCTestCase {
         }
 
         reportThroughput("pipeline.publicIngest", samples: samples, operations: messageCount, unit: "messages")
+    }
+
+    /// A deterministic sentence of made-up words, different for every `seed`.
+    /// Like real chat between different people, two of them rarely share
+    /// enough trigrams to need the spam filter's full comparison; words drawn
+    /// from one small list would, which measures the filter's worst case
+    /// rather than ordinary ingest.
+    private static func perfSentence(_ seed: Int) -> String {
+        var state = UInt64(seed) &* 0x9E37_79B9_7F4A_7C15 &+ 1
+        func next(_ bound: Int) -> Int {
+            state = state &* 6364136223846793005 &+ 1442695040888963407
+            return Int((state >> 33) % UInt64(bound))
+        }
+        let words: [String] = (0..<7).map { _ in
+            let length = 2 + next(6)
+            let letters: [Character] = (0..<length).map { _ in Character(Unicode.Scalar(UInt8(97 + next(26)))) }
+            return String(letters)
+        }
+        return words.joined(separator: " ")
     }
 
     // MARK: - 7. ConversationStore append (to-be architecture)
@@ -681,6 +702,7 @@ private final class PerfNostrContext: ChatNostrContext {
     func parseMentions(from content: String) -> [String] {
         MessageFormattingEngine.extractMentions(from: content)
     }
+    let spamFilter = SpamFilter()
 
     var selectedPrivateChatPeer: PeerID?
     var nostrKeyMapping: [PeerID: String] = [:]
