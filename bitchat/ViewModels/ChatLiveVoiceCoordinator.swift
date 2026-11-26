@@ -140,6 +140,9 @@ final class ChatLiveVoiceCoordinator {
     /// How long a missing packet stalls delivery before being skipped.
     private static let gapSkipSeconds: TimeInterval = 0.5
     private static let finishedBurstsCap = 32
+    // Keep closure records for the fallback retention window, with a larger capacity.
+    private static let terminalBurstsCap = 256
+    private static let terminalBurstLifetime: TimeInterval = 600
 
     private unowned let context: any ChatLiveVoiceContext
     private let fileStore: BLEIncomingFileStore
@@ -148,6 +151,9 @@ final class ChatLiveVoiceCoordinator {
     private var fileManager: FileManager { fileStore.fileManager }
     private var assemblies: [AssemblyKey: Assembly] = [:]
     private var finishedBursts: [AssemblyKey: FinishedBurst] = [:]
+    // Keep closure records separate because note absorption removes fallback records.
+    private var terminalBursts: [AssemblyKey: TimeInterval] = [:]
+    private let monotonicNow: () -> TimeInterval
     /// Players still draining after their assembly — the sole strong owner —
     /// was discarded on burst END. Without this hold the player deallocates
     /// mid-tail (or mid session-acquire, killing the whole burst's audio)
@@ -158,9 +164,15 @@ final class ChatLiveVoiceCoordinator {
     /// `sweepsOnInit` exists for tests whose coordinator shares the real
     /// application-support directory: they pass `false` so parallel test
     /// runs never sweep each other's in-flight capture files.
-    init(context: any ChatLiveVoiceContext, fileStore: BLEIncomingFileStore = BLEIncomingFileStore(), sweepsOnInit: Bool = true) {
+    init(
+        context: any ChatLiveVoiceContext,
+        fileStore: BLEIncomingFileStore = BLEIncomingFileStore(),
+        sweepsOnInit: Bool = true,
+        monotonicNow: @escaping () -> TimeInterval = { ProcessInfo.processInfo.systemUptime }
+    ) {
         self.context = context
         self.fileStore = fileStore
+        self.monotonicNow = monotonicNow
         // Orphaned partial captures from a previous session (live-only bursts
         // whose finalized note never arrived) are dead weight the quota can
         // never reclaim (eviction skips voice_live_* by design) — sweep them
@@ -205,6 +217,10 @@ final class ChatLiveVoiceCoordinator {
         // START from another peer opens its own assembly instead of
         // capturing this one's frames.
         let key = AssemblyKey(peerID: peerID, scope: scope, burstID: packet.burstID)
+        if let expiresAt = terminalBursts[key] {
+            if expiresAt > monotonicNow() { return }
+            terminalBursts.removeValue(forKey: key)
+        }
         if let assembly = assemblies[key] {
             apply(packet, to: assembly)
             return
@@ -222,8 +238,10 @@ final class ChatLiveVoiceCoordinator {
             assemblies[key] = assembly
             updatePublicTalkerIndicator()
             apply(packet, to: assembly)
-        case .end, .canceled:
-            // Control packet for a burst we never saw — nothing to do.
+        case .canceled:
+            rememberTerminalBurst(key)
+        case .end:
+            // Preserve recovery when END overtakes every START/data packet.
             break
         }
     }
@@ -245,6 +263,7 @@ final class ChatLiveVoiceCoordinator {
         }
         drainingPlayers.removeAll(keepingCapacity: false)
         finishedBursts.removeAll(keepingCapacity: false)
+        terminalBursts.removeAll(keepingCapacity: false)
         updatePublicTalkerIndicator()
     }
 
@@ -272,12 +291,16 @@ final class ChatLiveVoiceCoordinator {
         // The note usually lands after END, but a lost END or a fast transfer
         // can beat it — close out the live assembly first.
         if let assembly = assemblies.first(where: { matches($0.key) })?.value {
+            if message.senderPeerID == assembly.key.peerID {
+                rememberTerminalBurst(assembly.key)
+            }
             finalize(assembly)
         }
 
         pruneFinishedBursts()
         guard let entry = finishedBursts.first(where: { matches($0.key) }) else { return false }
         let finished = entry.value
+        rememberTerminalBurst(entry.key)
 
         // A DM live bubble starts before the finalized file exists and
         // therefore has a receiver-local random ID. Adopt the finalized
@@ -519,6 +542,7 @@ final class ChatLiveVoiceCoordinator {
         try? assembly.fileHandle?.close()
         assembly.fileHandle = nil
         assemblies.removeValue(forKey: assembly.key)
+        if assembly.endInfo != nil { rememberTerminalBurst(assembly.key) }
         updatePublicTalkerIndicator()
 
         guard assembly.deliveredFrames > 0 else {
@@ -627,6 +651,7 @@ final class ChatLiveVoiceCoordinator {
         try? assembly.fileHandle?.close()
         assembly.fileHandle = nil
         assemblies.removeValue(forKey: assembly.key)
+        rememberTerminalBurst(assembly.key)
         updatePublicTalkerIndicator()
         removeBubble(of: assembly)
         WaveformCache.shared.purge(url: assembly.fileURL)
@@ -659,6 +684,20 @@ final class ChatLiveVoiceCoordinator {
     }
 
     // MARK: - Helpers
+
+    private func rememberTerminalBurst(_ key: AssemblyKey) {
+        pruneTerminalBursts()
+        if terminalBursts[key] == nil, terminalBursts.count >= Self.terminalBurstsCap,
+           let oldest = terminalBursts.min(by: { $0.value < $1.value })?.key {
+            terminalBursts.removeValue(forKey: oldest)
+        }
+        terminalBursts[key] = monotonicNow() + Self.terminalBurstLifetime
+    }
+
+    private func pruneTerminalBursts() {
+        let now = monotonicNow()
+        terminalBursts = terminalBursts.filter { $0.value > now }
+    }
 
     private func pruneFinishedBursts() {
         let now = Date()
