@@ -8,7 +8,7 @@
 
 import struct Foundation.Date
 
-public enum DeliveryStatus: Codable, Equatable, Hashable {
+public enum DeliveryStatus: Codable, Equatable, Hashable, Sendable {
     case notSentYet  // Created but not yet handed to any transport
     case sending
     case sent  // Left our device

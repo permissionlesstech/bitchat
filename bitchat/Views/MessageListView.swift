@@ -853,14 +853,32 @@ private struct MessageRowView: View, Equatable {
     @ThemedPalette private var palette
 
     let message: BitchatMessage
+    private let messageIdentity: ObjectIdentifier
     let deliveryStatus: DeliveryStatus
     let privatePeer: PeerID?
     @Binding var imagePreviewURL: URL?
     @Binding var showSidebar: Bool
     let onInsertMention: (String) -> Void
 
+    init(
+        message: BitchatMessage,
+        deliveryStatus: DeliveryStatus,
+        privatePeer: PeerID?,
+        imagePreviewURL: Binding<URL?>,
+        showSidebar: Binding<Bool>,
+        onInsertMention: @escaping (String) -> Void
+    ) {
+        self.message = message
+        self.messageIdentity = ObjectIdentifier(message)
+        self.deliveryStatus = deliveryStatus
+        self.privatePeer = privatePeer
+        self._imagePreviewURL = imagePreviewURL
+        self._showSidebar = showSidebar
+        self.onInsertMention = onInsertMention
+    }
+
     nonisolated static func == (lhs: MessageRowView, rhs: MessageRowView) -> Bool {
-        lhs.message === rhs.message
+        lhs.messageIdentity == rhs.messageIdentity
             && lhs.deliveryStatus == rhs.deliveryStatus
             && lhs.privatePeer == rhs.privatePeer
     }

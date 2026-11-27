@@ -16,6 +16,7 @@ struct TextMessageView: View, Equatable {
     @EnvironmentObject private var conversationUIModel: ConversationUIModel
 
     let message: BitchatMessage
+    private let messageIdentity: ObjectIdentifier
     /// Value snapshot of the message's mutable delivery status, captured at
     /// construction. `BitchatMessage` is a reference type mutated in place by
     /// `ConversationStore`, and SwiftUI compares reference-typed view fields
@@ -29,11 +30,12 @@ struct TextMessageView: View, Equatable {
 
     init(message: BitchatMessage) {
         self.message = message
+        self.messageIdentity = ObjectIdentifier(message)
         self.deliveryStatus = message.deliveryStatus
     }
 
     nonisolated static func == (lhs: TextMessageView, rhs: TextMessageView) -> Bool {
-        lhs.message === rhs.message && lhs.deliveryStatus == rhs.deliveryStatus
+        lhs.messageIdentity == rhs.messageIdentity && lhs.deliveryStatus == rhs.deliveryStatus
     }
 
     var body: some View {
