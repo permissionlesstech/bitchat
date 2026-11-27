@@ -325,6 +325,13 @@ private extension ContentComposerView {
         return composerAccentColor
     }
 
+    var currentVoiceNoteTarget: VoiceNoteTarget {
+        if let peerID = privateConversationModel.selectedPeerID {
+            return .privateChat(peerID)
+        }
+        return .publicMesh
+    }
+
     var micButtonView: some View {
         Image(systemName: "mic.circle.fill")
             .font(.bitchatSystem(size: 24))
@@ -338,10 +345,13 @@ private extension ContentComposerView {
                     .gesture(
                         DragGesture(minimumDistance: 0)
                             .onChanged { _ in
-                                voiceRecordingVM.start(shouldShow: conversationUIModel.canSendMediaInCurrentContext)
+                                voiceRecordingVM.start(
+                                    shouldShow: conversationUIModel.canSendMediaInCurrentContext,
+                                    target: currentVoiceNoteTarget
+                                )
                             }
                             .onEnded { _ in
-                                voiceRecordingVM.finish(completion: conversationUIModel.sendVoiceNote)
+                                voiceRecordingVM.finish(completion: conversationUIModel.sendVoiceNote(at:target:))
                             }
                     )
             )
@@ -359,9 +369,12 @@ private extension ContentComposerView {
             // give it a start/stop toggle as the default action.
             .accessibilityAction {
                 if voiceRecordingVM.state.isActive {
-                    voiceRecordingVM.finish(completion: conversationUIModel.sendVoiceNote)
+                    voiceRecordingVM.finish(completion: conversationUIModel.sendVoiceNote(at:target:))
                 } else {
-                    voiceRecordingVM.start(shouldShow: conversationUIModel.canSendMediaInCurrentContext)
+                    voiceRecordingVM.start(
+                        shouldShow: conversationUIModel.canSendMediaInCurrentContext,
+                        target: currentVoiceNoteTarget
+                    )
                 }
             }
     }

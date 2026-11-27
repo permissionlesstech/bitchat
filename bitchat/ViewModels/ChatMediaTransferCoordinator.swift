@@ -515,15 +515,29 @@ final class ChatMediaTransferCoordinator {
         self.transferIDFactory = transferIDFactory
     }
 
-    func sendVoiceNote(at url: URL) {
-        guard context.canSendMediaInCurrentContext else {
-            SecureLogger.info("Voice note blocked outside mesh/private context", category: .session)
-            try? FileManager.default.removeItem(at: url)
-            context.addSystemMessage(String(localized: "Voice notes are only available in mesh chats.", comment: "System message when a voice note is attempted outside mesh chats"))
-            return
+    func sendVoiceNote(at url: URL, target: VoiceNoteTarget? = nil) {
+        let targetPeer: PeerID?
+        switch target {
+        case .privateChat(let peerID):
+            guard !peerID.isGeoDM, !peerID.isGeoChat, !peerID.isGroup else {
+                SecureLogger.info("Voice note blocked outside mesh/private context", category: .session)
+                try? FileManager.default.removeItem(at: url)
+                context.addSystemMessage(String(localized: "Voice notes are only available in mesh chats.", comment: "System message when a voice note is attempted outside mesh chats"))
+                return
+            }
+            targetPeer = peerID
+        case .publicMesh:
+            targetPeer = nil
+        case nil:
+            guard context.canSendMediaInCurrentContext else {
+                SecureLogger.info("Voice note blocked outside mesh/private context", category: .session)
+                try? FileManager.default.removeItem(at: url)
+                context.addSystemMessage(String(localized: "Voice notes are only available in mesh chats.", comment: "System message when a voice note is attempted outside mesh chats"))
+                return
+            }
+            targetPeer = context.selectedPrivateChatPeer
         }
 
-        let targetPeer = context.selectedPrivateChatPeer
         let privateMessageID = targetPeer.flatMap { peerID in
             PrivateMediaMessageIdentity.stableID(
                 senderPeerID: context.myPeerID,

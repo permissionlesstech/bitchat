@@ -71,7 +71,7 @@ actor VoiceRecorder {
         sessionCoordinator: AudioSessionCoordinator = .shared,
         recorderFactory: any VoiceAudioRecorderCreating = SystemVoiceAudioRecorderFactory(),
         permissionGranted: (() -> Bool)? = nil,
-        paddingInterval: TimeInterval = 0.5,
+        paddingInterval: TimeInterval = 0,
         maxRecordingDuration: TimeInterval = 120,
         outputDirectory: URL? = nil,
         testingHooks: TestingHooks = TestingHooks()

@@ -56,8 +56,8 @@ extension ChatViewModel {
     }
 
     @MainActor
-    func sendVoiceNote(at url: URL) {
-        mediaTransferCoordinator.sendVoiceNote(at: url)
+    func sendVoiceNote(at url: URL, target: VoiceNoteTarget? = nil) {
+        mediaTransferCoordinator.sendVoiceNote(at: url, target: target)
     }
 
     /// Where a live burst would stream right now, or nil when the hold would
