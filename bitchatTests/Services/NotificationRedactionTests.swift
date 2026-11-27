@@ -115,4 +115,34 @@ struct NotificationRedactionTests {
         #expect(geo.title.contains("u4pruyd"))
         #expect(geo.body == "someone said something")
     }
+
+    @Test func redactedVerificationWithholdsPeerNickname() throws {
+        let (service, deliverer) = makeService(hidePreviews: true)
+
+        service.sendVerificationNotification(
+            title: "Mutual verification",
+            body: "You and alice verified each other",
+            identifier: "verify-mutual-1"
+        )
+
+        let content = try #require(deliverer.requests.first).content
+        #expect(!content.title.contains("alice"))
+        #expect(!content.body.contains("alice"))
+        #expect(!content.title.isEmpty)
+        #expect(!content.body.isEmpty)
+    }
+
+    @Test func unredactedVerificationShowsPeerNickname() throws {
+        let (service, deliverer) = makeService(hidePreviews: false)
+
+        service.sendVerificationNotification(
+            title: "Mutual verification",
+            body: "You and alice verified each other",
+            identifier: "verify-mutual-2"
+        )
+
+        let content = try #require(deliverer.requests.first).content
+        #expect(content.title == "Mutual verification")
+        #expect(content.body == "You and alice verified each other")
+    }
 }

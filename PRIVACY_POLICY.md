@@ -1,6 +1,6 @@
 # bitchat Privacy Policy
 
-*Last updated: July 2026*
+*Last updated: November 2026*
 
 ## Our Commitment
 
@@ -81,7 +81,7 @@ Internet-backed features are optional. When enabled or used:
 
 Nostr relays are operated by third parties. Their retention, logging, availability, and privacy practices are outside the project's control. Public events and encrypted events may remain on relays according to each relay's policy.
 
-You can add relays yourself in settings, including `.onion` addresses. Added relays are stored locally, are limited in number, and are erased by panic wipe. Tor routing is on by default; while it is off, every relay you connect to can see your IP address, including relays carrying your private messages.
+You can add custom `wss://` relays yourself in settings. Added relays are stored locally, are limited in number, and are erased by panic wipe. Tor routing is on by default; while it is off, every relay you connect to can see your IP address, including relays carrying your private messages.
 
 ## Location and Apple Services
 
@@ -96,7 +96,7 @@ Location permission is optional and requested as when-in-use access. It is used 
 
 - Microphone access is used only while you record a voice note or actively hold live push-to-talk. The resulting audio is sent to the mesh conversation you selected; public-conversation audio is public to that mesh, while private-conversation audio uses the private transport protections described below.
 - Voice-note and live-audio files can remain in Application Support under the media retention rules above.
-- Camera access is used to scan peer-verification QR codes. Photo-library access is used when you choose an image to send.
+- Camera access is used to scan peer-verification QR codes and when you take a photo to share in a mesh chat. Photo-library access is used when you choose an image to send.
 - These permissions can be revoked in system settings. bitchat does not record microphone or camera input while the related capture UI is inactive.
 
 ## Cryptography

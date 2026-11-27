@@ -15,9 +15,19 @@ struct ImagePickerView: UIViewControllerRepresentable {
     let sourceType: UIImagePickerController.SourceType
     let completion: (UIImage?) -> Void
 
+    static func resolvedSourceType(
+        for requested: UIImagePickerController.SourceType,
+        isAvailable: (UIImagePickerController.SourceType) -> Bool = UIImagePickerController.isSourceTypeAvailable
+    ) -> UIImagePickerController.SourceType {
+        if isAvailable(requested) {
+            return requested
+        }
+        return .photoLibrary
+    }
+
     func makeUIViewController(context: Context) -> UIImagePickerController {
         let picker = UIImagePickerController()
-        picker.sourceType = sourceType
+        picker.sourceType = Self.resolvedSourceType(for: sourceType)
         picker.delegate = context.coordinator
         picker.allowsEditing = false
 

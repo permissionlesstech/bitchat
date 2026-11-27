@@ -33,6 +33,7 @@ let package = Package(
             path: "bitchat",
             exclude: [
                 "Info.plist",
+                "PrivacyInfo.xcprivacy",
                 "Assets.xcassets",
                 "_PreviewHelpers/PreviewAssets.xcassets",
                 "bitchat.entitlements",

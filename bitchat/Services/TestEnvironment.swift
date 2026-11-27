@@ -14,12 +14,19 @@ import Foundation
 /// `NotificationService` and `LocationStateManager`.
 enum TestEnvironment {
     /// True when running under XCTest / Swift Testing or in CI.
+    /// Compiled out of Release builds so shell environment variables such as
+    /// `CI` cannot disable persistence, notifications, location, or panic-wipe
+    /// cleanup in shipping binaries.
     static let isRunningTests: Bool = {
+        #if DEBUG
         let env = ProcessInfo.processInfo.environment
         return NSClassFromString("XCTestCase") != nil ||
                env["XCTestConfigurationFilePath"] != nil ||
                env["XCTestBundlePath"] != nil ||
                env["GITHUB_ACTIONS"] != nil ||
                env["CI"] != nil
+        #else
+        return false
+        #endif
     }()
 }

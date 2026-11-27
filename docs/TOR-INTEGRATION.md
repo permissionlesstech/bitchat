@@ -32,7 +32,7 @@ The settings UI states this while the toggle is off.
 
 ## Relays
 
-Private messages target the built-in relay set plus any relays added by hand (`NostrRelaySettings`, capped at 8, `.onion` addresses accepted). The built-in set is four well-known clearnet hostnames, so a filter blocking four names would otherwise end internet-delivered private messages until a new build shipped.
+Private messages target the built-in relay set plus any relays added by hand (`NostrRelaySettings`, capped at 8). The built-in set is four well-known clearnet hostnames, so adding custom `wss://` relays lets users work around filters blocking those hosts. `.onion` onion-service relays are not yet supported because `arti-client` is built without the `onion-service-client` feature.
 
 ## Artifact maintenance
 

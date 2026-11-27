@@ -3170,181 +3170,181 @@
         "ar" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "عندما لا تصل شبكة mesh إلى شخص، تنتقل الرسائل الخاصة عبر هذه المرحّلات. المرحّلات المدمجة عناوين معروفة يمكن لمرشّح الشبكة حجبها — لذا يمكنك إضافة مرحّلاتك الخاصة، بما في ذلك عناوين .onion."
+            "value" : "عندما لا تصل شبكة mesh إلى شخص، تنتقل الرسائل الخاصة عبر هذه المرحّلات. المرحّلات المدمجة عناوين معروفة يمكن لمرشّح الشبكة حجبها — لذا يمكنك إضافة مرحّلاتك الخاصة."
           }
         },
         "bn" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "মেশ কারও কাছে পৌঁছাতে না পারলে ব্যক্তিগত বার্তা এই রিলেগুলোর মধ্য দিয়ে যায়। বিল্ট-ইন রিলেগুলো সুপরিচিত ঠিকানা, যা নেটওয়ার্ক ফিল্টার আটকে দিতে পারে — তাই আপনি নিজের রিলে যোগ করতে পারেন, .onion ঠিকানাও।"
+            "value" : "মেশ কারও কাছে পৌঁছাতে না পারলে ব্যক্তিগত বার্তা এই রিলেগুলোর মধ্য দিয়ে যায়। বিল্ট-ইন রিলেগুলো সুপরিচিত ঠিকানা, যা নেটওয়ার্ক ফিল্টার আটকে দিতে পারে — তাই আপনি নিজের রিলে যোগ করতে পারেন।"
           }
         },
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "wenn das mesh jemanden nicht erreicht, laufen private nachrichten über diese relays. die eingebauten sind bekannte adressen, die ein netzwerkfilter blockieren kann — du kannst also eigene hinzufügen, auch .onion-adressen."
+            "value" : "wenn das mesh jemanden nicht erreicht, laufen private nachrichten über diese relays. die eingebauten sind bekannte adressen, die ein netzwerkfilter blockieren kann — du kannst also eigene hinzufügen."
           }
         },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "when the mesh can't reach someone, private messages travel through these relays. the built-in ones are well-known addresses that a network filter can block, so you can add your own — including .onion addresses."
+            "value" : "when the mesh can't reach someone, private messages travel through these relays. the built-in ones are well-known addresses that a network filter can block, so you can add your own."
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "cuando el mesh no llega a alguien, los mensajes privados viajan por estos relays. los integrados son direcciones muy conocidas que un filtro de red puede bloquear, así que puedes añadir los tuyos — incluidas direcciones .onion."
+            "value" : "cuando el mesh no llega a alguien, los mensajes privados viajan por estos relays. los integrados son direcciones muy conocidas que un filtro de red puede bloquear, así que puedes añadir los tuyos."
           }
         },
         "fa" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "وقتی مش به کسی نمی‌رسد، پیام‌های خصوصی از این رله‌ها می‌گذرند. رله‌های داخلی نشانی‌های شناخته‌شده‌ای هستند که یک صافی شبکه می‌تواند مسدودشان کند — پس می‌توانید رله‌های خودتان را اضافه کنید، از جمله نشانی‌های .onion."
+            "value" : "وقتی مش به کسی نمی‌رسد، پیام‌های خصوصی از این رله‌ها می‌گذرند. رله‌های داخلی نشانی‌های شناخته‌شده‌ای هستند که یک صافی شبکه می‌تواند مسدودشان کند — پس می‌توانید رله‌های خودتان را اضافه کنید."
           }
         },
         "fil" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "kapag hindi maabot ng mesh ang isang tao, dumadaan ang mga pribadong mensahe sa mga relay na ito. ang mga built-in ay kilalang-kilalang address na kayang harangin ng filter ng network — kaya maaari kang magdagdag ng sarili mo, kasama ang mga .onion address."
+            "value" : "kapag hindi maabot ng mesh ang isang tao, dumadaan ang mga pribadong mensahe sa mga relay na ito. ang mga built-in ay kilalang-kilalang address na kayang harangin ng filter ng network — kaya maaari kang magdagdag ng sarili mo."
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "quand le mesh ne joint pas quelqu'un, les messages privés passent par ces relais. ceux intégrés sont des adresses bien connues qu'un filtre réseau peut bloquer — tu peux donc ajouter les tiens, y compris des adresses .onion."
+            "value" : "quand le mesh ne joint pas quelqu'un, les messages privés passent par ces relais. ceux intégrés sont des adresses bien connues qu'un filtre réseau peut bloquer — tu peux donc ajouter les tiens."
           }
         },
         "he" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "כשה-mesh לא מגיע למישהו, הודעות פרטיות עוברות דרך הממסרים האלה. הממסרים המובנים הם כתובות מוכרות שמסנן רשת יכול לחסום — אפשר להוסיף ממסרים משלך, כולל כתובות .onion."
+            "value" : "כשה-mesh לא מגיע למישהו, הודעות פרטיות עוברות דרך הממסרים האלה. הממסרים המובנים הם כתובות מוכרות שמסנן רשת יכול לחסום — אפשר להוסיף ממסרים משלך."
           }
         },
         "hi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "जब मेश किसी तक नहीं पहुँच पाता, तब निजी संदेश इन रिले से होकर जाते हैं। अंतर्निर्मित रिले जाने-पहचाने पते हैं जिन्हें नेटवर्क फ़िल्टर रोक सकता है — इसलिए आप अपने रिले जोड़ सकते हैं, .onion पते भी।"
+            "value" : "जब मेश किसी तक नहीं पहुँच पाता, तब निजी संदेश इन रिले से होकर जाते हैं। अंतर्निर्मित रिले जाने-पहचाने पते हैं जिन्हें नेटवर्क फ़िल्टर रोक सकता है — इसलिए आप अपने रिले जोड़ सकते हैं।"
           }
         },
         "id" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "saat mesh tidak bisa menjangkau seseorang, pesan pribadi lewat relay ini. relay bawaan adalah alamat yang sudah dikenal luas dan bisa diblokir filter jaringan — jadi kamu bisa menambahkan relay sendiri, termasuk alamat .onion."
+            "value" : "saat mesh tidak bisa menjangkau seseorang, pesan pribadi lewat relay ini. relay bawaan adalah alamat yang sudah dikenal luas dan bisa diblokir filter jaringan — jadi kamu bisa menambahkan relay sendiri."
           }
         },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "quando la mesh non raggiunge qualcuno, i messaggi privati passano da questi relay. quelli integrati sono indirizzi molto noti che un filtro di rete può bloccare — puoi quindi aggiungere i tuoi, anche indirizzi .onion."
+            "value" : "quando la mesh non raggiunge qualcuno, i messaggi privati passano da questi relay. quelli integrati sono indirizzi molto noti che un filtro di rete può bloccare — puoi quindi aggiungere i tuoi."
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "meshで相手に届かないとき、プライベートメッセージはこれらのリレーを通ります。組み込みのリレーはよく知られたアドレスで、ネットワークのフィルターにブロックされることがあります — 自分のリレー、.onionアドレスも追加できます。"
+            "value" : "meshで相手に届かないとき、プライベートメッセージはこれらのリレーを通ります。組み込みのリレーはよく知られたアドレスで、ネットワークのフィルターにブロックされることがあります — 自分のリレーを追加できます。"
           }
         },
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "mesh로 상대에게 닿지 않으면 비공개 메시지는 이 릴레이를 거칩니다. 기본 릴레이는 널리 알려진 주소여서 네트워크 필터가 차단할 수 있습니다 — 그래서 .onion 주소를 포함해 직접 릴레이를 추가할 수 있습니다."
+            "value" : "mesh로 상대에게 닿지 않으면 비공개 메시지는 이 릴레이를 거칩니다. 기본 릴레이는 널리 알려진 주소여서 네트워크 필터가 차단할 수 있습니다 — 그래서 직접 릴레이를 추가할 수 있습니다."
           }
         },
         "ms" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "apabila mesh tidak dapat mencapai seseorang, pesan peribadi bergerak melalui relay ini. relay terbina dalam ialah alamat yang terkenal dan boleh dihalang oleh penapis rangkaian — jadi anda boleh menambah relay sendiri, termasuk alamat .onion."
+            "value" : "apabila mesh tidak dapat mencapai seseorang, pesan peribadi bergerak melalui relay ini. relay terbina dalam ialah alamat yang terkenal dan boleh dihalang oleh penapis rangkaian — jadi anda boleh menambah relay sendiri."
           }
         },
         "ne" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "mesh कसैसम्म पुग्न सक्दैन भने निजी सन्देश यी रिले मार्फत जान्छन्। पूर्वनिर्मित रिले सबैलाई थाहा भएका ठेगाना हुन्, जसलाई नेटवर्क फिल्टरले रोक्न सक्छ — त्यसैले तिमी आफ्नै रिले थप्न सक्छौ, .onion ठेगाना पनि।"
+            "value" : "mesh कसैसम्म पुग्न सक्दैन भने निजी सन्देश यी रिले मार्फत जान्छन्। पूर्वनिर्मित रिले सबैलाई थाहा भएका ठेगाना हुन्, जसलाई नेटवर्क फिल्टरले रोक्न सक्छ — त्यसैले तिमी आफ्नै रिले थप्न सक्छौ।"
           }
         },
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "als de mesh iemand niet bereikt, gaan privéberichten via deze relays. de ingebouwde relays zijn bekende adressen die een netwerkfilter kan blokkeren — je kunt dus je eigen relays toevoegen, ook .onion-adressen."
+            "value" : "als de mesh iemand niet bereikt, gaan privéberichten via deze relays. de ingebouwde relays zijn bekende adressen die een netwerkfilter kan blokkeren — je kunt dus je eigen relays toevoegen."
           }
         },
         "pl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "gdy mesh nie dosięga kogoś, wiadomości prywatne idą przez te relay. wbudowane to powszechnie znane adresy, które filtr sieciowy może zablokować — możesz więc dodać własne, także adresy .onion."
+            "value" : "gdy mesh nie dosięga kogoś, wiadomości prywatne idą przez te relay. wbudowane to powszechnie znane adresy, które filtr sieciowy może zablokować — możesz więc dodać własne."
           }
         },
         "pt" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "quando a mesh não chega a alguém, as mensagens privadas seguem por estes relés. os integrados são endereços bem conhecidos que um filtro de rede pode bloquear — por isso podes acrescentar os teus, incluindo endereços .onion."
+            "value" : "quando a mesh não chega a alguém, as mensagens privadas seguem por estes relés. os integrados são endereços bem conhecidos que um filtro de rede pode bloquear — por isso podes acrescentar os teus."
           }
         },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "quando o mesh não alcança alguém, as mensagens privadas passam por estes relays. os integrados são endereços conhecidos que um filtro de rede pode bloquear — então você pode adicionar os seus, inclusive endereços .onion."
+            "value" : "quando o mesh não alcança alguém, as mensagens privadas passam por estes relays. os integrados são endereços conhecidos que um filtro de rede pode bloquear — então você pode adicionar os seus."
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "когда mesh не достаёт до человека, приватные сообщения идут через эти реле. встроенные — это широко известные адреса, которые может заблокировать сетевой фильтр, поэтому можно добавить свои, в том числе .onion-адреса."
+            "value" : "когда mesh не достаёт до человека, приватные сообщения идут через эти реле. встроенные — это широко известные адреса, которые может заблокировать сетевой фильтр, поэтому можно добавить свои."
           }
         },
         "sv" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "när mesh inte når fram till någon går privata meddelanden via dessa reläer. de inbyggda är välkända adresser som ett nätverksfilter kan blockera — du kan därför lägga till egna, även .onion-adresser."
+            "value" : "när mesh inte når fram till någon går privata meddelanden via dessa reläer. de inbyggda är välkända adresser som ett nätverksfilter kan blockera — du kan därför lägga till egna."
           }
         },
         "ta" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "mesh ஒருவரை எட்ட முடியாதபோது, தனிப்பட்ட செய்திகள் இந்த ரிலேகள் வழியாகச் செல்கின்றன. உள்ளமைந்த ரிலேகள் நன்கு அறியப்பட்ட முகவரிகள், அவற்றை நெட்வொர்க் வடிகட்டி தடுக்க முடியும் — எனவே .onion முகவரிகள் உட்பட உங்கள் சொந்த ரிலேகளைச் சேர்க்கலாம்."
+            "value" : "mesh ஒருவரை எட்ட முடியாதபோது, தனிப்பட்ட செய்திகள் இந்த ரிலேகள் வழியாகச் செல்கின்றன. உள்ளமைந்த ரிலேகள் நன்கு அறியப்பட்ட முகவரிகள், அவற்றை நெட்வொர்க் வடிகட்டி தடுக்க முடியும் — எனவே உங்கள் சொந்த ரிலேகளைச் சேர்க்கலாம்."
           }
         },
         "th" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "เมื่อ mesh ไปไม่ถึงใคร ข้อความส่วนตัวจะเดินทางผ่านรีเลย์เหล่านี้ รีเลย์ที่มาพร้อมแอปเป็นที่อยู่ที่รู้จักกันดีและตัวกรองเครือข่ายปิดกั้นได้ — คุณจึงเพิ่มรีเลย์ของตัวเองได้ รวมถึงที่อยู่ .onion"
+            "value" : "เมื่อ mesh ไปไม่ถึงใคร ข้อความส่วนตัวจะเดินทางผ่านรีเลย์เหล่านี้ รีเลย์ที่มาพร้อมแอปเป็นที่อยู่ที่รู้จักกันดีและตัวกรองเครือข่ายปิดกั้นได้ — คุณจึงเพิ่มรีเลย์ของตัวเองได้"
           }
         },
         "tr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "mesh birine ulaşamadığında özel mesajlar bu rölelerden geçer. yerleşik röleler herkesin bildiği adreslerdir ve bir ağ filtresi bunları engelleyebilir — bu yüzden .onion adresleri de dahil kendi rölelerinizi ekleyebilirsiniz."
+            "value" : "mesh birine ulaşamadığında özel mesajlar bu rölelerden geçer. yerleşik röleler herkesin bildiği adreslerdir ve bir ağ filtresi bunları engelleyebilir — bu yüzden kendi rölelerinizi ekleyebilirsiniz."
           }
         },
         "uk" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "коли mesh не дотягується до людини, приватні повідомлення йдуть через ці релеї. вбудовані — це добре відомі адреси, які може заблокувати мережевий фільтр, тож можна додати власні, зокрема .onion-адреси."
+            "value" : "коли mesh не дотягується до людини, приватні повідомлення йдуть через ці релеї. вбудовані — це добре відомі адреси, які може заблокувати мережевий фільтр, тож можна додати власні."
           }
         },
         "ur" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "جب mesh کسی تک نہ پہنچ سکے تو نجی پیغامات ان ریلے سے گزرتے ہیں۔ بلٹ اِن ریلے مشہور پتے ہیں جنہیں نیٹ ورک فلٹر روک سکتا ہے — اس لیے آپ اپنے ریلے شامل کر سکتے ہیں، .onion پتے بھی۔"
+            "value" : "جب mesh کسی تک نہ پہنچ سکے تو نجی پیغامات ان ریلے سے گزرتے ہیں۔ بلٹ اِن ریلے مشہور پتے ہیں جنہیں نیٹ ورک فلٹر روک سکتا ہے — اس لیے آپ اپنے ریلے شامل کر سکتے ہیں۔"
           }
         },
         "vi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "khi mesh không tới được ai đó, tin nhắn riêng đi qua các relay này. các relay tích hợp là những địa chỉ ai cũng biết nên bộ lọc mạng có thể chặn — vì vậy bạn có thể thêm relay của mình, kể cả địa chỉ .onion."
+            "value" : "khi mesh không tới được ai đó, tin nhắn riêng đi qua các relay này. các relay tích hợp là những địa chỉ ai cũng biết nên bộ lọc mạng có thể chặn — vì vậy bạn có thể thêm relay của mình."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "当 mesh 无法触达某人时，私密消息会经这些中继传递。内置中继是众所周知的地址，网络过滤可以封锁它们 — 所以你可以添加自己的中继，包括 .onion 地址。"
+            "value" : "当 mesh 无法触达某人时，私密消息会经这些中继传递。内置中继是众所周知的地址，网络过滤可以封锁它们 — 所以你可以添加自己的中继。"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "當 mesh 無法觸及某人時，私密訊息會經這些中繼傳遞。內建中繼是眾所周知的位址，網路過濾可以封鎖它們 — 所以你可以加入自己的中繼，包括 .onion 位址。"
+            "value" : "當 mesh 無法觸及某人時，私密訊息會經這些中繼傳遞。內建中繼是眾所周知的位址，網路過濾可以封鎖它們 — 所以你可以加入自己的中繼。"
           }
         }
       }
@@ -85135,6 +85135,192 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "🫵 你被提及"
+          }
+        }
+      }
+    },
+    "notification.redacted.verification.title" : {
+      "comment" : "Lock-screen notification title for peer verification when message previews are hidden; deliberately omits the peer nickname",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "✅ تم التحقق من النظير"
+          }
+        },
+        "bn" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "✅ পিয়ার যাচাইকৃত"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "✅ kontakt verifiziert"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "✅ peer verified"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "✅ par verificado"
+          }
+        },
+        "fa" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "✅ همتا تأیید شد"
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "✅ na-verify ang peer"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "✅ pair vérifié"
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "✅ עמית אומת"
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "✅ पीयर सत्यापित"
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "✅ peer terverifikasi"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "✅ peer verificato"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "✅ ピアを認証しました"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "✅ 피어 인증됨"
+          }
+        },
+        "ms" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "✅ rakan disahkan"
+          }
+        },
+        "ne" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "✅ पियर प्रमाणित भयो"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "✅ peer geverifieerd"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "✅ uczestnik zweryfikowany"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "✅ par verificado"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "✅ par verificado"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "✅ участник проверен"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "✅ deltagare verifierad"
+          }
+        },
+        "ta" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "✅ சகா சரிபார்க்கப்பட்டது"
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "✅ ยืนยันเพียร์แล้ว"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "✅ eş doğrulandı"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "✅ учасника перевірено"
+          }
+        },
+        "ur" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "✅ پیئر کی تصدیق ہو گئی"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "✅ đã xác minh ngang hàng"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "✅ 已验证对端"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "✅ 已驗證對端"
           }
         }
       }
