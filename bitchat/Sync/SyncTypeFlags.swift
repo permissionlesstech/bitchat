@@ -115,14 +115,6 @@ struct SyncTypeFlags: OptionSet {
         return contains(SyncTypeFlags(rawValue: 1 << UInt64(bit)))
     }
 
-    func union(_ other: SyncTypeFlags) -> SyncTypeFlags {
-        SyncTypeFlags(rawValue: rawValue | other.rawValue)
-    }
-
-    func intersection(_ other: SyncTypeFlags) -> SyncTypeFlags {
-        SyncTypeFlags(rawValue: rawValue & other.rawValue)
-    }
-
     /// Compact form for logs, e.g. "message+fragment". Without this, the
     /// per-schedule periodic sync rounds log identical lines and read as
     /// duplicated sends (misdiagnosed twice during July 2026 device testing).

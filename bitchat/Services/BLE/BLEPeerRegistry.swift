@@ -10,9 +10,6 @@ struct BLEPeerInfo: Equatable {
     var isVerifiedNickname: Bool
     var lastSeen: Date
     var capabilities: PeerCapabilities = []
-    /// Distinguishes an old client that omitted the capabilities TLV from a
-    /// modern client that explicitly advertised a set without a given bit.
-    var capabilitiesWereExplicitlyAdvertised: Bool = false
     /// Rendezvous cell from the peer's announce when it advertises `.bridge`.
     var bridgeGeohash: String?
 }
@@ -131,10 +128,6 @@ struct BLEPeerRegistry {
         peers[peerID.toShort()]?.capabilities ?? []
     }
 
-    func capabilitiesWereExplicitlyAdvertised(for peerID: PeerID) -> Bool {
-        peers[peerID.toShort()]?.capabilitiesWereExplicitlyAdvertised == true
-    }
-
     /// Peers whose last verified announce advertised the given capability.
     func peers(advertising capability: PeerCapabilities) -> [PeerID] {
         peers.values.filter { $0.capabilities.contains(capability) }.map(\.peerID)
@@ -245,7 +238,6 @@ struct BLEPeerRegistry {
             isVerifiedNickname: true,
             lastSeen: now,
             capabilities: capabilities ?? [],
-            capabilitiesWereExplicitlyAdvertised: capabilities != nil,
             bridgeGeohash: bridgeGeohash
         )
 

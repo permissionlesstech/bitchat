@@ -108,12 +108,6 @@ enum BLEOutboundLinkPlanner {
         return nil
     }
 
-    static func minimumLinkLimit(peripheralWriteLimits: [Int], centralNotifyLimits: [Int]) -> Int? {
-        [peripheralWriteLimits.min(), centralNotifyLimits.min()]
-            .compactMap { $0 }
-            .min()
-    }
-
     static func shouldSpoolDirectedPacket(
         directedPeerHint: PeerID?,
         selectedLinks: BLEFanoutSelection,
