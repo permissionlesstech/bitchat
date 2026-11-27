@@ -863,6 +863,9 @@ struct AppArchitectureTests {
     @Test("ComposerDraftModel manages mentions, sends, and panic reset")
     @MainActor
     func composerDraftModelBehavior() {
+        ComposerDraftStore.replaceAllForTesting([:])
+        defer { ComposerDraftStore.replaceAllForTesting([:]) }
+
         let draftModel = ComposerDraftModel()
         draftModel.insertMention("alice")
         #expect(draftModel.messageText == "@alice ")
@@ -882,6 +885,167 @@ struct AppArchitectureTests {
         draftModel.resetForPanic()
         #expect(draftModel.messageText.isEmpty)
         #expect(draftModel.activeDraftKey == .mesh)
+    }
+
+    @Test("AppChromeModel runs all per-window panic preparations and survives sibling window close")
+    @MainActor
+    func panicWipeRunsAllWindowPreparationsAndSurvivesSiblingClose() {
+        let viewModel = makeArchitectureViewModel()
+        let privateInboxModel = PrivateInboxModel(conversations: ConversationStore())
+        let chromeModel = AppChromeModel(chatViewModel: viewModel, privateInboxModel: privateInboxModel)
+
+        let hostA = ComposerDraftHost()
+        let hostB = ComposerDraftHost()
+        hostA.model.replaceText("window A sensitive draft")
+        hostB.model.replaceText("window B sensitive draft")
+
+        chromeModel.setPanicPreparation({ [weak draft = hostA.model] in
+            draft?.resetForPanic()
+        }, id: hostA.id)
+        chromeModel.setPanicPreparation({ [weak draft = hostB.model] in
+            draft?.resetForPanic()
+        }, id: hostB.id)
+
+        // Closing window B clears only window B's hook; window A must still wipe.
+        chromeModel.setPanicPreparation(nil, id: hostB.id)
+        chromeModel.panicClearAllData()
+
+        #expect(hostA.model.messageText.isEmpty)
+        #expect(hostA.model.activeDraftKey == .mesh)
+        #expect(hostB.model.messageText == "window B sensitive draft")
+
+        // When both windows remain open, one panic wipe clears both drafts.
+        hostA.model.replaceText("draft A2")
+        hostB.model.replaceText("draft B2")
+        chromeModel.setPanicPreparation({ [weak draft = hostB.model] in
+            draft?.resetForPanic()
+        }, id: hostB.id)
+
+        chromeModel.panicClearAllData()
+
+        #expect(hostA.model.messageText.isEmpty)
+        #expect(hostB.model.messageText.isEmpty)
+    }
+
+    @Test("ComposerDraftHost isolates live drafts per window without observing keystrokes")
+    @MainActor
+    func composerDraftHostIsolatesPerWindowDraftsWithoutObservingKeystrokes() {
+        ComposerDraftStore.replaceAllForTesting([:])
+        defer { ComposerDraftStore.replaceAllForTesting([:]) }
+
+        let hostA = ComposerDraftHost()
+        let hostB = ComposerDraftHost()
+
+        var hostAPublishCount = 0
+        let cancellable = hostA.objectWillChange.sink { hostAPublishCount += 1 }
+        defer { cancellable.cancel() }
+
+        hostA.model.messageText = "unsaved in window A"
+        hostB.model.loadInitialDraft(for: .mesh)
+
+        #expect(hostA.model.messageText == "unsaved in window A")
+        #expect(hostB.model.messageText.isEmpty)
+        #expect(hostAPublishCount == 0)
+    }
+
+    @Test("AppChromeModel re-presents Bluetooth alert across consecutive alertable states after local dismissal")
+    @MainActor
+    func bluetoothAlertRePresentsAfterLocalDismissal() async {
+        let viewModel = makeArchitectureViewModel()
+        let privateInboxModel = PrivateInboxModel(conversations: ConversationStore())
+        let chromeModel = AppChromeModel(chatViewModel: viewModel, privateInboxModel: privateInboxModel)
+
+        viewModel.updateBluetoothState(.poweredOff)
+        await waitUntil { chromeModel.showBluetoothAlert }
+        #expect(chromeModel.showBluetoothAlert)
+
+        chromeModel.dismissBluetoothAlert()
+        #expect(!chromeModel.showBluetoothAlert)
+        #expect(!viewModel.showBluetoothAlert)
+
+        viewModel.updateBluetoothState(.unauthorized)
+        await waitUntil { chromeModel.showBluetoothAlert }
+        #expect(chromeModel.showBluetoothAlert)
+
+        // Even if the chrome property was cleared locally without touching
+        // ChatViewModel, consecutive alertable transitions must re-present.
+        chromeModel.showBluetoothAlert = false
+        viewModel.updateBluetoothState(.unsupported)
+        await waitUntil { chromeModel.showBluetoothAlert }
+        #expect(chromeModel.showBluetoothAlert)
+    }
+
+    @Test("ComposerDraftModel cancels pending autocomplete debounce across draft lifecycle transitions")
+    @MainActor
+    func composerDraftModelCancelsPendingAutocompleteDebounceOnLifecycleTransitions() async {
+        ComposerDraftStore.replaceAllForTesting([:])
+        defer { ComposerDraftStore.replaceAllForTesting([:]) }
+
+        let viewModel = makeArchitectureViewModel()
+        guard let transport = viewModel.meshService as? MockTransport else {
+            Issue.record("Expected ChatViewModel meshService to be a MockTransport in architecture tests")
+            return
+        }
+        let peerID = PeerID(str: "0011223344556688")
+        transport.peerNicknames[peerID] = "alice"
+        transport.updatePeerSnapshots([
+            makeArchitectureSnapshot(
+                peerID: peerID,
+                nickname: "alice",
+                connected: true,
+                noisePublicKey: Data(repeating: 0x22, count: 32)
+            )
+        ])
+        let autocompleteModel = ComposerAutocompleteModel(chatViewModel: viewModel)
+        let draftModel = ComposerDraftModel(autocompleteDebounceDuration: .milliseconds(30))
+
+        // Baseline sanity check: without cancellation, the 30ms debounce fires.
+        draftModel.replaceText("@a")
+        draftModel.scheduleAutocompleteUpdate(for: "@a", in: autocompleteModel)
+        await waitUntil { autocompleteModel.showAutocomplete }
+        #expect(autocompleteModel.autocompleteSuggestions == ["@alice"])
+        autocompleteModel.dismissAutocomplete()
+        await waitUntil { !autocompleteModel.showAutocomplete }
+
+        func assertDebounceCancelled(after transition: () -> Void) async {
+            draftModel.scheduleAutocompleteUpdate(for: "@a", in: autocompleteModel)
+            transition()
+            try? await Task.sleep(nanoseconds: 80_000_000)
+            #expect(!autocompleteModel.showAutocomplete)
+        }
+
+        draftModel.replaceText("@a")
+        await assertDebounceCancelled {
+            _ = draftModel.takeMessageToSend()
+        }
+
+        draftModel.replaceText("@a")
+        await assertDebounceCancelled {
+            draftModel.switchDraft(to: .location(geohash: "9q8yy"))
+        }
+
+        draftModel.replaceText("@a")
+        await assertDebounceCancelled {
+            draftModel.loadInitialDraft(for: .mesh)
+        }
+
+        draftModel.replaceText("@a")
+        await assertDebounceCancelled {
+            draftModel.replaceText("replaced")
+        }
+    }
+
+    @Test("AppRuntime stores a single identity-equatable AppEnvironmentModels instance")
+    @MainActor
+    func appRuntimeEnvironmentModelsIsStoredAndIdentityEquatable() {
+        let runtime = AppRuntime(
+            keychain: MockKeychain(),
+            idBridge: NostrIdentityBridge(keychain: MockKeychainHelper()),
+            sharedContentStore: nil
+        )
+        let first = runtime.environmentModels
+        let second = runtime.environmentModels
+        #expect(first == second)
     }
 
     @Test("VerificationModel bridges selected conversation and fingerprint actions")

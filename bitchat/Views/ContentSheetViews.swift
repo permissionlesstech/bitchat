@@ -85,7 +85,7 @@ struct ContentPeopleSheetView: View {
                       !hasModalPresentation else {
                     return
                 }
-                appChromeModel.showBluetoothAlert = false
+                appChromeModel.dismissBluetoothAlert()
             }
         )
     }
@@ -156,7 +156,7 @@ struct ContentPeopleSheetView: View {
                 }
             )) {
                 if let peerID = appChromeModel.showingFingerprintFor,
-                   let models = appEnvironmentModels {
+                   let models = appEnvironmentModels.require("ContentPeopleSheetView.contactDetail") {
                     ContactDetailSheet(
                         peerID: peerID,
                         conversationPeerID: privateConversationModel.selectedPeerID ?? peerID,
@@ -181,6 +181,7 @@ struct ContentPeopleSheetView: View {
                 }
             }
         }
+        .environment(\.composerDraftModel, draftModel)
         .foregroundColor(palette.primary)
         .confirmationDialog(
             String(
@@ -335,10 +336,11 @@ private struct ContentPeopleListView: View {
                                 appChromeModel.showFingerprint(for: peerID)
                             },
                             onToggleBlock: { peer in
+                                let uiModel = appEnvironmentModels.require("ContentPeopleListView.onToggleBlock")?.conversationUIModel
                                 if peer.isBlocked {
-                                    appEnvironmentModels?.conversationUIModel.unblock(peerID: peer.peerID, displayName: peer.displayName)
+                                    uiModel?.unblock(peerID: peer.peerID, displayName: peer.displayName)
                                 } else {
-                                    appEnvironmentModels?.conversationUIModel.block(peerID: peer.peerID, displayName: peer.displayName)
+                                    uiModel?.block(peerID: peer.peerID, displayName: peer.displayName)
                                 }
                             }
                         )
@@ -379,7 +381,7 @@ private struct ContentPeopleListView: View {
         }
         .themedSheetBackground()
         .sheet(isPresented: $showVerifySheet) {
-            if let verificationModel = appEnvironmentModels?.verificationModel {
+            if let verificationModel = appEnvironmentModels.require("ContentPeopleListView.verifySheet")?.verificationModel {
                 VerificationSheetView(isPresented: $showVerifySheet)
                     .environmentObject(verificationModel)
             }
@@ -629,7 +631,7 @@ private struct ContentPrivateChatSheetView: View {
             }
         }
         .sheet(isPresented: $showWalkieTalkieSheet) {
-            if let models = appEnvironmentModels {
+            if let models = appEnvironmentModels.require("ContentPrivateChatSheetView.walkieTalkieSheet") {
                 WalkieTalkieSheetView(
                     voiceRecordingVM: voiceRecordingVM,
                     allowsChannelSwitching: false

@@ -41,7 +41,6 @@ private struct SmokeFeatureModels {
     let verificationModel: VerificationModel
     let conversationUIModel: ConversationUIModel
     let composerAutocompleteModel: ComposerAutocompleteModel
-    let composerDraftModel: ComposerDraftModel
     let peerListModel: PeerListModel
     let boardAlertsModel: BoardAlertsModel
     let sharedContentImportModel: SharedContentImportModel
@@ -54,7 +53,6 @@ private struct SmokeFeatureModels {
             verificationModel: verificationModel,
             conversationUIModel: conversationUIModel,
             composerAutocompleteModel: composerAutocompleteModel,
-            composerDraftModel: composerDraftModel,
             locationChannelsModel: locationChannelsModel,
             peerListModel: peerListModel,
             appChromeModel: appChromeModel,
@@ -97,7 +95,6 @@ private func makeSmokeFeatureModels(for viewModel: ChatViewModel) -> SmokeFeatur
         conversations: conversations
     )
     let composerAutocompleteModel = ComposerAutocompleteModel(chatViewModel: viewModel)
-    let composerDraftModel = ComposerDraftModel()
     let peerListModel = PeerListModel(
         chatViewModel: viewModel,
         conversations: conversations,
@@ -121,7 +118,6 @@ private func makeSmokeFeatureModels(for viewModel: ChatViewModel) -> SmokeFeatur
         verificationModel: verificationModel,
         conversationUIModel: conversationUIModel,
         composerAutocompleteModel: composerAutocompleteModel,
-        composerDraftModel: composerDraftModel,
         peerListModel: peerListModel,
         boardAlertsModel: boardAlertsModel,
         sharedContentImportModel: SharedContentImportModel(store: nil)
@@ -138,7 +134,7 @@ private func installSmokeEnvironment<V: View>(
 
 @MainActor
 private struct ContentPeopleSheetHarness: View {
-    let draftModel: ComposerDraftModel
+    let draftModel = ComposerDraftModel()
     @State private var showSidebar = true
     @State private var selectedMessageSender: String?
     @State private var selectedMessageSenderID: PeerID?
@@ -525,12 +521,12 @@ struct ViewSmokeTests {
         // set (peerList / publicChat / privateInbox included). Missing any of
         // those crashes the NavigationStack sheet on some iOS versions (#1558).
         _ = mount(installSmokeEnvironment(ContentView(), featureModels: featureModels))
-        _ = mount(installSmokeEnvironment(ContentPeopleSheetHarness(draftModel: featureModels.composerDraftModel), featureModels: featureModels))
+        _ = mount(installSmokeEnvironment(ContentPeopleSheetHarness(), featureModels: featureModels))
 
         featureModels.privateConversationModel.openConversation(for: peerID)
         try? await Task.sleep(nanoseconds: 50_000_000)
 
-        _ = mount(installSmokeEnvironment(ContentPeopleSheetHarness(draftModel: featureModels.composerDraftModel), featureModels: featureModels))
+        _ = mount(installSmokeEnvironment(ContentPeopleSheetHarness(), featureModels: featureModels))
 
         #expect(featureModels.privateConversationModel.selectedPeerID == peerID)
         #expect(featureModels.privateConversationModel.selectedHeaderState?.headerPeerID == peerID)

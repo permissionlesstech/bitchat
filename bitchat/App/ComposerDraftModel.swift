@@ -1,13 +1,24 @@
 import Combine
 import Foundation
 
+/// Non-observing per-window owner for `ComposerDraftModel`.
+///
+/// `ContentView` holds this via `@StateObject` so each macOS `WindowGroup`
+/// window owns its own live draft buffer and panic-preparation registration
+/// ID without subscribing `ContentView` to `ComposerDraftModel.objectWillChange`.
+@MainActor
+final class ComposerDraftHost: ObservableObject {
+    let id = UUID()
+    let model = ComposerDraftModel()
+}
+
 /// Owns the composer's live text draft and autocomplete debounce task outside
 /// `ContentView`, `MessageListView`, and the people/DM sheet shells.
 ///
 /// Only `ContentComposerView` subscribes to this object via `@ObservedObject`;
-/// parent shells and timelines access it through the non-observing
-/// `appEnvironmentModels` environment container so typing never triggers
-/// full-tree or message-list diffs.
+/// parent shells and timelines access it per window through `ComposerDraftHost`
+/// and `@Environment(\.composerDraftModel)` so typing never triggers
+/// full-tree or message-list diffs and macOS windows keep independent drafts.
 @MainActor
 final class ComposerDraftModel: ObservableObject {
     @Published var messageText = ""
@@ -15,8 +26,11 @@ final class ComposerDraftModel: ObservableObject {
 
     private(set) var activeDraftKey: ComposerDraftStore.Key = .mesh
     private var autocompleteDebounceTask: Task<Void, Never>?
+    private let autocompleteDebounceDuration: Duration
 
-    init() {}
+    init(autocompleteDebounceDuration: Duration = .milliseconds(150)) {
+        self.autocompleteDebounceDuration = autocompleteDebounceDuration
+    }
 
     func setReplyTarget(_ target: MessageReplyTarget?) {
         if replyTarget != target {
@@ -31,6 +45,7 @@ final class ComposerDraftModel: ObservableObject {
     }
 
     func loadInitialDraft(for key: ComposerDraftStore.Key) {
+        cancelAutocompleteDebounce()
         activeDraftKey = key
         let loaded = ComposerDraftStore.load(key)
         if messageText != loaded {
@@ -40,6 +55,7 @@ final class ComposerDraftModel: ObservableObject {
 
     func switchDraft(to newKey: ComposerDraftStore.Key) {
         guard newKey != activeDraftKey else { return }
+        cancelAutocompleteDebounce()
         ComposerDraftStore.save(messageText, for: activeDraftKey)
         activeDraftKey = newKey
         clearReplyTarget()
@@ -54,6 +70,7 @@ final class ComposerDraftModel: ObservableObject {
     }
 
     func replaceText(_ text: String) {
+        cancelAutocompleteDebounce()
         messageText = text
     }
 
@@ -74,6 +91,7 @@ final class ComposerDraftModel: ObservableObject {
     func takeMessageToSend() -> String? {
         guard let trimmed = messageText.trimmedOrNilIfEmpty else { return nil }
         let activeReply = replyTarget
+        cancelAutocompleteDebounce()
         messageText = ""
         replyTarget = nil
         ComposerDraftStore.save("", for: activeDraftKey)
@@ -102,13 +120,13 @@ final class ComposerDraftModel: ObservableObject {
         // spawning a debounce Task on every keystroke once the panel is closed.
         guard text.contains("@") || autocompleteModel.showAutocomplete else { return }
         let cursorPosition = text.count
+        let debounceDuration = autocompleteDebounceDuration
         autocompleteDebounceTask = Task { @MainActor in
             do {
-                try await Task.sleep(nanoseconds: 150_000_000)
+                try await Task.sleep(for: debounceDuration)
             } catch {
                 return
             }
-            guard !Task.isCancelled else { return }
             autocompleteModel.updateAutocomplete(for: text, cursorPosition: cursorPosition)
         }
     }
