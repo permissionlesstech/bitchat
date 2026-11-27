@@ -117,6 +117,7 @@ struct MeshTopologyView: View {
             .padding(.horizontal)
             .padding(.bottom, 16)
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .onAppear { model = provider() }
         .accessibilityElement(children: .combine)
         .accessibilityLabel(Text(summaryText))
