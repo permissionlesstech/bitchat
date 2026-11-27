@@ -422,6 +422,7 @@ private struct MessageListContentView: View {
                 // mark the row callbacks are checked against) before any row
                 // reports in. Expansion waits until the scroll below has
                 // brought the newest row on screen.
+                bottomRowID = nil
                 bottomSettledContextKey = nil
                 scrollToBottom(on: proxy, privatePeer: privatePeer)
             }
@@ -489,6 +490,10 @@ private struct MessageListContentView: View {
                 cancelFollowScroll()
             }
         }
+        // Reset UIScrollView state when switching channels or DMs so a deep
+        // scroll offset from a populated room never carries over into a
+        // shorter or empty timeline on iOS.
+        .id(contextKey)
         .environment(\.openURL, OpenURLAction { url in
             guard MessageListExternalURLPolicy.isAllowed(url) else {
                 return .discarded
