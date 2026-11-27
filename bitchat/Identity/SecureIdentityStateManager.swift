@@ -193,6 +193,7 @@ final class SecureIdentityStateManager: SecureIdentityStateManagerProtocol {
     /// state we must NOT persist (it would overwrite the real cache with data the
     /// next launch can't decrypt) and must NOT delete the existing cache.
     private var encryptionKeyIsEphemeral: Bool
+    private var cacheReadUnavailable: Bool = false
     
     init(_ keychain: KeychainManagerProtocol) {
         self.keychain = keychain
@@ -266,20 +267,31 @@ final class SecureIdentityStateManager: SecureIdentityStateManagerProtocol {
     // MARK: - Secure Loading/Saving
     
     private func loadIdentityCache() {
-        guard let encryptedData = keychain.getIdentityKey(forKey: cacheKey) else {
-            // No existing cache, start fresh
+        switch keychain.getIdentityKeyWithResult(forKey: cacheKey) {
+        case .success(let encryptedData):
+            do {
+                let sealedBox = try AES.GCM.SealedBox(combined: encryptedData)
+                let decryptedData = try AES.GCM.open(sealedBox, using: encryptionKey)
+                cache = try JSONDecoder().decode(IdentityCache.self, from: decryptedData)
+            } catch {
+                cache = IdentityCache()
+                let deleted = keychain.deleteIdentityKey(forKey: cacheKey)
+                SecureLogger.warning(
+                    "Discarded unreadable identity cache; starting fresh (deleted=\(deleted), error=\(error.localizedDescription))",
+                    category: .security
+                )
+            }
+
+        case .itemNotFound:
+            // Genuine first run: no existing cache, start fresh.
             return
-        }
-        
-        do {
-            let sealedBox = try AES.GCM.SealedBox(combined: encryptedData)
-            let decryptedData = try AES.GCM.open(sealedBox, using: encryptionKey)
-            cache = try JSONDecoder().decode(IdentityCache.self, from: decryptedData)
-        } catch {
-            cache = IdentityCache()
-            let deleted = keychain.deleteIdentityKey(forKey: cacheKey)
+
+        case .deviceLocked, .authenticationFailed, .accessDenied, .otherError:
+            // Transient/critical read failure: leave the persisted cache intact
+            // and avoid overwriting it during this session.
+            cacheReadUnavailable = true
             SecureLogger.warning(
-                "Discarded unreadable identity cache; starting fresh (deleted=\(deleted), error=\(error.localizedDescription))",
+                "Identity cache unavailable from keychain; refusing to overwrite persisted cache this session",
                 category: .security
             )
         }
@@ -311,13 +323,13 @@ final class SecureIdentityStateManager: SecureIdentityStateManagerProtocol {
     /// can spin forever (observed as a CI test-suite hang), so the snapshot
     /// must be taken on `queue`, never off it.
     /// - Returns: `true` if persisted (or intentionally skipped under an ephemeral
-    ///   session key), `false` if encoding/sealing/Keychain save failed.
+    ///   session key or transient cache-read failure), `false` if encoding/sealing/Keychain save failed.
     @discardableResult
     private func persist(snapshot: IdentityCache) -> Bool {
-        // Never persist under an ephemeral key — it would overwrite the real
-        // cache with data the next launch cannot decrypt.
-        guard !encryptionKeyIsEphemeral else {
-            SecureLogger.debug("Skipping identity cache save (ephemeral key this session)", category: .security)
+        // Never persist under an ephemeral key or after a transient cache-read
+        // failure — doing so would overwrite persisted identity pins/blocks.
+        guard !encryptionKeyIsEphemeral, !cacheReadUnavailable else {
+            SecureLogger.debug("Skipping identity cache save (keychain unavailable at load)", category: .security)
             return true
         }
 
@@ -686,6 +698,7 @@ final class SecureIdentityStateManager: SecureIdentityStateManagerProtocol {
         
         queue.sync(flags: .barrier) {
             self.cache = IdentityCache()
+            self.cacheReadUnavailable = false
             self.ephemeralSessions.removeAll()
             self.pendingSave = false
 

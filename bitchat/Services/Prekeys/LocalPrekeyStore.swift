@@ -77,7 +77,7 @@ final class LocalPrekeyStore {
     /// initial batch on first use. Sorted by ID for canonical signing bytes.
     func currentBundlePrekeys() -> (prekeys: [PrekeyBundle.Prekey], generatedAt: UInt64) {
         queue.sync {
-            loadLocked()
+            guard loadLocked() else { return ([], 0) }
             _ = replenishLocked()
             let prekeys = records
                 .filter { $0.consumedAt == nil }
@@ -96,7 +96,7 @@ final class LocalPrekeyStore {
     /// redelivery grace window.
     func privateKey(for id: UInt32) -> Curve25519.KeyAgreement.PrivateKey? {
         queue.sync {
-            loadLocked()
+            guard loadLocked() else { return nil }
             let date = now()
             guard let record = records.first(where: { $0.id == id }) else { return nil }
             if let consumedAt = record.consumedAt,
@@ -120,7 +120,7 @@ final class LocalPrekeyStore {
     @discardableResult
     func markConsumed(_ id: UInt32) -> Bool {
         queue.sync {
-            loadLocked()
+            guard loadLocked() else { return false }
             guard let index = records.firstIndex(where: { $0.id == id }),
                   records[index].consumedAt == nil else { return false }
             records[index].consumedAt = now()
@@ -136,14 +136,14 @@ final class LocalPrekeyStore {
     @discardableResult
     func replenishIfNeeded() -> Bool {
         queue.sync {
-            loadLocked()
+            guard loadLocked() else { return false }
             return replenishLocked()
         }
     }
 
     var unconsumedCount: Int {
         queue.sync {
-            loadLocked()
+            guard loadLocked() else { return 0 }
             return records.filter { $0.consumedAt == nil }.count
         }
     }
@@ -203,16 +203,29 @@ final class LocalPrekeyStore {
         generatedAt = max(nowMillis, generatedAt &+ 1)
     }
 
-    private func loadLocked() {
-        guard !loaded else { return }
-        loaded = true
-        guard let data = keychain.getIdentityKey(forKey: Self.keychainKey),
-              let persisted = try? JSONDecoder().decode(Persisted.self, from: data) else {
-            return
+    private func loadLocked() -> Bool {
+        guard !loaded else { return true }
+        switch keychain.getIdentityKeyWithResult(forKey: Self.keychainKey) {
+        case .success(let data):
+            loaded = true
+            if let persisted = try? JSONDecoder().decode(Persisted.self, from: data) {
+                records = persisted.records
+                nextID = persisted.nextID
+                generatedAt = persisted.generatedAt
+            }
+            return true
+        case .itemNotFound:
+            loaded = true
+            return true
+        case .deviceLocked, .authenticationFailed, .accessDenied, .otherError:
+            // Leave `loaded = false` so a subsequent unlocked call retries,
+            // and refuse to replenish/overwrite the persisted prekey store.
+            SecureLogger.warning(
+                "Local prekey store unavailable from keychain; refusing to overwrite",
+                category: .keychain
+            )
+            return false
         }
-        records = persisted.records
-        nextID = persisted.nextID
-        generatedAt = persisted.generatedAt
     }
 
     private func persistLocked() {
