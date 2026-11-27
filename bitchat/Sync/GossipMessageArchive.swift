@@ -48,7 +48,7 @@ final class GossipMessageArchive {
             let data = try JSONEncoder().encode(packets)
             var options: Data.WritingOptions = [.atomic]
             #if os(iOS)
-            options.insert(.completeFileProtection)
+            options.insert(.completeFileProtectionUntilFirstUserAuthentication)
             #endif
             try data.write(to: fileURL, options: options)
         } catch {

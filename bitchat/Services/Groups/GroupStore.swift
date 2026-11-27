@@ -34,7 +34,7 @@ final class GroupStore: ObservableObject {
             fileURL: fileURL,
             subdirectory: "groups",
             fileName: "groups.json",
-            protection: .complete
+            protection: .untilFirstUserAuthentication
         )
         loadFromDisk()
     }

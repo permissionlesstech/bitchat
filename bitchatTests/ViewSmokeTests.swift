@@ -916,4 +916,33 @@ struct ViewSmokeTests {
         window.isHidden = true
     }
     #endif
+
+    @Test("Message list external URL allowlist permits only safe schemes")
+    func messageListExternalURLAllowlist() throws {
+        let allowed = [
+            "https://bitchat.free",
+            "http://example.com",
+            "HTTPS://EXAMPLE.COM/path",
+            "cashu:cashuA_test",
+            "lightning:lnbc1test",
+            "bitchat://verify?name=alice"
+        ]
+        for raw in allowed {
+            let url = try #require(URL(string: raw))
+            #expect(MessageListExternalURLPolicy.isAllowed(url), "Expected \(raw) to be allowed")
+        }
+
+        let blocked = [
+            "tel:+15551234567",
+            "sms:+15551234567",
+            "mailto:alice@example.com",
+            "file:///etc/passwd",
+            "javascript:alert(1)",
+            "itms-services://?action=download-manifest"
+        ]
+        for raw in blocked {
+            let url = try #require(URL(string: raw))
+            #expect(!MessageListExternalURLPolicy.isAllowed(url), "Expected \(raw) to be blocked")
+        }
+    }
 }
