@@ -291,20 +291,41 @@ actor VoiceRecorder {
         #endif
     }
 
-    private func makeOutputURL() throws -> URL {
+    private static let fileNameDateFormatter: DateFormatter = {
         let formatter = DateFormatter()
         formatter.dateFormat = "yyyyMMdd_HHmmss"
-        let fileName = "voice_\(formatter.string(from: Date()))_\(UUID().uuidString).m4a"
+        return formatter
+    }()
 
-        let baseDirectory = try outputDirectory
-            ?? applicationFilesDirectory().appendingPathComponent("voicenotes/outgoing", isDirectory: true)
-        try FileManager.default.createDirectory(at: baseDirectory, withIntermediateDirectories: true, attributes: BLEIncomingFileStore.mediaProtectionAttributes)
+    nonisolated static func makeOutgoingVoiceNoteURL(
+        fileName: String,
+        outputDirectory: URL? = nil
+    ) throws -> URL {
+        let baseDirectory: URL
+        if let outputDirectory {
+            baseDirectory = outputDirectory
+        } else {
+            let appSupport = try FileManager.default.url(
+                for: .applicationSupportDirectory,
+                in: .userDomainMask,
+                appropriateFor: nil,
+                create: true
+            )
+            baseDirectory = appSupport
+                .appendingPathComponent("files", isDirectory: true)
+                .appendingPathComponent("voicenotes/outgoing", isDirectory: true)
+        }
+        try FileManager.default.createDirectory(
+            at: baseDirectory,
+            withIntermediateDirectories: true,
+            attributes: BLEIncomingFileStore.mediaProtectionAttributes
+        )
         return baseDirectory.appendingPathComponent(fileName)
     }
 
-    private func applicationFilesDirectory() throws -> URL {
-        try FileManager.default.url(for: .applicationSupportDirectory, in: .userDomainMask, appropriateFor: nil, create: true)
-            .appendingPathComponent("files", isDirectory: true)
+    private func makeOutputURL() throws -> URL {
+        let fileName = "voice_\(Self.fileNameDateFormatter.string(from: Date()))_\(UUID().uuidString).m4a"
+        return try Self.makeOutgoingVoiceNoteURL(fileName: fileName, outputDirectory: outputDirectory)
     }
 
     /// Fire-and-forget: the coordinator hops the blocking deactivation IPC

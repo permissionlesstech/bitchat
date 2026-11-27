@@ -1303,7 +1303,7 @@ struct ChatViewModelPrivateMediaDeletionTests {
     }
 
     @Test @MainActor
-    func stableDeleteProtectsPathSharedWithLegacyBubble() {
+    func stableDeleteRefusalKeepsBubblesAndSurfacesSystemMessage() {
         let (viewModel, transport) = makeTestableViewModel()
         transport.persistDeletedPrivateMediaResult = false
         let peerID = PeerID(str: String(repeating: "6", count: 64))
@@ -1332,11 +1332,9 @@ struct ChatViewModelPrivateMediaDeletionTests {
         #expect(
             transport.deletedPrivateMediaMessageIDBatches == [[stableID]]
         )
-        #expect(transport.deletedPrivateMediaRelativePaths == [[:]])
         #expect(
-            transport.protectedPrivateMediaRelativePaths == [[
-                "images/incoming/\(filename)"
-            ]]
+            transport.deletedPrivateMediaRelativePaths
+                == [[stableID: "images/incoming/\(filename)"]]
         )
         let messages = viewModel.privateChats[peerID] ?? []
         #expect(messages.prefix(2).map(\.id) == [stableID, legacyID])

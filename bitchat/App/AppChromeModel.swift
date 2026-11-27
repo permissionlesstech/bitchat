@@ -163,63 +163,25 @@ final class AppChromeModel: ObservableObject {
             }
             .store(in: &cancellables)
 
-        chatViewModel.$nickname
-            .removeDuplicates()
-            .dropFirst()
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] nickname in
-                guard let self, self.nickname != nickname else { return }
-                self.nickname = nickname
-            }
-            .store(in: &cancellables)
+        mirror(chatViewModel.$nickname, to: \.nickname)
+        mirror(chatViewModel.$showBluetoothAlert, to: \.showBluetoothAlert)
+        mirror(chatViewModel.$bluetoothAlertMessage, to: \.bluetoothAlertMessage)
+        mirror(chatViewModel.$bluetoothState, to: \.bluetoothState)
+        mirror(chatViewModel.$torBlocked, to: \.torBlocked)
+        mirror(chatViewModel.$panicRecoveryBlocked, to: \.panicWipeBlocked)
+    }
 
-        chatViewModel.$showBluetoothAlert
+    private func mirror<Value: Equatable>(
+        _ publisher: Published<Value>.Publisher,
+        to keyPath: ReferenceWritableKeyPath<AppChromeModel, Value>
+    ) {
+        publisher
             .removeDuplicates()
             .dropFirst()
             .receive(on: DispatchQueue.main)
-            .sink { [weak self] showAlert in
-                guard let self, self.showBluetoothAlert != showAlert else { return }
-                self.showBluetoothAlert = showAlert
-            }
-            .store(in: &cancellables)
-
-        chatViewModel.$bluetoothAlertMessage
-            .removeDuplicates()
-            .dropFirst()
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] message in
-                guard let self, self.bluetoothAlertMessage != message else { return }
-                self.bluetoothAlertMessage = message
-            }
-            .store(in: &cancellables)
-
-        chatViewModel.$bluetoothState
-            .removeDuplicates()
-            .dropFirst()
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] state in
-                guard let self, self.bluetoothState != state else { return }
-                self.bluetoothState = state
-            }
-            .store(in: &cancellables)
-
-        chatViewModel.$torBlocked
-            .removeDuplicates()
-            .dropFirst()
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] blocked in
-                guard let self, self.torBlocked != blocked else { return }
-                self.torBlocked = blocked
-            }
-            .store(in: &cancellables)
-
-        chatViewModel.$panicRecoveryBlocked
-            .removeDuplicates()
-            .dropFirst()
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] blocked in
-                guard let self, self.panicWipeBlocked != blocked else { return }
-                self.panicWipeBlocked = blocked
+            .sink { [weak self] value in
+                guard let self, self[keyPath: keyPath] != value else { return }
+                self[keyPath: keyPath] = value
             }
             .store(in: &cancellables)
     }

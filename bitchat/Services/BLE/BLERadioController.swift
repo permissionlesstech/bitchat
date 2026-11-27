@@ -473,3 +473,98 @@ private extension CBPeripheralState {
         }
     }
 }
+
+
+// MARK: - Scan Duty Policy
+
+enum BLEScanDutyPlan: Equatable {
+    case continuous
+    case dutyCycle(onDuration: TimeInterval, offDuration: TimeInterval)
+}
+
+enum BLEScanDutyPolicy {
+    static func plan(
+        appIsActive: Bool,
+        connectedCount: Int,
+        hasRecentTraffic: Bool,
+        highDegreeThreshold: Int = TransportConfig.bleHighDegreeThreshold,
+        lowPowerMode: Bool = false
+    ) -> BLEScanDutyPlan {
+        if lowPowerMode && appIsActive && !hasRecentTraffic {
+            if connectedCount >= highDegreeThreshold {
+                return .dutyCycle(onDuration: 2.0, offDuration: 20.0)
+            }
+            return .dutyCycle(
+                onDuration: TransportConfig.bleDutyOnDurationDense,
+                offDuration: TransportConfig.bleDutyOffDurationDense
+            )
+        }
+
+        let forceContinuousScan = connectedCount <= 2 || hasRecentTraffic
+        let shouldDutyCycle = appIsActive && connectedCount > 0 && !forceContinuousScan
+
+        guard shouldDutyCycle else {
+            return .continuous
+        }
+
+        if connectedCount >= highDegreeThreshold {
+            return .dutyCycle(
+                onDuration: TransportConfig.bleDutyOnDurationDense,
+                offDuration: TransportConfig.bleDutyOffDurationDense
+            )
+        }
+
+        return .dutyCycle(
+            onDuration: TransportConfig.bleDutyOnDuration,
+            offDuration: TransportConfig.bleDutyOffDuration
+        )
+    }
+}
+
+// MARK: - Recent Peripheral Cache
+
+/// Remembers recently seen bitchat peripherals so pending background connects
+/// can be armed when the app leaves the foreground.
+final class BLERecentPeripheralCache<Peripheral> {
+    private struct Entry {
+        let peripheral: Peripheral
+        var lastSeen: Date
+    }
+
+    private var entries: [String: Entry] = [:]
+    private let capacity: Int
+    private let maxAge: TimeInterval
+
+    init(
+        capacity: Int = TransportConfig.bleRecentPeripheralCacheCap,
+        maxAge: TimeInterval = TransportConfig.bleRecentPeripheralMaxAgeSeconds
+    ) {
+        self.capacity = capacity
+        self.maxAge = maxAge
+    }
+
+    var count: Int { entries.count }
+
+    func record(_ peripheral: Peripheral, peripheralID: String, at now: Date) {
+        entries[peripheralID] = Entry(peripheral: peripheral, lastSeen: now)
+        guard entries.count > capacity else { return }
+        if let stalest = entries.min(by: { $0.value.lastSeen < $1.value.lastSeen }) {
+            entries.removeValue(forKey: stalest.key)
+        }
+    }
+
+    func reconnectTargets(
+        now: Date,
+        limit: Int,
+        excluding: (String) -> Bool
+    ) -> [(peripheralID: String, peripheral: Peripheral)] {
+        let cutoff = now.addingTimeInterval(-maxAge)
+        entries = entries.filter { $0.value.lastSeen >= cutoff }
+        guard limit > 0 else { return [] }
+        return entries
+            .filter { !excluding($0.key) }
+            .sorted { $0.value.lastSeen > $1.value.lastSeen }
+            .prefix(limit)
+            .map { (peripheralID: $0.key, peripheral: $0.value.peripheral) }
+    }
+}

@@ -10,11 +10,8 @@ import Foundation
 /// testable (see `ChatOutgoingCoordinatorContextTests`) and makes its true
 /// dependencies explicit.
 @MainActor
-protocol ChatOutgoingContext: AnyObject {
-    // MARK: Identity & channel state
-    var nickname: String { get }
-    var myPeerID: PeerID { get }
-    var activeChannel: ChannelID { get }
+protocol ChatOutgoingContext: ChatIdentityContext {
+    // MARK: Channel & selection state
     var selectedPrivateChatPeer: PeerID? { get }
     var isTeleported: Bool { get }
 

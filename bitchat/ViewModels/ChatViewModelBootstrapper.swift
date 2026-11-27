@@ -312,6 +312,19 @@ private extension ChatViewModelBootstrapper {
         )
     }
 
+    private static func publishToGeoRelays(event: NostrEvent, geohash: String, logPrefix: String) {
+        let relays = GeoRelayDirectory.shared.closestRelays(
+            toGeohash: geohash,
+            count: TransportConfig.nostrGeoRelayCount
+        )
+        // Refuse rather than publish to default relays no geo subscriber reads.
+        guard !relays.isEmpty else {
+            SecureLogger.warning("\(logPrefix): no geo relays for #\(geohash); not publishing", category: .session)
+            return
+        }
+        NostrRelayManager.shared.sendEvent(event, to: relays)
+    }
+
     /// Wires the gateway-mode policy layer (`GatewayService`) to the mesh
     /// transport, the relay manager, and the inbound Nostr pipeline. All
     /// dependencies are closures so the service stays unit-testable with
@@ -323,19 +336,7 @@ private extension ChatViewModelBootstrapper {
         let gateway = GatewayService.shared
 
         gateway.publishToRelays = { event, geohash in
-            let relays = GeoRelayDirectory.shared.closestRelays(
-                toGeohash: geohash,
-                count: TransportConfig.nostrGeoRelayCount
-            )
-            // Symmetric with the local send path (GeohashSubscriptionManager
-            // .sendGeohash): with no known geo relay, refuse rather than
-            // publish to default relays no geo subscriber reads — that would
-            // be silent dead traffic, not delivery.
-            guard !relays.isEmpty else {
-                SecureLogger.warning("🌐 Gateway: no geo relays for #\(geohash); not publishing carried event", category: .session)
-                return
-            }
-            NostrRelayManager.shared.sendEvent(event, to: relays)
+            Self.publishToGeoRelays(event: event, geohash: geohash, logPrefix: "🌐 Gateway")
         }
         gateway.broadcastToMesh = { [weak bleService] payload in
             bleService?.broadcastNostrCarrier(payload)
@@ -403,15 +404,7 @@ private extension ChatViewModelBootstrapper {
         let idBridge = viewModel.idBridge
 
         bridge.publishToRelays = { event, cell in
-            let relays = GeoRelayDirectory.shared.closestRelays(
-                toGeohash: cell,
-                count: TransportConfig.nostrGeoRelayCount
-            )
-            guard !relays.isEmpty else {
-                SecureLogger.warning("🌉 Bridge: no geo relays for cell \(cell); not publishing", category: .session)
-                return
-            }
-            NostrRelayManager.shared.sendEvent(event, to: relays)
+            Self.publishToGeoRelays(event: event, geohash: cell, logPrefix: "🌉 Bridge")
         }
         bridge.openSubscription = { cells in
             guard let cell = cells.first else { return }

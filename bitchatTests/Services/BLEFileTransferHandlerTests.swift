@@ -21,7 +21,8 @@ struct BLEFileTransferHandlerTests {
         var receiptCommits: [(messageID: String, storedURL: URL)] = []
         var receiptCommitSucceeds = true
         var removedIncomingFiles: [URL] = []
-        var finishedIncomingFileDeliveries: [URL] = []
+        var beganPendingDeliveries: [URL] = []
+        var finishedPendingDeliveries: [URL] = []
         var lastSeenUpdates: [PeerID] = []
         var deliveryAcks: [(messageID: String, peerID: PeerID)] = []
         var deliveredMessages: [BitchatMessage] = []
@@ -37,84 +38,11 @@ struct BLEFileTransferHandlerTests {
         var receiptStateOverride: ((String) -> BLEPrivateMediaReceiptState)?
         var receiptCommitOverride: ((String, URL) -> Bool)?
         var removeIncomingFileOverride: ((URL) -> Void)?
-        var finishIncomingFileDeliveryOverride: ((URL) -> Void)?
     }
 
     private let localPeerID = PeerID(str: "0102030405060708")
     private let remotePeerID = PeerID(str: "1122334455667788")
     private let sampleSigningKey = Data(repeating: 0xAB, count: 32)
-
-    @Test @MainActor
-    func deliveryGateFinalizesInitialRejection() {
-        var completions = 0
-        var finalizations = 0
-
-        TransportEventDeliveryGate.attempt(
-            shouldDeliver: { false },
-            deliver: {
-                Issue.record("delivery sink must not run")
-                return .accepted
-            },
-            completion: { completions += 1 },
-            finalization: { _ in finalizations += 1 }
-        )
-
-        #expect(completions == 0)
-        #expect(finalizations == 1)
-    }
-
-    @Test @MainActor
-    func deliveryGateFinalizesMissingOrRejectingSink() {
-        var completions = 0
-        var finalizations = 0
-
-        TransportEventDeliveryGate.attempt(
-            shouldDeliver: { true },
-            deliver: { .rejected },
-            completion: { completions += 1 },
-            finalization: { _ in finalizations += 1 }
-        )
-
-        #expect(completions == 0)
-        #expect(finalizations == 1)
-    }
-
-    @Test @MainActor
-    func deliveryGateFinalizesPostInsertionRejection() {
-        var deliveryChecks = 0
-        var completions = 0
-        var finalizations = 0
-
-        TransportEventDeliveryGate.attempt(
-            shouldDeliver: {
-                deliveryChecks += 1
-                return deliveryChecks == 1
-            },
-            deliver: { .accepted },
-            completion: { completions += 1 },
-            finalization: { _ in finalizations += 1 }
-        )
-
-        #expect(deliveryChecks == 2)
-        #expect(completions == 0)
-        #expect(finalizations == 1)
-    }
-
-    @Test @MainActor
-    func deliveryGatePreservesInvokedUnconfirmedOutcomeWithoutAck() {
-        var completions = 0
-        var outcomes: [TransportEventDeliveryOutcome] = []
-
-        TransportEventDeliveryGate.attempt(
-            shouldDeliver: { true },
-            deliver: { .invokedUnconfirmed },
-            completion: { completions += 1 },
-            finalization: { outcomes.append($0) }
-        )
-
-        #expect(completions == 0)
-        #expect(outcomes == [.invokedUnconfirmed])
-    }
 
     private func makeHandler(recorder: Recorder) -> BLEFileTransferHandler {
         let environment = BLEFileTransferHandlerEnvironment(
@@ -162,9 +90,11 @@ struct BLEFileTransferHandlerTests {
                 recorder.removedIncomingFiles.append(storedURL)
                 recorder.removeIncomingFileOverride?(storedURL)
             },
-            finishIncomingFileDelivery: { storedURL in
-                recorder.finishedIncomingFileDeliveries.append(storedURL)
-                recorder.finishIncomingFileDeliveryOverride?(storedURL)
+            beginPendingDelivery: { storedURL in
+                recorder.beganPendingDeliveries.append(storedURL)
+            },
+            finishPendingDelivery: { storedURL in
+                recorder.finishedPendingDeliveries.append(storedURL)
             },
             isPrivateMediaSenderBlocked: { peerID in
                 recorder.blockedPeers.contains(peerID)
@@ -216,6 +146,8 @@ struct BLEFileTransferHandlerTests {
         #expect(recorder.saveCalls.first?.defaultPrefix == "file")
         #expect(recorder.lastSeenUpdates.isEmpty)
         #expect(recorder.deliveredMessages.count == 1)
+        #expect(recorder.beganPendingDeliveries == [recorder.saveResult])
+        #expect(recorder.finishedPendingDeliveries == [recorder.saveResult])
         let message = recorder.deliveredMessages.first
         #expect(message?.sender == "Alice")
         #expect(message?.content == "[file] sample.pdf")
@@ -289,6 +221,8 @@ struct BLEFileTransferHandlerTests {
 
         #expect(recorder.signedNameQueries == [remotePeerID])
         #expect(recorder.deliveredMessages.count == 1)
+        #expect(recorder.beganPendingDeliveries == [recorder.saveResult])
+        #expect(recorder.finishedPendingDeliveries == [recorder.saveResult])
         #expect(recorder.deliveredMessages.first?.sender == "Bob")
     }
 
@@ -311,6 +245,8 @@ struct BLEFileTransferHandlerTests {
         #expect(recorder.signatureVerifyCount == 1)
         #expect(recorder.signedNameQueries.isEmpty)
         #expect(recorder.deliveredMessages.count == 1)
+        #expect(recorder.beganPendingDeliveries == [recorder.saveResult])
+        #expect(recorder.finishedPendingDeliveries == [recorder.saveResult])
         #expect(recorder.deliveredMessages.first?.sender == "Me")
     }
 
@@ -327,6 +263,8 @@ struct BLEFileTransferHandlerTests {
         // signature lookup (mirrors BLEPublicMessageHandler).
         #expect(recorder.signedNameQueries == [remotePeerID])
         #expect(recorder.deliveredMessages.count == 1)
+        #expect(recorder.beganPendingDeliveries == [recorder.saveResult])
+        #expect(recorder.finishedPendingDeliveries == [recorder.saveResult])
         #expect(recorder.deliveredMessages.first?.sender == "Carol")
     }
 
@@ -418,6 +356,8 @@ struct BLEFileTransferHandlerTests {
         #expect(recorder.trackedPackets.isEmpty)
         #expect(recorder.lastSeenUpdates == [remotePeerID])
         #expect(recorder.deliveredMessages.count == 1)
+        #expect(recorder.beganPendingDeliveries == [recorder.saveResult])
+        #expect(recorder.finishedPendingDeliveries == [recorder.saveResult])
         #expect(recorder.deliveredMessages.first?.isPrivate == true)
         #expect(recorder.deliveredMessages.first?.id.hasPrefix("media-") == false)
         // Must be explicit: BitchatMessage defaults private messages to
@@ -451,6 +391,8 @@ struct BLEFileTransferHandlerTests {
         #expect(recorder.saveCalls.first?.data == content)
         #expect(recorder.lastSeenUpdates == [remotePeerID])
         #expect(recorder.deliveredMessages.count == 1)
+        #expect(recorder.beganPendingDeliveries == [recorder.saveResult])
+        #expect(recorder.finishedPendingDeliveries == [recorder.saveResult])
         #expect(recorder.deliveredMessages.first?.isPrivate == true)
         #expect(recorder.deliveredMessages.first?.timestamp == timestamp)
         #expect(recorder.deliveredMessages.first?.id == PrivateMediaMessageIdentity.stableID(
@@ -496,9 +438,6 @@ struct BLEFileTransferHandlerTests {
         recorder.removeIncomingFileOverride = {
             store.removeIncomingFile(at: $0)
         }
-        recorder.finishIncomingFileDeliveryOverride = {
-            store.finishIncomingFileDelivery(at: $0)
-        }
 
         let content = TestImageFixtures.makeJPEG()
         let fileName =
@@ -523,11 +462,10 @@ struct BLEFileTransferHandlerTests {
         ))
         #expect(recorder.deliveredMessages.isEmpty)
         #expect(recorder.deliveryAcks.isEmpty)
-        #expect(recorder.finishedIncomingFileDeliveries.count == 1)
-        #expect(store.reservePrivateMediaDeletion(
+        #expect(store.commitPrivateMediaDeletion(
             messageIDs: [stableID],
             payloadRelativePaths: [:]
-        ) != nil)
+        ))
     }
 
     @Test
@@ -554,6 +492,8 @@ struct BLEFileTransferHandlerTests {
         #expect(recorder.receiptCommits.isEmpty)
         #expect(recorder.deliveryAcks.isEmpty)
         #expect(recorder.deliveredMessages.count == 1)
+        #expect(recorder.beganPendingDeliveries == [recorder.saveResult])
+        #expect(recorder.finishedPendingDeliveries == [recorder.saveResult])
         #expect(recorder.deliveredMessages.first?.id.hasPrefix("media-") == false)
     }
 
@@ -581,7 +521,6 @@ struct BLEFileTransferHandlerTests {
         #expect(recorder.deliveredMessages.isEmpty)
         #expect(recorder.removedIncomingFiles.count == 1)
         #expect(recorder.removedIncomingFiles.first == recorder.saveResult)
-        #expect(recorder.finishedIncomingFileDeliveries.isEmpty)
     }
 
     @Test
@@ -606,13 +545,10 @@ struct BLEFileTransferHandlerTests {
 
         #expect(handler.handle(packet, from: remotePeerID))
         #expect(recorder.deliveredMessages.count == 1)
+        #expect(recorder.beganPendingDeliveries == [recorder.saveResult])
+        #expect(recorder.finishedPendingDeliveries == [recorder.saveResult])
         #expect(recorder.deliveryAcks.isEmpty)
         #expect(recorder.removedIncomingFiles.isEmpty)
-        #expect(recorder.finishedIncomingFileDeliveries.count == 1)
-        #expect(
-            recorder.finishedIncomingFileDeliveries.first
-                == recorder.saveResult
-        )
     }
 
     @Test
@@ -733,9 +669,6 @@ struct BLEFileTransferHandlerTests {
             recorder.removeIncomingFileOverride = {
                 store.removeIncomingFile(at: $0)
             }
-            recorder.finishIncomingFileDeliveryOverride = {
-                store.finishIncomingFileDelivery(at: $0)
-            }
         }
 
         let first = Recorder()
@@ -819,6 +752,8 @@ struct BLEFileTransferHandlerTests {
         #expect(recorder.saveCalls.count == 2)
         #expect(recorder.deliveryAcks.count == 1)
         #expect(recorder.deliveredMessages.count == 1)
+        #expect(recorder.beganPendingDeliveries == [recorder.saveResult])
+        #expect(recorder.finishedPendingDeliveries == [recorder.saveResult])
     }
 
     @Test
@@ -926,6 +861,8 @@ struct BLEFileTransferHandlerTests {
         ))
         #expect(recorder.saveCalls.count == 1)
         #expect(recorder.deliveredMessages.count == 1)
+        #expect(recorder.beganPendingDeliveries == [recorder.saveResult])
+        #expect(recorder.finishedPendingDeliveries == [recorder.saveResult])
         #expect(recorder.deliveryAcks.count == 1)
     }
 
@@ -1114,36 +1051,6 @@ struct BLEFileTransferHandlerTests {
     }
 
     @Test
-    func legacyIncomingDeleteLeavesPendingDeliveryPayload() throws {
-        let base = FileManager.default.temporaryDirectory
-            .appendingPathComponent(
-                "legacy-pending-\(UUID().uuidString)",
-                isDirectory: true
-            )
-        defer { try? FileManager.default.removeItem(at: base) }
-        let store = BLEIncomingFileStore(baseDirectory: base)
-
-        // save() marks the stored path pending until delivery finishes; a
-        // legacy delete naming the same basename must not unlink it.
-        let stored = try #require(store.save(
-            data: Data([0xFF, 0xD8, 0xFF, 0xD9]),
-            preferredName: "pending.jpg",
-            subdirectory: "images/incoming",
-            fallbackExtension: "jpg",
-            defaultPrefix: "img"
-        ))
-        let relativePath = "images/incoming/\(stored.lastPathComponent)"
-
-        #expect(!store.removeLegacyIncomingFile(relativePath: relativePath))
-        #expect(FileManager.default.fileExists(atPath: stored.path))
-
-        // Once the delivery window closes the same unlink is allowed.
-        store.finishIncomingFileDelivery(at: stored)
-        #expect(store.removeLegacyIncomingFile(relativePath: relativePath))
-        #expect(!FileManager.default.fileExists(atPath: stored.path))
-    }
-
-    @Test
     func legacyIncomingDeleteLeavesReceiptProtectedPayload() throws {
         let base = FileManager.default.temporaryDirectory
             .appendingPathComponent(
@@ -1277,49 +1184,37 @@ struct BLEFileTransferHandlerTests {
     }
 
     @Test
-    func panicWipeInvalidatesPayloadCoordinationReservations() throws {
+    func panicWipeAllowsFreshUniqueSavesAfterReset() throws {
         let base = FileManager.default.temporaryDirectory
             .appendingPathComponent(
-                "panic-payload-coordination-\(UUID().uuidString)",
+                "panic-unique-saves-\(UUID().uuidString)",
                 isDirectory: true
             )
         defer { try? FileManager.default.removeItem(at: base) }
         let store = BLEIncomingFileStore(baseDirectory: base)
-        let pendingName = "pending-before-panic.jpg"
-        let pendingURL = try #require(store.save(
+        let preferredName = "image-before-panic.jpg"
+        let prePanicURL = try #require(store.save(
             data: Data("old".utf8),
-            preferredName: pendingName,
+            preferredName: preferredName,
             subdirectory: "images/incoming",
             fallbackExtension: "jpg",
             defaultPrefix: "image"
-        ))
-        let messageID = "media-aabbccddeeff00112233445566778899"
-        let reservation = try #require(store.reservePrivateMediaDeletion(
-            messageIDs: [messageID],
-            payloadRelativePaths: [
-                messageID: "images/incoming/delete-before-panic.jpg"
-            ]
         ))
 
         try store.panicWipe()
 
-        #expect(!store.commitPrivateMediaDeletion(
-            reservation: reservation,
-            messageIDs: [messageID],
-            payloadRelativePaths: [
-                messageID: "images/incoming/delete-before-panic.jpg"
-            ],
-            protectedPayloadRelativePaths: []
-        ))
         let postPanicURL = try #require(store.save(
             data: Data("new".utf8),
-            preferredName: pendingName,
+            preferredName: preferredName,
             subdirectory: "images/incoming",
             fallbackExtension: "jpg",
             defaultPrefix: "image"
         ))
-        #expect(pendingURL.lastPathComponent == pendingName)
-        #expect(postPanicURL.lastPathComponent == pendingName)
+        #expect(prePanicURL.lastPathComponent.hasSuffix("_\(preferredName)"))
+        #expect(postPanicURL.lastPathComponent.hasSuffix("_\(preferredName)"))
+        #expect(prePanicURL != postPanicURL)
+        #expect(!FileManager.default.fileExists(atPath: prePanicURL.path))
+        #expect(FileManager.default.fileExists(atPath: postPanicURL.path))
     }
 
     @Test

@@ -235,16 +235,8 @@ final class PTTLiveVoiceSession: VoiceCaptureSession {
     }
 
     private static func makeOutputURL(burstID: Data) throws -> URL {
-        let base = try FileManager.default.url(
-            for: .applicationSupportDirectory,
-            in: .userDomainMask,
-            appropriateFor: nil,
-            create: true
+        try VoiceRecorder.makeOutgoingVoiceNoteURL(
+            fileName: "voice_\(burstID.hexEncodedString()).m4a"
         )
-        let directory = base
-            .appendingPathComponent("files", isDirectory: true)
-            .appendingPathComponent("voicenotes/outgoing", isDirectory: true)
-        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true, attributes: BLEIncomingFileStore.mediaProtectionAttributes)
-        return directory.appendingPathComponent("voice_\(burstID.hexEncodedString()).m4a")
     }
 }

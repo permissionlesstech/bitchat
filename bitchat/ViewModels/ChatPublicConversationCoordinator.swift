@@ -18,12 +18,9 @@ import UIKit
 /// conversation stores, geohash participants, and the inbound public message
 /// pipeline.
 @MainActor
-protocol ChatPublicConversationContext: AnyObject {
+protocol ChatPublicConversationContext: ChatIdentityContext {
     // MARK: Channel state
-    var activeChannel: ChannelID { get }
     var currentGeohash: String? { get }
-    var nickname: String { get }
-    var myPeerID: PeerID { get }
 
     // MARK: Public conversation store (single-writer intents)
     /// Appends a public message in timestamp order. Returns `false` when a

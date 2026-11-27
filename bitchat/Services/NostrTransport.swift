@@ -240,18 +240,8 @@ final class NostrTransport: Transport, @unchecked Sendable {
     weak var eventDelegate: TransportEventDelegate?
     weak var peerEventsDelegate: TransportPeerEventsDelegate?
 
-    func currentPeerSnapshots() -> [TransportPeerSnapshot] { [] }
-
     var myPeerID: PeerID { senderPeerID }
-    var myNickname: String { "" }
-    func setNickname(_ nickname: String) { /* not used for Nostr */ }
 
-    func startServices() { /* no-op */ }
-    func stopServices() { /* no-op */ }
-    func emergencyDisconnectAll() { /* no-op */ }
-
-    func isPeerConnected(_ peerID: PeerID) -> Bool { false }
-    
     func isPeerReachable(_ peerID: PeerID) -> Bool {
         // Callers address peers by either the short 16-hex ID or the full
         // 64-hex noise key (offline favorites), so compare in short form.
@@ -276,18 +266,8 @@ final class NostrTransport: Transport, @unchecked Sendable {
         canDeliverPromptly(to: peerID)
     }
 
-    func peerNickname(peerID: PeerID) -> String? { nil }
-    func getPeerNicknames() -> [PeerID: String] { [:] }
-
-    func getFingerprint(for peerID: PeerID) -> String? { nil }
-    func getNoiseSessionState(for peerID: PeerID) -> LazyHandshakeState { .none }
-    func triggerHandshake(with peerID: PeerID) { /* no-op */ }
-
-    // Nostr does not use Noise sessions here; the inert Transport defaults
-    // for the noise* identity hooks apply.
-
-    // Public broadcast not supported over Nostr here
-    func sendMessage(_ content: String, mentions: [String]) { /* no-op */ }
+    // Mesh-only lifecycle, discovery, Noise, and broadcast Transport hooks use
+    // the inert defaults defined in `extension Transport`.
 
     func sendPrivateMessage(_ content: String, to peerID: PeerID, recipientNickname: String, messageID: String) {
         let generation = dependencies.ackPacer.currentGeneration()
@@ -334,7 +314,6 @@ final class NostrTransport: Transport, @unchecked Sendable {
         }
     }
 
-    func sendBroadcastAnnounce() { /* no-op for Nostr */ }
     func sendDeliveryAck(for messageID: String, to peerID: PeerID) {
         enqueueAck(.deliveredDirect(messageID: messageID, peerID: peerID))
     }

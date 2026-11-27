@@ -155,22 +155,19 @@ final class ComposerAutocompleteModel: ObservableObject {
     }
 
     private func bind() {
-        chatViewModel.$showAutocomplete
-            .removeDuplicates()
-            .dropFirst()
-            .receive(on: DispatchQueue.main)
-            .assign(to: &$showAutocomplete)
+        mirror(chatViewModel.$showAutocomplete, to: &$showAutocomplete)
+        mirror(chatViewModel.$autocompleteSuggestions, to: &$autocompleteSuggestions)
+        mirror(chatViewModel.$selectedAutocompleteIndex, to: &$selectedAutocompleteIndex)
+    }
 
-        chatViewModel.$autocompleteSuggestions
+    private func mirror<Value: Equatable>(
+        _ publisher: Published<Value>.Publisher,
+        to target: inout Published<Value>.Publisher
+    ) {
+        publisher
             .removeDuplicates()
             .dropFirst()
             .receive(on: DispatchQueue.main)
-            .assign(to: &$autocompleteSuggestions)
-
-        chatViewModel.$selectedAutocompleteIndex
-            .removeDuplicates()
-            .dropFirst()
-            .receive(on: DispatchQueue.main)
-            .assign(to: &$selectedAutocompleteIndex)
+            .assign(to: &target)
     }
 }

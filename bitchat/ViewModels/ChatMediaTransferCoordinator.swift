@@ -67,13 +67,10 @@ private struct PrivateMediaReconnectRetryCandidate {
 /// testable (see `ChatMediaTransferCoordinatorContextTests`) and makes its
 /// true dependencies explicit.
 @MainActor
-protocol ChatMediaTransferContext: AnyObject {
+protocol ChatMediaTransferContext: ChatIdentityContext {
     // MARK: Composition state
     var canSendMediaInCurrentContext: Bool { get }
     var selectedPrivateChatPeer: PeerID? { get }
-    var nickname: String { get }
-    var myPeerID: PeerID { get }
-    var activeChannel: ChannelID { get }
     func nicknameForPeer(_ peerID: PeerID) -> String
     func currentPublicSender() -> (name: String, peerID: PeerID)
 
@@ -309,44 +306,17 @@ extension ChatViewModel: ChatMediaTransferContext {
             return
         }
         let requestedIDs = Set(messageIDs)
-        let incomingPathReferences = Array(
-            conversations.conversationsByID.values
-                .lazy
-                .flatMap(\.messages)
-                .compactMap { message -> (
-                    messageID: String,
-                    path: String
-                )? in
-                guard self.isIncomingPrivateMessage(message),
-                      let path = self.incomingMediaRelativePath(
-                          for: message
-                      ) else {
-                    return nil
-                }
-                return (message.id, path)
-            }
-        )
-        let ownerIDsByPath = Dictionary(
-            grouping: incomingPathReferences,
-            by: { $0.path }
-        ).mapValues { Set($0.map(\.messageID)) }
-        let protectedPayloadRelativePaths = Set(
-            ownerIDsByPath.compactMap { path, ownerIDs in
-                ownerIDs.isSubset(of: requestedIDs) ? nil : path
-            }
-        )
         var payloadRelativePaths: [String: String] = [:]
-        for reference in incomingPathReferences
-        where requestedIDs.contains(reference.messageID)
-            && ownerIDsByPath[reference.path, default: []]
-                .isSubset(of: requestedIDs) {
-            payloadRelativePaths[reference.messageID] = reference.path
+        for message in conversations.conversationsByID.values.lazy.flatMap(\.messages)
+        where requestedIDs.contains(message.id)
+            && isIncomingPrivateMessage(message) {
+            if let path = incomingMediaRelativePath(for: message) {
+                payloadRelativePaths[message.id] = path
+            }
         }
         persistence.persistDeletedPrivateMedia(
             messageIDs: messageIDs,
             payloadRelativePaths: payloadRelativePaths,
-            protectedPayloadRelativePaths:
-                protectedPayloadRelativePaths,
             completion: completion
         )
     }

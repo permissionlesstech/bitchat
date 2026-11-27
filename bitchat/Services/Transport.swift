@@ -104,15 +104,11 @@ protocol PrivateMediaDeletionPersisting: AnyObject {
     func persistDeletedPrivateMedia(
         messageIDs: [String],
         payloadRelativePaths: [String: String],
-        protectedPayloadRelativePaths: Set<String>,
         completion: @escaping @MainActor (Bool) -> Void
     )
 
-    /// Gated unlink for a LEGACY (non-stable-ID) incoming payload whose
-    /// bubble was explicitly removed. Implementations delete the file only
-    /// when its path is not pending delivery and not reserved by any receipt
-    /// or in-flight deletion transaction; otherwise the file stays for
-    /// bounded quota cleanup.
+    /// Unlinks a legacy (non-stable-ID) incoming payload whose bubble was
+    /// explicitly removed when no stable receipt owns the path.
     @MainActor
     func removeLegacyPrivateMediaPayload(relativePath: String)
 }
@@ -232,6 +228,23 @@ extension BitchatMessage {
 }
 
 extension Transport {
+    // Inert defaults for transports that only handle a subset of the mesh
+    // surface (e.g. NostrTransport for offline private messaging).
+    func currentPeerSnapshots() -> [TransportPeerSnapshot] { [] }
+    var myNickname: String { "" }
+    func setNickname(_ nickname: String) {}
+    func startServices() {}
+    func stopServices() {}
+    func emergencyDisconnectAll() {}
+    func isPeerConnected(_ peerID: PeerID) -> Bool { false }
+    func peerNickname(peerID: PeerID) -> String? { nil }
+    func getPeerNicknames() -> [PeerID: String] { [:] }
+    func getFingerprint(for peerID: PeerID) -> String? { nil }
+    func getNoiseSessionState(for peerID: PeerID) -> LazyHandshakeState { .none }
+    func triggerHandshake(with peerID: PeerID) {}
+    func sendMessage(_ content: String, mentions: [String]) {}
+    func sendBroadcastAnnounce() {}
+
     // Reachability implies prompt delivery for transports that hand packets
     // straight to the radio; queue-backed transports override this.
     func canDeliverPromptly(to peerID: PeerID) -> Bool { isPeerReachable(peerID) }
