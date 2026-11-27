@@ -38,7 +38,7 @@ jobs:
         # base.sha, not the merge ref: the pull request's validator and its
         # tests are never present in this workspace, so the gate cannot be
         # influenced by code under review.
-        uses: actions/checkout@v5
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
           ref: ${{ github.event.pull_request.base.sha }}
           persist-credentials: false
@@ -89,7 +89,7 @@ jobs:
 
     steps:
       - name: Check out the pull request
-        uses: actions/checkout@v5
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
           persist-credentials: false
 

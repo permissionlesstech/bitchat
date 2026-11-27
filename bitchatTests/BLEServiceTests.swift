@@ -62,8 +62,8 @@ struct BLEServiceTests {
     
     // MARK: - Message Sending Tests
     
-    @Test func sendPublicMessage() async throws {
-        try await confirmation { receivedPublicMessage in
+    @Test func sendPublicMessage() async {
+        await confirmation { receivedPublicMessage in
             let delegate = MockBitchatDelegate { message in
                 #expect(message.content == "Hello, world!")
                 #expect(message.sender == "TestUser")
@@ -72,15 +72,12 @@ struct BLEServiceTests {
             }
             service.delegate = delegate
             service.sendMessage("Hello, world!")
-            
-            // Allow async processing
-            try await sleep(1.0)
         }
         #expect(service.sentMessages.count == 1)
     }
     
-    @Test func sendPrivateMessage() async throws {
-        try await confirmation { receivedPrivateMessage in
+    @Test func sendPrivateMessage() async {
+        await confirmation { receivedPrivateMessage in
             let delegate = MockBitchatDelegate { message in
                 #expect(message.content == "Secret message")
                 #expect(message.sender == "TestUser")
@@ -96,15 +93,12 @@ struct BLEServiceTests {
                 recipientNickname: "Bob",
                 messageID: "MSG123"
             )
-            
-            // Allow async processing
-            try await sleep(1.0)
         }
         #expect(service.sentMessages.count == 1)
     }
     
-    @Test func sendMessageWithMentions() async throws {
-        try await confirmation { receivedMessageWithMentions in
+    @Test func sendMessageWithMentions() async {
+        await confirmation { receivedMessageWithMentions in
             let delegate = MockBitchatDelegate { message in
                 #expect(message.content == "@alice @bob check this out")
                 #expect(message.mentions == ["alice", "bob"])
@@ -112,16 +106,13 @@ struct BLEServiceTests {
             }
             service.delegate = delegate
             service.sendMessage("@alice @bob check this out", mentions: ["alice", "bob"])
-            
-            // Allow async processing
-            try await sleep(1.0)
         }
     }
     
     // MARK: - Message Reception Tests
     
-    @Test func simulateIncomingMessage() async throws {
-        try await confirmation { receiveMessage in
+    @Test func simulateIncomingMessage() async {
+        await confirmation { receiveMessage in
             let peerID = PeerID(str: UUID().uuidString)
             
             let delegate = MockBitchatDelegate { message in
@@ -145,9 +136,6 @@ struct BLEServiceTests {
                 mentions: nil
             )
             service.simulateIncomingMessage(incomingMessage)
-            
-            // Allow async processing
-            try await sleep(1.0)
         }
     }
     
@@ -188,9 +176,6 @@ struct BLEServiceTests {
             )
             
             service.simulateIncomingPacket(packet)
-            
-            // Allow async processing
-            try await sleep(1.0)
         }
     }
     
@@ -221,8 +206,8 @@ struct BLEServiceTests {
     
     // MARK: - Message Delivery Handler Tests
     
-    @Test func messageDeliveryHandler() async throws {
-        try await confirmation { deliveryHandler in
+    @Test func messageDeliveryHandler() async {
+        await confirmation { deliveryHandler in
             service.packetDeliveryHandler = { packet in
                 if let msg = BitchatMessage.fromTestPayload(packet.payload) {
                     #expect(msg.content == "Test delivery")
@@ -230,9 +215,6 @@ struct BLEServiceTests {
                 }
             }
             service.sendMessage("Test delivery")
-            
-            // Allow async processing
-            try await sleep(1.0)
         }
     }
     
@@ -272,9 +254,6 @@ struct BLEServiceTests {
             )
             
             service.simulateIncomingPacket(packet)
-            
-            // Allow async processing
-            try await sleep(1.0)
         }
     }
 }
