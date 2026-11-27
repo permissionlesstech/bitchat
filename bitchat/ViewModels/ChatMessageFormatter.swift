@@ -282,31 +282,13 @@ final class ChatMessageFormatter {
                         let token = String(matchText.dropFirst()).lowercased()
                         let allowed = Set("0123456789bcdefghjkmnpqrstuvwxyz")
                         let isGeohash = (2...12).contains(token.count) && token.allSatisfy { allowed.contains($0) }
-                        let attachedToMentionToken: Bool = {
-                            if swiftRange.lowerBound > content.startIndex {
-                                var index = content.index(before: swiftRange.lowerBound)
-                                while true {
-                                    let character = content[index]
-                                    if character.isWhitespace || character.isNewline { break }
-                                    if character == "@" { return true }
-                                    if index == content.startIndex { break }
-                                    index = content.index(before: index)
-                                }
-                            }
-                            return false
-                        }()
-                        let standalone: Bool = {
-                            if swiftRange.lowerBound == content.startIndex { return true }
-                            let previous = content.index(before: swiftRange.lowerBound)
-                            return content[previous].isWhitespace || content[previous].isNewline
-                        }()
 
                         var tagStyle = AttributeContainer()
                         tagStyle.font = isSelf
                             ? .bitchatSystem(size: 14, weight: .bold, design: design)
                             : .bitchatSystem(size: 14, design: design)
                         tagStyle.foregroundColor = baseColor
-                        if isGeohash && !attachedToMentionToken && standalone,
+                        if isGeohash,
                            let url = URL(string: "bitchat://geohash/\(token)") {
                             tagStyle.link = url
                             tagStyle.underlineStyle = .single

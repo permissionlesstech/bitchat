@@ -146,10 +146,8 @@ final class GeoPresenceTracker {
 
         #if os(iOS)
         guard UIApplication.shared.applicationState == .active else { return }
-        if case .location(let channel) = context.activeChannel, channel.geohash == gh { return }
         #elseif os(macOS)
         guard NSApplication.shared.isActive else { return }
-        if case .location(let channel) = context.activeChannel, channel.geohash == gh { return }
         #endif
 
         cooldownPerGeohash(gh, content: content, event: event)

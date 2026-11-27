@@ -79,12 +79,9 @@ protocol ChatPrivateConversationContext: AnyObject {
     func isNostrBlocked(pubkeyHexLowercased: String) -> Bool
     func displayNameForNostrPubkey(_ pubkeyHex: String) -> String
     func deriveNostrIdentity(forGeohash geohash: String) throws -> NostrIdentity
-    func currentNostrIdentity() -> NostrIdentity?
 
     // MARK: Routing & acknowledgements
     func routePrivateMessage(_ content: String, to peerID: PeerID, recipientNickname: String, messageID: String)
-    @discardableResult
-    func routeReadReceipt(_ receipt: ReadReceipt, to peerID: PeerID) -> Bool
     /// Confirms an authenticated delivery/read acknowledgement so the router
     /// stops retaining the original private message for resend. The peer
     /// aliases scope the removal to the authenticated sender.
@@ -740,59 +737,6 @@ final class ChatPrivateConversationCoordinator {
         }
 
         context.upsertPrivateMessage(message, in: ephemeralPeerID)
-    }
-
-    func handleViewingThisChat(
-        _ message: BitchatMessage,
-        targetPeerID: PeerID,
-        key: Data?,
-        senderPubkey: String
-    ) {
-        context.markPrivateChatRead(targetPeerID)
-        if let key,
-           let ephemeralPeerID = context.ephemeralPeerID(forNoiseKey: key) {
-            context.markPrivateChatRead(ephemeralPeerID)
-        }
-        guard !context.sentReadReceipts.contains(message.id) else { return }
-
-        if let key {
-            let receipt = ReadReceipt(
-                originalMessageID: message.id,
-                readerID: context.myPeerID,
-                readerNickname: context.nickname
-            )
-            SecureLogger.debug("Viewing chat; sending READ ack for \(message.id.prefix(8))… via router", category: .session)
-            context.routeReadReceipt(receipt, to: PeerID(hexData: key))
-            context.markReadReceiptSent(message.id)
-        } else if let identity = context.currentNostrIdentity() {
-            context.sendGeohashReadReceipt(message.id, toRecipientHex: senderPubkey, from: identity)
-            context.markReadReceiptSent(message.id)
-            SecureLogger.debug(
-                "Viewing chat; sent READ ack directly to Nostr pub=\(senderPubkey.prefix(8))… for mid=\(message.id.prefix(8))…",
-                category: .session
-            )
-        }
-    }
-
-    func markAsUnreadIfNeeded(
-        shouldMarkAsUnread: Bool,
-        targetPeerID: PeerID,
-        key: Data?,
-        isRecentMessage: Bool,
-        senderNickname: String,
-        messageContent: String
-    ) {
-        guard shouldMarkAsUnread else { return }
-
-        context.markPrivateChatUnread(targetPeerID)
-        if let key,
-           let ephemeralPeerID = context.ephemeralPeerID(forNoiseKey: key),
-           ephemeralPeerID != targetPeerID {
-            context.markPrivateChatUnread(ephemeralPeerID)
-        }
-        if isRecentMessage {
-            context.notifyPrivateMessage(from: senderNickname, message: messageContent, peerID: targetPeerID)
-        }
     }
 
     /// Applies an inbound `[FAVORITED]`/`[UNFAVORITED]` marker from either

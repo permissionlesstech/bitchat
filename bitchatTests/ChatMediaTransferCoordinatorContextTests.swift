@@ -740,7 +740,7 @@ struct ChatMediaTransferCoordinatorContextTests {
             recipientNickname: "Me"
         )
 
-        coordinator.cleanupIncomingLocalFile(forMessage: message)
+        coordinator.cleanupLocalFile(forMessage: message)
 
         #expect(FileManager.default.fileExists(atPath: directory.path))
         #expect(FileManager.default.fileExists(atPath: child.path))

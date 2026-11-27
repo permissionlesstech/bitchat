@@ -751,7 +751,7 @@ private final class PerfNostrContext: ChatNostrContext {
     func sendGeohashReadReceipt(_ messageID: String, toRecipientHex recipientHex: String, from identity: NostrIdentity) {}
 
     func favoriteRelationship(forNoiseKey noiseKey: Data) -> FavoritesPersistenceService.FavoriteRelationship? { nil }
-    func allFavoriteRelationships() -> [FavoritesPersistenceService.FavoriteRelationship] { [] }
+    func favoriteNoiseKey(forNostrPubkey nostrPubkey: String) -> Data? { nil }
     func notifyGeohashActivity(geohash: String, bodyPreview: String) {}
 }
 

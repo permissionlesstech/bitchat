@@ -113,7 +113,7 @@ struct AppArchitectureTests {
         #expect(store.fingerprint(for: shortPeerID) == nil)
         #expect(store.fingerprint(for: canonicalPeerID) == "fp-1")
         #expect(store.selectedPrivateChatFingerprint == "fp-1")
-        #expect(store.encryptionStatus(for: shortPeerID) == .noiseSecured)
+        #expect(store.encryptionStatuses[shortPeerID] == .noiseSecured)
         #expect(store.cachedEncryptionStatus(for: shortPeerID) == nil)
         #expect(store.isVerified("fp-1"))
 
@@ -452,7 +452,6 @@ struct AppArchitectureTests {
 
         #expect(chromeModel.showingFingerprintFor == peerID)
         #expect(chromeModel.isAppInfoPresented)
-        #expect(chromeModel.shouldSuppressScreenshotNotification)
         #expect(chromeModel.showScreenshotPrivacyWarning)
 
         chromeModel.clearFingerprint()
@@ -672,7 +671,7 @@ struct AppArchitectureTests {
             )
         ]
 
-        conversationModel.startConversation(with: fullPeerID)
+        conversationModel.openConversation(for: fullPeerID)
         await waitUntil {
             conversationModel.selectedPeerID == fullPeerID
         }
@@ -919,7 +918,7 @@ struct AppArchitectureTests {
             )
         ]
 
-        privateConversationModel.startConversation(with: peerID)
+        privateConversationModel.openConversation(for: peerID)
         await waitUntil {
             verificationModel.selectedPeerID == peerID
         }

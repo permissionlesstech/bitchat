@@ -1,45 +1,5 @@
 import BitFoundation
-import Combine
 import Foundation
-
-enum RuntimeScenePhase: String, Sendable, Equatable {
-    case active
-    case inactive
-    case background
-}
-
-enum TorLifecycleEvent: String, Sendable, Equatable {
-    case willStart
-    case willRestart
-    case didBecomeReady
-    case preferenceChanged
-    /// Bootstrap ran out its deadline without completing.
-    case bootstrapDidStall
-}
-
-enum AppEvent: Sendable, Equatable {
-    case launched
-    case startupCompleted
-    case scenePhaseChanged(RuntimeScenePhase)
-    case openedURL(String)
-    case sharedContentReadyForReview(SharedContentKind)
-    case notificationOpened(peerID: PeerID?)
-    case deepLinkOpened(String)
-    case torLifecycleChanged(TorLifecycleEvent)
-    case nostrRelayConnectionChanged(Bool)
-    case terminationRequested
-}
-
-actor AppEventStream {
-    private var continuations: [UUID: AsyncStream<AppEvent>.Continuation] = [:]
-
-    func emit(_ event: AppEvent) {
-        for continuation in continuations.values {
-            continuation.yield(event)
-        }
-    }
-
-}
 
 /// Identity key for a direct conversation. Equality and hashing use the
 /// canonical `id` only; `routingPeerID` carries the transport-level peer ID

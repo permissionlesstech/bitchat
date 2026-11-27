@@ -214,10 +214,6 @@ struct ChatLifecycleCoordinatorContextTests {
         } else {
             Issue.record("expected the .read copy of m1 to win the merge")
         }
-
-        // getMessages(for: nil) falls back to the public timeline.
-        context.messages = [makePrivateMessage(id: "pub")]
-        #expect(coordinator.getMessages(for: nil).map(\.id) == ["pub"])
     }
 
     @Test @MainActor

@@ -13,7 +13,7 @@ extension ChatViewModel {
     
     // MARK: - Tor notifications
     
-    @objc func handleTorWillStart() {
+    func handleTorWillStart() {
         Task { @MainActor in
             // A fresh attempt can stall again, so let it be reported again.
             self.torStallAnnounced = false
@@ -27,7 +27,7 @@ extension ChatViewModel {
         }
     }
 
-    @objc func handleTorWillRestart() {
+    func handleTorWillRestart() {
         Task { @MainActor in
             self.torRestartPending = true
             // Post only in geohash channels (queue if not active)
@@ -37,7 +37,7 @@ extension ChatViewModel {
         }
     }
 
-    @objc func handleTorDidBecomeReady() {
+    func handleTorDidBecomeReady() {
         Task { @MainActor in
             self.torStallAnnounced = false
             self.torBlocked = false
@@ -62,7 +62,7 @@ extension ChatViewModel {
     /// than leaving "starting tor…" on screen indefinitely: on a network that
     /// blocks Tor this is the terminal state, and someone needs to know that
     /// internet features are stalled while the mesh still works.
-    @objc func handleTorBootstrapDidStall() {
+    func handleTorBootstrapDidStall() {
         Task { @MainActor in
             guard TorManager.shared.torEnforced else { return }
             // torEnforced is a compile-time constant in release builds; the
@@ -82,7 +82,7 @@ extension ChatViewModel {
         }
     }
 
-    @objc func handleTorPreferenceChanged(_: Notification) {
+    func handleTorPreferenceChanged() {
         Task { @MainActor in
             self.torStatusAnnounced = false
             self.torInitialReadyAnnounced = false

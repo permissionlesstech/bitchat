@@ -12,7 +12,6 @@ import Foundation
 @MainActor
 protocol ChatLifecycleContext: AnyObject {
     // MARK: Chat & receipt state
-    var messages: [BitchatMessage] { get }
     /// A single private chat's timeline (store-direct lookup on
     /// `ChatViewModel`; no `privateChats` dictionary build).
     func privateMessages(for peerID: PeerID) -> [BitchatMessage]
@@ -243,11 +242,6 @@ final class ChatLifecycleCoordinator {
                 context.markReadReceiptSent(message.id)
             }
         }
-    }
-
-    func getMessages(for peerID: PeerID?) -> [BitchatMessage] {
-        guard let peerID else { return context.messages }
-        return getPrivateChatMessages(for: peerID)
     }
 
     func getPrivateChatMessages(for peerID: PeerID) -> [BitchatMessage] {

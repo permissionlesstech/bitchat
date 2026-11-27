@@ -18,8 +18,6 @@ protocol ChatNostrContext: GeohashSubscriptionContext, NostrInboundPipelineConte
 
     // MARK: Routing & acknowledgements (shared with `ChatPrivateConversationContext`)
     func routeFavoriteNotification(to peerID: PeerID, isFavorite: Bool)
-    func sendGeohashDeliveryAck(for messageID: String, toRecipientHex recipientHex: String, from identity: NostrIdentity)
-    func sendGeohashReadReceipt(_ messageID: String, toRecipientHex recipientHex: String, from identity: NostrIdentity)
 
     // MARK: Favorites (shared with the other contexts)
     /// The persisted favorite relationship for the peer's Noise static key, if any.
@@ -57,41 +55,6 @@ final class ChatNostrCoordinator {
         self.presence = presence
         self.inbound = inbound
         self.subscriptions = GeohashSubscriptionManager(context: context, inbound: inbound, presence: presence)
-    }
-
-    @MainActor
-    func sendDeliveryAckViaNostrEmbedded(
-        _ message: BitchatMessage,
-        wasReadBefore: Bool,
-        senderPubkey: String,
-        key: Data?
-    ) {
-        guard let context else { return }
-        if key != nil {
-            if let identity = context.currentNostrIdentity() {
-                context.sendGeohashDeliveryAck(for: message.id, toRecipientHex: senderPubkey, from: identity)
-            }
-        } else if let identity = context.currentNostrIdentity() {
-            context.sendGeohashDeliveryAck(for: message.id, toRecipientHex: senderPubkey, from: identity)
-            SecureLogger.debug(
-                "Sent DELIVERED ack directly to Nostr pub=\(senderPubkey.prefix(8))… for mid=\(message.id.prefix(8))…",
-                category: .session
-            )
-        }
-
-        if !wasReadBefore && context.selectedPrivateChatPeer == message.senderPeerID {
-            if key != nil {
-                if let identity = context.currentNostrIdentity() {
-                    context.sendGeohashReadReceipt(message.id, toRecipientHex: senderPubkey, from: identity)
-                }
-            } else if let identity = context.currentNostrIdentity() {
-                context.sendGeohashReadReceipt(message.id, toRecipientHex: senderPubkey, from: identity)
-                SecureLogger.debug(
-                    "Viewing chat; sent READ ack directly to Nostr pub=\(senderPubkey.prefix(8))… for mid=\(message.id.prefix(8))…",
-                    category: .session
-                )
-            }
-        }
     }
 
     @MainActor

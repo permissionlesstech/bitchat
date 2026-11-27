@@ -22,11 +22,8 @@ protocol NostrInboundPipelineContext: AnyObject {
     func displayNameForNostrPubkey(_ pubkeyHex: String) -> String
 
     // MARK: Favorites bridge
-    /// All favorite relationships, used to bridge a Nostr pubkey back to a
-    /// Noise key on the inbound DM path.
-    func allFavoriteRelationships() -> [FavoritesPersistenceService.FavoriteRelationship]
     /// Fast reverse lookup from a Nostr pubkey (hex or npub) to a favorite's
-    /// Noise static key; defaults to scanning `allFavoriteRelationships()`.
+    /// Noise static key.
     func favoriteNoiseKey(forNostrPubkey nostrPubkey: String) -> Data?
 
     // MARK: Presence & key mapping
@@ -59,38 +56,6 @@ protocol NostrInboundPipelineContext: AnyObject {
     func handleReadReceipt(_ payload: NoisePayload, senderPubkey: String, convKey: PeerID)
 }
 
-extension NostrInboundPipelineContext {
-    func favoriteNoiseKey(forNostrPubkey nostrPubkey: String) -> Data? {
-        let favorites = allFavoriteRelationships()
-        var npubToMatch = nostrPubkey
-
-        if !nostrPubkey.hasPrefix("npub") {
-            if let pubkeyData = Data(hexString: nostrPubkey),
-               let encoded = try? Bech32.encode(hrp: "npub", data: pubkeyData) {
-                npubToMatch = encoded
-            } else {
-                SecureLogger.warning(
-                    "⚠️ Invalid hex public key format or encoding failed: \(nostrPubkey.prefix(16))...",
-                    category: .session
-                )
-            }
-        }
-
-        for relationship in favorites {
-            if let storedNostrKey = relationship.peerNostrPublicKey {
-                if storedNostrKey == npubToMatch {
-                    return relationship.peerNoisePublicKey
-                }
-                if !storedNostrKey.hasPrefix("npub") && storedNostrKey == nostrPubkey {
-                    SecureLogger.debug("✅ Found Noise key for Nostr sender (hex match)", category: .session)
-                    return relationship.peerNoisePublicKey
-                }
-            }
-        }
-        return nil
-    }
-}
-
 extension ChatViewModel: NostrInboundPipelineContext {
     // `currentGeohash`, the identity/blocking members, key mapping, and the
     // inbound message handlers already have witnesses on `ChatViewModel`.
@@ -98,10 +63,6 @@ extension ChatViewModel: NostrInboundPipelineContext {
 
     func hasProcessedNostrEvent(_ eventID: String) -> Bool {
         deduplicationService.hasProcessedNostrEvent(eventID)
-    }
-
-    func allFavoriteRelationships() -> [FavoritesPersistenceService.FavoriteRelationship] {
-        Array(FavoritesPersistenceService.shared.favorites.values)
     }
 
     func favoriteNoiseKey(forNostrPubkey nostrPubkey: String) -> Data? {
