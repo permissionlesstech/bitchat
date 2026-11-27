@@ -5126,6 +5126,9 @@ extension BLEService {
             localPeerID: { [weak self] in
                 self?.myPeerID ?? PeerID(str: "")
             },
+            localSigningPublicKey: { [weak self] in
+                self?.noiseService.getSigningPublicKeyData()
+            },
             localNickname: { [weak self] in
                 self?.myNickname ?? ""
             },

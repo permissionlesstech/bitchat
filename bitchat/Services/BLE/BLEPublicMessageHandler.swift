@@ -10,6 +10,8 @@ import Foundation
 struct BLEPublicMessageHandlerEnvironment {
     /// Local peer identity at the time the message is handled.
     let localPeerID: () -> PeerID
+    /// Local Ed25519 signing public key used to authenticate self-authored sync replays.
+    let localSigningPublicKey: () -> Data?
     /// Local nickname used for sender resolution and collision checks.
     let localNickname: () -> String
     /// Current time source.
@@ -85,11 +87,13 @@ final class BLEPublicMessageHandler {
         // cache. Fall back to that persisted-identity lookup for peers not (yet)
         // in the registry.
         let isSelf = peerID == env.localPeerID()
+        let verifiedSelf = isSelf
+            && (env.localSigningPublicKey().map { env.verifyPacketSignature(packet, $0) } ?? false)
         let registrySigningKey = peersSnapshot[peerID]?.signingPublicKey
         let verifiedViaRegistry = !isSelf
             && (registrySigningKey.map { env.verifyPacketSignature(packet, $0) } ?? false)
         let signedDisplayName = (isSelf || verifiedViaRegistry) ? nil : env.signedSenderDisplayName(packet, peerID)
-        guard isSelf || verifiedViaRegistry || signedDisplayName != nil else {
+        guard verifiedSelf || verifiedViaRegistry || signedDisplayName != nil else {
             SecureLogger.warning("🚫 Dropping public message with missing/invalid signature for claimed sender \(peerID.id.prefix(8))…", category: .security)
             return false
         }
