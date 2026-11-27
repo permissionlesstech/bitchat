@@ -379,6 +379,10 @@ extension BLEService {
         // One bounded echo makes initiator/responder proof ordering converge
         // even when message 3 and the first proof take different mesh links.
         sendAuthenticatedPeerState(to: normalizedPeerID, echo: true)
+        // Purge any prekey bundle cached under a different/legacy signing key
+        // and verify any pending bundle that arrived before Noise auth landed.
+        prekeyBundleStore.invalidate(forNoiseKey: publicKey, unlessSignedBy: state.signingPublicKey)
+        drainPendingPrekeyBundles(for: normalizedPeerID)
         let policy = privateMediaSendPolicy(to: normalizedPeerID)
         sendPendingNoisePayloadsAfterHandshake(for: normalizedPeerID)
         completePrivateMediaPolicyResolution(application.completions, with: policy)
