@@ -28,6 +28,7 @@ final class PanicWipeCoverageTests: XCTestCase {
         var clearCalls = 0
         let service = GeohashPresenceService(
             availableChannelsProvider: { [] },
+            isLocationAuthorized: { true },
             locationChanges: Empty().eraseToAnyPublisher(),
             torReadyPublisher: Empty().eraseToAnyPublisher(),
             torIsReady: { false },
