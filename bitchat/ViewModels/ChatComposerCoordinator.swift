@@ -9,7 +9,7 @@ import Foundation
 /// testable (see `ChatComposerCoordinatorContextTests`) and makes its true
 /// dependencies explicit.
 @MainActor
-protocol ChatComposerContext: AnyObject {
+protocol ChatComposerContext: ChatIdentityContext, ChatGeohashIdentityContext {
     // MARK: Autocomplete UI state
     var autocompleteSuggestions: [String] { get set }
     var autocompleteRange: NSRange? { get set }
@@ -24,21 +24,12 @@ protocol ChatComposerContext: AnyObject {
     /// Replaces the matched range in `text` with the chosen suggestion.
     func applyAutocompleteSuggestion(_ suggestion: String, to text: String, range: NSRange) -> String
 
-    // MARK: Identity & channel state
-    var nickname: String { get }
-    var myPeerID: PeerID { get }
-    var activeChannel: ChannelID { get }
+    // MARK: Peer lookups
     /// The transport's own nickname (excluded from autocomplete candidates).
     var meshNickname: String { get }
     func meshPeerNicknames() -> [PeerID: String]
     /// True when this mesh nickname belongs to a blocked peer.
     func isMeshNicknameBlocked(_ nickname: String) -> Bool
-    /// True when this geohash pubkey is blocked for location chats.
-    func isNostrBlocked(pubkeyHexLowercased: String) -> Bool
-
-    // MARK: Geohash identity (shared with the other contexts)
-    var geoNicknames: [String: String] { get }
-    func deriveNostrIdentity(forGeohash geohash: String) throws -> NostrIdentity
 }
 
 extension ChatViewModel: ChatComposerContext {

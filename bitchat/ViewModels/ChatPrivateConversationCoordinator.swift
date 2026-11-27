@@ -12,25 +12,14 @@ import Foundation
 /// documents the coordinator's real coupling to private-chat state, peer
 /// identity, and the routing/ack transports.
 @MainActor
-protocol ChatPrivateConversationContext: AnyObject {
+protocol ChatPrivateConversationContext: ChatIdentityContext, ChatDirectMessageStoreContext {
     // MARK: Conversation state
     var privateChats: [PeerID: [BitchatMessage]] { get }
-    /// A single private chat's timeline. Witnessed by the store-direct
-    /// lookup on `ChatViewModel` (no `privateChats` dictionary build).
-    func privateMessages(for peerID: PeerID) -> [BitchatMessage]
     var sentReadReceipts: Set<String> { get }
     var selectedPrivateChatPeer: PeerID? { get }
-    var nickname: String { get }
-    var activeChannel: ChannelID { get }
     var nostrKeyMapping: [PeerID: String] { get }
 
     // MARK: Conversation store intents
-    // The sole mutation paths for private message state (single-writer
-    // `ConversationStore` ops; see docs/CONVERSATION-STORE-DESIGN.md).
-    /// Appends a private message in timestamp order; returns `false` on
-    /// duplicate message ID.
-    @discardableResult
-    func appendPrivateMessage(_ message: BitchatMessage, to peerID: PeerID) -> Bool
     /// Replace-or-append a private message by ID, keeping its position.
     func upsertPrivateMessage(_ message: BitchatMessage, in peerID: PeerID)
     /// Applies a delivery status by message ID; returns `false` when the
@@ -38,7 +27,6 @@ protocol ChatPrivateConversationContext: AnyObject {
     @discardableResult
     func setPrivateDeliveryStatus(_ status: DeliveryStatus, forMessageID messageID: String, peerID: PeerID) -> Bool
     func markPrivateChatUnread(_ peerID: PeerID)
-    func markPrivateChatRead(_ peerID: PeerID)
     /// Moves all messages from `oldPeerID`'s chat into `newPeerID`'s chat
     /// (dedup by ID, order preserved, unread carried, old chat removed).
     func migratePrivateChat(from oldPeerID: PeerID, to newPeerID: PeerID)
@@ -60,7 +48,6 @@ protocol ChatPrivateConversationContext: AnyObject {
     func handOffSelectedPrivateChat(from oldPeerIDs: [PeerID], to newPeerID: PeerID)
 
     // MARK: Peers & identity
-    var myPeerID: PeerID { get }
     func peerNickname(for peerID: PeerID) -> String?
     func isPeerConnected(_ peerID: PeerID) -> Bool
     func isPeerReachable(_ peerID: PeerID) -> Bool

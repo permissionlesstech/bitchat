@@ -67,13 +67,10 @@ private struct PrivateMediaReconnectRetryCandidate {
 /// testable (see `ChatMediaTransferCoordinatorContextTests`) and makes its
 /// true dependencies explicit.
 @MainActor
-protocol ChatMediaTransferContext: AnyObject {
+protocol ChatMediaTransferContext: ChatIdentityContext {
     // MARK: Composition state
     var canSendMediaInCurrentContext: Bool { get }
     var selectedPrivateChatPeer: PeerID? { get }
-    var nickname: String { get }
-    var myPeerID: PeerID { get }
-    var activeChannel: ChannelID { get }
     func nicknameForPeer(_ peerID: PeerID) -> String
     func currentPublicSender() -> (name: String, peerID: PeerID)
 

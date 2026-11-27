@@ -8,25 +8,17 @@
 
 import BitLogger
 import BitFoundation
-import Combine
 import Foundation
-import SwiftUI
 
-/// Manages private chat session policy (selection, read receipts,
-/// consolidation). Message storage lives in the single-writer
-/// `ConversationStore` (docs/CONVERSATION-STORE-DESIGN.md); the
-/// `privateChats` / `unreadMessages` properties below are read-only views
-/// derived from it.
+/// Manages private chat session policy (selection delegation, read receipts,
+/// consolidation). Message and selection state live in the single-writer
+/// `ConversationStore`.
 @MainActor
-final class PrivateChatManager: ObservableObject {
-    /// Read-only mirror of `ConversationStore.selectedPrivatePeerID` — the
-    /// store is the sole owner of conversation selection. Kept `@Published`
-    /// so existing observers (`objectWillChange` forwarding into
-    /// `ChatViewModel`) keep firing on selection changes. Mutate via
-    /// `startChat(with:)` / `endChat()`, which route through the store's
-    /// `setSelectedPrivatePeer` intent.
-    @Published private(set) var selectedPeer: PeerID? = nil
-    private var selectedPeerMirrorCancellable: AnyCancellable? = nil
+final class PrivateChatManager {
+    /// Current direct-conversation selection, read directly from `ConversationStore`.
+    var selectedPeer: PeerID? {
+        conversationStore?.selectedPrivatePeerID
+    }
 
     var sentReadReceipts: Set<String> = []  // Made accessible for ChatViewModel
 
@@ -37,32 +29,15 @@ final class PrivateChatManager: ObservableObject {
     weak var unifiedPeerService: UnifiedPeerService?
     /// Single source of truth for message and selection state; injected by
     /// the bootstrapper (`wireServiceGraph`).
-    var conversationStore: ConversationStore? {
-        didSet { bindSelectionMirror() }
-    }
+    var conversationStore: ConversationStore?
 
     init(meshService: Transport? = nil, conversationStore: ConversationStore? = nil) {
         self.meshService = meshService
         self.conversationStore = conversationStore
-        bindSelectionMirror() // didSet does not fire during init
     }
 
     func resetForPanic() {
         sentReadReceipts.removeAll(keepingCapacity: false)
-    }
-
-    /// Keeps `selectedPeer` in lock-step with the store's selection axis
-    /// (including store-internal handoffs such as conversation migration).
-    private func bindSelectionMirror() {
-        guard let store = conversationStore else {
-            selectedPeerMirrorCancellable = nil
-            return
-        }
-        selectedPeerMirrorCancellable = store.$selectedPrivatePeerID
-            .sink { [weak self] peerID in
-                guard let self, self.selectedPeer != peerID else { return }
-                self.selectedPeer = peerID
-            }
     }
 
     #if DEBUG

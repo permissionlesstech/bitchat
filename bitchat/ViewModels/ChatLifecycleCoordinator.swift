@@ -10,22 +10,11 @@ import Foundation
 /// testable (see `ChatLifecycleCoordinatorContextTests`) and makes its true
 /// dependencies explicit.
 @MainActor
-protocol ChatLifecycleContext: AnyObject {
+protocol ChatLifecycleContext: ChatIdentityContext, ChatDirectMessageStoreContext {
     // MARK: Chat & receipt state
-    /// A single private chat's timeline (store-direct lookup on
-    /// `ChatViewModel`; no `privateChats` dictionary build).
-    func privateMessages(for peerID: PeerID) -> [BitchatMessage]
     var unreadPrivateMessages: Set<PeerID> { get }
     var selectedPrivateChatPeer: PeerID? { get }
-    /// Appends a private message via the single-writer store intent.
-    @discardableResult
-    func appendPrivateMessage(_ message: BitchatMessage, to peerID: PeerID) -> Bool
-    /// Clears the peer's unread flag (store unread state only).
-    func markPrivateChatRead(_ peerID: PeerID)
     var sentReadReceipts: Set<String> { get }
-    var nickname: String { get }
-    var myPeerID: PeerID { get }
-    var activeChannel: ChannelID { get }
     var nostrKeyMapping: [PeerID: String] { get }
     /// Records that a read receipt is being sent for `messageID`.
     /// Returns `false` when one was already recorded — the caller must skip sending.
