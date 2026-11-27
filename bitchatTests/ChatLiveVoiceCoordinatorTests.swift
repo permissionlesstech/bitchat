@@ -653,17 +653,25 @@ struct ChatLiveVoiceCoordinatorTests {
         let liveCapture = incoming.appendingPathComponent(
             "voice_live_\(burstID.hexEncodedString())_\(peer.id)_dm.aac"
         )
+        let fallbackURL = incoming.appendingPathComponent(fallbackName(burstID: burstID, peerID: peer))
+        #expect(FileManager.default.fileExists(atPath: liveCapture.path))
 
         let swept = await TestHelpers.waitUntil(
             { !FileManager.default.fileExists(atPath: stale.path) },
             timeout: TestConstants.settleTimeout
         )
         #expect(swept)
-        #expect(FileManager.default.fileExists(atPath: liveCapture.path))
+        // Under heavy parallel CI load the 3s idle timer may already have
+        // promoted the active capture to its fallback name while waiting on the
+        // `.utility` sweep; either way, the sweep must never have deleted it.
+        #expect(
+            FileManager.default.fileExists(atPath: liveCapture.path)
+                || FileManager.default.fileExists(atPath: fallbackURL.path)
+        )
 
-        // Finalizing the burst must still promote its capture file cleanly.
+        // Finalizing the burst (no-op if idle timer already finalized) must
+        // leave the full audio intact at the promoted fallback path.
         send(try #require(VoiceBurstPacket(burstID: burstID, seq: 2, kind: .end(totalDataPackets: 1, durationMs: 64))), to: coordinator, from: peer)
-        let fallbackURL = incoming.appendingPathComponent(fallbackName(burstID: burstID, peerID: peer))
         #expect(try Data(contentsOf: fallbackURL) == ADTSFramer.frame(frame))
     }
 
