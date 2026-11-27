@@ -186,14 +186,18 @@ struct NoiseProtocolTests {
     @Test func largeMessageEncryption() throws {
         try performHandshake(initiator: aliceSession, responder: bobSession)
         
-        // Create a large message
-        let largeMessage = TestHelpers.generateRandomData(length: 100_000)
-        
-        // Encrypt and decrypt
-        let ciphertext = try aliceSession.encrypt(largeMessage)
+        // Ordinary Noise payloads are capped at NoiseSecurityConstants.maxMessageSize.
+        let maxOrdinaryMessage = TestHelpers.generateRandomData(length: NoiseSecurityConstants.maxMessageSize)
+        let ciphertext = try aliceSession.encrypt(maxOrdinaryMessage)
         let decrypted = try bobSession.decrypt(ciphertext)
-        
-        #expect(decrypted == largeMessage)
+        #expect(decrypted == maxOrdinaryMessage)
+
+        // Private-file typed payloads may exceed the ordinary cap up to the framed-file limit.
+        var largePrivateFile = Data([NoisePayloadType.privateFile.rawValue])
+        largePrivateFile.append(TestHelpers.generateRandomData(length: 100_000))
+        let fileCiphertext = try aliceSession.encrypt(largePrivateFile)
+        let fileDecrypted = try bobSession.decrypt(fileCiphertext)
+        #expect(fileDecrypted == largePrivateFile)
     }
     
     @Test func encryptionBeforeHandshake() {

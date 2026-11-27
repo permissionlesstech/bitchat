@@ -669,7 +669,7 @@ struct NoiseCoverageTests {
         try establishManagerSessions(aliceManager: aliceManager, bobManager: bobManager)
 
         let establishedSession = try #require(
-            aliceManager.getSession(for: alicePeerID) as? SecureNoiseSession
+            aliceManager.getSession(for: alicePeerID)
         )
         establishedSession.setMessageCountForTesting(
             UInt64(Double(NoiseSecurityConstants.maxMessagesPerSession) * 0.9)
@@ -810,13 +810,13 @@ struct NoiseCoverageTests {
 
     @Test("Secure noise sessions enforce limits and renegotiation thresholds")
     func secureNoiseSessionsEnforceLimitsAndThresholds() throws {
-        let initiator = SecureNoiseSession(
+        let initiator = NoiseSession(
             peerID: alicePeerID,
             role: .initiator,
             keychain: keychain,
             localStaticKey: aliceStaticKey
         )
-        let responder = SecureNoiseSession(
+        let responder = NoiseSession(
             peerID: bobPeerID,
             role: .responder,
             keychain: keychain,
@@ -863,13 +863,13 @@ struct NoiseCoverageTests {
 
     @Test("Secure noise sessions expire based on session start time")
     func secureNoiseSessionsExpireBasedOnSessionStartTime() throws {
-        let initiator = SecureNoiseSession(
+        let initiator = NoiseSession(
             peerID: alicePeerID,
             role: .initiator,
             keychain: keychain,
             localStaticKey: aliceStaticKey
         )
-        let responder = SecureNoiseSession(
+        let responder = NoiseSession(
             peerID: bobPeerID,
             role: .responder,
             keychain: keychain,
@@ -901,13 +901,13 @@ struct NoiseCoverageTests {
         // sessionExpired on every call. needsRenegotiation() has to notice
         // the session is old on its own -- it can't rely on the idle check,
         // because there is no idle time to find.
-        let session = SecureNoiseSession(
+        let session = NoiseSession(
             peerID: alicePeerID,
             role: .initiator,
             keychain: keychain,
             localStaticKey: aliceStaticKey
         )
-        let responder = SecureNoiseSession(
+        let responder = NoiseSession(
             peerID: bobPeerID,
             role: .responder,
             keychain: keychain,

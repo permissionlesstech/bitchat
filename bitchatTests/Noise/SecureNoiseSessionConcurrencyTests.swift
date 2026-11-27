@@ -14,18 +14,18 @@ import BitFoundation
 
 struct SecureNoiseSessionConcurrencyTests {
 
-    private func makeEstablishedPair() throws -> (initiator: SecureNoiseSession, responder: SecureNoiseSession) {
+    private func makeEstablishedPair() throws -> (initiator: NoiseSession, responder: NoiseSession) {
         let aliceKey = Curve25519.KeyAgreement.PrivateKey()
         let bobKey = Curve25519.KeyAgreement.PrivateKey()
         let keychain = MockKeychain()
 
-        let alice = SecureNoiseSession(
+        let alice = NoiseSession(
             peerID: PeerID(publicKey: bobKey.publicKey.rawRepresentation),
             role: .initiator,
             keychain: keychain,
             localStaticKey: aliceKey
         )
-        let bob = SecureNoiseSession(
+        let bob = NoiseSession(
             peerID: PeerID(publicKey: aliceKey.publicKey.rawRepresentation),
             role: .responder,
             keychain: keychain,
