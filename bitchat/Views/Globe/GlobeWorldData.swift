@@ -67,13 +67,22 @@ struct GlobeWorldData: Sendable {
 
     private init(bundle: Bundle) {
         func data(_ name: String) -> Data? {
-            bundle.url(forResource: name, withExtension: "geojson").flatMap { try? Data(contentsOf: $0) }
+            if let url = bundle.url(forResource: name, withExtension: "geojson.zlib"),
+               let compressed = try? Data(contentsOf: url) {
+                return Self.decompress(compressed)
+            }
+            return bundle.url(forResource: name, withExtension: "geojson").flatMap { try? Data(contentsOf: $0) }
         }
         self.init(
             land: data("world_land").map(Self.parseLand) ?? [],
             borders: data("world_borders").map(Self.parseBorders) ?? [],
             cities: data("world_cities").map(Self.parseCities) ?? []
         )
+    }
+
+    /// Inflates raw-deflate (`.zlib`) compressed Globe GeoJSON resources.
+    static func decompress(_ data: Data) -> Data? {
+        try? (data as NSData).decompressed(using: .zlib) as Data
     }
 
     /// Polygon and MultiPolygon geometries; every ring (outer and holes) becomes one entry.

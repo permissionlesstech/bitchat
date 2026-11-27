@@ -354,13 +354,18 @@ struct GlobeWorldDataTests {
     private static let landURL = URL(fileURLWithPath: #filePath)
         .deletingLastPathComponent()
         .deletingLastPathComponent()
-        .appendingPathComponent("bitchat/Resources/Globe/world_land.geojson")
+        .appendingPathComponent("bitchat/Resources/Globe/world_land.geojson.zlib")
+
+    private static func loadLandData() throws -> Data {
+        let compressed = try Data(contentsOf: landURL)
+        return try #require(GlobeWorldData.decompress(compressed))
+    }
 
     /// Regression: Eurasia wraps the antimeridian at Chukotka, and the old relative-
     /// longitude test counted the ±180° seam as a crossing, so open ocean read as
     /// inside Eurasia and its fill was flipped over the Pacific and Atlantic.
     @Test func bundledLandClassifiesOceansAndContinents() throws {
-        let land = GlobeWorldData.parseLand(try Data(contentsOf: Self.landURL))
+        let land = GlobeWorldData.parseLand(try Self.loadLandData())
         #expect(land.count > 100)
         func isLand(_ lat: Double, _ lon: Double) -> Bool {
             land.contains { GlobeGeometry.ringContains($0, lat: lat, lon: lon) }
@@ -375,7 +380,7 @@ struct GlobeWorldDataTests {
 
     /// No visible ocean pixel may be painted by a land fill, from any vantage point.
     @Test func landFillsLeaveVisibleOceanUncovered() throws {
-        let land = GlobeWorldData.parseLand(try Data(contentsOf: Self.landURL))
+        let land = GlobeWorldData.parseLand(try Self.loadLandData())
         let size = CGSize(width: 402, height: 874)
         let cx = 201.0, cy = 437.0
         let clip = GlobeGeometry.ClipRect(size: size)

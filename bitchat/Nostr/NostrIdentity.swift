@@ -1,5 +1,5 @@
+import BitSecp256k1
 import Foundation
-import P256K
 
 /// Manages the secp256k1 identity used by BitChat's Nostr relay features,
 /// including the proprietary private-envelope transport.
@@ -39,8 +39,8 @@ struct NostrIdentity: Codable {
     /// Generate a new Nostr identity
     static func generate() throws -> NostrIdentity {
         // Generate Schnorr key for Nostr
-        let schnorrKey = try P256K.Schnorr.PrivateKey()
-        let xOnlyPubkey = Data(schnorrKey.xonly.bytes)
+        let schnorrKey = try BitSecp256k1.SchnorrPrivateKey()
+        let xOnlyPubkey = schnorrKey.xonlyPublicKey
         let npub = try Bech32.encode(hrp: "npub", data: xOnlyPubkey)
         
         return NostrIdentity(
@@ -53,8 +53,8 @@ struct NostrIdentity: Codable {
     
     /// Initialize from existing private key data
     init(privateKeyData: Data) throws {
-        let schnorrKey = try P256K.Schnorr.PrivateKey(dataRepresentation: privateKeyData)
-        let xOnlyPubkey = Data(schnorrKey.xonly.bytes)
+        let schnorrKey = try BitSecp256k1.SchnorrPrivateKey(dataRepresentation: privateKeyData)
+        let xOnlyPubkey = schnorrKey.xonlyPublicKey
         
         self.privateKey = privateKeyData
         self.publicKey = xOnlyPubkey
@@ -63,7 +63,7 @@ struct NostrIdentity: Codable {
     }
     
     /// Get Schnorr signing key for Nostr event signatures
-    func schnorrSigningKey() throws -> P256K.Schnorr.PrivateKey {
-        try P256K.Schnorr.PrivateKey(dataRepresentation: privateKey)
+    func schnorrSigningKey() throws -> BitSecp256k1.SchnorrPrivateKey {
+        try BitSecp256k1.SchnorrPrivateKey(dataRepresentation: privateKey)
     }
 }
