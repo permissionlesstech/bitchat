@@ -494,8 +494,8 @@ struct AppArchitectureTests {
         #expect(defaults.string(forKey: key) == AppInfoView.Pane.info.rawValue)
         #expect(chromeModel.isAppInfoPresented)
 
-        // Controls that promise a pane (the header gear and the gateway globe
-        // both say "settings") must land there even against sticky memory.
+        // Controls that promise a pane (such as the gateway globe opening
+        // settings) must land there even against sticky memory.
         chromeModel.isAppInfoPresented = false
         chromeModel.presentAppInfo(pane: .settings)
         #expect(defaults.string(forKey: key) == AppInfoView.Pane.settings.rawValue)
