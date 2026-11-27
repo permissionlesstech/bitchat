@@ -236,7 +236,7 @@ final class MessageFormattingEngine {
         return result
     }
 
-    private struct ContentHints {
+    struct ContentHints {
         var hasMentions = false
         var hasHashtags = false
         var hasURLs = false
@@ -250,7 +250,7 @@ final class MessageFormattingEngine {
 
     /// Single-pass UTF-8 scanner that detects candidate rich tokens without
     /// allocating lowercased copies or bridging to NSString.
-    private static func scanContentHints(in content: String) -> ContentHints {
+    static func scanContentHints(in content: String) -> ContentHints {
         if let hints = content.utf8.withContiguousStorageIfAvailable({ scanContentHintsBuffer($0) }) {
             return hints
         }

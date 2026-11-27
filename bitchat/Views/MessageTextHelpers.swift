@@ -14,9 +14,12 @@ extension BitchatMessage {
         if let cached = getCachedContentScan() {
             return cached
         }
+        // Single-pass UTF-8 hint scan skips all four payment regexes on the
+        // vast majority of plain chat lines.
+        let hints = MessageFormattingEngine.scanContentHints(in: content)
         let scan = ContentScan(
-            cashuLinks: content.extractCashuLinks(),
-            lightningLinks: content.extractLightningLinks(),
+            cashuLinks: hints.hasCashu ? content.extractCashuLinks() : [],
+            lightningLinks: hints.hasLightning ? content.extractLightningLinks() : [],
             isLongForDisplay: content.isLongForDisplay()
         )
         setCachedContentScan(scan)
@@ -25,8 +28,15 @@ extension BitchatMessage {
 }
 
 extension String {
+    /// Zero-allocation check matching `!trimmed.isEmpty`: returns `true` on the
+    /// first non-whitespace, non-newline character.
+    var hasNonWhitespaceContent: Bool {
+        contains { !$0.isWhitespace && !$0.isNewline }
+    }
+
     // Detect if there is an extremely long token (no whitespace/newlines) that could break layout
     func hasVeryLongToken(threshold: Int) -> Bool {
+        if utf8.count < threshold { return false }
         var current = 0
         for ch in self {
             if ch.isWhitespace || ch.isNewline {
@@ -47,7 +57,8 @@ extension String {
         lengthThreshold: Int = TransportConfig.uiLongMessageLengthThreshold,
         tokenThreshold: Int = TransportConfig.uiVeryLongTokenThreshold
     ) -> Bool {
-        count > lengthThreshold || hasVeryLongToken(threshold: tokenThreshold)
+        if utf8.count < min(lengthThreshold, tokenThreshold) { return false }
+        return count > lengthThreshold || hasVeryLongToken(threshold: tokenThreshold)
     }
 
     /// True when rich formatting (regex / link detectors) should be skipped.
@@ -57,13 +68,17 @@ extension String {
         lengthThreshold: Int = 4000,
         tokenThreshold: Int = 1024
     ) -> Bool {
-        count > lengthThreshold || hasVeryLongToken(threshold: tokenThreshold)
+        if utf8.count < min(lengthThreshold, tokenThreshold) { return false }
+        return count > lengthThreshold || hasVeryLongToken(threshold: tokenThreshold)
     }
 
     // Extract up to `max` distinct Cashu tokens (cashuA/cashuB), as the bare
     // bearer strings. Allow dot '.' and shorter lengths. The `cashu:` URI
     // form matches too — the token embedded after the scheme is the match.
     func extractCashuLinks(max: Int = 3) -> [String] {
+        guard utf8.count >= 46, MessageFormattingEngine.scanContentHints(in: self).hasCashu else {
+            return []
+        }
         let regex = MessageFormattingEngine.Patterns.cashu
         let ns = self as NSString
         let range = NSRange(location: 0, length: ns.length)
@@ -82,6 +97,9 @@ extension String {
 
     // Extract Lightning payloads (scheme, BOLT11, LNURL). Returned as lightning:<payload>
     func extractLightningLinks(max: Int = 3) -> [String] {
+        guard MessageFormattingEngine.scanContentHints(in: self).hasLightning else {
+            return []
+        }
         var results: [String] = []
         let ns = self as NSString
         let full = NSRange(location: 0, length: ns.length)

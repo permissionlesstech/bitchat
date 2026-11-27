@@ -16,9 +16,21 @@ final class AutocompleteService {
     /// only case `getSuggestions` can return anything for, whatever the peers.
     /// Lets callers skip assembling the peer list after every keystroke.
     static func hasMentionToken(in text: String, cursorPosition: Int) -> Bool {
-        let textToPosition = String(text.prefix(cursorPosition))
-        let range = NSRange(location: 0, length: (textToPosition as NSString).length)
-        return Patterns.mentionAutocomplete.firstMatch(in: textToPosition, options: [], range: range) != nil
+        mentionPrefix(in: text, cursorPosition: cursorPosition) != nil
+    }
+
+    /// Returns the normalized lowercased prefix of a trailing `@mention` token
+    /// ending at `cursorPosition`, or `nil` when the cursor is not inside one.
+    /// Fast-rejects texts without `@` without allocating or bridging to NSString.
+    static func mentionPrefix(in text: String, cursorPosition: Int) -> String? {
+        guard cursorPosition > 0, text.contains("@") else { return nil }
+        let textToPosition = cursorPosition >= text.count ? text : String(text.prefix(cursorPosition))
+        let nsText = textToPosition as NSString
+        let range = NSRange(location: 0, length: nsText.length)
+        guard let match = Patterns.mentionAutocomplete.firstMatch(in: textToPosition, options: [], range: range) else {
+            return nil
+        }
+        return nsText.substring(with: match.range(at: 1)).normalizedNickname.lowercased()
     }
 
     /// Get autocomplete suggestions for current text
@@ -64,13 +76,26 @@ final class AutocompleteService {
         let captureRange = match.range(at: 1)
         let prefix = nsText.substring(with: captureRange).normalizedNickname.lowercased()
 
-        let suggestions = peers
-            .filter { $0.normalizedNickname.lowercased().hasPrefix(prefix) }
-            .sorted()
-            .prefix(5)
-            .map { "@\($0)" }
+        // Maintain only the top 5 lexicographically smallest matching peers so
+        // typing `@` in a crowded room stays O(N) without sorting every peer.
+        var top: [String] = []
+        top.reserveCapacity(6)
+        for peer in peers {
+            if !prefix.isEmpty && !peer.normalizedNickname.lowercased().hasPrefix(prefix) {
+                continue
+            }
+            if top.count == 5, let last = top.last, peer >= last {
+                continue
+            }
+            let insertIdx = top.firstIndex { peer < $0 } ?? top.endIndex
+            top.insert(peer, at: insertIdx)
+            if top.count > 5 {
+                top.removeLast()
+            }
+        }
 
-        return suggestions.isEmpty ? nil : (Array(suggestions), fullRange)
+        let suggestions = top.map { "@\($0)" }
+        return suggestions.isEmpty ? nil : (suggestions, fullRange)
     }
 
     private func needsArgument(command: String) -> Bool {

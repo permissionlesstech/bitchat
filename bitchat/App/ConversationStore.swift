@@ -89,6 +89,64 @@ final class Conversation: ObservableObject, Identifiable {
         case updated
     }
 
+    fileprivate struct BatchInsertResult {
+        let inserted: [BitchatMessage]
+        let trimmedMessageIDs: [String]
+
+        static let empty = BatchInsertResult(inserted: [], trimmedMessageIDs: [])
+    }
+
+    /// Inserts a batch of messages in timestamp order with a single `@Published`
+    /// mutation and a single cap trim. Crucial for crowded-room bursts so one
+    /// pipeline flush emits one SwiftUI update instead of N.
+    fileprivate func insertBatch(_ batch: [BitchatMessage]) -> BatchInsertResult {
+        guard !batch.isEmpty else { return .empty }
+        var updated = messages
+        var inserted: [BitchatMessage] = []
+        inserted.reserveCapacity(batch.count)
+        var lowestInsertedIndex: Int?
+
+        for message in batch {
+            guard indexByMessageID[message.id] == nil else { continue }
+            if let last = updated.last, message.timestamp < last.timestamp {
+                let index = Self.insertionIndex(for: message.timestamp, in: updated)
+                updated.insert(message, at: index)
+                lowestInsertedIndex = min(lowestInsertedIndex ?? index, index)
+                // Tentatively register so a later duplicate in the same batch is skipped.
+                indexByMessageID[message.id] = indexOffset + index
+            } else {
+                updated.append(message)
+                indexByMessageID[message.id] = indexOffset + updated.count - 1
+            }
+            inserted.append(message)
+        }
+
+        guard !inserted.isEmpty else { return .empty }
+
+        var trimmedIDs: [String] = []
+        if updated.count > cap {
+            let overflow = updated.count - cap
+            trimmedIDs = updated.prefix(overflow).map(\.id)
+            for id in trimmedIDs {
+                indexByMessageID.removeValue(forKey: id)
+            }
+            updated.removeFirst(overflow)
+            indexOffset += overflow
+            if let lowest = lowestInsertedIndex {
+                lowestInsertedIndex = max(0, lowest - overflow)
+            }
+        }
+
+        if let lowest = lowestInsertedIndex {
+            for index in lowest..<updated.count {
+                indexByMessageID[updated[index].id] = indexOffset + index
+            }
+        }
+
+        messages = updated
+        return BatchInsertResult(inserted: inserted, trimmedMessageIDs: trimmedIDs)
+    }
+
     /// Inserts a message in timestamp order, deduplicating by message ID.
     /// Fast path appends when the timestamp is >= the current tail;
     /// otherwise a binary search finds the upper-bound insertion point so
@@ -98,7 +156,7 @@ final class Conversation: ObservableObject, Identifiable {
         guard indexByMessageID[message.id] == nil else { return .duplicate }
 
         if let last = messages.last, message.timestamp < last.timestamp {
-            let index = insertionIndex(for: message.timestamp)
+            let index = Self.insertionIndex(for: message.timestamp, in: messages)
             messages.insert(message, at: index)
             reindex(from: index)
         } else {
@@ -265,7 +323,7 @@ final class Conversation: ObservableObject, Identifiable {
     /// Upper-bound binary search: first index whose timestamp is strictly
     /// greater than `timestamp`, so equal-timestamp messages keep arrival
     /// order.
-    private func insertionIndex(for timestamp: Date) -> Int {
+    private static func insertionIndex(for timestamp: Date, in messages: [BitchatMessage]) -> Int {
         var low = 0
         var high = messages.count
         while low < high {
@@ -401,6 +459,28 @@ final class ConversationStore: ObservableObject {
         unregisterMessageIDs(result.trimmedMessageIDs, from: id)
         changes.send(.appended(id, message))
         return true
+    }
+
+    /// Appends a batch of messages to one conversation with a single
+    /// `@Published` array write and a single cap trim. Returns the messages
+    /// actually inserted (excluding ID duplicates).
+    @discardableResult
+    func appendBatch(_ messages: [BitchatMessage], to id: ConversationID) -> [BitchatMessage] {
+        guard !messages.isEmpty else { return [] }
+        if messages.count == 1 {
+            return append(messages[0], to: id) ? messages : []
+        }
+        let conversation = conversation(for: id)
+        let result = conversation.insertBatch(messages)
+        guard !result.inserted.isEmpty else { return [] }
+        for message in result.inserted {
+            registerMessageID(message.id, in: id)
+        }
+        unregisterMessageIDs(result.trimmedMessageIDs, from: id)
+        for message in result.inserted {
+            changes.send(.appended(id, message))
+        }
+        return result.inserted
     }
 
     /// Replace-or-append by message ID (media progress, edits).

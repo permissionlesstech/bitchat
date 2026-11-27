@@ -59,7 +59,9 @@ struct ContentComposerView: View {
                 .padding(.horizontal, 12)
             }
 
-            CommandSuggestionsView(messageText: $draftModel.messageText)
+            if draftModel.messageText.hasPrefix("/") {
+                CommandSuggestionsView(messageText: $draftModel.messageText)
+            }
 
             if voiceRecordingVM.state.isActive {
                 recordingIndicator
@@ -143,6 +145,29 @@ struct ContentComposerView: View {
 }
 
 private extension ContentComposerView {
+    /// Static localized strings hoisted out of `body` so each keystroke in the
+    /// composer doesn't perform repeated bundle lookups.
+    enum Strings {
+        static let nearbyOnlyOnA11y = String(localized: "content.accessibility.nearby_only_on", defaultValue: "Nearby only: messages stay within radio range", comment: "Accessibility label for the compose scope toggle when messages stay local")
+        static let nearbyOnlyOffA11y = String(localized: "content.accessibility.nearby_only_off", defaultValue: "Bridged: messages also reach people across the bridge", comment: "Accessibility label for the compose scope toggle when messages cross the mesh bridge")
+        static let nearbyOnlyOnHelp = String(localized: "content.composer.nearby_only_on", defaultValue: "Nearby only — this message won't cross the bridge", comment: "Tooltip for the compose scope toggle when messages stay local")
+        static let nearbyOnlyOffHelp = String(localized: "content.composer.nearby_only_off", defaultValue: "Bridged — reaches people beyond radio range in this area", comment: "Tooltip for the compose scope toggle when messages cross the mesh bridge")
+        static let placeholderMesh = String(localized: "content.input.placeholder.mesh", comment: "Composer placeholder for the public mesh channel")
+        static let placeholderPrivateFormat = String(localized: "content.input.placeholder.private", comment: "Composer placeholder inside a private chat, naming the conversation partner")
+        static let placeholderLocationFormat = String(localized: "content.input.placeholder.location", comment: "Composer placeholder for a public geohash channel, naming it")
+        static let cancel = String(localized: "common.cancel", comment: "Cancel action in the voice recording HUD")
+        static let attachPhoto = String(localized: "content.accessibility.attach_photo", comment: "Accessibility label for the photo attachment button")
+        static let attachPhotoHint = String(localized: "content.accessibility.attach_photo_hint", comment: "Accessibility hint explaining the attachment button opens the photo library")
+        static let choosePhoto = String(localized: "content.accessibility.choose_photo", comment: "Accessibility label for the macOS photo picker button")
+        static let recordVoice = String(localized: "content.accessibility.record_voice_note", comment: "Accessibility label for the voice note button")
+        static let recording = String(localized: "content.accessibility.recording", comment: "Accessibility value announced while a voice note is recording")
+        static let someoneSpeakingFormat = String(localized: "content.accessibility.someone_speaking", comment: "Accessibility value on the mic button naming who is talking live in the public channel")
+        static let recordVoiceHint = String(localized: "content.accessibility.record_voice_hint", comment: "Accessibility hint explaining double-tap toggles voice recording")
+        static let sendMessage = String(localized: "content.accessibility.send_message", comment: "Accessibility label for the send message button")
+        static let sendHintReady = String(localized: "content.accessibility.send_hint_ready", comment: "Hint prompting the user to send the message")
+        static let sendHintEmpty = String(localized: "content.accessibility.send_hint_empty", comment: "Hint prompting the user to enter a message")
+    }
+
     /// The nearby-only scope toggle appears only where it means something:
     /// the public mesh channel with the bridge on.
     var showsNearbyOnlyToggle: Bool {
@@ -166,16 +191,8 @@ private extension ContentComposerView {
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .accessibilityLabel(
-            bridgeService.nearbyOnly
-            ? String(localized: "content.accessibility.nearby_only_on", defaultValue: "Nearby only: messages stay within radio range", comment: "Accessibility label for the compose scope toggle when messages stay local")
-            : String(localized: "content.accessibility.nearby_only_off", defaultValue: "Bridged: messages also reach people across the bridge", comment: "Accessibility label for the compose scope toggle when messages cross the mesh bridge")
-        )
-        .help(
-            bridgeService.nearbyOnly
-            ? String(localized: "content.composer.nearby_only_on", defaultValue: "Nearby only — this message won't cross the bridge", comment: "Tooltip for the compose scope toggle when messages stay local")
-            : String(localized: "content.composer.nearby_only_off", defaultValue: "Bridged — reaches people beyond radio range in this area", comment: "Tooltip for the compose scope toggle when messages cross the mesh bridge")
-        )
+        .accessibilityLabel(bridgeService.nearbyOnly ? Strings.nearbyOnlyOnA11y : Strings.nearbyOnlyOffA11y)
+        .help(bridgeService.nearbyOnly ? Strings.nearbyOnlyOnHelp : Strings.nearbyOnlyOffHelp)
     }
 
     /// States where a message will land: the DM partner's name for private
@@ -187,21 +204,13 @@ private extension ContentComposerView {
             // form, so it must not get another "@" prefix; a mesh nickname does.
             let isGeoDM = privateConversationModel.selectedPeerID?.isGeoDM == true
             let target = isGeoDM ? header.displayName : "@\(header.displayName)"
-            return String(
-                format: String(localized: "content.input.placeholder.private", comment: "Composer placeholder inside a private chat, naming the conversation partner"),
-                locale: .current,
-                target
-            )
+            return String(format: Strings.placeholderPrivateFormat, locale: .current, target)
         }
         switch locationChannelsModel.selectedChannel {
         case .mesh:
-            return String(localized: "content.input.placeholder.mesh", comment: "Composer placeholder for the public mesh channel")
+            return Strings.placeholderMesh
         case .location(let channel):
-            return String(
-                format: String(localized: "content.input.placeholder.location", comment: "Composer placeholder for a public geohash channel, naming it"),
-                locale: .current,
-                channel.geohash
-            )
+            return String(format: Strings.placeholderLocationFormat, locale: .current, channel.geohash)
         }
     }
 
@@ -232,7 +241,7 @@ private extension ContentComposerView {
             }
             Spacer()
             Button(action: voiceRecordingVM.cancel) {
-                Label(String(localized: "common.cancel", comment: "Cancel action in the voice recording HUD"), systemImage: "xmark.circle")
+                Label(Strings.cancel, systemImage: "xmark.circle")
                     .labelStyle(.iconOnly)
                     .font(.bitchatSystem(size: 18))
                     .foregroundColor(.red)
@@ -265,12 +274,8 @@ private extension ContentComposerView {
                 imagePickerSourceType = .camera
                 showImagePicker = true
             }
-            .accessibilityLabel(
-                String(localized: "content.accessibility.attach_photo", comment: "Accessibility label for the photo attachment button")
-            )
-            .accessibilityHint(
-                String(localized: "content.accessibility.attach_photo_hint", comment: "Accessibility hint explaining the attachment button opens the photo library")
-            )
+            .accessibilityLabel(Strings.attachPhoto)
+            .accessibilityHint(Strings.attachPhotoHint)
             .accessibilityAddTraits(.isButton)
             // The long-press → camera path is unreachable for VoiceOver users;
             // mirror it as a named action.
@@ -286,15 +291,13 @@ private extension ContentComposerView {
                 .frame(width: 36, height: 36)
         }
         .buttonStyle(.plain)
-        .accessibilityLabel(
-            String(localized: "content.accessibility.choose_photo", comment: "Accessibility label for the macOS photo picker button")
-        )
+        .accessibilityLabel(Strings.choosePhoto)
         #endif
     }
 
     @ViewBuilder
     var sendOrMicButton: some View {
-        let hasText = !draftModel.messageText.trimmed.isEmpty
+        let hasText = draftModel.messageText.hasNonWhitespaceContent
         if conversationUIModel.canSendMediaInCurrentContext {
             ZStack {
                 micButtonView
@@ -348,23 +351,15 @@ private extension ContentComposerView {
                             }
                     )
             )
-            .accessibilityLabel(
-                String(localized: "content.accessibility.record_voice_note", comment: "Accessibility label for the voice note button")
-            )
+            .accessibilityLabel(Strings.recordVoice)
             .accessibilityValue(
                 voiceRecordingVM.state.isActive
-                ? String(localized: "content.accessibility.recording", comment: "Accessibility value announced while a voice note is recording")
+                ? Strings.recording
                 : busyTalker.map {
-                    String(
-                        format: String(localized: "content.accessibility.someone_speaking", comment: "Accessibility value on the mic button naming who is talking live in the public channel"),
-                        locale: .current,
-                        $0
-                    )
+                    String(format: Strings.someoneSpeakingFormat, locale: .current, $0)
                 } ?? ""
             )
-            .accessibilityHint(
-                String(localized: "content.accessibility.record_voice_hint", comment: "Accessibility hint explaining double-tap toggles voice recording")
-            )
+            .accessibilityHint(Strings.recordVoiceHint)
             .accessibilityAddTraits(.isButton)
             // Press-and-hold drag gestures can't be activated by VoiceOver;
             // give it a start/stop toggle as the default action.
@@ -387,14 +382,8 @@ private extension ContentComposerView {
         }
         .buttonStyle(.plain)
         .disabled(!enabled)
-        .accessibilityLabel(
-            String(localized: "content.accessibility.send_message", comment: "Accessibility label for the send message button")
-        )
-        .accessibilityHint(
-            enabled
-            ? String(localized: "content.accessibility.send_hint_ready", comment: "Hint prompting the user to send the message")
-            : String(localized: "content.accessibility.send_hint_empty", comment: "Hint prompting the user to enter a message")
-        )
+        .accessibilityLabel(Strings.sendMessage)
+        .accessibilityHint(enabled ? Strings.sendHintReady : Strings.sendHintEmpty)
     }
 }
 

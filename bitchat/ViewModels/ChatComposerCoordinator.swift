@@ -85,12 +85,12 @@ final class ChatComposerCoordinator {
         // The query can only suggest for an @-token ending at the cursor, so
         // skip assembling the candidates (a pass over every mesh peer or
         // geohash participant) after each typing pause in plain text.
-        guard AutocompleteService.hasMentionToken(in: text, cursorPosition: cursorPosition) else {
+        guard let prefix = AutocompleteService.mentionPrefix(in: text, cursorPosition: cursorPosition) else {
             setAutocompleteState(suggestions: [], range: nil)
             return
         }
 
-        let peerCandidates = autocompleteCandidates()
+        let peerCandidates = autocompleteCandidates(matchingPrefix: prefix)
         let (suggestions, range) = context.autocompleteQuery(
             for: text,
             peers: peerCandidates,
@@ -114,6 +114,9 @@ final class ChatComposerCoordinator {
     }
 
     func parseMentions(from content: String) -> [String] {
+        // Fast reject: almost no message contains an `@`, so skip NSString
+        // bridging, regex matching, and mesh peer dictionary copy on hot paths.
+        guard content.contains("@") else { return [] }
         let regex = ChatViewModel.Patterns.mention
         let nsContent = content as NSString
         let matches = regex.matches(
@@ -121,6 +124,7 @@ final class ChatComposerCoordinator {
             options: [],
             range: NSRange(location: 0, length: nsContent.length)
         )
+        guard !matches.isEmpty else { return [] }
 
         let peerNicknames = context.meshPeerNicknames()
         var validTokens = Set(peerNicknames.values)
@@ -160,7 +164,7 @@ private extension ChatComposerCoordinator {
         }
     }
 
-    func autocompleteCandidates() -> [String] {
+    func autocompleteCandidates(matchingPrefix prefix: String) -> [String] {
         switch context.activeChannel {
         case .mesh:
             let values = context.meshPeerNicknames().values
@@ -171,6 +175,9 @@ private extension ChatComposerCoordinator {
         case .location(let channel):
             var tokens = Set<String>()
             for (pubkey, nick) in context.geoNicknames {
+                if !prefix.isEmpty && !nick.normalizedNickname.lowercased().hasPrefix(prefix) {
+                    continue
+                }
                 guard !context.isNostrBlocked(pubkeyHexLowercased: pubkey) else { continue }
                 tokens.insert("\(nick)#\(pubkey.suffix(4))")
             }

@@ -21,7 +21,26 @@ protocol PublicMessagePipelineDelegate: AnyObject {
     /// Returns `false` when the message was already present (ID dedup).
     @discardableResult
     func pipeline(_: PublicMessagePipeline, commit message: BitchatMessage, to conversationID: ConversationID) -> Bool
+    /// Commits a batch of messages to one conversation in a single store
+    /// mutation so a crowded-room burst triggers one SwiftUI publish instead
+    /// of one per message. Returns the messages actually inserted.
+    @discardableResult
+    func pipeline(
+        _: PublicMessagePipeline,
+        commitBatch messages: [BitchatMessage],
+        to conversationID: ConversationID
+    ) -> [BitchatMessage]
     func pipelinePrewarmMessage(_: PublicMessagePipeline, message: BitchatMessage)
+}
+
+extension PublicMessagePipelineDelegate {
+    func pipeline(
+        _ pipeline: PublicMessagePipeline,
+        commitBatch messages: [BitchatMessage],
+        to conversationID: ConversationID
+    ) -> [BitchatMessage] {
+        messages.filter { self.pipeline(pipeline, commit: $0, to: conversationID) }
+    }
 }
 
 @MainActor
@@ -131,17 +150,58 @@ private extension PublicMessagePipeline {
         buffer.removeAll(keepingCapacity: true)
         guard !pending.isEmpty else { return }
 
-        pending.sort { $0.message.timestamp < $1.message.timestamp }
+        if pending.count > 1 {
+            var needsSort = false
+            for idx in 1..<pending.count where pending[idx].message.timestamp < pending[idx - 1].message.timestamp {
+                needsSort = true
+                break
+            }
+            if needsSort {
+                pending.sort { $0.message.timestamp < $1.message.timestamp }
+            }
+        }
 
-        for item in pending {
-            guard delegate.pipeline(self, commit: item.message, to: item.conversationID) else { continue }
-            delegate.pipeline(self, recordContentKey: item.contentKey, timestamp: item.message.timestamp)
+        // Commit contiguous same-conversation runs in one store write each so
+        // crowded-room bursts trigger a single SwiftUI publish per flush.
+        var committedMessages: [BitchatMessage] = []
+        committedMessages.reserveCapacity(pending.count)
+        var runStart = 0
+        while runStart < pending.count {
+            let convID = pending[runStart].conversationID
+            var runEnd = runStart + 1
+            while runEnd < pending.count, pending[runEnd].conversationID == convID {
+                runEnd += 1
+            }
+
+            let run = pending[runStart..<runEnd]
+            let inserted = delegate.pipeline(
+                self,
+                commitBatch: run.map(\.message),
+                to: convID
+            )
+            if !inserted.isEmpty {
+                if inserted.count == run.count {
+                    for item in run {
+                        delegate.pipeline(self, recordContentKey: item.contentKey, timestamp: item.message.timestamp)
+                    }
+                } else {
+                    let insertedIDs = Set(inserted.map(\.id))
+                    for item in run where insertedIDs.contains(item.message.id) {
+                        delegate.pipeline(self, recordContentKey: item.contentKey, timestamp: item.message.timestamp)
+                    }
+                }
+                committedMessages.append(contentsOf: inserted)
+            }
+            runStart = runEnd
         }
 
         updateFlushInterval(withBatchSize: pending.count)
 
-        for item in pending {
-            delegate.pipelinePrewarmMessage(self, message: item.message)
+        // Prewarm only the tail rows visible near the bottom viewport so a
+        // sudden history-replay burst never stalls the main thread formatting
+        // hundreds of off-screen rows.
+        for message in committedMessages.suffix(TransportConfig.uiBatchPrewarmLimit) {
+            delegate.pipelinePrewarmMessage(self, message: message)
         }
 
         if !buffer.isEmpty {

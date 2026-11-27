@@ -114,7 +114,7 @@ struct ContentView: View {
     @ScaledMetric(relativeTo: .body) private var headerHeight: CGFloat = 44
     @ScaledMetric(relativeTo: .subheadline) private var headerPeerIconSize: CGFloat = 11
     @ScaledMetric(relativeTo: .subheadline) private var headerPeerCountFontSize: CGFloat = 12
-    @State private var windowCountPublic: Int = 300
+    @State private var windowCountPublic: Int = TransportConfig.uiWindowInitialCountPublic
     @State private var windowCountPrivate: [PeerID: Int] = [:]
 
     @ThemedPalette private var palette
@@ -487,14 +487,9 @@ struct ContentView: View {
 
                 Divider()
 
-                GeometryReader { geometry in
-                    VStack(spacing: 0) {
-                        publicMessageList
-                            .background(palette.background)
-                            .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    }
-                    .frame(width: geometry.size.width, height: geometry.size.height)
-                }
+                publicMessageList
+                    .background(palette.background)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
 
                 Divider()
 

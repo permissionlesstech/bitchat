@@ -77,6 +77,10 @@ final class ComposerDraftModel: ObservableObject {
         in autocompleteModel: ComposerAutocompleteModel
     ) {
         autocompleteDebounceTask?.cancel()
+        autocompleteDebounceTask = nil
+        // Ordinary typing without `@` can never open mention autocomplete; skip
+        // spawning a debounce Task on every keystroke once the panel is closed.
+        guard text.contains("@") || autocompleteModel.showAutocomplete else { return }
         let cursorPosition = text.count
         autocompleteDebounceTask = Task { @MainActor in
             do {

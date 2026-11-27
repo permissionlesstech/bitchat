@@ -838,4 +838,110 @@ struct ViewSmokeTests {
         #expect(preview.videoPreviewLayer.videoGravity == .resizeAspectFill)
         #endif
     }
+
+    #if os(iOS)
+    @Test("Liquid Glass chat scroll view does not double-inset or offset the first message")
+    func liquidGlassMessageList_doesNotDoubleTopInsetFirstMessage() async {
+        let (viewModel, _, _) = makeSmokeViewModel()
+        let featureModels = makeSmokeFeatureModels(for: viewModel)
+
+        // Start in a populated #mesh channel (scrolled down) before switching
+        // to an initially empty #ez channel where 2 Tor system messages arrive
+        // with the keyboard up — reproducing channel switch, empty→populated
+        // transition, and keyboard safe-area changes in one test.
+        let meshHistory: [BitchatMessage] = (0..<80).map { i in
+            BitchatMessage(
+                id: "mesh-\(i)",
+                sender: "alice",
+                content: "crowded room message number \(i)",
+                timestamp: Date(timeIntervalSince1970: 1_700_000_000 + Double(i)),
+                isRelay: false
+            )
+        }
+        viewModel.conversations.appendBatch(meshHistory, to: .mesh)
+
+        let rootView = installSmokeEnvironment(
+            ContentView().environment(\.appTheme, .liquidGlass),
+            featureModels: featureModels
+        )
+        let host = UIHostingController(rootView: rootView)
+        let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 393, height: 852))
+        window.rootViewController = host
+        window.makeKeyAndVisible()
+        host.view.frame = window.bounds
+        host.view.setNeedsLayout()
+        host.view.layoutIfNeeded()
+        try? await Task.sleep(nanoseconds: 100_000_000)
+
+        // Switch to empty #ez and simulate the keyboard opening.
+        let channel = GeohashChannel(level: .region, geohash: "ez")
+        featureModels.locationChannelsModel.select(.location(channel))
+        viewModel.conversations.setActiveChannel(.location(channel))
+        host.additionalSafeAreaInsets = UIEdgeInsets(top: 0, left: 0, bottom: 330, right: 0)
+        host.view.setNeedsLayout()
+        host.view.layoutIfNeeded()
+        try? await Task.sleep(nanoseconds: 100_000_000)
+
+        // Now deliver two system messages (matching the Tor restart screenshot).
+        let first = BitchatMessage(
+            id: "sys-1",
+            sender: "system",
+            content: "tor is restarting to restore connectivity...",
+            timestamp: Date(timeIntervalSince1970: 1_700_001_000),
+            isRelay: false
+        )
+        let second = BitchatMessage(
+            id: "sys-2",
+            sender: "system",
+            content: "tor restarted. network routing restored.",
+            timestamp: Date(timeIntervalSince1970: 1_700_001_001),
+            isRelay: false
+        )
+        viewModel.conversations.append(first, to: .geohash("ez"))
+        try? await Task.sleep(nanoseconds: 80_000_000)
+        viewModel.conversations.append(second, to: .geohash("ez"))
+        // Let followToBottom + 50ms retry settle.
+        try? await Task.sleep(nanoseconds: 120_000_000)
+        host.view.setNeedsLayout()
+        host.view.layoutIfNeeded()
+
+        func findScrollView(in view: UIView) -> UIScrollView? {
+            if let sv = view as? UIScrollView { return sv }
+            for subview in view.subviews {
+                if let found = findScrollView(in: subview) { return found }
+            }
+            return nil
+        }
+
+        let scrollView = findScrollView(in: host.view)
+        #expect(scrollView != nil)
+        if let scrollView {
+            let frameTopInWindow = scrollView.superview?.convert(scrollView.frame.origin, to: window).y ?? scrollView.frame.origin.y
+            let contentZeroInWindow = scrollView.convert(CGPoint.zero, to: window).y
+            let topInset = scrollView.adjustedContentInset.top
+            let expectedMaxTop = host.view.safeAreaInsets.top + 80
+            #expect(
+                frameTopInWindow <= host.view.safeAreaInsets.top + 1,
+                "ScrollView frame should extend behind top safeAreaInset (frameTop=\(frameTopInWindow), hostSafeTop=\(host.view.safeAreaInsets.top), topInset=\(topInset), contentOffset.y=\(scrollView.contentOffset.y), contentZeroInWindow=\(contentZeroInWindow))"
+            )
+            #expect(
+                contentZeroInWindow <= expectedMaxTop,
+                "First message top (\(contentZeroInWindow)) exceeded header budget (\(expectedMaxTop)); frameTop=\(frameTopInWindow), topInset=\(topInset), contentOffset.y=\(scrollView.contentOffset.y), hostSafeTop=\(host.view.safeAreaInsets.top)"
+            )
+            // Also verify the actual rendered content subview inside UIScrollView
+            // is not vertically centered or pushed halfway down.
+            let renderedContentMinY = scrollView.subviews
+                .filter { $0.bounds.height > 1 && $0.bounds.width > 100 }
+                .map { scrollView.convert($0.frame.origin, to: window).y }
+                .min()
+            if let renderedContentMinY {
+                #expect(
+                    renderedContentMinY <= expectedMaxTop + 16,
+                    "Rendered content subview top (\(renderedContentMinY)) was pushed down (expected <= \(expectedMaxTop + 16)); contentSize=\(scrollView.contentSize), contentOffset=\(scrollView.contentOffset), adjustedContentInset=\(scrollView.adjustedContentInset)"
+                )
+            }
+        }
+        window.isHidden = true
+    }
+    #endif
 }

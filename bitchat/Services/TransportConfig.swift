@@ -155,7 +155,7 @@ enum TransportConfig {
     static let uiReadReceiptRetryShortSeconds: TimeInterval = 0.1
     static let uiReadReceiptRetryLongSeconds: TimeInterval = 0.5
     static let uiBatchDispatchStaggerSeconds: TimeInterval = 0.15
-    static let uiScrollThrottleSeconds: TimeInterval = 0.5
+    static let uiScrollThrottleSeconds: TimeInterval = 0.15
     static let uiAnimationMediumSeconds: TimeInterval = 0.2
     static let uiRecentCutoffFiveMinutesSeconds: TimeInterval = 5 * 60
     static let uiMeshEmptyConfirmationSeconds: TimeInterval = 30.0
@@ -372,9 +372,13 @@ enum TransportConfig {
     static let uiPeerPaletteRingBrightnessDeltaDark: Double = -0.07
 
     // UI windowing (infinite scroll)
-    static let uiWindowInitialCountPublic: Int = 300
-    static let uiWindowInitialCountPrivate: Int = 300
-    static let uiWindowStepCount: Int = 200
+    static let uiWindowInitialCountPublic: Int = 150
+    static let uiWindowInitialCountPrivate: Int = 150
+    static let uiWindowStepCount: Int = 150
+    /// Maximum tail messages synchronously prewarmed per public pipeline flush;
+    /// caps main-actor work during crowded-room history bursts to the rows near
+    /// the bottom viewport.
+    static let uiBatchPrewarmLimit: Int = 30
 
     // Share extension
     static let uiShareExtensionDismissDelaySeconds: TimeInterval = 2.0
