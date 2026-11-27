@@ -125,6 +125,77 @@ final class GeohashPresenceServiceTests: XCTestCase {
         XCTAssertEqual(scheduler.intervals, [22, 22])
     }
 
+    func test_performHeartbeat_sendsNothingWhileLocationIsRevokedAndResumesWhenRestored() async {
+        let scheduler = MockGeohashPresenceScheduler()
+        var authorized = true
+        var delaysStarted = 0
+        var sentGeohashes: [String] = []
+        let service = makeService(
+            scheduler: scheduler,
+            isLocationAuthorized: { authorized },
+            relaySender: { event, _ in
+                if let geohash = event.tags.first(where: { $0.first == "g" })?[1] {
+                    sentGeohashes.append(geohash)
+                }
+            },
+            sleeper: { _ in delaysStarted += 1 }
+        )
+
+        service.start()
+        service.performHeartbeat()
+        let sentWhileAuthorized = await waitUntil { sentGeohashes == ["9q8yy"] }
+        XCTAssertTrue(sentWhileAuthorized)
+
+        // Revoked mid-session. The provider still returns the last fix, so
+        // only the permission check can keep this heartbeat quiet, and it
+        // should not even schedule a send.
+        authorized = false
+        service.performHeartbeat()
+        let scheduledWhileRevoked = await waitUntil(timeout: TestConstants.negativeWaitWindow) {
+            delaysStarted > 1 || sentGeohashes.count > 1
+        }
+        XCTAssertFalse(scheduledWhileRevoked)
+
+        authorized = true
+        service.performHeartbeat()
+        let resumed = await waitUntil { sentGeohashes == ["9q8yy", "9q8yy"] }
+        XCTAssertTrue(resumed)
+        XCTAssertEqual(delaysStarted, 2)
+        // The loop kept rescheduling while revoked, so nothing has to restart it.
+        XCTAssertEqual(scheduler.intervals, [40, 40, 40, 40])
+    }
+
+    func test_revocationDuringDecorrelationDelay_dropsThePendingBroadcast() async throws {
+        let identity = try NostrIdentity.generate()
+        var authorized = true
+        var sleeperContinuation: CheckedContinuation<Void, Never>?
+        var sendCount = 0
+        let service = makeService(
+            scheduler: MockGeohashPresenceScheduler(),
+            isLocationAuthorized: { authorized },
+            deriveIdentity: { _ in identity },
+            relaySender: { _, _ in sendCount += 1 },
+            sleeper: { _ in
+                await withCheckedContinuation { continuation in
+                    sleeperContinuation = continuation
+                }
+            },
+            burstMinDelay: 1,
+            burstMaxDelay: 1
+        )
+
+        service.start()
+        service.performHeartbeat()
+        let delayStarted = await waitUntil { sleeperContinuation != nil }
+        XCTAssertTrue(delayStarted)
+
+        authorized = false
+        sleeperContinuation?.resume()
+        let sent = await waitUntil(timeout: TestConstants.negativeWaitWindow) { sendCount > 0 }
+
+        XCTAssertFalse(sent)
+    }
+
     func test_stopForPanic_cancelsTimerAndSuppressesDelayedBroadcast() async throws {
         let identity = try NostrIdentity.generate()
         let scheduler = MockGeohashPresenceScheduler()
@@ -195,6 +266,7 @@ final class GeohashPresenceServiceTests: XCTestCase {
         availableChannels: [GeohashChannel] = [
             GeohashChannel(level: .city, geohash: "9q8yy")
         ],
+        isLocationAuthorized: @escaping () -> Bool = { true },
         torIsReady: @escaping () -> Bool = { true },
         torIsForeground: @escaping () -> Bool = { true },
         deriveIdentity: @escaping (String) throws -> NostrIdentity = { _ in try NostrIdentity.generate() },
@@ -210,6 +282,7 @@ final class GeohashPresenceServiceTests: XCTestCase {
         let torReadySubject = PassthroughSubject<Void, Never>()
         return GeohashPresenceService(
             availableChannelsProvider: { availableChannels },
+            isLocationAuthorized: isLocationAuthorized,
             locationChanges: locationSubject.eraseToAnyPublisher(),
             torReadyPublisher: torReadySubject.eraseToAnyPublisher(),
             torIsReady: torIsReady,

@@ -214,6 +214,53 @@ struct BridgeServiceTests {
         #expect(fixture.service.activeCell == "u4prux")
     }
 
+    @Test func ownLocationCellNeedsLocationAccess() {
+        let channels = GeohashChannelLevel.allCases.map {
+            GeohashChannel(level: $0, geohash: String("u4pruydqqvj".prefix($0.precision)))
+        }
+
+        #expect(BridgeService.ownLocationCell(from: channels, permission: .authorized) == Self.cell)
+        let withoutAccess: [LocationChannelManager.PermissionState] = [.notDetermined, .denied, .restricted]
+        for permission in withoutAccess {
+            #expect(BridgeService.ownLocationCell(from: channels, permission: permission) == nil)
+        }
+    }
+
+    @Test func revokedLocationClosesTheRendezvousUntilAccessReturns() {
+        let fixture = Fixture(enabled: true)
+        var permission = LocationChannelManager.PermissionState.authorized
+        // The last fix stays in the list, so only the permission can close it.
+        let lastFix = [GeohashChannel(level: .neighborhood, geohash: Self.cell)]
+        fixture.service.locationCell = {
+            BridgeService.ownLocationCell(from: lastFix, permission: permission)
+        }
+        fixture.service.refreshRendezvous()
+        #expect(fixture.service.activeCell == Self.cell)
+
+        permission = .denied
+        fixture.service.refreshRendezvous()
+
+        #expect(fixture.service.activeCell == nil)
+        #expect(fixture.closedSubscriptions == 1)
+        // Past the presence throttle, so a live cell would publish again.
+        let publishedBeforeRevocation = fixture.published.count
+        fixture.advance(BridgeService.Limits.presenceIntervalSeconds)
+        fixture.fireScheduledTimers()
+        fixture.service.bridgeOutgoing(
+            content: "still here?",
+            senderPeerID: PeerID(str: "0011223344556677"),
+            timestamp: Date()
+        )
+        #expect(fixture.published.count == publishedBeforeRevocation, "nothing goes to the old cell")
+
+        permission = .authorized
+        fixture.service.refreshRendezvous()
+
+        #expect(fixture.service.activeCell == Self.cell)
+        #expect(fixture.openedSubscriptions.count == 2)
+        #expect(fixture.published.last?.cell == Self.cell, "presence resumes")
+    }
+
     @Test func disablingClosesSubscriptionAndClearsState() {
         let fixture = Fixture(enabled: true)
         fixture.service.refreshRendezvous()

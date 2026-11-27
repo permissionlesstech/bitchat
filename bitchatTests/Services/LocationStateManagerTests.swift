@@ -104,7 +104,6 @@ final class LocationStateManagerTests: XCTestCase {
         )
         let channelsLoaded = await waitUntil { !manager.availableChannels.isEmpty }
         XCTAssertTrue(channelsLoaded)
-        let cachedChannels = manager.availableChannels
         manager.addBookmark("u4pru")
         manager.markTeleported(for: "9q8yy", true)
         manager.select(.location(GeohashChannel(level: .city, geohash: "9q8yy")))
@@ -121,9 +120,68 @@ final class LocationStateManagerTests: XCTestCase {
         XCTAssertEqual(locationManager.stopUpdatingLocationCallCount, 1)
         XCTAssertEqual(locationManager.desiredAccuracy, kCLLocationAccuracyHundredMeters)
         XCTAssertEqual(locationManager.distanceFilter, TransportConfig.locationDistanceFilterMeters)
-        XCTAssertEqual(manager.availableChannels, cachedChannels, "cached display state can remain")
+        XCTAssertEqual(manager.availableChannels, [], "channels from the last fix go with the permission")
         XCTAssertEqual(manager.bookmarks, ["u4pru"])
         XCTAssertTrue(manager.teleported, "an explicit remote selection survives device revocation")
+    }
+
+    func test_permissionRevocation_forgetsTheLastFixUntilReauthorized() async {
+        let locationManager = MockLocationManager(authorizationStatus: .authorizedAlways)
+        let geocoder = MockLocationGeocoder()
+        geocoder.enqueue(placemarks: [makePlacemark(country: "United States", locality: "Honolulu")])
+        let manager = LocationStateManager(
+            storage: makeStorage(),
+            locationManager: locationManager,
+            geocoder: geocoder,
+            shouldInitializeCoreLocation: true
+        )
+        let authorized = await waitUntil { manager.permissionState == .authorized }
+        XCTAssertTrue(authorized)
+        let honolulu = CLLocation(latitude: 21.2850, longitude: -157.8357)
+
+        manager.locationManager(CLLocationManager(), didUpdateLocations: [honolulu])
+        let fixLoaded = await waitUntil {
+            !manager.availableChannels.isEmpty && manager.locationNames[.city] == "Honolulu"
+        }
+        XCTAssertTrue(fixLoaded)
+
+        // Another fix whose place-name lookup is still out when access goes.
+        geocoder.holdsCompletions = true
+        geocoder.enqueue(placemarks: [makePlacemark(country: "United States", locality: "Honolulu")])
+        manager.locationManager(CLLocationManager(), didUpdateLocations: [honolulu])
+
+        // CoreLocation updates its status before it tells the delegate.
+        locationManager.authorizationStatus = .denied
+        manager.locationManager(CLLocationManager(), didChangeAuthorization: .denied)
+
+        let denied = await waitUntil { manager.permissionState == .denied }
+        XCTAssertTrue(denied)
+        XCTAssertEqual(manager.availableChannels, [])
+        XCTAssertEqual(manager.locationNames, [:])
+
+        // The lookup that outlasted the revocation lands, and a fix
+        // CoreLocation had already queued arrives. That fix is not even
+        // sent for geocoding.
+        geocoder.completePending()
+        manager.locationManager(CLLocationManager(), didUpdateLocations: [honolulu])
+        XCTAssertEqual(geocoder.reverseRequests.count, 2)
+
+        locationManager.authorizationStatus = .authorizedAlways
+        manager.locationManager(CLLocationManager(), didChangeAuthorization: .authorizedAlways)
+
+        let reauthorized = await waitUntil { manager.permissionState == .authorized }
+        XCTAssertTrue(reauthorized)
+        // Main-actor tasks run in order, so anything the late arrivals
+        // queued has run by now: neither brought the last fix back.
+        XCTAssertEqual(manager.availableChannels, [])
+        XCTAssertEqual(manager.locationNames, [:])
+        XCTAssertEqual(locationManager.requestLocationCallCount, 1, "access returning asks for a fresh fix")
+
+        manager.locationManager(CLLocationManager(), didUpdateLocations: [honolulu])
+        let channelsBack = await waitUntil {
+            manager.availableChannels.count == GeohashChannelLevel.allCases.count
+        }
+        XCTAssertTrue(channelsBack)
     }
 
     func test_didUpdateLocations_computesChannelsAndReverseGeocodesFriendlyNames() async {
@@ -408,10 +466,20 @@ private final class MockLocationGeocoder: LocationStateGeocoding {
 
     private(set) var cancelCallCount = 0
     private(set) var reverseRequests: [CLLocation] = []
+    /// When set, lookups wait for `completePending()`, as if still out on
+    /// the network.
+    var holdsCompletions = false
     private var responses: [Response] = []
+    private var pendingCompletions: [() -> Void] = []
 
     func enqueue(placemarks: [CLPlacemark]?, error: Error? = nil) {
         responses.append(Response(placemarks: placemarks, error: error))
+    }
+
+    func completePending() {
+        let completions = pendingCompletions
+        pendingCompletions.removeAll()
+        completions.forEach { $0() }
     }
 
     func cancelGeocode() {
@@ -424,6 +492,11 @@ private final class MockLocationGeocoder: LocationStateGeocoding {
     ) {
         reverseRequests.append(location)
         let response = responses.isEmpty ? Response(placemarks: nil, error: nil) : responses.removeFirst()
-        completionHandler(response.placemarks, response.error)
+        let complete = { completionHandler(response.placemarks, response.error) }
+        if holdsCompletions {
+            pendingCompletions.append(complete)
+        } else {
+            complete()
+        }
     }
 }
