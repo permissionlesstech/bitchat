@@ -19,13 +19,13 @@ let package = Package(
         .package(path: "localPackages/Arti"),
         .package(path: "localPackages/BitFoundation"),
         .package(path: "localPackages/BitLogger"),
-        .package(url: "https://github.com/21-DOT-DEV/swift-secp256k1", exact: "0.24.0")
+        .package(path: "localPackages/BitSecp256k1")
     ],
     targets: [
         .executableTarget(
             name: "bitchat",
             dependencies: [
-                .product(name: "P256K", package: "swift-secp256k1"),
+                .product(name: "BitSecp256k1", package: "BitSecp256k1"),
                 .product(name: "BitFoundation", package: "BitFoundation"),
                 .product(name: "BitLogger", package: "BitLogger"),
                 .product(name: "Tor", package: "Arti")
