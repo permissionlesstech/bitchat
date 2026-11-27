@@ -468,34 +468,48 @@ struct ContentView: View {
         }
     }
 
-    /// Matrix: classic opaque bars with dividers. Glass: full-bleed message
-    /// list scrolling underneath floating chrome overlays with explicit scroll
-    /// content margins, avoiding SwiftUI `.safeAreaInset` double top-insetting
-    /// on iOS while preserving full-bleed translucency behind the bars.
+    /// Matrix: classic opaque bars with dividers. Glass on iOS 17+/macOS 14+:
+    /// full-bleed message list scrolling underneath floating chrome overlays
+    /// with explicit scroll content margins, avoiding SwiftUI `.safeAreaInset`
+    /// double top-insetting on iOS while preserving full-bleed translucency.
+    /// Older OS versions without `.contentMargins` keep single-level
+    /// `.safeAreaInset` so programmatic `scrollTo` targets still clear the bar.
     @ViewBuilder
     private var mainContent: some View {
         if usesGlassLayout {
-            publicMessageList
-                .overlay(alignment: .top) {
-                    headerView
-                        .background(ChromeHeightReader(edge: .top))
-                }
-                .overlay(alignment: .bottom) {
-                    if selectedPrivatePeerID == nil {
-                        composerView
-                            .background(ChromeHeightReader(edge: .bottom))
+            if #available(iOS 17.0, macOS 14.0, *) {
+                publicMessageList
+                    .overlay(alignment: .top) {
+                        headerView
+                            .background(ChromeHeightReader(edge: .top))
                     }
-                }
-                .onPreferenceChange(TopChromeHeightKey.self) { height in
-                    if abs(topChromeHeight - height) > 0.5 {
-                        topChromeHeight = height
+                    .overlay(alignment: .bottom) {
+                        if selectedPrivatePeerID == nil {
+                            composerView
+                                .background(ChromeHeightReader(edge: .bottom))
+                        }
                     }
-                }
-                .onPreferenceChange(BottomChromeHeightKey.self) { height in
-                    if abs(bottomChromeHeight - height) > 0.5 {
-                        bottomChromeHeight = height
+                    .onPreferenceChange(TopChromeHeightKey.self) { height in
+                        if abs(topChromeHeight - height) > 0.5 {
+                            topChromeHeight = height
+                        }
                     }
-                }
+                    .onPreferenceChange(BottomChromeHeightKey.self) { height in
+                        if abs(bottomChromeHeight - height) > 0.5 {
+                            bottomChromeHeight = height
+                        }
+                    }
+            } else {
+                publicMessageList
+                    .safeAreaInset(edge: .top, spacing: 0) {
+                        headerView
+                    }
+                    .safeAreaInset(edge: .bottom, spacing: 0) {
+                        if selectedPrivatePeerID == nil {
+                            composerView
+                        }
+                    }
+            }
         } else {
             VStack(spacing: 0) {
                 headerView
@@ -560,13 +574,21 @@ struct ContentView: View {
         }
     }
 
+    private var usesOverlayChrome: Bool {
+        guard usesGlassLayout else { return false }
+        if #available(iOS 17.0, macOS 14.0, *) {
+            return true
+        }
+        return false
+    }
+
     private var glassTopContentInset: CGFloat {
-        guard usesGlassLayout else { return 0 }
+        guard usesOverlayChrome else { return 0 }
         return topChromeHeight > 0 ? topChromeHeight : headerHeight + 4
     }
 
     private var glassBottomContentInset: CGFloat {
-        guard usesGlassLayout, selectedPrivatePeerID == nil else { return 0 }
+        guard usesOverlayChrome, selectedPrivatePeerID == nil else { return 0 }
         return bottomChromeHeight > 0 ? bottomChromeHeight : 58
     }
 

@@ -304,83 +304,80 @@ private struct MessageListContentView: View {
 
         ScrollViewReader { proxy in
             ScrollView {
-                Group {
-                    if isEmptyPublic {
-                        publicEmptyState(
-                            fillHeight: max(0, emptyStateViewportHeight - topContentInset - bottomContentInset)
-                        )
-                    } else {
-                        VStack(alignment: .leading, spacing: 0) {
-                            LazyVStack(alignment: .leading, spacing: 0) {
-                                ForEach(messageItems) { item in
-                                    let message = item.message
-                                    MessageRowView(
-                                        message: message,
-                                        deliveryStatus: message.deliveryStatus,
-                                        privatePeer: privatePeer,
-                                        imagePreviewURL: $imagePreviewURL,
-                                        showSidebar: $showSidebar,
-                                        onInsertMention: insertMention
-                                    )
-                                    .equatable()
-                                    .onAppear {
-                                        // Callbacks lag a timeline switch: the new
-                                        // rows appear before the old ones disappear,
-                                        // each with its own render's view of which row
-                                        // was last. Only rows of the timeline the list
-                                        // has landed in may move its state, checked
-                                        // against live state rather than the render's.
-                                        guard isLandedRow(item.id) else { return }
-                                        if item.id == newestRowID(for: privatePeer) {
-                                            isAtBottom = true
-                                            unseenCount = 0
-                                            if bottomRowID != item.id {
-                                                bottomRowID = item.id
-                                            }
-                                            if bottomSettledContextKey != contextKey {
-                                                bottomSettledContextKey = contextKey
-                                            }
-                                            returnWindowToInitialSize(for: privatePeer, contextKey: contextKey, messages: messages)
+                if isEmptyPublic {
+                    publicEmptyState(
+                        fillHeight: max(0, emptyStateViewportHeight - topContentInset - bottomContentInset)
+                    )
+                } else {
+                    VStack(alignment: .leading, spacing: 0) {
+                        LazyVStack(alignment: .leading, spacing: 0) {
+                            ForEach(messageItems) { item in
+                                let message = item.message
+                                MessageRowView(
+                                    message: message,
+                                    deliveryStatus: message.deliveryStatus,
+                                    privatePeer: privatePeer,
+                                    imagePreviewURL: $imagePreviewURL,
+                                    showSidebar: $showSidebar,
+                                    onInsertMention: insertMention
+                                )
+                                .equatable()
+                                .onAppear {
+                                    // Callbacks lag a timeline switch: the new
+                                    // rows appear before the old ones disappear,
+                                    // each with its own render's view of which row
+                                    // was last. Only rows of the timeline the list
+                                    // has landed in may move its state, checked
+                                    // against live state rather than the render's.
+                                    guard isLandedRow(item.id) else { return }
+                                    if item.id == newestRowID(for: privatePeer) {
+                                        isAtBottom = true
+                                        unseenCount = 0
+                                        if bottomRowID != item.id {
+                                            bottomRowID = item.id
                                         }
-                                        if item.id == firstRowID, hasEarlierMessages {
-                                            expandWindow(
-                                                ifNeededFor: message,
-                                                allMessages: messages,
-                                                privatePeer: privatePeer,
-                                                proxy: proxy
-                                            )
+                                        if bottomSettledContextKey != contextKey {
+                                            bottomSettledContextKey = contextKey
                                         }
+                                        returnWindowToInitialSize(for: privatePeer, contextKey: contextKey, messages: messages)
                                     }
-                                    .onDisappear {
-                                        // A row of the landed timeline shares this
-                                        // closure's peer, so newestRowID is live here.
-                                        guard isLandedRow(item.id) else { return }
-                                        if item.id == newestRowID(for: privatePeer) || item.id == bottomRowID {
-                                            isAtBottom = false
-                                            bottomRowID = nil
-                                            // Leaving the bottom drops a follow-scroll
-                                            // still waiting on the throttle: it would
-                                            // yank the reader back down.
-                                            cancelFollowScroll()
-                                        }
+                                    if item.id == firstRowID, hasEarlierMessages {
+                                        expandWindow(
+                                            ifNeededFor: message,
+                                            allMessages: messages,
+                                            privatePeer: privatePeer,
+                                            proxy: proxy
+                                        )
+                                    }
+                                }
+                                .onDisappear {
+                                    // A row of the landed timeline shares this
+                                    // closure's peer, so newestRowID is live here.
+                                    guard isLandedRow(item.id) else { return }
+                                    if item.id == newestRowID(for: privatePeer) || item.id == bottomRowID {
+                                        isAtBottom = false
+                                        bottomRowID = nil
+                                        // Leaving the bottom drops a follow-scroll
+                                        // still waiting on the throttle: it would
+                                        // yank the reader back down.
+                                        cancelFollowScroll()
                                     }
                                 }
                             }
-                            .padding(.vertical, 2)
+                        }
+                        .padding(.vertical, 2)
 
-                            // Only carried history on screen: the ambient layer (radar,
-                            // sightings, live hints) stays visible below it instead of
-                            // vanishing the moment echoes exist.
-                            if privatePeer == nil, showsAmbientFooter(messageItems: messageItems) {
-                                MeshEmptyStateView(compact: true, bluetoothAvailable: bluetoothCanScan)
-                                    .padding(.horizontal, 12)
-                                    .padding(.top, 20)
-                                    .padding(.bottom, 8)
-                            }
+                        // Only carried history on screen: the ambient layer (radar,
+                        // sightings, live hints) stays visible below it instead of
+                        // vanishing the moment echoes exist.
+                        if privatePeer == nil, showsAmbientFooter(messageItems: messageItems) {
+                            MeshEmptyStateView(compact: true, bluetoothAvailable: bluetoothCanScan)
+                                .padding(.horizontal, 12)
+                                .padding(.top, 20)
+                                .padding(.bottom, 8)
                         }
                     }
                 }
-                .modifier(LegacyScrollChromePaddingModifier(top: topContentInset, bottom: bottomContentInset))
             }
             .modifier(ScrollChromeInsetsModifier(top: topContentInset, bottom: bottomContentInset))
             .background {
@@ -990,22 +987,6 @@ private struct ScrollChromeInsetsModifier: ViewModifier {
                 .contentMargins(.bottom, bottom, for: .scrollIndicators)
         } else {
             content
-        }
-    }
-}
-
-private struct LegacyScrollChromePaddingModifier: ViewModifier {
-    let top: CGFloat
-    let bottom: CGFloat
-
-    @ViewBuilder
-    func body(content: Content) -> some View {
-        if #available(iOS 17.0, macOS 14.0, *) {
-            content
-        } else {
-            content
-                .padding(.top, top)
-                .padding(.bottom, bottom)
         }
     }
 }
