@@ -279,11 +279,14 @@ jobs:
             -onlyUsePackageVersionsFromResolvedFile \
             build
 
-  # The SwiftPM suite runs on macOS and cannot execute UIKit/CoreBluetooth
-  # conditional tests. Select and pre-boot an available iPhone simulator via
-  # simctl before building so cold simulator boot (~3.5m) overlaps with
-  # build-for-testing, disable unused iOS code coverage instrumentation, and
-  # skip PerformanceBaselineTests (already gated in Run Swift Tests).
+  # The SwiftPM suite runs on macOS and already executes all cross-platform tests
+  # in parallel. Select an available iPhone simulator via simctl (skipping the
+  # slow xcodebuild -showdestinations fallback), disable unused iOS coverage, and
+  # let xcodebuild compile with all runner cores before booting the simulator
+  # (pre-booting during compilation starved the 3-vCPU runner and doubled build
+  # time). Pull requests run the 18 iOS-conditional / iOS-framework suites for
+  # fast feedback; pushes to main run the full simulator suite (minus
+  # PerformanceBaselineTests, which is already gated in Run Swift Tests).
   ios-tests:
     name: Run iOS simulator tests
     runs-on: macos-latest
@@ -295,7 +298,7 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Select and pre-boot iPhone simulator
+      - name: Select available iPhone simulator
         id: destination
         run: |
           set -uo pipefail
@@ -335,42 +338,58 @@ jobs:
             echo "Created simulator $destination_id ($devicetype, $runtime)"
           fi
 
-          # Start booting immediately so CoreSimulator boots while xcodebuild
-          # compiles the app and test bundle.
-          xcrun simctl boot "$destination_id" >/dev/null 2>&1 || true
           echo "Using iPhone simulator destination id: $destination_id"
           echo "id=$destination_id" >> "$GITHUB_OUTPUT"
-
-      - name: Build iOS tests
-        env:
-          DESTINATION_ID: ${{ steps.destination.outputs.id }}
-        run: |
-          set -o pipefail
-          xcodebuild -project bitchat.xcodeproj \
-            -scheme "bitchat (iOS)" \
-            -sdk iphonesimulator \
-            -destination "platform=iOS Simulator,id=$DESTINATION_ID" \
-            -enableCodeCoverage NO \
-            CODE_SIGNING_ALLOWED=NO \
-            -onlyUsePackageVersionsFromResolvedFile \
-            build-for-testing
 
       - name: Run iOS tests
         env:
           DESTINATION_ID: ${{ steps.destination.outputs.id }}
+          RUN_FULL_IOS_SUITE: ${{ github.event_name == 'push' && '1' || '0' }}
           TEST_RUNNER_BITCHAT_SKIP_PERF_BASELINES: "1"
         run: |
           set -o pipefail
-          xcrun simctl bootstatus "$DESTINATION_ID" -b
+          test_filters=()
+          if [ "$RUN_FULL_IOS_SUITE" = "1" ]; then
+            test_filters+=(
+              -skip-testing:bitchatTests_iOS/PerformanceBaselineTests
+            )
+          else
+            # iOS-conditional (#if os(iOS) / UIKit) and iOS framework
+            # (AVFoundation, CoreLocation, UserNotifications, CoreBluetooth,
+            # Share Extension) suites. Cross-platform tests already ran in
+            # parallel in Run Swift Tests; pushes to main run the full suite.
+            for suite in \
+              ComposerActionFrameTests \
+              ViewSmokeTests \
+              ImageUtilsTests \
+              ChatMediaPreparationTests \
+              ChatMediaTransferCoordinatorContextTests \
+              ChatViewModelMediaTransferTests \
+              MediaRetentionTests \
+              AudioSessionCoordinatorTests \
+              VoiceRecorderTests \
+              VoiceCaptureSessionTests \
+              VoiceNotePlaybackControllerTests \
+              PTTAudioTests \
+              PTTBurstPlayerTests \
+              LocationStateManagerTests \
+              NotificationServiceTests \
+              SharedContentHandoffTests \
+              BLEServiceCoreTests \
+              BLEServiceTests; do
+              test_filters+=("-only-testing:bitchatTests_iOS/$suite")
+            done
+          fi
           xcodebuild -project bitchat.xcodeproj \
             -scheme "bitchat (iOS)" \
             -sdk iphonesimulator \
             -destination "platform=iOS Simulator,id=$DESTINATION_ID" \
             -enableCodeCoverage NO \
             -parallel-testing-enabled NO \
-            -skip-testing:bitchatTests_iOS/PerformanceBaselineTests \
             CODE_SIGNING_ALLOWED=NO \
-            test-without-building
+            -onlyUsePackageVersionsFromResolvedFile \
+            "${test_filters[@]}" \
+            test
 
   # Blocking since the backlog reached zero (all violations fixed; rules the
   # codebase deliberately breaks are disabled in .swiftlint.yml). --strict
