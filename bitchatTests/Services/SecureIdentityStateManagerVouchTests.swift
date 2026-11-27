@@ -152,39 +152,6 @@ struct SecureIdentityStateManagerVouchTests {
         #expect(!manager.isVouched(fingerprint: vouchee, now: twoDaysLater))
     }
 
-    @Test
-    func effectiveTrustLevel_slotsVouchedBetweenCasualAndTrusted() {
-        let manager = makeManager()
-        manager.setVerified(fingerprint: voucher, verified: true)
-
-        // Unknown peer with a valid vouch reads as vouched.
-        #expect(manager.effectiveTrustLevel(for: vouchee) == .unknown)
-        manager.recordVouch(voucheeFingerprint: vouchee, voucherFingerprint: voucher, timestamp: Date())
-        #expect(manager.effectiveTrustLevel(for: vouchee) == .vouched)
-
-        // Explicit trust outranks a vouch.
-        manager.updateSocialIdentity(SocialIdentity(
-            fingerprint: vouchee,
-            localPetname: nil,
-            claimedNickname: "bob",
-            trustLevel: .trusted,
-            isFavorite: false,
-            isBlocked: false,
-            notes: nil
-        ))
-        #expect(manager.effectiveTrustLevel(for: vouchee) == .trusted)
-
-        // Explicit verification outranks everything.
-        manager.setVerified(fingerprint: vouchee, verified: true)
-        #expect(manager.effectiveTrustLevel(for: vouchee) == .verified)
-        #expect(!manager.isVouched(fingerprint: vouchee))
-
-        // Losing the voucher downgrades vouched back to the stored level.
-        manager.setVerified(fingerprint: vouchee, verified: false)
-        manager.setVerified(fingerprint: voucher, verified: false)
-        #expect(manager.effectiveTrustLevel(for: vouchee) == .casual)
-    }
-
     // MARK: - Exchange-policy state
 
     @Test

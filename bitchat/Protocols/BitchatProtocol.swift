@@ -148,9 +148,6 @@ protocol BitchatDelegate: AnyObject {
     func didDisconnectFromPeer(_ peerID: PeerID)
     func didUpdatePeerList(_ peers: [PeerID])
 
-    // Optional method to check if a fingerprint belongs to a favorite peer
-    func isFavorite(fingerprint: String) -> Bool
-
     func didUpdateMessageDeliveryStatus(_ messageID: String, status: DeliveryStatus)
 
     // Low-level events for better separation of concerns
@@ -169,10 +166,6 @@ protocol BitchatDelegate: AnyObject {
 
 // Provide default implementation to make it effectively optional
 extension BitchatDelegate {
-    func isFavorite(fingerprint: String) -> Bool {
-        return false
-    }
-    
     func didUpdateMessageDeliveryStatus(_ messageID: String, status: DeliveryStatus) {
         // Default empty implementation
     }
