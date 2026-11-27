@@ -271,6 +271,56 @@ struct BLEFragmentHandlerTests {
         #expect(recorder.reinjectedPackets.isEmpty)
     }
 
+    @Test
+    func fragmentedRequestSyncIsRejectedBeforeAssembly() {
+        let recorder = Recorder()
+        let handler = makeHandler(recorder: recorder)
+        let packet = makeFragmentPacket(
+            sender: remotePeerID,
+            index: 0,
+            total: 2,
+            originalType: MessageType.requestSync.rawValue
+        )
+
+        handler.handle(packet, from: remotePeerID)
+
+        #expect(recorder.trackedPackets.isEmpty)
+        #expect(recorder.appendedHeaders.isEmpty)
+        #expect(recorder.ingressChecks.isEmpty)
+        #expect(recorder.reinjectedPackets.isEmpty)
+    }
+
+    @Test
+    func reassembledRequestSyncDisguisedAsAnotherTypeIsDropped() throws {
+        let innerPacket = BitchatPacket(
+            type: MessageType.requestSync.rawValue,
+            senderID: Data(hexString: remotePeerID.id) ?? Data(),
+            recipientID: nil,
+            timestamp: 900_000,
+            payload: Data([0x01, 0x02]),
+            signature: nil,
+            ttl: 0
+        )
+        let reassembled = try #require(innerPacket.toBinaryData())
+
+        let recorder = Recorder()
+        recorder.appendResult = { header in
+            .complete(header: header, reassembledData: reassembled, started: false)
+        }
+        let handler = makeHandler(recorder: recorder)
+        let packet = makeFragmentPacket(
+            sender: remotePeerID,
+            index: 1,
+            total: 2,
+            originalType: MessageType.message.rawValue
+        )
+
+        handler.handle(packet, from: remotePeerID)
+
+        #expect(recorder.ingressChecks.isEmpty)
+        #expect(recorder.reinjectedPackets.isEmpty)
+    }
+
     /// Every byte value once, then zeros: the encoder leaves the inner
     /// payload uncompressed (100% byte diversity), while the zero chunks
     /// compress inside their fragments.

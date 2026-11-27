@@ -58,8 +58,11 @@ struct PacketPayloadLimitsTests {
     @Test func onlyMediaTypesReachTheFramedFileCeiling() throws {
         let size = FileTransferLimits.maxFramedFileBytes
         for mediaType in [MessageType.fileTransfer, .noiseEncrypted] {
-            let frame = try encodeCompressed(type: mediaType.rawValue, payloadSize: size, version: 2)
-            #expect(BinaryProtocol.decode(frame)?.payload.count == size)
+            // High-ratio (~1000x) crafted compressed bombs are rejected for
+            // media-class frames before allocation/decompression.
+            let bomb = try craftCompressedBombFrame(type: mediaType.rawValue, payloadSize: size)
+            #expect(BinaryProtocol.decode(bomb) == nil)
+            // Uncompressed media frames still reach the full framed-file ceiling.
             let raw = try encodeUncompressed(type: mediaType.rawValue, payloadSize: size, version: 2)
             #expect(BinaryProtocol.decode(raw)?.payload.count == size)
         }
@@ -159,6 +162,27 @@ struct PacketPayloadLimitsTests {
         let frame = try #require(BinaryProtocol.encode(packet, padding: false))
         #expect(frame.count < payloadSize / 10)
         #expect(frame[BinaryProtocol.Offsets.flags] & BinaryProtocol.Flags.isCompressed != 0)
+        return frame
+    }
+
+    /// Manually builds a v2 compressed frame whose compressed ratio far exceeds
+    /// the media deflate cap (simulating an attacker-crafted ~1 KB -> 1.18 MiB bomb).
+    private func craftCompressedBombFrame(type: UInt8, payloadSize: Int) throws -> Data {
+        let compressed = try #require(CompressionUtil.compress(Data(repeating: 0x41, count: payloadSize)))
+        #expect(compressed.count < payloadSize / 100)
+        var frame = Data()
+        frame.append(2) // version 2
+        frame.append(type)
+        frame.append(7) // ttl
+        var tsBE = UInt64(1_740_000_000_000).bigEndian
+        withUnsafeBytes(of: &tsBE) { frame.append($0.bindMemory(to: UInt8.self)) }
+        frame.append(BinaryProtocol.Flags.isCompressed)
+        var payloadLenBE = UInt32(compressed.count + 4).bigEndian
+        withUnsafeBytes(of: &payloadLenBE) { frame.append($0.bindMemory(to: UInt8.self)) }
+        frame.append(Data(repeating: 0x11, count: BinaryProtocol.senderIDSize))
+        var origSizeBE = UInt32(payloadSize).bigEndian
+        withUnsafeBytes(of: &origSizeBE) { frame.append($0.bindMemory(to: UInt8.self)) }
+        frame.append(compressed)
         return frame
     }
 }

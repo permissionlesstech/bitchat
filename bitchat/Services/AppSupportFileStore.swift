@@ -11,15 +11,12 @@ import BitLogger
 import Foundation
 
 enum AppSupportFileProtection {
-    case complete
     case untilFirstUserAuthentication
 
     var writingOptions: Data.WritingOptions {
         var options: Data.WritingOptions = [.atomic]
         #if os(iOS)
         switch self {
-        case .complete:
-            options.insert(.completeFileProtection)
         case .untilFirstUserAuthentication:
             options.insert(.completeFileProtectionUntilFirstUserAuthentication)
         }
@@ -30,8 +27,6 @@ enum AppSupportFileProtection {
     #if os(iOS)
     var fileProtectionType: FileProtectionType {
         switch self {
-        case .complete:
-            return .complete
         case .untilFirstUserAuthentication:
             return .completeUntilFirstUserAuthentication
         }

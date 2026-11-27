@@ -406,12 +406,16 @@ struct BLEIncomingFileStore: @unchecked Sendable {
     }
 
     /// Frees least-recently-modified incoming files until `reservingBytes`
-    /// fits under the quota. In-flight `voice_live_*` captures are never evicted
-    /// but still count toward usage.
-    func enforceQuota(reservingBytes: Int) {
+    /// fits under the quota. In-flight `voice_live_*` captures and files
+    /// awaiting UI delivery are never evicted but still count toward usage.
+    ///
+    /// Public arrivals (`isPrivate == false`) can never evict committed private
+    /// media received from contacts; private arrivals evict public files first
+    /// before touching older private files.
+    func enforceQuota(reservingBytes: Int, isPrivate: Bool = false) {
         do {
             let base = try filesDirectory()
-            var allFiles: [(url: URL, size: Int64, modified: Date)] = []
+            var allFiles: [(url: URL, size: Int64, modified: Date, isPrivateOwned: Bool)] = []
 
             for subdirectory in Self.incomingSubdirectories {
                 let dir = base.appendingPathComponent(subdirectory, isDirectory: true)
@@ -426,7 +430,11 @@ struct BLEIncomingFileStore: @unchecked Sendable {
                     guard let attrs = try? fileURL.resourceValues(forKeys: [.fileSizeKey, .contentModificationDateKey]),
                           let size = attrs.fileSize,
                           let modified = attrs.contentModificationDate else { continue }
-                    allFiles.append((url: fileURL, size: Int64(size), modified: modified))
+                    let relativePath = "\(subdirectory)/\(fileURL.lastPathComponent)"
+                    // Fail closed if the receipt ledger is temporarily unreadable so
+                    // public arrivals cannot evict committed private media.
+                    let isPrivateOwned = privateMediaReceipts.isPayloadOwned(relativePath: relativePath) ?? true
+                    allFiles.append((url: fileURL, size: Int64(size), modified: modified, isPrivateOwned: isPrivateOwned))
                 }
             }
 
@@ -436,8 +444,16 @@ struct BLEIncomingFileStore: @unchecked Sendable {
 
             let needToFree = currentUsage - targetUsage
             let protectedPaths = directoryCache.pendingDeliveryPathsSnapshot()
+            let candidates = allFiles
+                .filter { isPrivate || !$0.isPrivateOwned }
+                .sorted { lhs, rhs in
+                    if lhs.isPrivateOwned != rhs.isPrivateOwned {
+                        return !lhs.isPrivateOwned
+                    }
+                    return lhs.modified < rhs.modified
+                }
             var freedSpace: Int64 = 0
-            for file in allFiles.sorted(by: { $0.modified < $1.modified }) {
+            for file in candidates {
                 guard freedSpace < needToFree else { break }
                 guard !file.url.lastPathComponent.hasPrefix(Self.liveCapturePrefix),
                       !protectedPaths.contains(file.url.standardizedFileURL.path) else { continue }

@@ -75,7 +75,7 @@ final class PrekeyBundleStore {
             fileURL: fileURL,
             subdirectory: "prekeys",
             fileName: "bundles.json",
-            protection: .complete
+            protection: .untilFirstUserAuthentication
         )
         loadFromDisk()
     }

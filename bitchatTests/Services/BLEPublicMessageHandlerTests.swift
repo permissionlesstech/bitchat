@@ -20,6 +20,7 @@ struct BLEPublicMessageHandlerTests {
     }
 
     private let localPeerID = PeerID(str: "0102030405060708")
+    private let localSigningKey = Data(repeating: 0x11, count: 32)
     private let remotePeerID = PeerID(str: "1122334455667788")
 
     private func makeHandler(
@@ -30,6 +31,7 @@ struct BLEPublicMessageHandlerTests {
         let resolvedLocalPeerID = localPeerID ?? self.localPeerID
         let environment = BLEPublicMessageHandlerEnvironment(
             localPeerID: { resolvedLocalPeerID },
+            localSigningPublicKey: { self.localSigningKey },
             localNickname: { recorder.localNickname },
             now: { now },
             peersSnapshot: {
@@ -262,6 +264,7 @@ struct BLEPublicMessageHandlerTests {
     func selfSyncReplayResolvesOriginalMessageID() {
         let now = Date(timeIntervalSince1970: 1_000)
         let recorder = Recorder()
+        recorder.verifyPacketSignatureResult = true
         recorder.selfBroadcastMessageID = "original-id"
         let handler = makeHandler(recorder: recorder, now: now)
         // TTL 0 marks a sync replay of our own broadcast, not a self echo.
@@ -269,11 +272,28 @@ struct BLEPublicMessageHandlerTests {
 
         handler.handle(packet, from: localPeerID)
 
+        #expect(recorder.verifyPacketSignatureQueries == [localPeerID])
         #expect(recorder.selfBroadcastTakes.count == 1)
         #expect(recorder.deliveries.count == 1)
         #expect(recorder.deliveries.first?.peerID == localPeerID)
         #expect(recorder.deliveries.first?.nickname == recorder.localNickname)
         #expect(recorder.deliveries.first?.messageID == "original-id")
+    }
+
+    @Test
+    func spoofedSelfSenderWithInvalidSignatureIsDropped() {
+        let now = Date(timeIntervalSince1970: 1_000)
+        let recorder = Recorder()
+        recorder.verifyPacketSignatureResult = false
+        let handler = makeHandler(recorder: recorder, now: now)
+        // An attacker spoofing our own senderID with TTL 0 must not bypass signature verification.
+        let packet = makeMessagePacket(sender: localPeerID, content: "forged self", timestamp: timestamp(now), ttl: 0)
+
+        #expect(!handler.handle(packet, from: localPeerID))
+
+        #expect(recorder.verifyPacketSignatureQueries == [localPeerID])
+        #expect(recorder.trackedPackets.isEmpty)
+        #expect(recorder.deliveries.isEmpty)
     }
 
     @Test

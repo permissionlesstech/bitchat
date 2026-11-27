@@ -479,7 +479,10 @@ private struct MessageListContentView: View {
             }
         }
         .environment(\.openURL, OpenURLAction { url in
-            // Intercept custom cashu: links created in attributed text
+            guard MessageListExternalURLPolicy.isAllowed(url) else {
+                return .discarded
+            }
+            // Intercept custom cashu:/lightning: links created in attributed text
             if let scheme = url.scheme?.lowercased(), scheme == "cashu" || scheme == "lightning" {
                 #if os(iOS)
                 UIApplication.shared.open(url)
@@ -491,6 +494,17 @@ private struct MessageListContentView: View {
             }
             return .systemAction
         })
+    }
+}
+
+enum MessageListExternalURLPolicy {
+    static func isAllowed(_ url: URL) -> Bool {
+        guard let scheme = url.scheme?.lowercased() else { return false }
+        return scheme == "https"
+            || scheme == "http"
+            || scheme == "cashu"
+            || scheme == "lightning"
+            || scheme == "bitchat"
     }
 }
 

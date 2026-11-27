@@ -103,7 +103,7 @@ final class BoardStore {
             fileURL: fileURL,
             subdirectory: "board",
             fileName: "posts.json",
-            protection: .complete
+            protection: .untilFirstUserAuthentication
         )
         if self.fileStore.fileURL != nil {
             // Restore off the calling thread (cold launch on MainActor) on the

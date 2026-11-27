@@ -54,6 +54,23 @@ public enum PacketPayloadLimits {
     /// produced by any stream, so it is rejected before the output buffer is
     /// allocated.
     static let maxDeflateRatio = 1032
+    /// Tighter expansion ceiling for media-class frames (`fileTransfer`,
+    /// `noiseEncrypted`): legitimate media is already compressed and Noise
+    /// ciphertext is incompressible, so capping expansion blocks ~1 KB -> 1 MiB
+    /// broadcast decompression bombs without breaking normal payloads.
+    static let maxMediaDeflateRatio = 32
+
+    static func maxDeflateRatio(forType type: UInt8) -> Int {
+        guard let messageType = MessageType(rawValue: type) else {
+            return maxDeflateRatio
+        }
+        switch messageType {
+        case .fileTransfer, .noiseEncrypted:
+            return maxMediaDeflateRatio
+        default:
+            return maxDeflateRatio
+        }
+    }
 
     private static let fragmentBytes = 1_280
     private static let controlBytes = 4 * 1024

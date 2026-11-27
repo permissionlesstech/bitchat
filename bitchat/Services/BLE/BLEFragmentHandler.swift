@@ -36,6 +36,14 @@ final class BLEFragmentHandler {
         let env = environment
         guard let header = BLEFragmentHeader(packet: packet) else { return false }
 
+        // REQUEST_SYNC is strictly link-local (ttl == 0) and never fragmented.
+        // Rejecting it here stops a relayed fragment from zeroing TTL on
+        // reassembly and triggering a mesh-wide gossip store replay.
+        if header.originalType == MessageType.requestSync.rawValue {
+            SecureLogger.warning("🚫 Dropping fragmented REQUEST_SYNC from \(peerID.id.prefix(8))…", category: .security)
+            return false
+        }
+
         // Sync replay legitimately hands us our own fragments back (the RSR
         // ttl=0 restore path): after a relaunch the fragment store starts
         // empty, so our sync filter doesn't cover them and peers re-offer
@@ -76,6 +84,9 @@ final class BLEFragmentHandler {
                         "🚫 Reassembled packet id=\(completedHeader.idLogString) is type \(originalPacket.type), fragments claimed \(completedHeader.originalType)",
                         category: .security
                     )
+                    return false
+                } else if originalPacket.type == MessageType.requestSync.rawValue {
+                    SecureLogger.warning("🚫 Dropping reassembled REQUEST_SYNC from \(peerID.id.prefix(8))…", category: .security)
                     return false
                 } else if !env.isAcceptedIngressPayload(originalPacket, innerSender) {
                     return false

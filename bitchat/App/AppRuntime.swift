@@ -202,6 +202,7 @@ final class AppRuntime: ObservableObject {
 
     #if os(macOS)
     func handleMacDidBecomeActiveNotification() {
+        chatViewModel.setAppActive(true)
         guard chatViewModel.networkActivationAllowed else { return }
         chatViewModel.handleDidBecomeActive()
         checkForSharedContent()
@@ -212,6 +213,7 @@ final class AppRuntime: ObservableObject {
     func handleScenePhaseChange(_ newPhase: ScenePhase) {
         switch newPhase {
         case .background:
+            chatViewModel.setAppActive(false)
             TorManager.shared.setAppForeground(false)
             TorManager.shared.goDormantOnBackground()
             LocationStateManager.shared.endLiveRefresh()
@@ -220,6 +222,7 @@ final class AppRuntime: ObservableObject {
             didEnterBackground = true
 
         case .active:
+            chatViewModel.setAppActive(true)
             guard chatViewModel.networkActivationAllowed else { return }
             chatViewModel.meshService.startServices()
             TorManager.shared.setAppForeground(true)
@@ -249,7 +252,7 @@ final class AppRuntime: ObservableObject {
             checkForSharedContent()
 
         case .inactive:
-            break
+            chatViewModel.setAppActive(false)
 
         @unknown default:
             break
@@ -372,6 +375,13 @@ private extension AppRuntime {
             .receive(on: DispatchQueue.main)
             .sink { [weak self] _ in
                 self?.handleScreenshotCaptured()
+            }
+            .store(in: &cancellables)
+        #elseif os(macOS)
+        NotificationCenter.default.publisher(for: NSApplication.didResignActiveNotification)
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in
+                self?.chatViewModel.setAppActive(false)
             }
             .store(in: &cancellables)
         #endif
