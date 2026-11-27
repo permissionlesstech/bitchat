@@ -250,10 +250,10 @@ final class BLEAnnounceHandler {
         }
 
         // Persist cryptographic identity and signing key for robust offline
-        // verification — only for verified announces. Persisting unverified
-        // announces would let an attacker who replays a victim's noisePublicKey
-        // overwrite the victim's stored signing key/nickname (identity poisoning).
-        if verifiedAnnounce {
+        // verification — only for verified, non-stale announces. Persisting
+        // unverified or stale announces would let a replayed/older announce
+        // overwrite the stored signing key or claimed nickname.
+        if verifiedAnnounce && !isStaleAnnounce {
             env.persistIdentity(announcement)
         }
 

@@ -241,4 +241,17 @@ struct MeshTopologyTrackerTests {
         #expect(tracker.computeRoute(from: a, to: c, requiringVersion: 2) == nil)
     }
 
+    @Test func ignoresStaleAnnounceTimestamp() throws {
+        let tracker = MeshTopologyTracker()
+        let a = try hex("0101010101010101")
+        let b = try hex("0202020202020202")
+        let c = try hex("0303030303030303")
+
+        tracker.updateNeighbors(for: a, neighbors: [b], announceTimestamp: 2_000)
+        tracker.updateNeighbors(for: a, neighbors: [c], announceTimestamp: 1_000)
+
+        let snapshot = tracker.adjacencySnapshot()
+        #expect(snapshot[a] == [b])
+    }
+
 }
