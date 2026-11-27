@@ -11,10 +11,46 @@
             "comment" : "Fallback title when saving a shared link"
           }
         },
+        "bg" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "споделена връзка"
+          }
+        },
+        "be" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "абагуленая спасылка"
+          }
+        },
         "bn" : {
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "শেয়ার করা লিঙ্ক"
+          }
+        },
+        "da" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "delt link"
+          }
+        },
+        "cs" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "sdílený odkaz"
+          }
+        },
+        "ca" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Enllaç compartit"
+          }
+        },
+        "bs" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "dijeljeni link"
           }
         },
         "de" : {
@@ -22,6 +58,12 @@
             "state" : "translated",
             "value" : "geteilter link",
             "comment" : "Fallback title when saving a shared link"
+          }
+        },
+        "el" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Κοινοποιημένος σύνδεσμος"
           }
         },
         "en" : {
@@ -38,10 +80,22 @@
             "comment" : "Fallback title when saving a shared link"
           }
         },
+        "et" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "jagatud link"
+          }
+        },
         "fa" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "پیوند اشتراک‌گذاری‌شده"
+          }
+        },
+        "fi" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "jaettu linkki"
           }
         },
         "fil" : {
@@ -57,6 +111,12 @@
             "comment" : "Fallback title when saving a shared link"
           }
         },
+        "ga" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Nasc comhroinnte"
+          }
+        },
         "he" : {
           "stringUnit" : {
             "state" : "translated",
@@ -70,11 +130,29 @@
             "value" : "शेयर किया गया लिंक"
           }
         },
+        "hu" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Megosztott hivatkozás"
+          }
+        },
+        "hr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "dijeljena poveznica"
+          }
+        },
         "id" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "tautan dibagikan",
             "comment" : "Fallback title when saving a shared link"
+          }
+        },
+        "is" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "deildur hlekkur"
           }
         },
         "it" : {
@@ -98,10 +176,46 @@
             "comment" : "Fallback title when saving a shared link"
           }
         },
+        "mk" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "споделена врска"
+          }
+        },
+        "lv" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "kopīgota saite"
+          }
+        },
+        "lt" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "bendrinama nuoroda"
+          }
+        },
+        "lb" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Gedeelte Link"
+          }
+        },
         "ms" : {
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "pautan dikongsi"
+          }
+        },
+        "nb" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "delt lenke"
+          }
+        },
+        "mt" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Link maqsum"
           }
         },
         "ne" : {
@@ -136,11 +250,41 @@
             "comment" : "Fallback title when saving a shared link"
           }
         },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Link distribuit"
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "поделился ссылкой",
             "comment" : "Fallback title when saving a shared link"
+          }
+        },
+        "sr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "дељени линк"
+          }
+        },
+        "sq" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Lidhje e ndarë"
+          }
+        },
+        "sl" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "deljena povezava"
+          }
+        },
+        "sk" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "zdieľaný odkaz"
           }
         },
         "sv" : {
@@ -212,10 +356,46 @@
             "comment" : "Shown when provided content cannot be shared"
           }
         },
+        "bg" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "няма съдържание за споделяне"
+          }
+        },
+        "be" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "няма змесціва для абагулення"
+          }
+        },
         "bn" : {
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "শেয়ার করার মতো কোনো কনটেন্ট নেই"
+          }
+        },
+        "da" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "intet indhold, der kan deles"
+          }
+        },
+        "cs" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "žádný obsah ke sdílení"
+          }
+        },
+        "ca" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "cap contingut per compartir"
+          }
+        },
+        "bs" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "nema sadržaja za dijeljenje"
           }
         },
         "de" : {
@@ -223,6 +403,12 @@
             "state" : "translated",
             "value" : "kein teilbarer inhalt",
             "comment" : "Shown when provided content cannot be shared"
+          }
+        },
+        "el" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "δεν υπάρχει περιεχόμενο για κοινοποίηση"
           }
         },
         "en" : {
@@ -239,10 +425,22 @@
             "comment" : "Shown when provided content cannot be shared"
           }
         },
+        "et" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "jagatavat sisu pole"
+          }
+        },
         "fa" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "محتوای قابل اشتراک‌گذاری وجود ندارد"
+          }
+        },
+        "fi" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "ei jaettavaa sisältöä"
           }
         },
         "fil" : {
@@ -258,6 +456,12 @@
             "comment" : "Shown when provided content cannot be shared"
           }
         },
+        "ga" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "níl aon ábhar inchomhroinnte"
+          }
+        },
         "he" : {
           "stringUnit" : {
             "state" : "translated",
@@ -271,11 +475,29 @@
             "value" : "शेयर करने योग्य कोई सामग्री नहीं"
           }
         },
+        "hu" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "nincs megosztható tartalom"
+          }
+        },
+        "hr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "nema sadržaja za dijeljenje"
+          }
+        },
         "id" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "tidak ada konten yang bisa dibagikan",
             "comment" : "Shown when provided content cannot be shared"
+          }
+        },
+        "is" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "ekkert efni sem hægt er að deila"
           }
         },
         "it" : {
@@ -299,10 +521,46 @@
             "comment" : "Shown when provided content cannot be shared"
           }
         },
+        "mk" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "нема содржина за споделување"
+          }
+        },
+        "lv" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "nav kopīgojama satura"
+          }
+        },
+        "lt" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "nėra bendrinamo turinio"
+          }
+        },
+        "lb" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "keen inhalt zum deelen"
+          }
+        },
         "ms" : {
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "tiada kandungan yang boleh dikongsi"
+          }
+        },
+        "nb" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "ikke noe innhold som kan deles"
+          }
+        },
+        "mt" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "l-ebda kontenut li jista' jinqasam"
           }
         },
         "ne" : {
@@ -337,11 +595,41 @@
             "comment" : "Shown when provided content cannot be shared"
           }
         },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "niciun conținut de distribuit"
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "нет подходящего контента",
             "comment" : "Shown when provided content cannot be shared"
+          }
+        },
+        "sr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "нема садржаја за дељење"
+          }
+        },
+        "sq" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "asnjë përmbajtje për t'u ndarë"
+          }
+        },
+        "sl" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "ni vsebine za deljenje"
+          }
+        },
+        "sk" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "žiadny obsah na zdieľanie"
           }
         },
         "sv" : {
@@ -413,10 +701,46 @@
             "comment" : "Shown when the share extension receives no content"
           }
         },
+        "bg" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "няма какво да се сподели"
+          }
+        },
+        "be" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "няма чым падзяліцца"
+          }
+        },
         "bn" : {
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "শেয়ার করার কিছু নেই"
+          }
+        },
+        "da" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "intet at dele"
+          }
+        },
+        "cs" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "není co sdílet"
+          }
+        },
+        "ca" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "res per compartir"
+          }
+        },
+        "bs" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "nema ništa za dijeljenje"
           }
         },
         "de" : {
@@ -424,6 +748,12 @@
             "state" : "translated",
             "value" : "nichts zum teilen",
             "comment" : "Shown when the share extension receives no content"
+          }
+        },
+        "el" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "τίποτα για κοινοποίηση"
           }
         },
         "en" : {
@@ -440,10 +770,22 @@
             "comment" : "Shown when the share extension receives no content"
           }
         },
+        "et" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "pole midagi jagada"
+          }
+        },
         "fa" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "چیزی برای اشتراک‌گذاری نیست"
+          }
+        },
+        "fi" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "ei mitään jaettavaa"
           }
         },
         "fil" : {
@@ -459,6 +801,12 @@
             "comment" : "Shown when the share extension receives no content"
           }
         },
+        "ga" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "níl aon rud le comhroinnt"
+          }
+        },
         "he" : {
           "stringUnit" : {
             "state" : "translated",
@@ -472,11 +820,29 @@
             "value" : "शेयर करने के लिए कुछ नहीं"
           }
         },
+        "hu" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "nincs mit megosztani"
+          }
+        },
+        "hr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "nema ništa za dijeljenje"
+          }
+        },
         "id" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "tidak ada yang bisa dibagikan",
             "comment" : "Shown when the share extension receives no content"
+          }
+        },
+        "is" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "ekkert til að deila"
           }
         },
         "it" : {
@@ -500,10 +866,46 @@
             "comment" : "Shown when the share extension receives no content"
           }
         },
+        "mk" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "нема ништо за споделување"
+          }
+        },
+        "lv" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "nav ko kopīgot"
+          }
+        },
+        "lt" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "nėra ką bendrinti"
+          }
+        },
+        "lb" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "näischt ze deelen"
+          }
+        },
         "ms" : {
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "tiada apa-apa untuk dikongsi"
+          }
+        },
+        "nb" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "ingenting å dele"
+          }
+        },
+        "mt" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "xejn x'taqsam"
           }
         },
         "ne" : {
@@ -538,11 +940,41 @@
             "comment" : "Shown when the share extension receives no content"
           }
         },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "nimic de distribuit"
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "нечем поделиться",
             "comment" : "Shown when the share extension receives no content"
+          }
+        },
+        "sr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "нема ничега за дељење"
+          }
+        },
+        "sq" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "asgjë për të ndarë"
+          }
+        },
+        "sl" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "ni česa deliti"
+          }
+        },
+        "sk" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "nie je čo zdieľať"
           }
         },
         "sv" : {
@@ -609,26 +1041,170 @@
       "extractionState" : "manual",
       "localizations" : {
         "ar" : { "stringUnit" : { "state" : "needs_review", "value" : "تعذر الحفظ في bitchat" } },
+        "bg" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Не можа да се запази в bitchat"
+          }
+        },
+        "be" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Не ўдалося захаваць у bitchat"
+          }
+        },
         "bn" : { "stringUnit" : { "state" : "needs_review", "value" : "bitchat-এ সংরক্ষণ করা যায়নি" } },
+        "da" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Kunne ikke gemme i bitchat"
+          }
+        },
+        "cs" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Do bitchatu se nepodařilo uložit"
+          }
+        },
+        "ca" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "No s'ha pogut desar a bitchat"
+          }
+        },
+        "bs" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Čuvanje u bitchat nije uspjelo"
+          }
+        },
         "de" : { "stringUnit" : { "state" : "needs_review", "value" : "Konnte nicht in bitchat gespeichert werden" } },
+        "el" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Δεν ήταν δυνατή η αποθήκευση στο bitchat"
+          }
+        },
         "en" : { "stringUnit" : { "state" : "translated", "value" : "Could not save to bitchat" } },
         "es" : { "stringUnit" : { "state" : "needs_review", "value" : "No se pudo guardar en bitchat" } },
+        "et" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "bitchati salvestamine ebaõnnestus"
+          }
+        },
         "fa" : { "stringUnit" : { "state" : "needs_review", "value" : "ذخیره در bitchat ممکن نشد" } },
+        "fi" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Tallennus bitchatiin epäonnistui"
+          }
+        },
         "fil" : { "stringUnit" : { "state" : "needs_review", "value" : "Hindi ma-save sa bitchat" } },
         "fr" : { "stringUnit" : { "state" : "needs_review", "value" : "Impossible d’enregistrer dans bitchat" } },
+        "ga" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Níorbh fhéidir sábháil i bitchat"
+          }
+        },
         "he" : { "stringUnit" : { "state" : "needs_review", "value" : "לא ניתן לשמור ב-bitchat" } },
         "hi" : { "stringUnit" : { "state" : "needs_review", "value" : "bitchat में सेव नहीं किया जा सका" } },
+        "hu" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Nem sikerült menteni a bitchatbe"
+          }
+        },
+        "hr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Spremanje u bitchat nije uspjelo"
+          }
+        },
         "id" : { "stringUnit" : { "state" : "needs_review", "value" : "Tidak dapat menyimpan ke bitchat" } },
+        "is" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Ekki tókst að vista í bitchat"
+          }
+        },
         "it" : { "stringUnit" : { "state" : "needs_review", "value" : "Impossibile salvare in bitchat" } },
         "ja" : { "stringUnit" : { "state" : "needs_review", "value" : "bitchat に保存できませんでした" } },
         "ko" : { "stringUnit" : { "state" : "needs_review", "value" : "bitchat에 저장할 수 없습니다" } },
+        "mk" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Не можеше да се зачува во bitchat"
+          }
+        },
+        "lv" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Neizdevās saglabāt bitchat"
+          }
+        },
+        "lt" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Nepavyko išsaugoti bitchat"
+          }
+        },
+        "lb" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Konnt net a bitchat gespäichert ginn"
+          }
+        },
         "ms" : { "stringUnit" : { "state" : "needs_review", "value" : "Tidak dapat menyimpan ke bitchat" } },
+        "nb" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Kunne ikke lagre i bitchat"
+          }
+        },
+        "mt" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Ma setax jiġi ssejvjat f'bitchat"
+          }
+        },
         "ne" : { "stringUnit" : { "state" : "needs_review", "value" : "bitchat मा सुरक्षित गर्न सकिएन" } },
         "nl" : { "stringUnit" : { "state" : "needs_review", "value" : "Kon niet opslaan in bitchat" } },
         "pl" : { "stringUnit" : { "state" : "needs_review", "value" : "Nie udało się zapisać w bitchat" } },
         "pt" : { "stringUnit" : { "state" : "needs_review", "value" : "Não foi possível guardar no bitchat" } },
         "pt-BR" : { "stringUnit" : { "state" : "needs_review", "value" : "Não foi possível salvar no bitchat" } },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Nu s-a putut salva în bitchat"
+          }
+        },
         "ru" : { "stringUnit" : { "state" : "needs_review", "value" : "Не удалось сохранить в bitchat" } },
+        "sr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Чување у bitchat није успело"
+          }
+        },
+        "sq" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Nuk mund të ruhej në bitchat"
+          }
+        },
+        "sl" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Shranjevanje v bitchat ni uspelo"
+          }
+        },
+        "sk" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Do bitchatu sa nepodarilo uložiť"
+          }
+        },
         "sv" : { "stringUnit" : { "state" : "needs_review", "value" : "Kunde inte spara i bitchat" } },
         "ta" : { "stringUnit" : { "state" : "needs_review", "value" : "bitchat-இல் சேமிக்க முடியவில்லை" } },
         "th" : { "stringUnit" : { "state" : "needs_review", "value" : "บันทึกไปยัง bitchat ไม่ได้" } },
@@ -645,26 +1221,170 @@
       "extractionState" : "manual",
       "localizations" : {
         "ar" : { "stringUnit" : { "state" : "needs_review", "value" : "✓ حُفظ في bitchat — افتح التطبيق للمراجعة" } },
+        "bg" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "✓ Запазено в bitchat — отвори приложението, за да прегледаш"
+          }
+        },
+        "be" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "✓ Захавана ў bitchat — адкрый праграму, каб праглядзець"
+          }
+        },
         "bn" : { "stringUnit" : { "state" : "needs_review", "value" : "✓ bitchat-এ সংরক্ষিত — পর্যালোচনার জন্য অ্যাপটি খুলুন" } },
+        "da" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "✓ Gemt i bitchat — åbn appen for at gennemse"
+          }
+        },
+        "cs" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "✓ Uloženo v bitchatu — otevři aplikaci a zkontroluj to"
+          }
+        },
+        "ca" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "✓ Desat a bitchat — obre l'aplicació per revisar-lo"
+          }
+        },
+        "bs" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "✓ Sačuvano u bitchat — otvori aplikaciju za pregled"
+          }
+        },
         "de" : { "stringUnit" : { "state" : "needs_review", "value" : "✓ In bitchat gespeichert — App zum Prüfen öffnen" } },
+        "el" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "✓ Αποθηκεύτηκε στο bitchat — άνοιξε την εφαρμογή για έλεγχο"
+          }
+        },
         "en" : { "stringUnit" : { "state" : "translated", "value" : "✓ Saved in bitchat — open the app to review" } },
         "es" : { "stringUnit" : { "state" : "needs_review", "value" : "✓ Guardado en bitchat — abre la app para revisarlo" } },
+        "et" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "✓ Salvestatud bitchati — ülevaatamiseks ava rakendus"
+          }
+        },
         "fa" : { "stringUnit" : { "state" : "needs_review", "value" : "✓ در bitchat ذخیره شد — برای بازبینی، برنامه را باز کنید" } },
+        "fi" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "✓ Tallennettu bitchatiin — avaa sovellus tarkistaaksesi"
+          }
+        },
         "fil" : { "stringUnit" : { "state" : "needs_review", "value" : "✓ Na-save sa bitchat — buksan ang app para suriin" } },
         "fr" : { "stringUnit" : { "state" : "needs_review", "value" : "✓ Enregistré dans bitchat — ouvrez l’app pour vérifier" } },
+        "ga" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "✓ Sábháilte i bitchat — oscail an aip lena athbhreithniú"
+          }
+        },
         "he" : { "stringUnit" : { "state" : "needs_review", "value" : "✓ נשמר ב-bitchat — יש לפתוח את האפליקציה לבדיקה" } },
         "hi" : { "stringUnit" : { "state" : "needs_review", "value" : "✓ bitchat में सेव किया गया — समीक्षा के लिए ऐप खोलें" } },
+        "hu" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "✓ Mentve a bitchatbe — nyisd meg az alkalmazást az áttekintéshez"
+          }
+        },
+        "hr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "✓ Spremljeno u bitchat — otvori aplikaciju za pregled"
+          }
+        },
         "id" : { "stringUnit" : { "state" : "needs_review", "value" : "✓ Disimpan di bitchat — buka aplikasi untuk meninjau" } },
+        "is" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "✓ Vistað í bitchat — opnaðu forritið til að fara yfir"
+          }
+        },
         "it" : { "stringUnit" : { "state" : "needs_review", "value" : "✓ Salvato in bitchat — apri l’app per controllare" } },
         "ja" : { "stringUnit" : { "state" : "needs_review", "value" : "✓ bitchat に保存しました — アプリを開いて確認してください" } },
         "ko" : { "stringUnit" : { "state" : "needs_review", "value" : "✓ bitchat에 저장됨 — 앱을 열어 검토하세요" } },
+        "mk" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "✓ Зачувано во bitchat — отвори ја апликацијата за преглед"
+          }
+        },
+        "lv" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "✓ Saglabāts bitchat — atver lietotni, lai pārskatītu"
+          }
+        },
+        "lt" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "✓ Išsaugota bitchat — atidaryk programėlę peržiūrai"
+          }
+        },
+        "lb" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "✓ A bitchat gespäichert — maach d'App op, fir et z'iwwerpréiwen"
+          }
+        },
         "ms" : { "stringUnit" : { "state" : "needs_review", "value" : "✓ Disimpan dalam bitchat — buka aplikasi untuk menyemak" } },
+        "nb" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "✓ Lagret i bitchat — åpne appen for å gå gjennom"
+          }
+        },
+        "mt" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "✓ Issejvjat f'bitchat — iftaħ l-app biex tirrevedi"
+          }
+        },
         "ne" : { "stringUnit" : { "state" : "needs_review", "value" : "✓ bitchat मा सुरक्षित गरियो — समीक्षा गर्न एप खोल्नुहोस्" } },
         "nl" : { "stringUnit" : { "state" : "needs_review", "value" : "✓ Opgeslagen in bitchat — open de app om te bekijken" } },
         "pl" : { "stringUnit" : { "state" : "needs_review", "value" : "✓ Zapisano w bitchat — otwórz aplikację, aby sprawdzić" } },
         "pt" : { "stringUnit" : { "state" : "needs_review", "value" : "✓ Guardado no bitchat — abra a app para rever" } },
         "pt-BR" : { "stringUnit" : { "state" : "needs_review", "value" : "✓ Salvo no bitchat — abra o app para revisar" } },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "✓ Salvat în bitchat — deschide aplicația pentru a verifica"
+          }
+        },
         "ru" : { "stringUnit" : { "state" : "needs_review", "value" : "✓ Сохранено в bitchat — откройте приложение для проверки" } },
+        "sr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "✓ Сачувано у bitchat — отвори апликацију за преглед"
+          }
+        },
+        "sq" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "✓ U ruajt në bitchat — hap aplikacionin për ta rishikuar"
+          }
+        },
+        "sl" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "✓ Shranjeno v bitchat — odpri aplikacijo za pregled"
+          }
+        },
+        "sk" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "✓ Uložené v bitchate — otvor aplikáciu a skontroluj to"
+          }
+        },
         "sv" : { "stringUnit" : { "state" : "needs_review", "value" : "✓ Sparat i bitchat — öppna appen för att granska" } },
         "ta" : { "stringUnit" : { "state" : "needs_review", "value" : "✓ bitchat-இல் சேமிக்கப்பட்டது — மதிப்பாய்வு செய்ய செயலியைத் திறக்கவும்" } },
         "th" : { "stringUnit" : { "state" : "needs_review", "value" : "✓ บันทึกใน bitchat แล้ว — เปิดแอปเพื่อตรวจสอบ" } },
