@@ -336,7 +336,7 @@ final class ChatGroupCoordinator {
     /// Fire-and-flood send: local echo goes straight to `.sent` because group
     /// messages have no per-member acknowledgments in v1.
     func sendGroupMessage(_ content: String, to groupPeerID: PeerID) {
-        guard !content.isEmpty, content.count <= InputValidator.Limits.maxMessageLength else { return }
+        guard !content.isEmpty, content.count <= TransportConfig.maxMessageLength else { return }
         guard let group = context.groupStore.group(for: groupPeerID),
               let key = context.groupStore.key(forGroupID: group.groupID) else {
             // The person is inside the group thread; the error belongs there,

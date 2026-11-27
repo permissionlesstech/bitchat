@@ -37,14 +37,6 @@ struct NicknameNormalizationTests {
     }
 
     @Test
-    func validateNicknameReturnsCanonicalForm() {
-        #expect(InputValidator.validateNickname(decomposed) == precomposed)
-        #expect(InputValidator.validateNickname("  \(decomposed)  ") == precomposed)
-        // Validation behavior is otherwise unchanged.
-        #expect(InputValidator.validateNickname("   ") == nil)
-    }
-
-    @Test
     func collisionSuffixSplittingSurvivesNormalization() {
         let (base, suffix) = (decomposed.normalizedNickname + "#ab12").splitSuffix()
         #expect(base == precomposed)

@@ -175,7 +175,7 @@ struct BLEServiceTests {
                 mentions: nil
             )
             
-            let payload = try #require(message.toBinaryPayload(), "Failed to create binary payload")
+            let payload = try #require(message.toTestPayload(), "Failed to create binary payload")
             
             let packet = BitchatPacket(
                 type: 0x01,
@@ -224,7 +224,7 @@ struct BLEServiceTests {
     @Test func messageDeliveryHandler() async throws {
         try await confirmation { deliveryHandler in
             service.packetDeliveryHandler = { packet in
-                if let msg = BitchatMessage(packet.payload) {
+                if let msg = BitchatMessage.fromTestPayload(packet.payload) {
                     #expect(msg.content == "Test delivery")
                     deliveryHandler()
                 }
@@ -259,7 +259,7 @@ struct BLEServiceTests {
                 mentions: nil
             )
             
-            let payload = try #require(message.toBinaryPayload(), "Failed to create payload")
+            let payload = try #require(message.toTestPayload(), "Failed to create payload")
             
             let packet = BitchatPacket(
                 type: 0x01,

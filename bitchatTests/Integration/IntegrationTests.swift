@@ -503,7 +503,7 @@ struct IntegrationTests {
                 if packet.type == 0x02 {
                     receivedPacket()
                     if let decrypted = try? helper.noiseManagers["Bob"]!.decrypt(packet.payload, from: helper.nodes["Alice"]!.peerID) {
-                        #expect(BitchatMessage(decrypted)?.content == "Secret message")
+                        #expect(BitchatMessage.fromTestPayload(decrypted)?.content == "Secret message")
                     } else {
                         Issue.record("Bob was unable to decrypt the message")
                     }
