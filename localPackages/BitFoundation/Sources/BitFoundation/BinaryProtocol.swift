@@ -117,6 +117,65 @@ public struct BinaryProtocol {
         }
     }
 
+    public enum FrameLengthCheck: Equatable {
+        case incomplete
+        case invalid
+        case length(Int)
+    }
+
+    /// Inspects a wire-format buffer prefix and computes the expected total
+    /// unpadded frame length without decoding or decompressing the payload.
+    public static func expectedFrameLength(for data: Data) -> FrameLengthCheck {
+        guard data.count >= v1HeaderSize + senderIDSize else {
+            return .incomplete
+        }
+        let start = data.startIndex
+        let version = data[start]
+        guard let headerSize = headerSize(for: version) else {
+            return .invalid
+        }
+        let framePrefix = headerSize + senderIDSize
+        guard data.count >= framePrefix else {
+            return .incomplete
+        }
+
+        let flags = data[start + Offsets.flags]
+        let hasRecipient = (flags & Flags.hasRecipient) != 0
+        let hasSignature = (flags & Flags.hasSignature) != 0
+        let isCompressed = (flags & Flags.isCompressed) != 0
+        let hasRoute = (version >= 2) && (flags & Flags.hasRoute) != 0
+
+        let lenStart = start + Offsets.flags + 1
+        let payloadLength: Int
+        if version == 2 {
+            let b0 = UInt32(data[lenStart]) << 24
+            let b1 = UInt32(data[lenStart + 1]) << 16
+            let b2 = UInt32(data[lenStart + 2]) << 8
+            let b3 = UInt32(data[lenStart + 3])
+            payloadLength = Int(b0 | b1 | b2 | b3)
+        } else {
+            let b0 = UInt16(data[lenStart]) << 8
+            let b1 = UInt16(data[lenStart + 1])
+            payloadLength = Int(b0 | b1)
+        }
+
+        if isCompressed, payloadLength < lengthFieldSize(for: version) {
+            return .invalid
+        }
+
+        var required = framePrefix + (hasRecipient ? recipientIDSize : 0)
+        if hasRoute {
+            guard data.count > required else { return .incomplete }
+            let routeCount = Int(data[start + required])
+            required += 1 + routeCount * senderIDSize
+        }
+        let (withPayload, payloadOverflow) = required.addingReportingOverflow(payloadLength)
+        guard !payloadOverflow else { return .invalid }
+        let (total, sigOverflow) = withPayload.addingReportingOverflow(hasSignature ? signatureSize : 0)
+        guard !sigOverflow, total > 0 else { return .invalid }
+        return .length(total)
+    }
+
     private static func lengthFieldSize(for version: UInt8) -> Int {
         return version == 2 ? 4 : 2
     }
