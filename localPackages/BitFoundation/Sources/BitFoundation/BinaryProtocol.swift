@@ -199,12 +199,18 @@ public struct BinaryProtocol {
         var originalPayloadSize: Int?
         if CompressionUtil.shouldCompress(payload) {
             // Only compress when we can represent the original length in the outbound frame
+            // and the compressed ratio stays within the decoder's per-type deflate cap.
             let maxRepresentable = version == 2 ? Int(UInt32.max) : Int(UInt16.max)
+            let maxDeflateRatio = PacketPayloadLimits.maxDeflateRatio(forType: packet.type)
             if payload.count <= maxRepresentable,
-               let compressedPayload = CompressionUtil.compress(payload) {
-                originalPayloadSize = payload.count
-                payload = compressedPayload
-                isCompressed = true
+               let compressedPayload = CompressionUtil.compress(payload),
+               !compressedPayload.isEmpty {
+                let (maxAllowed, overflow) = compressedPayload.count.multipliedReportingOverflow(by: maxDeflateRatio)
+                if overflow || payload.count <= maxAllowed {
+                    originalPayloadSize = payload.count
+                    payload = compressedPayload
+                    isCompressed = true
+                }
             }
         }
 
@@ -432,7 +438,8 @@ public struct BinaryProtocol {
                 let compressedSize = payloadLength - lengthFieldBytes
                 guard compressedSize > 0, let compressed = readData(compressedSize) else { return nil }
 
-                guard originalSize <= compressedSize * PacketPayloadLimits.maxDeflateRatio else {
+                let ratioCap = PacketPayloadLimits.maxDeflateRatio(forType: type)
+                guard originalSize <= compressedSize * ratioCap else {
                     SecureLogger.debug("🚫 Impossible compression ratio: \(originalSize) bytes from \(compressedSize)", category: .security)
                     return nil
                 }

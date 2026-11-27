@@ -122,8 +122,17 @@ struct NotificationStreamAssemblerTests {
     func testAssemblesCompressedLargeFrame() throws {
         var assembler = NotificationStreamAssembler()
 
-        // Keep the fixture below FileTransferLimits.maxPayloadBytes so encoding succeeds while still exercising compression.
-        let largeContent = Data(repeating: 0x41, count: 600_000)
+        // Keep the fixture below FileTransferLimits.maxPayloadBytes with realistic
+        // compressibility (bounded byte alphabet, ~2-4x ratio) so it compresses
+        // without tripping the media decompression-bomb ratio cap.
+        var rng: UInt64 = 0x5EED_CAFE_1234_5678
+        let largeContent = Data((0..<600_000).map { i in
+            if i % 4 == 0 {
+                rng = rng &* 6364136223846793005 &+ 1442695040888963407
+                return UInt8((rng >> 33) & 0x3F)
+            }
+            return 0x41
+        })
         let filePacket = BitchatFilePacket(
             fileName: "large.bin",
             fileSize: UInt64(largeContent.count),

@@ -2697,8 +2697,8 @@ final class BLEService: NSObject {
             trackPacketSeen: { [weak self] packet in
                 self?.gossipSyncManager?.onPublicPacketSeen(packet)
             },
-            enforceStorageQuota: { [weak self] reservingBytes in
-                self?.incomingFileStore.enforceQuota(reservingBytes: reservingBytes)
+            enforceStorageQuota: { [weak self] reservingBytes, isPrivate in
+                self?.incomingFileStore.enforceQuota(reservingBytes: reservingBytes, isPrivate: isPrivate)
             },
             saveIncomingFile: { [weak self] data, preferredName, subdirectory, fallbackExtension, defaultPrefix in
                 self?.incomingFileStore.save(

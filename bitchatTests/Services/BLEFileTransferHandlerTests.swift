@@ -61,7 +61,7 @@ struct BLEFileTransferHandlerTests {
             trackPacketSeen: { packet in
                 recorder.trackedPackets.append(packet)
             },
-            enforceStorageQuota: { reservingBytes in
+            enforceStorageQuota: { reservingBytes, _ in
                 recorder.quotaReservations.append(reservingBytes)
             },
             saveIncomingFile: { data, preferredName, subdirectory, fallbackExtension, defaultPrefix in
