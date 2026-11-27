@@ -1774,7 +1774,7 @@ final class ChatViewModel: ObservableObject, SynchronousMessageTransportEventDel
         // crash-recovery replay calls this method directly and would otherwise
         // let a staged envelope survive the wipe. Clearing here is idempotent
         // (it only removes the app-group key), so the double-clear is harmless.
-        if let sharedDefaults = UserDefaults(suiteName: BitchatApp.groupID) {
+        if let sharedDefaults = BitchatApp.sharedUserDefaults() {
             SharedContentStore(defaults: sharedDefaults).discardAll()
         }
 

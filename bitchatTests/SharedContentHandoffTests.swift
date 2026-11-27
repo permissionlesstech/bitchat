@@ -170,4 +170,56 @@ struct SharedContentHandoffTests {
         #expect(model.offer?.payload == newer)
         #expect(context.store.pending(now: now) == newer)
     }
+
+    @Test("App group ID prefers configured Info.plist AppGroupID and ignores unexpanded placeholders")
+    func appGroupIDResolutionPrefersConfiguredValue() {
+        #expect(BitchatApp.resolvedGroupID(
+            infoDictionary: ["AppGroupID": "group.chat.bitchat.TEAM123"],
+            bundleIdentifier: "chat.bitchat"
+        ) == "group.chat.bitchat.TEAM123")
+
+        #expect(BitchatApp.resolvedGroupID(
+            infoDictionary: ["AppGroupID": "  group.custom.bitchat  "],
+            bundleIdentifier: "chat.bitchat"
+        ) == "group.custom.bitchat")
+
+        #expect(BitchatApp.resolvedGroupID(
+            infoDictionary: ["AppGroupID": "$(APP_GROUP_ID)"],
+            bundleIdentifier: "chat.bitchat.local"
+        ) == "group.chat.bitchat.local")
+
+        #expect(BitchatApp.resolvedGroupID(
+            infoDictionary: ["AppGroupID": "   "],
+            bundleIdentifier: nil
+        ) == "group.chat.bitchat")
+    }
+
+    @Test("Shared defaults are skipped when the App Group container is unavailable")
+    func sharedUserDefaultsRequiresAvailableContainer() {
+        var defaultsRequested = false
+        let missing = BitchatApp.sharedUserDefaults(
+            groupID: "group.chat.bitchat",
+            containerURLProvider: { _ in nil },
+            defaultsProvider: { _ in
+                defaultsRequested = true
+                return UserDefaults(suiteName: "should-not-be-called")
+            }
+        )
+        #expect(missing == nil)
+        #expect(!defaultsRequested)
+
+        let context = makeStore()
+        defer { context.defaults.removePersistentDomain(forName: context.suite) }
+        var requestedGroupID: String?
+        let available = BitchatApp.sharedUserDefaults(
+            groupID: "group.chat.bitchat",
+            containerURLProvider: { id in
+                requestedGroupID = id
+                return URL(fileURLWithPath: "/tmp/mock-app-group")
+            },
+            defaultsProvider: { _ in context.defaults }
+        )
+        #expect(requestedGroupID == "group.chat.bitchat")
+        #expect(available === context.defaults)
+    }
 }

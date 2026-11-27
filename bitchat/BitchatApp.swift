@@ -12,7 +12,39 @@ import UserNotifications
 @main
 struct BitchatApp: App {
     static let bundleID = Bundle.main.bundleIdentifier ?? "chat.bitchat"
-    static let groupID = "group.\(bundleID)"
+    static let groupID = resolvedGroupID(
+        infoDictionary: Bundle.main.infoDictionary,
+        bundleIdentifier: Bundle.main.bundleIdentifier
+    )
+
+    static func resolvedGroupID(
+        infoDictionary: [String: Any]?,
+        bundleIdentifier: String?
+    ) -> String {
+        if let configured = (infoDictionary?["AppGroupID"] as? String)?
+            .trimmingCharacters(in: .whitespacesAndNewlines),
+           !configured.isEmpty,
+           !configured.contains("$(") {
+            return configured
+        }
+        let resolvedBundleID = bundleIdentifier ?? "chat.bitchat"
+        return "group.\(resolvedBundleID)"
+    }
+
+    /// Returns shared `UserDefaults` for the configured App Group only when the
+    /// running binary is entitled to that container. Calling
+    /// `UserDefaults(suiteName:)` for an unprovisioned App Group detaches from
+    /// `cfprefsd` and logs `Container: (null)` on every launch.
+    static func sharedUserDefaults(
+        groupID: String = BitchatApp.groupID,
+        containerURLProvider: (String) -> URL? = {
+            FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: $0)
+        },
+        defaultsProvider: (String) -> UserDefaults? = { UserDefaults(suiteName: $0) }
+    ) -> UserDefaults? {
+        guard containerURLProvider(groupID) != nil else { return nil }
+        return defaultsProvider(groupID)
+    }
 
     @StateObject private var runtime: AppRuntime
     @AppStorage(AppTheme.storageKey) private var appThemeRawValue = AppTheme.matrix.rawValue

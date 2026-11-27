@@ -13,7 +13,15 @@ import UniformTypeIdentifiers
 /// Avoids deprecated Social framework and SLComposeServiceViewController.
 final class ShareViewController: UIViewController {
     // Bundle.main.bundleIdentifier would get the extension's bundleID
-    private static let groupID = Bundle.main.object(forInfoDictionaryKey: "AppGroupID") as? String ?? "group.chat.bitchat"
+    private static let groupID: String = {
+        if let configured = (Bundle.main.object(forInfoDictionaryKey: "AppGroupID") as? String)?
+            .trimmingCharacters(in: .whitespacesAndNewlines),
+           !configured.isEmpty,
+           !configured.contains("$(") {
+            return configured
+        }
+        return "group.chat.bitchat"
+    }()
 
     private enum Strings {
         static let nothingToShare = String(localized: "share.status.nothing_to_share", comment: "Shown when the share extension receives no content")
@@ -161,7 +169,8 @@ final class ShareViewController: UIViewController {
     }
 
     private func stageAndFinish(_ payload: SharedContentPayload) {
-        guard let defaults = UserDefaults(suiteName: Self.groupID) else {
+        guard FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: Self.groupID) != nil,
+              let defaults = UserDefaults(suiteName: Self.groupID) else {
             finishWithMessage(Strings.failedToSave)
             return
         }
