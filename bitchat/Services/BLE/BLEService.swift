@@ -1084,7 +1084,15 @@ final class BLEService: NSObject {
 
             // Send to centrals subscribed to us as peripheral
             if centralsCount > 0, let ch = char {
-                peripheralManager?.updateValue(data, for: ch, onSubscribedCentrals: nil)
+                _ = executeLinkCommand(
+                    .notifyCentrals(
+                        data: data,
+                        characteristic: ch,
+                        centrals: nil,
+                        enqueueOnBackpressure: false,
+                        context: "leave"
+                    )
+                )
             }
         }
 
@@ -1096,8 +1104,8 @@ final class BLEService: NSObject {
 
         // Clear pending notifications and stop timers/duty-cycle on bleQueue
         // so shutdown cannot race an in-flight scan-resume item.
+        _ = executeLinkCommand(.clearPendingNotifications)
         bleQueue.sync {
-            pendingNotifications.removeAll()
             maintenanceTimer?.cancel()
             maintenanceTimer = nil
             radio.stopDutyCycle()
@@ -2225,11 +2233,17 @@ final class BLEService: NSObject {
 
         // Notify via central link (dual-role)
         if let characteristic = characteristic, !sentEncrypted, let recipientCentral {
-            let success = peripheralManager?.updateValue(data, for: characteristic, onSubscribedCentrals: [recipientCentral]) ?? false
+            let success = executeLinkCommand(
+                .notifyCentrals(
+                    data: data,
+                    characteristic: characteristic,
+                    centrals: [recipientCentral],
+                    enqueueOnBackpressure: true,
+                    context: "encrypted"
+                )
+            )
             if success {
                 sentEncrypted = true
-            } else {
-                enqueuePendingNotification(data: data, centrals: [recipientCentral], context: "encrypted")
             }
         }
 
@@ -2332,18 +2346,50 @@ final class BLEService: NSObject {
         }
         guard !eligible.isEmpty else { return false }
 
-        let accept = { [self] in
-            if peripheralManager?.updateValue(data, for: characteristic, onSubscribedCentrals: eligible) == true {
-                return true
-            }
-            return enqueuePendingNotificationIfAccepted(
-                data: data,
-                centrals: eligible,
-                context: context
-            )
-        }
         // queue-contract-ok: engine → bleQueue is the sanctioned sync direction.
-        return bleQueue.sync(execute: accept)
+        return executeLinkCommand(
+            .notifyCentrals(
+                data: data,
+                characteristic: characteristic,
+                centrals: eligible,
+                enqueueOnBackpressure: true,
+                context: context
+            ),
+            synchronous: true
+        )
+    }
+
+    /// Executes a downward `BLELinkCommand` against the peripheral link layer.
+    @discardableResult
+    func executeLinkCommand(_ command: BLELinkCommand, synchronous: Bool = false) -> Bool {
+        switch command {
+        case .notifyCentrals(let data, let characteristic, let centrals, let enqueueOnBackpressure, let context):
+            if synchronous {
+                let accept: () -> Bool = { [self] in
+                    if peripheralManager?.updateValue(data, for: characteristic, onSubscribedCentrals: centrals) == true {
+                        return true
+                    }
+                    guard enqueueOnBackpressure else { return false }
+                    return enqueuePendingNotificationIfAccepted(
+                        data: data,
+                        centrals: centrals ?? [],
+                        context: context
+                    )
+                }
+                // queue-contract-ok: engine → bleQueue is the sanctioned sync direction.
+                return bleQueue.sync(execute: accept)
+            }
+            let success = peripheralManager?.updateValue(data, for: characteristic, onSubscribedCentrals: centrals) ?? false
+            if !success && enqueueOnBackpressure {
+                enqueuePendingNotification(data: data, centrals: centrals, context: context)
+            }
+            return success
+        case .clearPendingNotifications:
+            bleQueue.sync {
+                pendingNotifications.removeAll()
+            }
+            return true
+        }
     }
 
     /// Returns true only when the packet was accepted by at least one current
@@ -2486,13 +2532,16 @@ final class BLEService: NSObject {
                         requiredAuthenticatedPeer: requireNoiseAuthenticatedPeerLink ? directedOnlyPeer : nil
                     ) || acceptedByPhysicalLink
                 } else {
-                    let success = peripheralManager?.updateValue(data, for: ch, onSubscribedCentrals: targets) ?? false
-                    if !success {
-                        // Notification queue full - queue for retry to prevent silent packet loss
-                        // This is critical for fragment delivery reliability
-                        let context = packet.type == MessageType.fragment.rawValue ? "fragment" : "broadcast"
-                        enqueuePendingNotification(data: data, centrals: targets, context: context)
-                    }
+                    let context = packet.type == MessageType.fragment.rawValue ? "fragment" : "broadcast"
+                    _ = executeLinkCommand(
+                        .notifyCentrals(
+                            data: data,
+                            characteristic: ch,
+                            centrals: targets,
+                            enqueueOnBackpressure: true,
+                            context: context
+                        )
+                    )
                 }
             }
         }
