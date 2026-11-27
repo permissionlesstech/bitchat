@@ -177,9 +177,13 @@ final class ChatViewModel: ObservableObject, SynchronousMessageTransportEventDel
     @Published var nickname: String = "" {
         didSet {
             // Canonicalize whenever nickname is set: trim whitespace
-            // (whitespace-only becomes "") and apply Unicode NFC so accented
-            // names match regardless of how they were typed.
-            let cleaned = (nickname.trimmedOrNilIfEmpty ?? "").normalizedNickname
+            // (whitespace-only becomes ""), apply Unicode NFC so accented
+            // names match regardless of how they were typed, and cap to
+            // AnnouncementPacket's 255-byte UTF-8 TLV limit.
+            let cleaned = (nickname.trimmedOrNilIfEmpty ?? "")
+                .normalizedNickname
+                .truncatedToUTF8Bytes(String.maxNicknameUTF8Bytes)
+                .trimmedOrNilIfEmpty ?? ""
             if cleaned != nickname {
                 nickname = cleaned
                 return

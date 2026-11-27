@@ -73,6 +73,9 @@ final class NotificationService {
         static var geohashActivityTitle: String {
             String(localized: "notification.redacted.geohash.title", defaultValue: "📍 new activity nearby", comment: "Lock-screen notification title for activity in a location channel when message previews are hidden; deliberately omits the geohash")
         }
+        static var verificationTitle: String {
+            String(localized: "notification.redacted.verification.title", defaultValue: "✅ peer verified", comment: "Lock-screen notification title for peer verification when message previews are hidden; deliberately omits the peer nickname")
+        }
         static var body: String {
             String(localized: "notification.redacted.body", defaultValue: "open bitchat to read", comment: "Lock-screen notification body shown in place of the message text when message previews are hidden")
         }
@@ -203,6 +206,12 @@ final class NotificationService {
         let deeplink = "bitchat://geohash/\(geohash)"
         let userInfo: [String: Any] = ["deeplink": deeplink]
         sendLocalNotification(title: title, body: body, identifier: identifier, userInfo: userInfo)
+    }
+
+    func sendVerificationNotification(title: String, body: String, identifier: String) {
+        let resolvedTitle = hidePreviews ? Redacted.verificationTitle : title
+        let resolvedBody = hidePreviews ? Redacted.body : body
+        sendLocalNotification(title: resolvedTitle, body: resolvedBody, identifier: identifier)
     }
 
     func sendNetworkAvailableNotification(peerCount: Int) {

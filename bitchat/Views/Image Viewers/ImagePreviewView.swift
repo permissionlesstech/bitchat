@@ -123,7 +123,7 @@ struct ImagePreviewView: View {
         let url: URL
 
         func makeUIViewController(context: Context) -> UIDocumentPickerViewController {
-            let controller = UIDocumentPickerViewController(forExporting: [url])
+            let controller = UIDocumentPickerViewController(forExporting: [url], asCopy: true)
             controller.shouldShowFileExtensions = true
             return controller
         }

@@ -87,8 +87,9 @@ extension View {
             }
         )
         #if os(iOS)
-        let sourceType: UIImagePickerController.SourceType =
+        let requestedSourceType: UIImagePickerController.SourceType =
             mode.wrappedValue == .camera ? .camera : .photoLibrary
+        let sourceType = ImagePickerView.resolvedSourceType(for: requestedSourceType)
         return fullScreenCover(isPresented: isPresented) {
             ImagePickerView(sourceType: sourceType) { image in
                 mode.wrappedValue = nil

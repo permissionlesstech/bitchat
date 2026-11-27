@@ -65,6 +65,16 @@ struct SharedContentHandoffTests {
             try context.store.stage(misleadingControl, now: now)
         }
 
+        let asciiControl = SharedContentPayload.text("bad\u{0000}byte", createdAt: now)
+        #expect(throws: SharedContentHandoffError.invalidCharacters) {
+            try context.store.stage(asciiControl, now: now)
+        }
+
+        let zwjAndBidiMark = SharedContentPayload.text("family 👨‍👩‍👧‍👦 \u{200F}مرحبا\u{00AD}test\u{200C}!", createdAt: now)
+        try context.store.stage(zwjAndBidiMark, now: now)
+        #expect(context.store.pending(now: now) == zwjAndBidiMark)
+        context.defaults.removeObject(forKey: SharedContentStore.storageKey)
+
         let expired = SharedContentPayload.text(
             "too old",
             createdAt: now.addingTimeInterval(-SharedContentPayload.retentionSeconds - 1)
