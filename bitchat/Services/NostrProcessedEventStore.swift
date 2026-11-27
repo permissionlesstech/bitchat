@@ -45,6 +45,7 @@ final class NostrProcessedEventStore {
         self.readData = readData
     }
 
+    #if DEBUG
     /// Processed event IDs, oldest first (insertion order).
     func load() -> [String] {
         ioQueue.sync {
@@ -56,6 +57,7 @@ final class NostrProcessedEventStore {
             }
         }
     }
+    #endif
 
     /// Loads processed event IDs asynchronously on the utility I/O queue so
     /// cold launch does not block the main actor on disk I/O + JSON decoding.

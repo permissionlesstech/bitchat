@@ -607,10 +607,12 @@ final class BridgeCourierService: ObservableObject {
         invalidated.forEach { $0(false) }
     }
 
+    #if DEBUG
     /// A fresh random Nostr identity for signing one drop. Delegates to the
     /// canonical generator (Schnorr key that can't fail validity) instead of
     /// hand-rolling SecRandom + retry.
     static func makeThrowawayIdentity() -> NostrIdentity? {
         try? NostrIdentity.generate()
     }
+    #endif
 }

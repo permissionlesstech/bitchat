@@ -105,6 +105,7 @@ final class PrekeyBundleStore {
 
     // MARK: - Sealing support
 
+    #if DEBUG
     /// Whether an unexpired bundle with sealable prekeys is cached for a peer.
     func hasUsableBundle(for noiseKey: Data) -> Bool {
         queue.sync {
@@ -112,6 +113,7 @@ final class PrekeyBundleStore {
             return bundle.usedIDs.count < bundle.prekeyIDs.count
         }
     }
+    #endif
 
     /// The prekey to seal a message with: the message's existing assignment if
     /// any (re-deposits reuse it), else the lowest unused ID, which is then

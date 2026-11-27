@@ -262,8 +262,6 @@ final class BLEService: NSObject {
         if FavoritesPersistenceService.shared.isMutualFavorite(depositorNoiseKey) { return .favorite }
         return isVerifiedPeer ? .verified : nil
     }
-    // Local-only store-and-forward counters; nil in unit tests.
-    var sfMetrics: StoreAndForwardMetrics?
 
     // Verified one-time prekey bundles gossiped by other peers, used to seal
     // courier mail forward-secretly. Injectable for tests.
@@ -4865,7 +4863,6 @@ extension BLEService {
             let isKnownOnMesh = peerRegistry.info(for: shortID) != nil
             let senderPeerID = isKnownOnMesh ? shortID : PeerID(hexData: senderStaticKey)
             SecureLogger.debug("📦 Opened courier envelope from \(senderPeerID.id.prefix(8))…", category: .session)
-            sfMetrics?.record(.courierOpened)
             notifyUI { [weak self] in
                 self?.deliverTransportEvent(.noisePayloadReceived(
                     peerID: senderPeerID,
@@ -4905,7 +4902,6 @@ extension BLEService {
         let isVerifiedPeer = depositorInfo?.isVerifiedNickname ?? false
         let store = courierStore
         let policy = courierDepositPolicy
-        let metrics = sfMetrics
         notifyUI { [weak self] in
             guard let self else { return }
             guard let tier = policy(depositorKey, isVerifiedPeer) else {
@@ -4915,7 +4911,6 @@ extension BLEService {
             self.messageQueue.async {
                 if store.deposit(envelope, from: depositorKey, tier: tier) {
                     SecureLogger.debug("📦 Carrying courier envelope deposited by \(peerID.id.prefix(8))… (\(tier.rawValue))", category: .session)
-                    metrics?.record(.courierAccepted)
                 }
             }
         }
@@ -4923,7 +4918,6 @@ extension BLEService {
 
     /// Hand over any carried envelopes addressed to a peer we just heard from.
     private func deliverCourierMail(to peerID: PeerID, noiseKey: Data) {
-        let metrics = sfMetrics
         let accepted = courierStore.handoverEnvelopes(for: noiseKey) { [weak self] envelope in
             guard let self,
                   let payload = envelope.encode(),
@@ -4935,7 +4929,6 @@ extension BLEService {
                   ) else {
                 return false
             }
-            metrics?.record(.courierHandedOver)
             return true
         }
         if accepted > 0 {
@@ -4958,7 +4951,6 @@ extension BLEService {
         for envelope in envelopes {
             guard let payload = envelope.encode() else { continue }
             broadcastPacket(makeCourierPacket(payload, to: peerID))
-            sfMetrics?.record(.courierRemoteHandover)
         }
     }
 
@@ -4968,7 +4960,6 @@ extension BLEService {
     /// mirroring the deposit policy they would apply to us.
     private func sprayCourierMail(to peerID: PeerID, noiseKey: Data, isVerifiedPeer: Bool) {
         let store = courierStore
-        let metrics = sfMetrics
         let sendSpray: () -> Void = { [weak self] in
             guard let self else { return }
             let accepted = store.transferSprayCopies(to: noiseKey) { envelope in
@@ -4981,7 +4972,6 @@ extension BLEService {
                       ) else {
                     return false
                 }
-                metrics?.record(.courierSprayed)
                 return true
             }
             if accepted > 0 {

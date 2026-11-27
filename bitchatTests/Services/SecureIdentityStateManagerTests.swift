@@ -664,10 +664,6 @@ private final class FailingCacheSaveKeychain: KeychainManagerProtocol {
         data = Data()
     }
 
-    func secureClear(_ string: inout String) {
-        string = ""
-    }
-
     func verifyIdentityKeyExists() -> Bool {
         storage["identity_noiseStaticKey"] != nil
     }

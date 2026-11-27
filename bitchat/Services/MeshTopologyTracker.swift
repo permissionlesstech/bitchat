@@ -68,6 +68,7 @@ final class MeshTopologyTracker {
         queue.sync { claims }
     }
 
+    #if DEBUG
     func removePeer(_ data: Data?) {
         guard let peer = sanitize(data) else { return }
         queue.sync(flags: .barrier) {
@@ -76,6 +77,7 @@ final class MeshTopologyTracker {
             self.observedVersions.removeValue(forKey: peer)
         }
     }
+    #endif
 
     /// Prune nodes that haven't updated their topology in `age` seconds
     func prune(olderThan age: TimeInterval, now: Date = Date()) {

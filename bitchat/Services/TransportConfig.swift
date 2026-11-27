@@ -212,7 +212,6 @@ enum TransportConfig {
     static let locationDistanceFilterMeters: Double = 1000
     // Live (channel sheet open) distance threshold for meaningful updates
     static let locationDistanceFilterLiveMeters: Double = 10.0
-    static let locationLiveRefreshInterval: TimeInterval = 5.0
 
     // Notifications (geohash)
     static let uiGeoNotifyCooldownSeconds: TimeInterval = 60.0

@@ -16,19 +16,19 @@ struct GeohashBookmarksStoreTests {
         #expect(store.bookmarks.isEmpty)
 
         // Add with mixed case and hash prefix
-        store.toggle("#U4PRUY")
+        store.toggleBookmark("#U4PRUY")
         #expect(store.isBookmarked("u4pruy"))
         #expect(store.bookmarks.first == "u4pruy")
 
         // Toggling again removes
-        store.toggle("u4pruy")
+        store.toggleBookmark("u4pruy")
         #expect(!store.isBookmarked("u4pruy"))
         #expect(store.bookmarks.isEmpty)
     }
 
     @Test func persistenceWritten() throws {
-        store.toggle("ezs42")
-        store.toggle("u4pruy")
+        store.toggleBookmark("ezs42")
+        store.toggleBookmark("u4pruy")
         // Verify persisted JSON contains both (order not enforced here)
         let data = try #require(storage.data(forKey: storeKey), "No persisted data found")
         let arr = try JSONDecoder().decode([String].self, from: data)

@@ -865,15 +865,6 @@ final class KeychainManager: KeychainManagerProtocol {
         data = Data() // Clear the data object
     }
     
-    /// Securely clear sensitive string from memory
-    func secureClear(_ string: inout String) {
-        // Convert to mutable data and clear
-        if var data = string.data(using: .utf8) {
-            secureClear(&data)
-        }
-        string = "" // Clear the string object
-    }
-    
     // MARK: - Debug
 
     func verifyIdentityKeyExists() -> Bool {

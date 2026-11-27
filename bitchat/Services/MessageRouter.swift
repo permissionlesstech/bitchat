@@ -47,7 +47,6 @@ final class MessageRouter {
     private let now: () -> Date
     private let courierDirectory: CourierDirectory
     private let outboxStore: MessageOutboxStore?
-    private let metrics: StoreAndForwardMetrics?
 
     /// Invoked whenever a retained private message is dropped without a
     /// delivery ack (attempt cap, TTL expiry, or per-peer overflow eviction)
@@ -140,14 +139,12 @@ final class MessageRouter {
         transports: [Transport],
         now: @escaping () -> Date = Date.init,
         courierDirectory: CourierDirectory? = nil,
-        outboxStore: MessageOutboxStore? = nil,
-        metrics: StoreAndForwardMetrics? = nil
+        outboxStore: MessageOutboxStore? = nil
     ) {
         self.transports = transports
         self.now = now
         self.courierDirectory = courierDirectory ?? .favoritesBacked()
         self.outboxStore = outboxStore
-        self.metrics = metrics
         self.outbox = outboxStore?.load() ?? [:]
         outboxStore?.setRecoveryHandler { [weak self] recovered in
             self?.mergeRecoveredOutbox(recovered)
@@ -162,14 +159,6 @@ final class MessageRouter {
             guard let self = self else { return }
             if let data = note.userInfo?["peerPublicKey"] as? Data {
                 let peerID = PeerID(publicKey: data)
-                Task { @MainActor in
-                    self.flushOutbox(for: peerID)
-                }
-            }
-            // Handle key updates
-            if let newKey = note.userInfo?["peerPublicKey"] as? Data,
-               note.userInfo?["isKeyUpdate"] is Bool {
-                let peerID = PeerID(publicKey: newKey)
                 Task { @MainActor in
                     self.flushOutbox(for: peerID)
                 }
@@ -387,7 +376,6 @@ final class MessageRouter {
     }
 
     private func recordCourierDeposit(messageID: String, for peerID: PeerID, courierKeys: [Data], persist: Bool = true) {
-        metrics?.record(.courierDeposited)
         guard var queue = outbox[peerID],
               let index = queue.firstIndex(where: { $0.messageID == messageID }) else { return }
         queue[index].depositedCourierKeys.formUnion(courierKeys)
@@ -432,9 +420,6 @@ final class MessageRouter {
         // state still needs a removal tombstone; otherwise skip redundant I/O.
         if cleared || (outboxStore?.hasDeferredDiskState ?? false) {
             outboxStore?.recordRemoval(messageID: messageID)
-            if cleared {
-                metrics?.record(.outboxDelivered)
-            }
             persistOutbox()
         }
     }
@@ -462,9 +447,6 @@ final class MessageRouter {
         // during a cold launch, but skip rewriting disk when already cleared.
         if cleared || (outboxStore?.hasDeferredDiskState ?? false) {
             outboxStore?.recordRemoval(messageID: messageID, for: peerIDs)
-            if cleared {
-                metrics?.record(.outboxDelivered)
-            }
             persistOutbox()
         }
         return cleared
@@ -489,7 +471,6 @@ final class MessageRouter {
             dropMessage(evicted.messageID, for: peerID)
         }
         outbox[peerID] = queue
-        metrics?.record(.outboxQueued)
         persistOutbox()
     }
 
@@ -521,7 +502,6 @@ final class MessageRouter {
 
     private func dropMessage(_ messageID: String, for peerID: PeerID) {
         secureTransmissions.remove(PeerMessageKey(peerID: peerID, messageID: messageID))
-        metrics?.record(.outboxDropped)
         onMessageDropped?(messageID, peerID)
     }
 
@@ -693,7 +673,6 @@ final class MessageRouter {
                 recipientNickname: message.nickname,
                 messageID: message.messageID
             )
-            metrics?.record(.outboxResent)
             outboxChanged = incrementSendAttemptsIfQueued(message.messageID, for: peerID) || outboxChanged
         }
 
@@ -749,7 +728,6 @@ final class MessageRouter {
                     PeerMessageKey(peerID: peerID, messageID: message.messageID)
                 )
                 transport.sendPrivateMessage(message.content, to: peerID, recipientNickname: message.nickname, messageID: message.messageID)
-                metrics?.record(.outboxResent)
                 outboxChanged = incrementSendAttemptsIfQueued(message.messageID, for: peerID) || outboxChanged
             } else if let transport = connectedTransport(for: peerID) {
                 // "Connected" without a secure session — possibly a stolen
@@ -767,7 +745,6 @@ final class MessageRouter {
                     PeerMessageKey(peerID: peerID, messageID: message.messageID)
                 )
                 transport.sendPrivateMessage(message.content, to: peerID, recipientNickname: message.nickname, messageID: message.messageID)
-                metrics?.record(.outboxResent)
             } else if let transport = reachableTransport(for: peerID) {
                 // Reachability without a connection is a freshness heuristic,
                 // so the send can silently go nowhere: send but keep retaining
@@ -783,7 +760,6 @@ final class MessageRouter {
                 }
                 SecureLogger.debug("Outbox -> \(type(of: transport)) (reachable) for \(peerID.id.prefix(8))… id=\(message.messageID.prefix(8))…", category: .session)
                 transport.sendPrivateMessage(message.content, to: peerID, recipientNickname: message.nickname, messageID: message.messageID)
-                metrics?.record(.outboxResent)
                 outboxChanged = incrementSendAttemptsIfQueued(message.messageID, for: peerID) || outboxChanged
             }
         }
