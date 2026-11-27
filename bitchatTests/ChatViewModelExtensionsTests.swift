@@ -503,7 +503,7 @@ struct ChatViewModelNostrExtensionTests {
             senderIdentity: sender
         )
 
-        viewModel.subscribeGiftWrap(giftWrap, id: recipient)
+        viewModel.handleGiftWrap(giftWrap, id: recipient)
 
         try? await Task.sleep(nanoseconds: 100_000_000)
         #expect(viewModel.privateChats.isEmpty)
@@ -576,7 +576,7 @@ struct ChatViewModelNostrExtensionTests {
             senderIdentity: sender
         )
 
-        viewModel.subscribeGiftWrap(giftWrap, id: recipient)
+        viewModel.handleGiftWrap(giftWrap, id: recipient)
 
         let didUpdate = await TestHelpers.waitUntil(
             { isDelivered(status: deliveryStatus(in: viewModel, peerID: convKey, messageID: messageID)) },
@@ -614,7 +614,7 @@ struct ChatViewModelNostrExtensionTests {
             senderIdentity: sender
         )
 
-        viewModel.subscribeGiftWrap(giftWrap, id: recipient)
+        viewModel.handleGiftWrap(giftWrap, id: recipient)
 
         let didUpdate = await TestHelpers.waitUntil(
             { isRead(status: deliveryStatus(in: viewModel, peerID: convKey, messageID: messageID)) },

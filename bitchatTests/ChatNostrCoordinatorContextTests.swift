@@ -425,7 +425,7 @@ struct ChatNostrCoordinatorContextTests {
         let recent = try teleportedGeohashEvent(from: stillHere, sentAt: Date().addingTimeInterval(-60))
 
         coordinator.inbound.handleNostrEvent(expired, isHistoryReplay: true)
-        coordinator.inbound.subscribeNostrEvent(expiredOnResubscribe, isHistoryReplay: true)
+        coordinator.inbound.handleNostrEvent(expiredOnResubscribe, isHistoryReplay: true)
         coordinator.inbound.handleNostrEvent(recent, isHistoryReplay: true)
         await drainMainQueue()
 
