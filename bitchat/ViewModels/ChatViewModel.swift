@@ -1085,6 +1085,12 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, SynchronousMessage
         conversations.append(message, to: conversationID)
     }
 
+    @MainActor
+    @discardableResult
+    func appendPublicMessages(_ messages: [BitchatMessage], to conversationID: ConversationID) -> [BitchatMessage] {
+        conversations.appendBatch(messages, to: conversationID)
+    }
+
     /// Appends a geohash message if absent. Returns `true` when stored
     /// (the legacy `PublicTimelineStore.appendIfAbsent` contract).
     @MainActor

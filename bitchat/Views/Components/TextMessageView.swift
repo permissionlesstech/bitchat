@@ -9,7 +9,7 @@
 import SwiftUI
 import BitFoundation
 
-struct TextMessageView: View {
+struct TextMessageView: View, Equatable {
     @Environment(\.colorScheme) private var colorScheme: ColorScheme
     @Environment(\.appTheme) private var theme
     @ThemedPalette private var palette
@@ -30,6 +30,10 @@ struct TextMessageView: View {
     init(message: BitchatMessage) {
         self.message = message
         self.deliveryStatus = message.deliveryStatus
+    }
+
+    nonisolated static func == (lhs: TextMessageView, rhs: TextMessageView) -> Bool {
+        lhs.message === rhs.message && lhs.deliveryStatus == rhs.deliveryStatus
     }
 
     var body: some View {

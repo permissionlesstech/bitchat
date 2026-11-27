@@ -61,34 +61,37 @@ struct PublicMessageListView: View {
     /// Whether this instance holds the nearby-notes counter active (mesh
     /// public timeline only); balanced against activate/deactivate.
     @State private var holdsNotesCounter = false
+    @Environment(\.appTheme) private var theme
     @ThemedPalette private var palette
 
     var body: some View {
-        VStack(spacing: 0) {
+        MessageListContentView(
+            privatePeer: nil,
+            messages: publicChatModel.messages,
+            contextKey: publicChatModel.activeChannel.contextKey,
+            selectedPublicChannel: locationChannelsModel.selectedChannel,
+            bluetoothCanScan: bluetoothCanScan,
+            liveMessages: { _ in publicChatModel.messages },
+            liveContextKey: { _ in publicChatModel.activeChannel.contextKey },
+            liveWindowCount: { _ in windowCountPublic },
+            setWindowCount: { count, _ in windowCountPublic = count },
+            isAtBottom: $isAtBottom,
+            selectedMessageSender: $selectedMessageSender,
+            selectedMessageSenderID: $selectedMessageSenderID,
+            imagePreviewURL: $imagePreviewURL,
+            showSidebar: $showSidebar,
+            isTextFieldFocused: isTextFieldFocused
+        )
+        // Keep the scroll view as the direct body under ContentView's
+        // safeAreaInsets (no wrapping VStack): notesHereStrip joins the top
+        // safe area instead so messages never receive double top insets.
+        .safeAreaInset(edge: .top, spacing: 0) {
             // Notes pinned to this place stay visible while chatting — a
             // conversation starting must not hide what's left here.
             if case .mesh = locationChannelsModel.selectedChannel,
                nearbyNotes.noteCount > 0 {
                 notesHereStrip
             }
-
-            MessageListContentView(
-                privatePeer: nil,
-                messages: publicChatModel.messages,
-                contextKey: publicChatModel.activeChannel.contextKey,
-                selectedPublicChannel: locationChannelsModel.selectedChannel,
-                bluetoothCanScan: bluetoothCanScan,
-                liveMessages: { _ in publicChatModel.messages },
-                liveContextKey: { _ in publicChatModel.activeChannel.contextKey },
-                liveWindowCount: { _ in windowCountPublic },
-                setWindowCount: { count, _ in windowCountPublic = count },
-                isAtBottom: $isAtBottom,
-                selectedMessageSender: $selectedMessageSender,
-                selectedMessageSenderID: $selectedMessageSenderID,
-                imagePreviewURL: $imagePreviewURL,
-                showSidebar: $showSidebar,
-                isTextFieldFocused: isTextFieldFocused
-            )
         }
         .onAppear { updateNotesCounterHold() }
         .onDisappear { releaseNotesCounterHold() }
@@ -130,6 +133,7 @@ struct PublicMessageListView: View {
             .padding(.horizontal, 12)
             .padding(.vertical, 7)
             .background(palette.secondary.opacity(0.08))
+            .background(theme.usesGlassChrome ? AnyShapeStyle(.ultraThinMaterial) : AnyShapeStyle(palette.background))
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
@@ -214,8 +218,6 @@ private struct MessageListContentView: View {
 
     @EnvironmentObject private var conversationUIModel: ConversationUIModel
     @Environment(\.appEnvironmentModels) private var appEnvironmentModels
-    @Environment(\.colorScheme) private var colorScheme
-    @Environment(\.appTheme) private var theme
 
     let privatePeer: PeerID?
     let messages: [BitchatMessage]
@@ -258,6 +260,11 @@ private struct MessageListContentView: View {
     /// landed in it, i.e. whose scroll to the bottom has landed. Window
     /// expansion waits for it.
     @State private var bottomSettledContextKey: String?
+    /// Visible height of the scroll viewport, read non-structurally only while
+    /// the empty mesh state needs it to center its radar. Keeping GeometryReader
+    /// out from around ScrollView prevents double top safe-area insets under
+    /// Liquid Glass's `.safeAreaInset` chrome.
+    @State private var emptyStateViewportHeight: CGFloat = 0
 
     @ThemedPalette private var palette
 
@@ -276,26 +283,36 @@ private struct MessageListContentView: View {
                 appendedCount: 0,
                 in: messages
             )
-        let windowedMessages = Array(messages.suffix(renderedWindowCount))
+        let windowedSlice = messages.suffix(renderedWindowCount)
 
-        let messageItems: [MessageDisplayItem] = windowedMessages.compactMap { message in
-            guard !message.content.trimmed.isEmpty else { return nil }
+        let messageItems: [MessageDisplayItem] = windowedSlice.compactMap { message in
+            guard message.content.hasNonWhitespaceContent else { return nil }
             return MessageDisplayItem(id: "\(contextKey)|\(message.id)", message: message)
         }
+        let hasEarlierMessages = messages.count > windowedSlice.count
         // Top edge of the rendered window (whitespace-only messages get no
         // row, so they could never report reaching it).
         let firstRowID = messageItems.first?.id
+        let isEmptyPublic = messageItems.isEmpty && privatePeer == nil
 
-        GeometryReader { geometry in
-            ScrollViewReader { proxy in
-                ScrollView {
-                    if messageItems.isEmpty && privatePeer == nil {
-                        publicEmptyState(fillHeight: geometry.size.height)
-                    }
-                    LazyVStack(alignment: .leading, spacing: 0) {
-                        ForEach(messageItems) { item in
-                            let message = item.message
-                            messageRow(for: message)
+        ScrollViewReader { proxy in
+            ScrollView {
+                if isEmptyPublic {
+                    publicEmptyState(fillHeight: emptyStateViewportHeight)
+                } else {
+                    VStack(alignment: .leading, spacing: 0) {
+                        LazyVStack(alignment: .leading, spacing: 0) {
+                            ForEach(messageItems) { item in
+                                let message = item.message
+                                MessageRowView(
+                                    message: message,
+                                    deliveryStatus: message.deliveryStatus,
+                                    privatePeer: privatePeer,
+                                    imagePreviewURL: $imagePreviewURL,
+                                    showSidebar: $showSidebar,
+                                    onInsertMention: insertMention
+                                )
+                                .equatable()
                                 .onAppear {
                                     // Callbacks lag a timeline switch: the new
                                     // rows appear before the old ones disappear,
@@ -315,8 +332,7 @@ private struct MessageListContentView: View {
                                         }
                                         returnWindowToInitialSize(for: privatePeer, contextKey: contextKey, messages: messages)
                                     }
-                                    if item.id == firstRowID,
-                                       messages.count > windowedMessages.count {
+                                    if item.id == firstRowID, hasEarlierMessages {
                                         expandWindow(
                                             ifNeededFor: message,
                                             allMessages: messages,
@@ -338,162 +354,128 @@ private struct MessageListContentView: View {
                                         cancelFollowScroll()
                                     }
                                 }
-                                .contentShape(Rectangle())
-                                .contextMenu {
-                                    let showsUserActions = message.sender != "system" && !conversationUIModel.isSentByCurrentUser(message)
-                                    if showsUserActions {
-                                        // Mention and DM are redundant inside a 1:1 conversation:
-                                        // mentioning the only other participant is noise, and "DM"
-                                        // would just reopen the conversation that is already open.
-                                        if privatePeer == nil {
-                                            Button("content.actions.mention") {
-                                                insertMention(message.sender)
-                                            }
-                                            if let peerID = message.senderPeerID {
-                                                Button("content.actions.direct_message") {
-                                                    appEnvironmentModels?.privateConversationModel.openConversation(for: peerID)
-                                                    withAnimation(.easeInOut(duration: TransportConfig.uiAnimationMediumSeconds)) {
-                                                        showSidebar = true
-                                                    }
-                                                }
-                                            }
-                                        }
-                                        Button("content.actions.hug") {
-                                            conversationUIModel.sendHug(to: message.sender)
-                                        }
-                                        Button("content.actions.slap") {
-                                            conversationUIModel.sendSlap(to: message.sender)
-                                        }
-                                    }
-                                    Button("content.message.copy") {
-                                        #if os(iOS)
-                                        UIPasteboard.general.string = message.content
-                                        #else
-                                        let pb = NSPasteboard.general
-                                        pb.clearContents()
-                                        pb.setString(message.content, forType: .string)
-                                        #endif
-                                    }
-                                    if isResendableFailedMessage(message) {
-                                        Button("content.actions.resend") {
-                                            conversationUIModel.resendFailedPrivateMessage(message)
-                                        }
-                                    }
-                                    if showsUserActions {
-                                        Button("content.actions.block", role: .destructive) {
-                                            conversationUIModel.block(peerID: message.senderPeerID, displayName: message.sender)
-                                        }
-                                    }
-                                }
-                                .padding(.horizontal, 12)
-                                .padding(.vertical, 1)
-                                // Archived echoes read as one tinted block, not
-                                // just faded rows.
-                                .background(message.isArchivedEcho ? palette.secondary.opacity(0.08) : Color.clear)
-                        }
-                    }
-                    .padding(.vertical, 2)
-
-                    // Only carried history on screen: the ambient layer (radar,
-                    // sightings, live hints) stays visible below it instead of
-                    // vanishing the moment echoes exist.
-                    if privatePeer == nil, showsAmbientFooter(messageItems: messageItems) {
-                        MeshEmptyStateView(compact: true, bluetoothAvailable: bluetoothCanScan)
-                            .padding(.horizontal, 12)
-                            .padding(.top, 20)
-                            .padding(.bottom, 8)
-                    }
-                }
-                .overlay(alignment: .bottomTrailing) {
-                    if !isAtBottom && !messageItems.isEmpty {
-                        jumpToLatestPill(proxy: proxy)
-                    }
-                }
-                .onOpenURL(perform: handleOpenURL)
-                .onTapGesture(count: 3) {
-                    showClearConfirmation = true
-                }
-                .confirmationDialog(
-                    "content.clear.confirm_title",
-                    isPresented: $showClearConfirmation,
-                    titleVisibility: .visible
-                ) {
-                    Button("content.clear.confirm_action", role: .destructive) {
-                        conversationUIModel.clearCurrentConversation()
-                    }
-                    Button("common.cancel", role: .cancel) {}
-                }
-                .onAppear {
-                    // Runs before the rows' onAppear: lands the list (and sets the
-                    // mark the row callbacks are checked against) before any row
-                    // reports in. Expansion waits until the scroll below has
-                    // brought the newest row on screen.
-                    bottomSettledContextKey = nil
-                    scrollToBottom(on: proxy, privatePeer: privatePeer)
-                }
-                // The one change handler: a channel or DM switch changes the
-                // signature too, so landing in the new timeline happens here,
-                // ahead of that update's row callbacks.
-                .onChange(of: TimelineSignature(privatePeer: privatePeer, contextKey: contextKey, messages: messages)) { signature in
-                    onTimelineChange(signature, proxy: proxy)
-                }
-                .confirmationDialog(
-                    selectedMessageSender.map { "@\($0)" } ?? String(localized: "content.actions.title", comment: "Fallback title for the message action sheet"),
-                    isPresented: $showMessageActions,
-                    titleVisibility: .visible
-                ) {
-                    Button("content.actions.mention") {
-                        if let sender = selectedMessageSender {
-                            insertMention(sender)
-                        }
-                    }
-
-                    Button("content.actions.direct_message") {
-                        if let peerID = selectedMessageSenderID {
-                            appEnvironmentModels?.privateConversationModel.openConversation(for: peerID)
-                            withAnimation(.easeInOut(duration: TransportConfig.uiAnimationMediumSeconds)) {
-                                showSidebar = true
                             }
                         }
-                    }
+                        .padding(.vertical, 2)
 
-                    Button("content.actions.hug") {
-                        if let sender = selectedMessageSender {
-                            conversationUIModel.sendHug(to: sender)
+                        // Only carried history on screen: the ambient layer (radar,
+                        // sightings, live hints) stays visible below it instead of
+                        // vanishing the moment echoes exist.
+                        if privatePeer == nil, showsAmbientFooter(messageItems: messageItems) {
+                            MeshEmptyStateView(compact: true, bluetoothAvailable: bluetoothCanScan)
+                                .padding(.horizontal, 12)
+                                .padding(.top, 20)
+                                .padding(.bottom, 8)
                         }
                     }
-
-                    Button("content.actions.slap") {
-                        if let sender = selectedMessageSender {
-                            conversationUIModel.sendSlap(to: sender)
-                        }
-                    }
-
-                    Button("content.actions.block", role: .destructive) {
-                        conversationUIModel.block(peerID: selectedMessageSenderID, displayName: selectedMessageSender)
-                    }
-
-                    Button("common.cancel", role: .cancel) {}
                 }
-                .onAppear {
-                    // Also check when view appears
-                    if let peerID = privatePeer,
-                       let privateConversationModel = appEnvironmentModels?.privateConversationModel {
-                        // Try multiple times to ensure read receipts are sent
+            }
+            .background {
+                if isEmptyPublic {
+                    GeometryReader { geometry in
+                        Color.clear
+                            .onAppear {
+                                if emptyStateViewportHeight != geometry.size.height {
+                                    emptyStateViewportHeight = geometry.size.height
+                                }
+                            }
+                            .onChange(of: geometry.size.height) { newHeight in
+                                if emptyStateViewportHeight != newHeight {
+                                    emptyStateViewportHeight = newHeight
+                                }
+                            }
+                    }
+                }
+            }
+            .overlay(alignment: .bottomTrailing) {
+                if !isAtBottom && !messageItems.isEmpty {
+                    jumpToLatestPill(proxy: proxy)
+                }
+            }
+            .onOpenURL(perform: handleOpenURL)
+            .onTapGesture(count: 3) {
+                showClearConfirmation = true
+            }
+            .confirmationDialog(
+                "content.clear.confirm_title",
+                isPresented: $showClearConfirmation,
+                titleVisibility: .visible
+            ) {
+                Button("content.clear.confirm_action", role: .destructive) {
+                    conversationUIModel.clearCurrentConversation()
+                }
+                Button("common.cancel", role: .cancel) {}
+            }
+            .onAppear {
+                // Runs before the rows' onAppear: lands the list (and sets the
+                // mark the row callbacks are checked against) before any row
+                // reports in. Expansion waits until the scroll below has
+                // brought the newest row on screen.
+                bottomSettledContextKey = nil
+                scrollToBottom(on: proxy, privatePeer: privatePeer)
+            }
+            // The one change handler: a channel or DM switch changes the
+            // signature too, so landing in the new timeline happens here,
+            // ahead of that update's row callbacks.
+            .onChange(of: TimelineSignature(privatePeer: privatePeer, contextKey: contextKey, messages: messages)) { signature in
+                onTimelineChange(signature, proxy: proxy)
+            }
+            .confirmationDialog(
+                selectedMessageSender.map { "@\($0)" } ?? String(localized: "content.actions.title", comment: "Fallback title for the message action sheet"),
+                isPresented: $showMessageActions,
+                titleVisibility: .visible
+            ) {
+                Button("content.actions.mention") {
+                    if let sender = selectedMessageSender {
+                        insertMention(sender)
+                    }
+                }
+
+                Button("content.actions.direct_message") {
+                    if let peerID = selectedMessageSenderID {
+                        appEnvironmentModels?.privateConversationModel.openConversation(for: peerID)
+                        withAnimation(.easeInOut(duration: TransportConfig.uiAnimationMediumSeconds)) {
+                            showSidebar = true
+                        }
+                    }
+                }
+
+                Button("content.actions.hug") {
+                    if let sender = selectedMessageSender {
+                        conversationUIModel.sendHug(to: sender)
+                    }
+                }
+
+                Button("content.actions.slap") {
+                    if let sender = selectedMessageSender {
+                        conversationUIModel.sendSlap(to: sender)
+                    }
+                }
+
+                Button("content.actions.block", role: .destructive) {
+                    conversationUIModel.block(peerID: selectedMessageSenderID, displayName: selectedMessageSender)
+                }
+
+                Button("common.cancel", role: .cancel) {}
+            }
+            .onAppear {
+                // Also check when view appears
+                if let peerID = privatePeer,
+                   let privateConversationModel = appEnvironmentModels?.privateConversationModel {
+                    // Try multiple times to ensure read receipts are sent
+                    privateConversationModel.markMessagesAsRead(from: peerID)
+
+                    DispatchQueue.main.asyncAfter(deadline: .now() + TransportConfig.uiReadReceiptRetryShortSeconds) {
                         privateConversationModel.markMessagesAsRead(from: peerID)
+                    }
 
-                        DispatchQueue.main.asyncAfter(deadline: .now() + TransportConfig.uiReadReceiptRetryShortSeconds) {
-                            privateConversationModel.markMessagesAsRead(from: peerID)
-                        }
-
-                        DispatchQueue.main.asyncAfter(deadline: .now() + TransportConfig.uiReadReceiptRetryLongSeconds) {
-                            privateConversationModel.markMessagesAsRead(from: peerID)
-                        }
+                    DispatchQueue.main.asyncAfter(deadline: .now() + TransportConfig.uiReadReceiptRetryLongSeconds) {
+                        privateConversationModel.markMessagesAsRead(from: peerID)
                     }
                 }
-                .onDisappear {
-                    cancelFollowScroll()
-                }
+            }
+            .onDisappear {
+                cancelFollowScroll()
             }
         }
         .environment(\.openURL, OpenURLAction { url in
@@ -589,25 +571,6 @@ private extension MessageListContentView {
             .fixedSize(horizontal: false, vertical: true)
     }
 
-    /// A failed private text message of our own can be resent through the
-    /// normal send path (the context menu removes the failed original and
-    /// re-submits its content).
-    func isResendableFailedMessage(_ message: BitchatMessage) -> Bool {
-        guard message.isPrivate,
-              conversationUIModel.isSentByCurrentUser(message),
-              conversationUIModel.mediaAttachment(for: message) == nil,
-              case .failed = message.deliveryStatus
-        else { return false }
-        return true
-    }
-
-    /// Appends an @mention to the composer draft (never overwrites what the
-    /// user has already typed) and focuses the input field.
-    func insertMention(_ sender: String) {
-        appEnvironmentModels?.composerDraftModel.insertMention(sender)
-        isTextFieldFocused.wrappedValue = true
-    }
-
     /// Floating pill shown while scrolled up: re-presents the isAtBottom /
     /// unseenCount state the view already tracks, and jumps to the newest
     /// message via the existing scrollToBottom helper.
@@ -652,27 +615,11 @@ private extension MessageListContentView {
         return "\(base), \(count)"
     }
 
-    @ViewBuilder
-    func messageRow(for message: BitchatMessage) -> some View {
-        Group {
-            if message.sender == "system" {
-                systemMessageRow(message)
-            } else if let media = conversationUIModel.mediaAttachment(for: message) {
-                MediaMessageView(message: message, media: media, imagePreviewURL: $imagePreviewURL)
-            } else {
-                TextMessageView(message: message)
-            }
-        }
-        // Archived echoes ("heard here earlier") render dimmed: real history,
-        // visually distinct from the live conversation.
-        .opacity(message.isArchivedEcho ? 0.55 : 1)
-    }
-
-    @ViewBuilder
-    func systemMessageRow(_ message: BitchatMessage) -> some View {
-        Text(conversationUIModel.formatMessage(message, colorScheme: colorScheme, theme: theme))
-            .fixedSize(horizontal: false, vertical: true)
-            .frame(maxWidth: .infinity, alignment: .leading)
+    /// Appends an @mention to the composer draft (never overwrites what the
+    /// user has already typed) and focuses the input field.
+    func insertMention(_ sender: String) {
+        appEnvironmentModels?.composerDraftModel.insertMention(sender)
+        isTextFieldFocused.wrappedValue = true
     }
 
     func expandWindow(ifNeededFor message: BitchatMessage,
@@ -771,7 +718,7 @@ private extension MessageListContentView {
     /// Row ID of the newest message that has a row (whitespace-only
     /// messages render none).
     func newestRowID(for privatePeer: PeerID?) -> String? {
-        guard let newest = liveMessages(privatePeer).last(where: { !$0.content.trimmed.isEmpty }) else {
+        guard let newest = liveMessages(privatePeer).last(where: { $0.content.hasNonWhitespaceContent }) else {
             return nil
         }
         return "\(liveContextKey(privatePeer))|\(newest.id)"
@@ -881,6 +828,111 @@ private extension MessageListContentView {
         guard let timer = scrollThrottleTimer else { return }
         timer.invalidate()
         scrollThrottleTimer = nil
+    }
+}
+
+private struct MessageRowView: View, Equatable {
+    @EnvironmentObject private var conversationUIModel: ConversationUIModel
+    @Environment(\.appEnvironmentModels) private var appEnvironmentModels
+    @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.appTheme) private var theme
+    @ThemedPalette private var palette
+
+    let message: BitchatMessage
+    let deliveryStatus: DeliveryStatus
+    let privatePeer: PeerID?
+    @Binding var imagePreviewURL: URL?
+    @Binding var showSidebar: Bool
+    let onInsertMention: (String) -> Void
+
+    nonisolated static func == (lhs: MessageRowView, rhs: MessageRowView) -> Bool {
+        lhs.message === rhs.message
+            && lhs.deliveryStatus == rhs.deliveryStatus
+            && lhs.privatePeer == rhs.privatePeer
+    }
+
+    var body: some View {
+        rowContent
+            // Archived echoes ("heard here earlier") render dimmed: real
+            // history, visually distinct from the live conversation.
+            .opacity(message.isArchivedEcho ? 0.55 : 1)
+            .contentShape(Rectangle())
+            .contextMenu {
+                let showsUserActions = message.sender != "system" && !conversationUIModel.isSentByCurrentUser(message)
+                if showsUserActions {
+                    // Mention and DM are redundant inside a 1:1 conversation:
+                    // mentioning the only other participant is noise, and "DM"
+                    // would just reopen the conversation that is already open.
+                    if privatePeer == nil {
+                        Button("content.actions.mention") {
+                            onInsertMention(message.sender)
+                        }
+                        if let peerID = message.senderPeerID {
+                            Button("content.actions.direct_message") {
+                                appEnvironmentModels?.privateConversationModel.openConversation(for: peerID)
+                                withAnimation(.easeInOut(duration: TransportConfig.uiAnimationMediumSeconds)) {
+                                    showSidebar = true
+                                }
+                            }
+                        }
+                    }
+                    Button("content.actions.hug") {
+                        conversationUIModel.sendHug(to: message.sender)
+                    }
+                    Button("content.actions.slap") {
+                        conversationUIModel.sendSlap(to: message.sender)
+                    }
+                }
+                Button("content.message.copy") {
+                    #if os(iOS)
+                    UIPasteboard.general.string = message.content
+                    #else
+                    let pb = NSPasteboard.general
+                    pb.clearContents()
+                    pb.setString(message.content, forType: .string)
+                    #endif
+                }
+                if isResendableFailedMessage(message) {
+                    Button("content.actions.resend") {
+                        conversationUIModel.resendFailedPrivateMessage(message)
+                    }
+                }
+                if showsUserActions {
+                    Button("content.actions.block", role: .destructive) {
+                        conversationUIModel.block(peerID: message.senderPeerID, displayName: message.sender)
+                    }
+                }
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 1)
+            // Archived echoes read as one tinted block, not just faded rows.
+            .background(message.isArchivedEcho ? palette.secondary.opacity(0.08) : Color.clear)
+    }
+
+    @ViewBuilder
+    private var rowContent: some View {
+        if message.sender == "system" {
+            Text(conversationUIModel.formatMessage(message, colorScheme: colorScheme, theme: theme))
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: .infinity, alignment: .leading)
+        } else if let media = conversationUIModel.mediaAttachment(for: message) {
+            MediaMessageView(message: message, media: media, imagePreviewURL: $imagePreviewURL)
+        } else {
+            TextMessageView(message: message)
+                .equatable()
+        }
+    }
+
+    /// A failed private text message of our own can be resent through the
+    /// normal send path (the context menu removes the failed original and
+    /// re-submits its content).
+    private func isResendableFailedMessage(_ message: BitchatMessage) -> Bool {
+        guard message.isPrivate,
+              conversationUIModel.isSentByCurrentUser(message),
+              conversationUIModel.mediaAttachment(for: message) == nil,
+              case .failed = deliveryStatus
+        else { return false }
+        return true
     }
 }
 

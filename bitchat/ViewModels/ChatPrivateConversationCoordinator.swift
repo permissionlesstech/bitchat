@@ -155,7 +155,12 @@ extension ChatViewModel: ChatPrivateConversationContext {
     }
 
     func deriveNostrIdentity(forGeohash geohash: String) throws -> NostrIdentity {
-        try idBridge.deriveIdentity(forGeohash: geohash)
+        if let cached = cachedGeohashIdentity, cached.geohash == geohash {
+            return cached.identity
+        }
+        let identity = try idBridge.deriveIdentity(forGeohash: geohash)
+        cachedGeohashIdentity = (geohash, identity)
+        return identity
     }
 
     func currentNostrIdentity() -> NostrIdentity? {

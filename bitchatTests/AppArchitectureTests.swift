@@ -1072,4 +1072,65 @@ struct AppArchitectureTests {
             return false
         }
     }
+
+    @Test("ConversationStore.appendBatch commits crowded-room bursts in one publish and preserves invariants")
+    @MainActor
+    func conversationStoreAppendBatchEmitsOnceAndPreservesInvariants() {
+        let store = ConversationStore()
+        store.setActiveChannel(.mesh)
+        let publicChat = PublicChatModel(conversations: store)
+
+        var emissions = 0
+        let cancellable = publicChat.objectWillChange.sink { _ in emissions += 1 }
+        defer { cancellable.cancel() }
+
+        let cap = TransportConfig.meshTimelineCap
+        let total = cap + 25
+        let batch: [BitchatMessage] = (0..<total).map { idx in
+            // Mix out-of-order timestamps and a duplicate ID to exercise every branch.
+            let ts = idx % 10 == 9 ? Double(idx) - 3.5 : Double(idx)
+            return makeArchitectureMessage(id: "burst-\(idx)", timestamp: ts)
+        }
+        let duplicate = makeArchitectureMessage(id: "burst-10", timestamp: 9999)
+
+        let inserted = store.appendBatch(batch + [duplicate], to: .mesh)
+
+        #expect(emissions == 1)
+        #expect(inserted.count == total)
+        #expect(publicChat.messages.count == cap)
+        #expect(store.auditInvariants().isEmpty)
+        // Verify non-decreasing timestamp ordering.
+        for idx in 1..<publicChat.messages.count {
+            #expect(publicChat.messages[idx - 1].timestamp <= publicChat.messages[idx].timestamp)
+        }
+    }
+
+    @Test("Message contentScan and hasNonWhitespaceContent fast paths match full parsing")
+    func contentScanAndWhitespaceFastPathsPreserveSemantics() {
+        #expect(!"".hasNonWhitespaceContent)
+        #expect(!"   \t\n  ".hasNonWhitespaceContent)
+        #expect("hi".hasNonWhitespaceContent)
+        #expect("  hi  ".hasNonWhitespaceContent)
+
+        let plain = BitchatMessage(
+            id: "scan-plain",
+            sender: "alice",
+            content: "hello crowded room",
+            timestamp: Date(),
+            isRelay: false
+        )
+        #expect(plain.contentScan == BitchatMessage.ContentScan(cashuLinks: [], lightningLinks: [], isLongForDisplay: false))
+
+        let cashuToken = "cashuA" + String(repeating: "a", count: 48)
+        let payment = BitchatMessage(
+            id: "scan-pay",
+            sender: "alice",
+            content: "pay \(cashuToken) or lightning:lnbc1test",
+            timestamp: Date(),
+            isRelay: false
+        )
+        #expect(payment.contentScan.cashuLinks == [cashuToken])
+        #expect(payment.contentScan.lightningLinks == ["lightning:lnbc1test"])
+        #expect(!payment.contentScan.isLongForDisplay)
+    }
 }
