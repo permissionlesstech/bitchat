@@ -14,7 +14,15 @@ final class NostrIdentityBridge {
     private var deviceSeedCache: Data?
     // Cache derived identities to avoid repeated crypto during view rendering
     private var derivedIdentityCache: [String: NostrIdentity] = [:]
+    // Incremented on every cache clear/panic wipe so a concurrent cold-start
+    // Keychain load or HMAC derivation that started before a wipe can never
+    // repopulate the shared cache with pre-wipe private keys.
+    private var cacheGeneration: UInt64 = 0
     private let cacheLock = NSLock()
+    // Serializes cold-start Keychain read/create so two concurrent callers
+    // hitting `.itemNotFound` cannot generate and persist divergent identities
+    // or seeds. Lock ordering: always acquire `keyCreationLock` before `cacheLock`.
+    private let keyCreationLock = NSLock()
 
     private let keychain: KeychainManagerProtocol
 
@@ -31,13 +39,26 @@ final class NostrIdentityBridge {
         }
         cacheLock.unlock()
 
+        keyCreationLock.lock()
+        defer { keyCreationLock.unlock() }
+
+        cacheLock.lock()
+        if let cached = currentIdentityCache {
+            cacheLock.unlock()
+            return cached
+        }
+        let generation = cacheGeneration
+        cacheLock.unlock()
+
         // Distinguish missing vs transiently unavailable Keychain so a locked-device
         // read neither overwrites an existing identity nor caches a throwaway key.
         switch keychain.loadWithResult(key: currentIdentityKey, service: keychainService) {
         case .success(let existingData):
             if let identity = try? JSONDecoder().decode(NostrIdentity.self, from: existingData) {
                 cacheLock.lock()
-                currentIdentityCache = identity
+                if cacheGeneration == generation {
+                    currentIdentityCache = identity
+                }
                 cacheLock.unlock()
                 return identity
             }
@@ -57,7 +78,9 @@ final class NostrIdentityBridge {
         if case .success(let stored) = keychain.loadWithResult(key: currentIdentityKey, service: keychainService),
            stored == data {
             cacheLock.lock()
-            currentIdentityCache = nostrIdentity
+            if cacheGeneration == generation {
+                currentIdentityCache = nostrIdentity
+            }
             cacheLock.unlock()
         }
 
@@ -79,6 +102,7 @@ final class NostrIdentityBridge {
     /// cannot keep signing with pre-panic keys cached in memory.
     func clearInMemoryCaches() {
         cacheLock.lock()
+        cacheGeneration &+= 1
         currentIdentityCache = nil
         deviceSeedCache = nil
         derivedIdentityCache.removeAll()
@@ -87,15 +111,14 @@ final class NostrIdentityBridge {
 
     /// Clear all Nostr identity associations and current identity
     func clearAllAssociations() {
+        // Bump generation and drop in-memory keys before and after deleting
+        // Keychain items so concurrent callers spanning the wipe cannot
+        // repopulate the cache with pre-wipe private keys.
+        clearInMemoryCaches()
         // Must go through the injected keychain, not raw SecItem calls:
         // under test that keychain is in-memory, and a direct delete here
         // would wipe the developer's real Nostr identity on every test run.
         keychain.deleteAll(service: keychainService)
-
-        // Also drop the in-memory derived per-geohash identities and seed. These
-        // hold actual secp256k1 private keys; if left cached, post-panic geohash
-        // messages would still be signed with pre-panic keys (linkable across the
-        // wipe) until the app is force-quit.
         clearInMemoryCaches()
     }
 
@@ -103,26 +126,42 @@ final class NostrIdentityBridge {
 
     /// Returns a stable device seed used to derive unlinkable per-geohash identities,
     /// along with whether the seed is durably backed by Keychain and safe to cache.
-    private func getOrCreateDeviceSeed() -> (seed: Data, durable: Bool) {
+    private func getOrCreateDeviceSeed() -> (seed: Data, durable: Bool, generation: UInt64) {
         cacheLock.lock()
         if let cached = deviceSeedCache {
+            let generation = cacheGeneration
             cacheLock.unlock()
-            return (cached, true)
+            return (cached, true, generation)
         }
+        cacheLock.unlock()
+
+        keyCreationLock.lock()
+        defer { keyCreationLock.unlock() }
+
+        cacheLock.lock()
+        if let cached = deviceSeedCache {
+            let generation = cacheGeneration
+            cacheLock.unlock()
+            return (cached, true, generation)
+        }
+        let generation = cacheGeneration
         cacheLock.unlock()
 
         switch keychain.loadWithResult(key: deviceSeedKey, service: keychainService) {
         case .success(let existing):
             cacheLock.lock()
-            deviceSeedCache = existing
+            let currentGen = cacheGeneration
+            if currentGen == generation {
+                deviceSeedCache = existing
+            }
             cacheLock.unlock()
-            return (existing, true)
+            return (existing, currentGen == generation, generation)
         case .itemNotFound:
             break
         case .deviceLocked, .accessDenied, .authenticationFailed, .otherError:
             // Preserve the retry path without overwriting or caching a temporary seed.
             let ephemeralSeed = SymmetricKey(size: .bits256).withUnsafeBytes { Data($0) }
-            return (ephemeralSeed, false)
+            return (ephemeralSeed, false, generation)
         }
 
         // CryptoKit key generation cannot fail, unlike SecRandomCopyBytes —
@@ -134,13 +173,18 @@ final class NostrIdentityBridge {
         if case .success(let stored) = keychain.loadWithResult(key: deviceSeedKey, service: keychainService),
            stored == seed {
             cacheLock.lock()
-            deviceSeedCache = seed
+            let currentGen = cacheGeneration
+            if currentGen == generation {
+                deviceSeedCache = seed
+                persisted = true
+            } else {
+                persisted = false
+            }
             cacheLock.unlock()
-            persisted = true
         } else {
             persisted = false
         }
-        return (seed, persisted)
+        return (seed, persisted, generation)
     }
 
     /// Derive a deterministic, unlinkable Nostr identity for a mesh-bridge
@@ -162,7 +206,7 @@ final class NostrIdentityBridge {
         }
         cacheLock.unlock()
 
-        let (seed, durable) = getOrCreateDeviceSeed()
+        let (seed, durable, generation) = getOrCreateDeviceSeed()
         guard let msg = geohash.data(using: .utf8) else {
             throw NSError(domain: "NostrIdentity", code: -1, userInfo: [NSLocalizedDescriptionKey: "Invalid geohash string"])
         }
@@ -183,7 +227,9 @@ final class NostrIdentityBridge {
             if let identity = try? NostrIdentity(privateKeyData: keyData) {
                 if durable {
                     cacheLock.lock()
-                    derivedIdentityCache[geohash] = identity
+                    if cacheGeneration == generation {
+                        derivedIdentityCache[geohash] = identity
+                    }
                     cacheLock.unlock()
                 }
                 return identity
@@ -195,7 +241,9 @@ final class NostrIdentityBridge {
 
         if durable {
             cacheLock.lock()
-            derivedIdentityCache[geohash] = identity
+            if cacheGeneration == generation {
+                derivedIdentityCache[geohash] = identity
+            }
             cacheLock.unlock()
         }
 

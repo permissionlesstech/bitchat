@@ -10,11 +10,48 @@ import SwiftUI
 
 extension Color {
     private static let maxPeerColorCacheEntries = 512
-    private static var peerColorCache: [String: Color] = [:]
+
+    private final class PeerColorCache: @unchecked Sendable {
+        private let lock = NSLock()
+        private var entries: [String: Color] = [:]
+        private var generation: UInt64 = 0
+
+        func lookup(_ key: String) -> (color: Color?, generation: UInt64) {
+            lock.lock()
+            defer { lock.unlock() }
+            return (entries[key], generation)
+        }
+
+        func store(_ color: Color, for key: String, expectedGeneration: UInt64) {
+            lock.lock()
+            defer { lock.unlock() }
+            guard generation == expectedGeneration else { return }
+            if entries.count >= Color.maxPeerColorCacheEntries {
+                entries.removeAll(keepingCapacity: true)
+            }
+            entries[key] = color
+        }
+
+        func reset() {
+            lock.lock()
+            defer { lock.unlock() }
+            generation &+= 1
+            entries.removeAll(keepingCapacity: false)
+        }
+    }
+
+    private static let peerColorCache = PeerColorCache()
+
+    /// Panic-wipe hook: drops cached peer color seeds (nicknames, Noise keys,
+    /// Nostr pubkeys) from memory and fences any concurrent lookup.
+    static func clearPeerColorCache() {
+        peerColorCache.reset()
+    }
 
     init(peerSeed: String, isDark: Bool) {
         let cacheKey = peerSeed + (isDark ? "|dark" : "|light")
-        if let cached = Self.peerColorCache[cacheKey] {
+        let lookup = Self.peerColorCache.lookup(cacheKey)
+        if let cached = lookup.color {
             self = cached
             return
         }
@@ -33,10 +70,7 @@ extension Color {
         let saturation = min(1.0, max(0.50, sBase + (sRand - 0.5) * sRange))
         let brightness = min(1.0, max(0.35, bBase + (bRand - 0.5) * bRange))
         let c = Color(hue: hue, saturation: saturation, brightness: brightness)
-        if Self.peerColorCache.count >= Self.maxPeerColorCacheEntries {
-            Self.peerColorCache.removeAll(keepingCapacity: true)
-        }
-        Self.peerColorCache[cacheKey] = c
+        Self.peerColorCache.store(c, for: cacheKey, expectedGeneration: lookup.generation)
         self = c
     }
 }

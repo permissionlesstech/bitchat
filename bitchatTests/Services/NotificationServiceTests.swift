@@ -116,6 +116,49 @@ final class NotificationServiceTests: XCTestCase {
         XCTAssertEqual(deliverer.requests[1].content.interruptionLevel, .timeSensitive)
         XCTAssertEqual(deliverer.requests[1].content.body, "2 people around")
     }
+
+    func test_clearAllNotificationsForPanic_clearsPendingAndDelivered() {
+        let clearer = RecordingNotificationClearer()
+        let service = NotificationService(
+            isRunningTestsProvider: { false },
+            authorizer: RecordingNotificationAuthorizer(),
+            requestDeliverer: RecordingNotificationRequestDeliverer(),
+            notificationClearer: clearer
+        )
+
+        service.clearAllNotificationsForPanic()
+
+        XCTAssertEqual(clearer.removePendingCalls, 1)
+        XCTAssertEqual(clearer.removeDeliveredCalls, 1)
+    }
+
+    func test_clearAllNotificationsForPanic_skipsWhenRunningTests() {
+        let clearer = RecordingNotificationClearer()
+        let service = NotificationService(
+            isRunningTestsProvider: { true },
+            authorizer: RecordingNotificationAuthorizer(),
+            requestDeliverer: RecordingNotificationRequestDeliverer(),
+            notificationClearer: clearer
+        )
+
+        service.clearAllNotificationsForPanic()
+
+        XCTAssertEqual(clearer.removePendingCalls, 0)
+        XCTAssertEqual(clearer.removeDeliveredCalls, 0)
+    }
+}
+
+private final class RecordingNotificationClearer: NotificationClearing {
+    private(set) var removePendingCalls = 0
+    private(set) var removeDeliveredCalls = 0
+
+    func removeAllPendingNotificationRequests() {
+        removePendingCalls += 1
+    }
+
+    func removeAllDeliveredNotifications() {
+        removeDeliveredCalls += 1
+    }
 }
 
 private final class RecordingNotificationAuthorizer: NotificationAuthorizing {

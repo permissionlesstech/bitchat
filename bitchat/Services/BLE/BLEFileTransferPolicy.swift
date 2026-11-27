@@ -123,7 +123,12 @@ enum ImageContainerValidator {
         return validateDimensions(of: source)
     }
 
-    static func validateDimensions(of source: CGImageSource) -> String? {
+    static func validateDimensions(
+        of source: CGImageSource,
+        maxDimensionPixels: Int = ImageContainerValidator.maxDimensionPixels,
+        maxTotalPixels: Int = ImageContainerValidator.maxTotalPixels,
+        maxFrameCount: Int = ImageContainerValidator.maxFrameCount
+    ) -> String? {
         let frameCount = CGImageSourceGetCount(source)
         guard frameCount >= 1 else {
             return "image contains no frames"

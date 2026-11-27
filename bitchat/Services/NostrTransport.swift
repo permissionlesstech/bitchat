@@ -69,7 +69,18 @@ final class NostrTransport: Transport, @unchecked Sendable {
 
     // BLE short peer ID embedded in favorites (recipient-addressed) envelopes.
     // Geohash envelopes never carry it (see NostrEmbeddedBitChat).
-    var senderPeerID = PeerID(str: "")
+    // When `senderPeerIDProvider` is wired (production bootstrap), this reads
+    // the live mesh peer ID at send time so a panic-wipe identity rotation
+    // never embeds the pre-wipe peer ID in subsequent Nostr envelopes.
+    private var storedSenderPeerID = PeerID(str: "")
+    var senderPeerIDProvider: (() -> PeerID)?
+    var senderPeerID: PeerID {
+        get { senderPeerIDProvider?() ?? storedSenderPeerID }
+        set {
+            senderPeerIDProvider = nil
+            storedSenderPeerID = newValue
+        }
+    }
 
     // Throttle outbound acks — READ receipts and DELIVERED acks, direct and
     // geohash — to avoid relay rate limits. Reconnect redelivery produces a
@@ -280,7 +291,9 @@ final class NostrTransport: Transport, @unchecked Sendable {
     func sendMessage(_ content: String, mentions: [String]) { /* no-op */ }
 
     func sendPrivateMessage(_ content: String, to peerID: PeerID, recipientNickname: String, messageID: String) {
+        let generation = dependencies.ackPacer.currentGeneration()
         Task { @MainActor in
+            guard dependencies.ackPacer.currentGeneration() == generation else { return }
             guard let recipientNpub = resolveRecipientNpub(for: peerID),
                   let recipientHex = npubToHex(recipientNpub),
                   let senderIdentity = try? dependencies.currentIdentity() else { return }
@@ -289,7 +302,7 @@ final class NostrTransport: Transport, @unchecked Sendable {
                 SecureLogger.error("NostrTransport: failed to embed PM packet", category: .session)
                 return
             }
-            sendWrappedMessage(content: embedded, recipientHex: recipientHex, senderIdentity: senderIdentity)
+            sendWrappedMessage(content: embedded, recipientHex: recipientHex, senderIdentity: senderIdentity, expectedGeneration: generation)
         }
     }
 
@@ -306,7 +319,9 @@ final class NostrTransport: Transport, @unchecked Sendable {
     }
 
     func sendFavoriteNotification(to peerID: PeerID, isFavorite: Bool) {
+        let generation = dependencies.ackPacer.currentGeneration()
         Task { @MainActor in
+            guard dependencies.ackPacer.currentGeneration() == generation else { return }
             guard let recipientNpub = resolveRecipientNpub(for: peerID),
                   let recipientHex = npubToHex(recipientNpub),
                   let senderIdentity = try? dependencies.currentIdentity() else { return }
@@ -316,7 +331,7 @@ final class NostrTransport: Transport, @unchecked Sendable {
                 SecureLogger.error("NostrTransport: failed to embed favorite notification", category: .session)
                 return
             }
-            sendWrappedMessage(content: embedded, recipientHex: recipientHex, senderIdentity: senderIdentity)
+            sendWrappedMessage(content: embedded, recipientHex: recipientHex, senderIdentity: senderIdentity, expectedGeneration: generation)
         }
     }
 
@@ -341,14 +356,16 @@ extension NostrTransport {
 
     // MARK: Geohash DMs (per-geohash identity)
     func sendPrivateMessageGeohash(content: String, toRecipientHex recipientHex: String, from identity: NostrIdentity, messageID: String) {
+        let generation = dependencies.ackPacer.currentGeneration()
         Task { @MainActor in
+            guard dependencies.ackPacer.currentGeneration() == generation else { return }
             guard !recipientHex.isEmpty else { return }
             SecureLogger.debug("GeoDM: send PM mid=\(messageID.prefix(8))…", category: .session)
             guard let embedded = NostrEmbeddedBitChat.encodePMForNostrNoRecipient(content: content, messageID: messageID) else {
                 SecureLogger.error("NostrTransport: failed to embed geohash PM packet", category: .session)
                 return
             }
-            sendWrappedMessage(content: embedded, recipientHex: recipientHex, senderIdentity: identity, registerPending: true)
+            sendWrappedMessage(content: embedded, recipientHex: recipientHex, senderIdentity: identity, registerPending: true, expectedGeneration: generation)
         }
     }
 }

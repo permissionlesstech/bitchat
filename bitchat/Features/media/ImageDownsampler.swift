@@ -20,12 +20,38 @@ enum ImageDownsampler {
     typealias PlatformImage = NSImage
     #endif
 
-    private static let cache: NSCache<NSString, PlatformImage> = {
-        let cache = NSCache<NSString, PlatformImage>()
-        cache.countLimit = 48
-        cache.totalCostLimit = 32 * 1024 * 1024
-        return cache
-    }()
+    private final class DownsampledCache: @unchecked Sendable {
+        private let lock = NSLock()
+        private var wipeGeneration: UInt64 = 0
+        private let storage: NSCache<NSString, PlatformImage> = {
+            let cache = NSCache<NSString, PlatformImage>()
+            cache.countLimit = 48
+            cache.totalCostLimit = 32 * 1024 * 1024
+            return cache
+        }()
+
+        func lookup(_ key: NSString) -> (image: PlatformImage?, generation: UInt64) {
+            lock.lock()
+            defer { lock.unlock() }
+            return (storage.object(forKey: key), wipeGeneration)
+        }
+
+        func store(_ image: PlatformImage, for key: NSString, cost: Int, expectedGeneration: UInt64) {
+            lock.lock()
+            defer { lock.unlock() }
+            guard wipeGeneration == expectedGeneration else { return }
+            storage.setObject(image, forKey: key, cost: cost)
+        }
+
+        func reset() {
+            lock.lock()
+            defer { lock.unlock() }
+            wipeGeneration &+= 1
+            storage.removeAllObjects()
+        }
+    }
+
+    private static let cache = DownsampledCache()
 
     private static func cacheKey(for url: URL, maxPixelSize: Int) -> NSString {
         "\(url.path)#\(maxPixelSize)" as NSString
@@ -33,19 +59,21 @@ enum ImageDownsampler {
 
     static func cachedImage(for url: URL, maxPixelSize: Int) -> PlatformImage? {
         guard maxPixelSize > 0 else { return nil }
-        return cache.object(forKey: cacheKey(for: url, maxPixelSize: maxPixelSize))
+        return cache.lookup(cacheKey(for: url, maxPixelSize: maxPixelSize)).image
     }
 
     static func resetForPanic() {
-        cache.removeAllObjects()
+        cache.reset()
     }
 
     static func loadDownsampledImage(from url: URL, maxPixelSize: Int) -> PlatformImage? {
         guard maxPixelSize > 0 else { return nil }
         let key = cacheKey(for: url, maxPixelSize: maxPixelSize)
-        if let cached = cache.object(forKey: key) {
+        let initial = cache.lookup(key)
+        if let cached = initial.image {
             return cached
         }
+        let generation = initial.generation
         let sourceOptions: CFDictionary = [
             kCGImageSourceShouldCache: false
         ] as CFDictionary
@@ -74,7 +102,7 @@ enum ImageDownsampler {
         image = NSImage(cgImage: cgImage, size: NSSize(width: cgImage.width, height: cgImage.height))
         #endif
         let cost = max(1, cgImage.width * cgImage.height * 4)
-        cache.setObject(image, forKey: key, cost: cost)
+        cache.store(image, for: key, cost: cost, expectedGeneration: generation)
         return image
     }
 }

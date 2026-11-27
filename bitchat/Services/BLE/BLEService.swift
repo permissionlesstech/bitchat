@@ -1037,6 +1037,12 @@ final class BLEService: NSObject {
                 options: [CBCentralManagerScanOptionAllowDuplicatesKey: false]
             )
         }
+        // Restart peripheral advertising if Bluetooth is already powered on
+        // (e.g. after stopServicesImmediatelyForPanic() stopped advertising
+        // without tearing down the CBPeripheralManager).
+        if let pm = peripheralManager, pm.state == .poweredOn, !pm.isAdvertising {
+            pm.startAdvertising(BLERadioController.advertisementData())
+        }
         
         // Send initial announce after services are ready
         // Use longer delay to avoid conflicts with other announces
@@ -1498,10 +1504,21 @@ final class BLEService: NSObject {
         noiseService.verifySignature(signature, for: data, publicKey: publicKey)
     }
 
+    private let externalNoiseCallbacksLock = NSLock()
+    private var externalPeerAuthenticatedHandlers: [(PeerID, String) -> Void] = []
+    private var externalHandshakeRequiredHandler: ((PeerID) -> Void)?
+
     func installNoiseSessionCallbacks(
         onPeerAuthenticated: @escaping (PeerID, String) -> Void,
         onHandshakeRequired: @escaping (PeerID) -> Void
     ) {
+        // Persist externally installed callbacks so `resetIdentityForPanic()`
+        // re-attaches them when it creates a fresh `NoiseEncryptionService`.
+        externalNoiseCallbacksLock.lock()
+        externalPeerAuthenticatedHandlers.append(onPeerAuthenticated)
+        externalHandshakeRequiredHandler = onHandshakeRequired
+        externalNoiseCallbacksLock.unlock()
+
         // `onPeerAuthenticated` is additive (the encryption service keeps an
         // array of handlers); `onHandshakeRequired` is a single slot.
         noiseService.onPeerAuthenticated = onPeerAuthenticated
@@ -3043,6 +3060,9 @@ final class BLEService: NSObject {
     }
 
     func addPeerAuthenticatedObserver(_ handler: @escaping (PeerID, String) -> Void) {
+        externalNoiseCallbacksLock.lock()
+        externalPeerAuthenticatedHandlers.append(handler)
+        externalNoiseCallbacksLock.unlock()
         // Appends to the encryption service's handler array, so this never
         // displaces the callbacks installed by installNoiseSessionCallbacks.
         noiseService.addOnPeerAuthenticatedHandler(handler)
@@ -4135,6 +4155,18 @@ extension BLEService {
     }
     
     private func configureNoiseServiceCallbacks(for service: NoiseEncryptionService) {
+        let (peerAuthHandlers, handshakeRequiredHandler): ([(PeerID, String) -> Void], ((PeerID) -> Void)?) = {
+            externalNoiseCallbacksLock.lock()
+            defer { externalNoiseCallbacksLock.unlock() }
+            return (externalPeerAuthenticatedHandlers, externalHandshakeRequiredHandler)
+        }()
+        for handler in peerAuthHandlers {
+            service.addOnPeerAuthenticatedHandler(handler)
+        }
+        if let handshakeRequiredHandler {
+            service.onHandshakeRequired = handshakeRequiredHandler
+        }
+
         service.onPeerAuthenticatedWithGeneration = { [weak self] peerID, fingerprint, generation in
             SecureLogger.debug("🔐 Noise session authenticated with \(peerID.id.prefix(8))…, fingerprint: \(fingerprint.prefix(16))…")
             // Authentication can be reported while an initiator is still

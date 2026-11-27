@@ -16,6 +16,12 @@ enum ImageUtils {
     private static let compressionQuality: CGFloat = 0.82
     private static let targetImageBytes: Int = 45_000
     private static let maxSourceImageBytes: Int = 10 * 1024 * 1024
+    /// Generous local-source bounds for outgoing photos before ImageIO
+    /// downsamples them to `maxDimension` (448 px). Supports 12–48 MP iPhone
+    /// photos, panoramas, and 5K screenshots while still blocking absurd
+    /// crafted local image headers.
+    static let maxSourceDimensionPixels: Int = 16_384
+    static let maxSourceTotalPixels: Int = 100_000_000
 
     private static let timestampFormatterLock = NSLock()
     private static let timestampFormatter: DateFormatter = {
@@ -31,7 +37,11 @@ enum ImageUtils {
         return try autoreleasepool {
             let sourceOptions = [kCGImageSourceShouldCache: false] as CFDictionary
             guard let source = CGImageSourceCreateWithURL(url as CFURL, sourceOptions),
-                  ImageContainerValidator.validateDimensions(of: source) == nil else {
+                  ImageContainerValidator.validateDimensions(
+                    of: source,
+                    maxDimensionPixels: maxSourceDimensionPixels,
+                    maxTotalPixels: maxSourceTotalPixels
+                  ) == nil else {
                 throw ImageUtilsError.invalidImage
             }
 

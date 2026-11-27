@@ -481,8 +481,40 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, SynchronousMessage
     // Track sent read receipts to avoid duplicates (persisted across launches).
     // Mutations coalesce into a debounced off-main encode/write so rapid bursts
     // (opening a chat, reconnecting) do not re-encode the whole set on MainActor.
+    private final class ReadReceiptPersistGate: @unchecked Sendable {
+        private let lock = NSLock()
+        private var generation: UInt64 = 0
+
+        func nextGeneration() -> UInt64 {
+            lock.lock()
+            defer { lock.unlock() }
+            generation &+= 1
+            return generation
+        }
+
+        func commitIfCurrent(data: Data, expectedGeneration: UInt64, defaults: UserDefaults) {
+            lock.lock()
+            defer { lock.unlock() }
+            guard generation == expectedGeneration else { return }
+            defaults.set(data, forKey: "sentReadReceipts")
+        }
+
+        func flushSynchronously(receipts: [String], defaults: UserDefaults) {
+            lock.lock()
+            defer { lock.unlock() }
+            generation &+= 1
+            if receipts.isEmpty {
+                defaults.removeObject(forKey: "sentReadReceipts")
+            } else if let data = try? JSONEncoder().encode(receipts) {
+                defaults.set(data, forKey: "sentReadReceipts")
+            } else {
+                SecureLogger.error("❌ Failed to encode read receipts for persistence", category: .session)
+            }
+        }
+    }
+
     private var readReceiptPersistTask: Task<Void, Never>?
-    private var readReceiptPersistGeneration: UInt64 = 0
+    private let readReceiptPersistGate = ReadReceiptPersistGate()
 
     var sentReadReceipts: Set<String> = [] {  // messageID set
         didSet {
@@ -493,21 +525,23 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, SynchronousMessage
 
     private func schedulePersistSentReadReceipts() {
         readReceiptPersistTask?.cancel()
-        readReceiptPersistGeneration &+= 1
-        let generation = readReceiptPersistGeneration
+        let gate = readReceiptPersistGate
+        let generation = gate.nextGeneration()
         let snapshot = Array(sentReadReceipts)
         let defaults = readReceiptsDefaults
         readReceiptPersistTask = Task.detached(priority: .utility) { [weak self] in
             try? await Task.sleep(nanoseconds: 250_000_000)
             guard !Task.isCancelled else { return }
             if let data = try? JSONEncoder().encode(snapshot) {
-                defaults.set(data, forKey: "sentReadReceipts")
+                gate.commitIfCurrent(data: data, expectedGeneration: generation, defaults: defaults)
             } else {
                 SecureLogger.error("❌ Failed to encode read receipts for persistence", category: .session)
             }
             await MainActor.run { [weak self] in
-                guard let self, self.readReceiptPersistGeneration == generation else { return }
-                self.readReceiptPersistTask = nil
+                guard let self else { return }
+                if self.readReceiptPersistTask?.isCancelled == false {
+                    self.readReceiptPersistTask = nil
+                }
             }
         }
     }
@@ -517,14 +551,10 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, SynchronousMessage
     func flushPersistedReadReceiptsSynchronously() {
         readReceiptPersistTask?.cancel()
         readReceiptPersistTask = nil
-        readReceiptPersistGeneration &+= 1
-        if sentReadReceipts.isEmpty {
-            readReceiptsDefaults.removeObject(forKey: "sentReadReceipts")
-        } else if let data = try? JSONEncoder().encode(Array(sentReadReceipts)) {
-            readReceiptsDefaults.set(data, forKey: "sentReadReceipts")
-        } else {
-            SecureLogger.error("❌ Failed to encode read receipts for persistence", category: .session)
-        }
+        readReceiptPersistGate.flushSynchronously(
+            receipts: Array(sentReadReceipts),
+            defaults: readReceiptsDefaults
+        )
     }
 
     // Track which GeoDM messages we've already sent a delivery ACK for (by messageID)
@@ -1631,13 +1661,19 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, SynchronousMessage
             meshService.emergencyDisconnectAll()
         }
 
-        // Invalidate detached media preparation and close live capture file
+        // Invalidate detached media preparation, in-flight geohash PoW mining,
+        // uncommitted public timeline batches, and close live capture file
         // handles before clearing state or removing the media directory.
+        outgoingCoordinator.resetForPanic()
+        publicMessagePipeline.reset()
         mediaTransferCoordinator.resetForPanic()
         liveVoiceCoordinator.resetForPanic()
         privateChatClearGeneration &+= 1
         queuedPrivateChatClears.removeAll(keepingCapacity: false)
         privateChatClearInFlight = false
+
+        // Remove delivered and pending local notifications from Notification Center.
+        NotificationService.shared.clearAllNotificationsForPanic()
 
         // Deny and release any clear-media confirmations before identities,
         // message state, and local files are wiped.
@@ -1710,6 +1746,8 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, SynchronousMessage
         LocationNotesDependencies.clearCachedIdentitiesForPanic()
         WaveformCache.shared.resetForPanic()
         ImageDownsampler.resetForPanic()
+        CashuTokenDecoder.resetForPanic()
+        Color.clearPeerColorCache()
 
         // Drop private group keys and rosters (keychain + disk)
         groupStore.wipe()
