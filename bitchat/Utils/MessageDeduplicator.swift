@@ -2,20 +2,11 @@ import Foundation
 
 // MARK: - Message Deduplicator (shared)
 
-/// Thread-safe deduplicator with LRU eviction and time-based expiry.
+/// Thread-safe deduplicator with bounded eviction and time-based expiry.
 /// Used for both message ID deduplication (network layer) and content key deduplication (UI layer).
 final class MessageDeduplicator {
-    private struct Entry: Equatable {
-        let id: String
-        let timestamp: Date
-    }
-
-    private var entries: [Entry] = []
-    private var head: Int = 0
-    private var lookup: [String: Date] = [:]  // id -> timestamp for O(1) lookup
+    private var cache: BoundedCache<String, Void>
     private let lock = NSLock()
-    private let maxAge: TimeInterval
-    private let maxCount: Int
 
     /// Initialize with default config from TransportConfig
     convenience init() {
@@ -27,102 +18,49 @@ final class MessageDeduplicator {
 
     /// Initialize with custom config for content deduplication
     init(maxAge: TimeInterval, maxCount: Int) {
-        self.maxAge = maxAge
-        self.maxCount = maxCount
+        self.cache = BoundedCache(capacity: max(1, maxCount), ttl: maxAge)
     }
 
     /// Check if message is duplicate and add if not.
     /// - Parameter id: The message identifier to check.
     /// - Returns: `true` if the message was already seen, `false` otherwise.
     func isDuplicate(_ id: String) -> Bool {
-        lock.lock()
-        defer { lock.unlock() }
-
-        let now = Date()
-        cleanupOldEntries(before: now.addingTimeInterval(-maxAge))
-
-        if lookup[id] != nil {
-            return true
+        lock.withLock {
+            let now = Date()
+            cache.pruneExpired(now: now)
+            if cache.contains(id, now: now) {
+                return true
+            }
+            cache.set(id, value: (), now: now, refreshOrder: false)
+            return false
         }
-
-        entries.append(Entry(id: id, timestamp: now))
-        lookup[id] = now
-        trimIfNeeded()
-
-        return false
     }
 
     /// Add an ID without checking (for announce-back tracking)
     func markProcessed(_ id: String) {
-        lock.lock()
-        defer { lock.unlock() }
-
-        if lookup[id] == nil {
+        lock.withLock {
             let now = Date()
-            entries.append(Entry(id: id, timestamp: now))
-            lookup[id] = now
+            if !cache.contains(id, now: now) {
+                cache.set(id, value: (), now: now, refreshOrder: false)
+            }
         }
     }
 
     /// Check if ID exists without adding
     func contains(_ id: String) -> Bool {
-        lock.lock()
-        defer { lock.unlock() }
-        return lookup[id] != nil
-    }
-
-    private func trimIfNeeded() {
-        let activeCount = entries.count - head
-        guard activeCount > maxCount else { return }
-
-        // Remove down to 75% of maxCount for better amortization
-        let targetCount = (maxCount * 3) / 4
-        let removeCount = activeCount - targetCount
-
-        for i in head..<(head + removeCount) {
-            lookup.removeValue(forKey: entries[i].id)
-        }
-        head += removeCount
-
-        // Compact when head exceeds half the array to reclaim memory
-        if head > entries.count / 2 {
-            entries.removeFirst(head)
-            head = 0
-        }
+        lock.withLock { cache.contains(id) }
     }
 
     /// Clear all entries
     func reset() {
-        lock.lock()
-        defer { lock.unlock() }
-
-        entries.removeAll()
-        head = 0
-        lookup.removeAll()
+        lock.withLock { cache.removeAll() }
     }
 
     /// Periodic cleanup of expired entries and memory optimization.
     func cleanup() {
-        lock.lock()
-        defer { lock.unlock() }
-
-        cleanupOldEntries(before: Date().addingTimeInterval(-maxAge))
-
-        // Shrink capacity if significantly oversized
-        if entries.capacity > maxCount * 2 && entries.count < maxCount {
-            entries.reserveCapacity(maxCount)
-        }
-    }
-
-    private func cleanupOldEntries(before cutoff: Date) {
-        while head < entries.count, entries[head].timestamp < cutoff {
-            lookup.removeValue(forKey: entries[head].id)
-            head += 1
-        }
-        // Compact when head exceeds half the array
-        if head > 0 && head > entries.count / 2 {
-            entries.removeFirst(head)
-            head = 0
+        lock.withLock {
+            cache.pruneExpired(now: Date())
+            cache.shrinkIfOversized()
         }
     }
 }

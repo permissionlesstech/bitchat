@@ -1,9 +1,10 @@
 import Foundation
 
 final class BLELogRateLimiter {
+    private static let maxTrackedKeys = 256
     private let defaultMinimumInterval: TimeInterval
-    private let queue = DispatchQueue(label: "chat.bitchat.ble.log-rate-limiter")
-    private var lastLogTimeByKey: [String: Date] = [:]
+    private let lock = NSLock()
+    private var lastLogTimeByKey = BoundedCache<String, Date>(capacity: maxTrackedKeys)
 
     init(defaultMinimumInterval: TimeInterval) {
         self.defaultMinimumInterval = defaultMinimumInterval
@@ -14,15 +15,14 @@ final class BLELogRateLimiter {
         now: Date = Date(),
         minimumInterval: TimeInterval? = nil
     ) -> Bool {
-        queue.sync {
+        lock.withLock {
             let interval = minimumInterval ?? defaultMinimumInterval
-            if let lastLogTime = lastLogTimeByKey[key],
+            if let lastLogTime = lastLogTimeByKey.value(for: key),
                now.timeIntervalSince(lastLogTime) < interval {
                 return false
             }
-            lastLogTimeByKey[key] = now
+            lastLogTimeByKey.set(key, value: now, refreshOrder: true)
             return true
         }
     }
-
 }

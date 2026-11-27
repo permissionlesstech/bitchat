@@ -25,12 +25,7 @@ enum ComposerDraftStore {
     /// Cap how many conversations keep a draft; oldest entries fall off first.
     static let maxDraftCount = 64
 
-    private struct Entry {
-        var text: String
-        var updatedAt: Date
-    }
-
-    private static var entries: [String: Entry] = [:]
+    private static var cache = BoundedCache<String, String>(capacity: maxDraftCount)
     private static let lock = NSLock()
 
     enum Key: Hashable, Equatable {
@@ -73,55 +68,38 @@ enum ComposerDraftStore {
     }
 
     static func load(_ key: Key) -> String {
-        lock.lock()
-        defer { lock.unlock() }
-        return entries[key.storageString]?.text ?? ""
+        lock.withLock { cache.value(for: key.storageString) ?? "" }
     }
 
     static func save(_ text: String, for key: Key) {
-        lock.lock()
-        defer { lock.unlock() }
-        let trimmed = String(text.prefix(maxDraftLength))
-        if trimmed.isEmpty {
-            entries.removeValue(forKey: key.storageString)
-        } else {
-            entries[key.storageString] = Entry(text: trimmed, updatedAt: Date())
-            evictOldestIfNeededLocked()
+        lock.withLock {
+            let trimmed = String(text.prefix(maxDraftLength))
+            if trimmed.isEmpty {
+                cache.remove(key.storageString)
+            } else {
+                cache.set(key.storageString, value: trimmed, refreshOrder: true)
+            }
         }
     }
 
     static func reset() {
-        lock.lock()
-        defer { lock.unlock() }
-        entries.removeAll(keepingCapacity: false)
+        lock.withLock { cache.removeAll(keepingCapacity: false) }
     }
 
     /// Test helper: replace the in-memory map (and return the previous one).
     @discardableResult
     static func replaceAllForTesting(_ newEntries: [String: String] = [:]) -> [String: String] {
-        lock.lock()
-        defer { lock.unlock() }
-        let previous = entries.mapValues(\.text)
-        let now = Date()
-        entries = Dictionary(uniqueKeysWithValues: newEntries.map { ($0.key, Entry(text: $0.value, updatedAt: now)) })
-        return previous
+        lock.withLock {
+            let previous = cache.allValues
+            cache.removeAll(keepingCapacity: false)
+            for (key, value) in newEntries {
+                cache.set(key, value: value, refreshOrder: true)
+            }
+            return previous
+        }
     }
 
     static func countForTesting() -> Int {
-        lock.lock()
-        defer { lock.unlock() }
-        return entries.count
-    }
-
-    private static func evictOldestIfNeededLocked() {
-        guard entries.count > maxDraftCount else { return }
-        let surplus = entries.count - maxDraftCount
-        let doomed = entries
-            .sorted { $0.value.updatedAt < $1.value.updatedAt }
-            .prefix(surplus)
-            .map(\.key)
-        for key in doomed {
-            entries.removeValue(forKey: key)
-        }
+        lock.withLock { cache.count }
     }
 }

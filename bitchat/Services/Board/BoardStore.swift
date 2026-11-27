@@ -91,15 +91,21 @@ final class BoardStore {
     private var posts: [StoredPost] = []
     private var tombstones: [StoredTombstone] = []
     private let queue = DispatchQueue(label: "chat.bitchat.board.store")
-    private let fileURL: URL?
+    private let fileStore: AppSupportFileStore
     private let now: () -> Date
 
     /// - Parameter fileURL: Overrides the on-disk location (tests). Ignored
     ///   when `persistsToDisk` is false.
     init(persistsToDisk: Bool = true, fileURL: URL? = nil, now: @escaping () -> Date = Date.init) {
         self.now = now
-        self.fileURL = persistsToDisk ? (fileURL ?? Self.defaultFileURL()) : nil
-        if self.fileURL != nil {
+        self.fileStore = AppSupportFileStore(
+            persistsToDisk: persistsToDisk,
+            fileURL: fileURL,
+            subdirectory: "board",
+            fileName: "posts.json",
+            protection: .complete
+        )
+        if self.fileStore.fileURL != nil {
             // Restore off the calling thread (cold launch on MainActor) on the
             // serial store queue. Every read/write (`posts`, `syncCandidates`,
             // `ingest`, `wipe`) serializes on `queue`, so callers are linearly
@@ -159,9 +165,7 @@ final class BoardStore {
         queue.sync {
             posts.removeAll()
             tombstones.removeAll()
-            if let fileURL {
-                try? FileManager.default.removeItem(at: fileURL)
-            }
+            fileStore.removeIgnoringErrors()
             publishSnapshotLocked()
         }
         DispatchQueue.main.async { [weak self] in
@@ -345,33 +349,17 @@ final class BoardStore {
     // MARK: - Persistence
 
     private func persistLocked() {
-        guard let fileURL else { return }
         let payloads = posts.map { PersistedEntry(packet: $0.rawPacket, retainUntil: nil) }
             + tombstones.map { PersistedEntry(packet: $0.rawPacket, retainUntil: $0.retainUntil) }
         do {
-            if payloads.isEmpty {
-                try? FileManager.default.removeItem(at: fileURL)
-                return
-            }
-            try FileManager.default.createDirectory(
-                at: fileURL.deletingLastPathComponent(),
-                withIntermediateDirectories: true
-            )
-            let data = try JSONEncoder().encode(payloads)
-            var options: Data.WritingOptions = [.atomic]
-            #if os(iOS)
-            options.insert(.completeFileProtection)
-            #endif
-            try data.write(to: fileURL, options: options)
+            try fileStore.saveJSON(payloads, isEmpty: payloads.isEmpty)
         } catch {
             SecureLogger.error("Failed to persist board store: \(error)", category: .session)
         }
     }
 
     private func loadFromDiskLocked() {
-        guard let fileURL,
-              let data = try? Data(contentsOf: fileURL),
-              let payloads = try? JSONDecoder().decode([PersistedEntry].self, from: data) else {
+        guard let payloads = try? fileStore.loadJSON([PersistedEntry].self) else {
             return
         }
         let nowMs = currentMs()
@@ -390,17 +378,5 @@ final class BoardStore {
             )
         }
         publishSnapshotLocked()
-    }
-
-    private static func defaultFileURL() -> URL? {
-        guard let base = try? FileManager.default.url(
-            for: .applicationSupportDirectory,
-            in: .userDomainMask,
-            appropriateFor: nil,
-            create: true
-        ) else { return nil }
-        return base
-            .appendingPathComponent("board", isDirectory: true)
-            .appendingPathComponent("posts.json")
     }
 }
