@@ -25,7 +25,6 @@ struct AppInfoView: View {
     @State private var customRelays = NostrRelaySettings.customRelays()
     @State private var relayInput = ""
     @State private var relayError: String?
-    @ObservedObject private var locationManager = LocationChannelManager.shared
     /// Sticky across opens: first-ever open lands on Info (the gentler
     /// introduction), and afterwards the sheet reopens wherever it was left.
     @AppStorage(AppInfoView.selectedPaneStorageKey) private var selectedPane: Pane = .info
@@ -259,60 +258,54 @@ struct AppInfoView: View {
 
     }
 
-    var body: some View {
-        #if os(macOS)
+    private var sheetBody: some View {
         VStack(spacing: 0) {
-            // Custom header for macOS
-            HStack {
-                Spacer()
-                Button("app_info.done") {
-                    dismiss()
-                }
-                .buttonStyle(.plain)
-                .foregroundColor(textColor)
-                .padding()
-            }
-            .themedSurface(opacity: 0.95)
+            panePicker
 
-            VStack(spacing: 0) {
-                panePicker
-
-                ScrollView {
-                    paneContent
-                }
+            ScrollView {
+                paneContent
             }
-            .themedSheetBackground()
         }
-        .frame(width: 600, height: 700)
+        .themedSheetBackground()
+    }
+
+    var body: some View {
+        Group {
+            #if os(macOS)
+            VStack(spacing: 0) {
+                // Custom header for macOS
+                HStack {
+                    Spacer()
+                    Button("app_info.done") {
+                        dismiss()
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundColor(textColor)
+                    .padding()
+                }
+                .themedSurface(opacity: 0.95)
+
+                sheetBody
+            }
+            .frame(width: 600, height: 700)
+            #else
+            NavigationView {
+                sheetBody
+                    .navigationBarTitleDisplayMode(.inline)
+                    .toolbar {
+                        ToolbarItem(placement: .navigationBarTrailing) {
+                            SheetCloseButton { dismiss() }
+                                .foregroundColor(textColor)
+                        }
+                    }
+            }
+            #endif
+        }
         .sheet(isPresented: $showTopology) {
             if let topologyProvider {
                 MeshTopologyView(provider: topologyProvider)
             }
         }
-        #else
-        NavigationView {
-            VStack(spacing: 0) {
-                panePicker
-
-                ScrollView {
-                    paneContent
-                }
-            }
-            .themedSheetBackground()
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    SheetCloseButton { dismiss() }
-                        .foregroundColor(textColor)
-                }
-            }
-        }
-        .sheet(isPresented: $showTopology) {
-            if let topologyProvider {
-                MeshTopologyView(provider: topologyProvider)
-            }
-        }
-        #endif
     }
 
     // MARK: - Pane switching
@@ -485,7 +478,7 @@ struct AppInfoView: View {
                                 locationNotesEnabled = newValue
                                 LocationNotesSettings.enabled = newValue
                                 if newValue {
-                                    locationManager.enableLocationChannels()
+                                    locationChannelsModel.enableLocationChannels()
                                 }
                             }
                         )

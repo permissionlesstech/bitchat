@@ -96,50 +96,6 @@ enum ImageUtils {
         UIGraphicsEndImageContext()
         return rendered ?? image
     }
-    #else
-    static func processImage(_ image: NSImage, maxDimension: CGFloat = 448, outputDirectory: URL? = nil) throws -> URL {
-        return try autoreleasepool {
-            let scaled = scaledImage(image, maxDimension: maxDimension)
-            guard let inputCG = scaled.cgImage(forProposedRect: nil, context: nil, hints: nil) else {
-                throw ImageUtilsError.encodingFailed
-            }
-            let width = inputCG.width
-            let height = inputCG.height
-            let colorSpace = CGColorSpace(name: CGColorSpace.sRGB) ?? CGColorSpaceCreateDeviceRGB()
-            guard let context = CGContext(
-                data: nil,
-                width: width,
-                height: height,
-                bitsPerComponent: 8,
-                bytesPerRow: 0,
-                space: colorSpace,
-                bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
-            ) else {
-                throw ImageUtilsError.encodingFailed
-            }
-            context.draw(inputCG, in: CGRect(x: 0, y: 0, width: width, height: height))
-            guard let cgImage = context.makeImage() else {
-                throw ImageUtilsError.encodingFailed
-            }
-            return try encodeAndWriteJPEG(from: cgImage, outputDirectory: outputDirectory)
-        }
-    }
-
-    private static func scaledImage(_ image: NSImage, maxDimension: CGFloat) -> NSImage {
-        let size = image.size
-        let maxSide = max(size.width, size.height)
-        guard maxSide > maxDimension else { return image }
-        let scale = maxDimension / maxSide
-        let newSize = NSSize(width: size.width * scale, height: size.height * scale)
-        let scaledImage = NSImage(size: newSize)
-        scaledImage.lockFocus()
-        image.draw(in: NSRect(origin: .zero, size: newSize),
-                   from: NSRect(origin: .zero, size: size),
-                   operation: .copy,
-                   fraction: 1.0)
-        scaledImage.unlockFocus()
-        return scaledImage
-    }
     #endif
 
     private static func encodeAndWriteJPEG(from cgImage: CGImage, outputDirectory: URL?) throws -> URL {

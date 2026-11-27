@@ -66,7 +66,9 @@ struct QRCodeImage: View {
     var body: some View {
         Group {
             if let image = generateImage() {
-                ImageWrapper(image: image)
+                Image(decorative: image, scale: 1.0)
+                    .interpolation(.none)
+                    .resizable()
                     .frame(width: size, height: size)
             } else {
                 RoundedRectangle(cornerRadius: 8)
@@ -89,24 +91,6 @@ struct QRCodeImage: View {
         let scale = max(1, Int(size / 32))
         let transformed = outputImage.transformed(by: CGAffineTransform(scaleX: CGFloat(scale), y: CGFloat(scale)))
         return context.createCGImage(transformed, from: transformed.extent)
-    }
-}
-
-// Platform-specific wrapper to display CGImage in SwiftUI
-struct ImageWrapper: View {
-    let image: CGImage
-    var body: some View {
-        #if os(iOS)
-        let ui = UIImage(cgImage: image)
-        return Image(uiImage: ui)
-            .interpolation(.none)
-            .resizable()
-        #else
-        let ns = NSImage(cgImage: image, size: .zero)
-        return Image(nsImage: ns)
-            .interpolation(.none)
-            .resizable()
-        #endif
     }
 }
 

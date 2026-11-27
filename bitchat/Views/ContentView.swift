@@ -21,7 +21,6 @@ struct ContentRootModalPresentationState {
     var isLocationChannelsSheetPresented = false
     var isNoticesSheetPresented = false
     var isImagePreviewPresented = false
-    var isVerificationSheetPresented = false
     var isVoiceAlertPresented = false
     var isScreenshotPrivacyAlertPresented = false
     var isMediaPickerPresented = false
@@ -33,7 +32,6 @@ struct ContentRootModalPresentationState {
             || isLocationChannelsSheetPresented
             || isNoticesSheetPresented
             || isImagePreviewPresented
-            || isVerificationSheetPresented
             || isVoiceAlertPresented
             || isScreenshotPrivacyAlertPresented
             || isMediaPickerPresented
@@ -46,7 +44,6 @@ extension ContentRootModalPresentationState {
         appChromeModel: AppChromeModel,
         isPeopleSheetPresented: Bool = false,
         isImagePreviewPresented: Bool = false,
-        isVerificationSheetPresented: Bool = false,
         isVoiceAlertPresented: Bool = false,
         isMediaPickerPresented: Bool = false
     ) {
@@ -60,7 +57,6 @@ extension ContentRootModalPresentationState {
             isNoticesSheetPresented:
                 appChromeModel.isNoticesSheetPresented,
             isImagePreviewPresented: isImagePreviewPresented,
-            isVerificationSheetPresented: isVerificationSheetPresented,
             isVoiceAlertPresented: isVoiceAlertPresented,
             isScreenshotPrivacyAlertPresented:
                 appChromeModel.showScreenshotPrivacyWarning,
@@ -103,7 +99,6 @@ struct ContentView: View {
     @FocusState private var isNicknameFieldFocused: Bool
     @State private var isAtBottomPublic = true
     @State private var isAtBottomPrivate = true
-    @State private var showVerifySheet = false
     @State private var imagePreviewURL: URL?
     #if os(iOS)
     @State private var showImagePicker = false
@@ -150,7 +145,6 @@ struct ContentView: View {
             appChromeModel: appChromeModel,
             isPeopleSheetPresented: isPeopleSheetPresented,
             isImagePreviewPresented: imagePreviewURL != nil,
-            isVerificationSheetPresented: showVerifySheet,
             isVoiceAlertPresented: includingVoiceAlert && voiceRecordingVM.showAlert,
             isMediaPickerPresented: isMediaPickerPresented
         )
@@ -509,7 +503,6 @@ struct ContentView: View {
         VStack(spacing: 0) {
             ContentHeaderView(
                 showSidebar: $showSidebar,
-                showVerifySheet: $showVerifySheet,
                 isNicknameFieldFocused: $isNicknameFieldFocused,
                 headerHeight: headerHeight,
                 headerPeerIconSize: headerPeerIconSize,
