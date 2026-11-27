@@ -123,7 +123,7 @@ private struct PendingPrivateChatClear {
 /// Manages the application state and business logic for BitChat.
 /// Acts as the primary coordinator between UI components and backend services,
 /// implementing the BitchatDelegate protocol to handle network events.
-final class ChatViewModel: ObservableObject, BitchatDelegate, SynchronousMessageTransportEventDelegate, CommandContextProvider, GeohashParticipantContext, MessageFormattingContext {
+final class ChatViewModel: ObservableObject, BitchatDelegate, SynchronousMessageTransportEventDelegate, CommandContextProvider, GeohashParticipantContext {
     // Use MessageFormattingEngine.Patterns for regex matching (shared, precompiled)
     typealias Patterns = MessageFormattingEngine.Patterns
 
@@ -2017,28 +2017,6 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, SynchronousMessage
         case .migrated(let source, let destination):
             return source == activeID || destination == activeID
         }
-    }
-
-    @MainActor
-    private func peerColor(for message: BitchatMessage, isDark: Bool) -> Color {
-        messageFormatter.senderColor(for: message, isDark: isDark)
-    }
-
-    // MARK: - MessageFormattingContext Protocol
-
-    @MainActor
-    func isSelfMessage(_ message: BitchatMessage) -> Bool {
-        messageFormatter.isSelfMessage(message)
-    }
-
-    @MainActor
-    func senderColor(for message: BitchatMessage, isDark: Bool) -> Color {
-        peerColor(for: message, isDark: isDark)
-    }
-
-    @MainActor
-    func peerURL(for peerID: PeerID) -> URL? {
-        messageFormatter.peerURL(for: peerID)
     }
 
     // Public helpers for views to color peers consistently in lists

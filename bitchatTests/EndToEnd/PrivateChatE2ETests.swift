@@ -136,7 +136,7 @@ struct PrivateChatE2ETests {
             alice.packetDeliveryHandler = { packet in
                 // Encrypt outgoing private messages
                 if packet.type == 0x01,
-                   let message = BitchatMessage(packet.payload),
+                   let message = BitchatMessage.fromTestPayload(packet.payload),
                    message.isPrivate {
                     do {
                         let encrypted = try aliceManager.encrypt(packet.payload, for: bobNoiseID)

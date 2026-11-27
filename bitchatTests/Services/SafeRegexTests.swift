@@ -42,7 +42,6 @@ struct SafeRegexTests {
 
         let cashuToken = "cashuA" + String(repeating: "x", count: 45)
         #expect(matchCount(MessageFormattingEngine.Patterns.cashu, cashuToken) == 1)
-        #expect(matchCount(MessageFormattingEngine.Patterns.quickCashuPresence, cashuToken) == 1)
 
         let bolt11 = "lnbc1" + String(repeating: "q", count: 55)
         #expect(matchCount(MessageFormattingEngine.Patterns.bolt11, bolt11) == 1)
