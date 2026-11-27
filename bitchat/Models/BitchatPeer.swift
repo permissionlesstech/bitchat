@@ -1,5 +1,4 @@
 import Foundation
-import CoreBluetooth
 import BitFoundation
 
 /// Represents a peer in the BitChat network with all associated metadata
@@ -69,24 +68,7 @@ struct BitchatPeer: Equatable {
         }
         return nickname.isEmpty ? String(peerID.id.prefix(8)) : nickname
     }
-    
-    var statusIcon: String {
-        switch connectionState {
-        case .bluetoothConnected:
-            return "📻" // Radio icon for mesh connection
-        case .meshReachable:
-            return "📡" // Antenna for mesh reachable
-        case .nostrAvailable:
-            return "🌐" // Purple globe for Nostr
-        case .offline:
-            if theyFavoritedUs && !isFavorite {
-                return "🌙" // Crescent moon - they favorited us but we didn't reciprocate
-            } else {
-                return ""
-            }
-        }
-    }
-    
+
     // Initialize from mesh service data
     init(
         peerID: PeerID,

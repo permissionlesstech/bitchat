@@ -92,16 +92,6 @@ final class NostrIdentityBridge {
         return nostrIdentity
     }
     
-    /// Get Nostr public key associated with a Noise public key
-    func getNostrPublicKey(for noisePublicKey: Data) -> String? {
-        let key = "nostr-noise-\(noisePublicKey.base64EncodedString())"
-        guard let data = keychain.load(key: key, service: keychainService),
-              let pubkey = String(data: data, encoding: .utf8) else {
-            return nil
-        }
-        return pubkey
-    }
-    
     /// Drop in-memory private key caches without touching Keychain.
     /// Used by shadow service bridges during panic wipe so post-panic events
     /// cannot keep signing with pre-panic keys cached in memory.

@@ -27,9 +27,6 @@ private func arti_is_running() -> Int32
 @_silgen_name("arti_bootstrap_progress")
 private func arti_bootstrap_progress() -> Int32
 
-@_silgen_name("arti_bootstrap_summary")
-private func arti_bootstrap_summary(_ buf: UnsafeMutablePointer<CChar>, _ len: Int32) -> Int32
-
 /// Arti-based Tor integration for BitChat.
 /// - Boots a local Arti client and exposes a SOCKS5 proxy
 ///   on 127.0.0.1:socksPort. All app networking should await readiness and
@@ -44,10 +41,8 @@ public final class TorManager: ObservableObject {
 
     // State
     @Published private(set) public var isReady: Bool = false
-    @Published private(set) var isStarting: Bool = false
-    @Published private(set) var lastError: Error?
-    @Published private(set) var bootstrapProgress: Int = 0
-    @Published private(set) var bootstrapSummary: String = ""
+    private(set) var isStarting: Bool = false
+    private(set) var bootstrapProgress: Int = 0
     /// True once a bootstrap attempt has spent its whole deadline without
     /// completing.
     ///
@@ -121,7 +116,6 @@ public final class TorManager: ObservableObject {
         bootstrapDidStall = false
         startedAt = Date()  // Track startup time for grace period
         SecureLogger.debug("TorManager: startIfNeeded() - startedAt set", category: .session)
-        lastError = nil
         NotificationCenter.default.post(name: .TorWillStart, object: nil)
         bootstrapGeneration += 1
         let generation = bootstrapGeneration
@@ -224,7 +218,6 @@ public final class TorManager: ObservableObject {
     private func startArti(generation: Int) {
         guard let dirURL = dataDirectoryURL() else {
             isStarting = false
-            lastError = NSError(domain: "TorManager", code: -1, userInfo: [NSLocalizedDescriptionKey: "No data directory"])
             return
         }
         let host = socksHost
@@ -254,7 +247,6 @@ public final class TorManager: ObservableObject {
                 await MainActor.run {
                     guard generation == self.bootstrapGeneration else { return }
                     self.isStarting = false
-                    self.lastError = NSError(domain: "TorManager", code: Int(result), userInfo: [NSLocalizedDescriptionKey: "Arti start failed"])
                 }
                 return
             case .alreadyRunning:
@@ -283,7 +275,6 @@ public final class TorManager: ObservableObject {
                 if ready {
                     SecureLogger.info("TorManager: SOCKS ready at \(self.socksHost):\(self.socksPort)", category: .session)
                 } else {
-                    self.lastError = NSError(domain: "TorManager", code: -14, userInfo: [NSLocalizedDescriptionKey: "SOCKS not reachable"])
                     SecureLogger.error("TorManager: SOCKS not reachable (timeout)", category: .session)
                 }
             }
@@ -368,22 +359,16 @@ public final class TorManager: ObservableObject {
         let deadline = Date().addingTimeInterval(75)
         var didComplete = false
         var lastPublishedProgress: Int?
-        var lastPublishedSummary: String?
 
         while Date() < deadline {
             let progress = Int(arti_bootstrap_progress())
-            let summary = Self.readBootstrapSummary()
 
-            if progress != lastPublishedProgress || summary != lastPublishedSummary || progress >= 100 {
+            if progress != lastPublishedProgress || progress >= 100 {
                 lastPublishedProgress = progress
-                lastPublishedSummary = summary
                 let stillCurrent: Bool = await MainActor.run {
                     guard generation == self.bootstrapGeneration else { return false }
                     if self.bootstrapProgress != progress {
                         self.bootstrapProgress = progress
-                    }
-                    if self.bootstrapSummary != summary {
-                        self.bootstrapSummary = summary
                     }
                     if progress >= 100, self.isStarting {
                         self.isStarting = false
@@ -422,15 +407,6 @@ public final class TorManager: ObservableObject {
                 NotificationCenter.default.post(name: .TorBootstrapDidStall, object: nil)
             }
         }
-    }
-
-    nonisolated private static func readBootstrapSummary() -> String {
-        var buf = [CChar](repeating: 0, count: 256)
-        let len = arti_bootstrap_summary(&buf, Int32(buf.count))
-        if len > 0 {
-            return String(cString: buf)
-        }
-        return ""
     }
 
     // MARK: - Foreground/Background
@@ -480,7 +456,6 @@ public final class TorManager: ObservableObject {
         isReady = false
         socksReady = false
         bootstrapProgress = 0
-        bootstrapSummary = ""
         isStarting = false
         shutdownsInFlight += 1
         let executor = artiExecutor
@@ -492,7 +467,6 @@ public final class TorManager: ObservableObject {
                 self.isReady = false
                 self.socksReady = false
                 self.bootstrapProgress = 0
-                self.bootstrapSummary = ""
                 self.isStarting = false
                 self.didStart = false
                 self.restarting = false
@@ -541,7 +515,6 @@ public final class TorManager: ObservableObject {
             self.isReady = false
             self.socksReady = false
             self.bootstrapProgress = 0
-            self.bootstrapSummary = ""
             self.isStarting = true
             self.bootstrapDidStall = false
             self.lastRestartAt = Date()
