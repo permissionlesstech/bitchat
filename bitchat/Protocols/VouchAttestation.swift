@@ -6,6 +6,7 @@
 // For more information, see <https://unlicense.org>
 //
 
+import BitFoundation
 import CryptoKit
 import Foundation
 
@@ -69,8 +70,7 @@ struct VouchAttestation: Equatable {
         var message = Data(signingContext.utf8)
         message.append(voucheeFingerprint)
         message.append(voucheeSigningKey)
-        var timestampBE = timestampMs.bigEndian
-        withUnsafeBytes(of: &timestampBE) { message.append(contentsOf: $0) }
+        message.appendBigEndian(timestampMs)
         return message
     }
 
@@ -128,54 +128,45 @@ struct VouchAttestation: Equatable {
         guard voucheeFingerprint.count == Self.fingerprintSize,
               voucheeSigningKey.count == Self.signingKeySize,
               signature.count == Self.signatureSize else { return nil }
-        var data = Data()
-        func appendTLV(_ type: TLVType, _ value: Data) {
-            data.append(type.rawValue)
-            data.append(UInt8(value.count))
-            data.append(value)
-        }
-        appendTLV(.voucheeFingerprint, voucheeFingerprint)
-        appendTLV(.voucheeSigningKey, voucheeSigningKey)
-        var timestampBE = timestampMs.bigEndian
-        appendTLV(.timestamp, withUnsafeBytes(of: &timestampBE) { Data($0) })
-        appendTLV(.signature, signature)
-        return data
+        var writer = TLVWriter(lengthWidth: .oneByte)
+        writer.append(TLVType.voucheeFingerprint.rawValue, voucheeFingerprint)
+        writer.append(TLVType.voucheeSigningKey.rawValue, voucheeSigningKey)
+        writer.append(TLVType.timestamp.rawValue, bigEndian: timestampMs)
+        writer.append(TLVType.signature.rawValue, signature)
+        return writer.data
     }
 
     static func decode(from data: Data) -> VouchAttestation? {
+        var reader = TLVReader(data, lengthWidth: .oneByte)
         var fingerprint: Data?
         var signingKey: Data?
         var timestampMs: UInt64?
         var signature: Data?
 
-        var offset = data.startIndex
-        while offset < data.endIndex {
-            guard data.index(offset, offsetBy: 2, limitedBy: data.endIndex) != nil,
-                  offset + 1 < data.endIndex else { return nil }
-            let type = data[offset]
-            let length = Int(data[offset + 1])
-            let valueStart = offset + 2
-            guard let valueEnd = data.index(valueStart, offsetBy: length, limitedBy: data.endIndex) else {
+        loop: while true {
+            switch reader.next() {
+            case .end:
+                break loop
+            case .malformed:
                 return nil
+            case .entry(let type, let value):
+                switch TLVType(rawValue: type) {
+                case .voucheeFingerprint:
+                    guard value.count == fingerprintSize else { return nil }
+                    fingerprint = Data(value)
+                case .voucheeSigningKey:
+                    guard value.count == signingKeySize else { return nil }
+                    signingKey = Data(value)
+                case .timestamp:
+                    guard let parsed: UInt64 = value.readBigEndian() else { return nil }
+                    timestampMs = parsed
+                case .signature:
+                    guard value.count == signatureSize else { return nil }
+                    signature = Data(value)
+                case nil:
+                    break // Unknown TLV: skip for forward compatibility.
+                }
             }
-            let value = Data(data[valueStart..<valueEnd])
-            switch TLVType(rawValue: type) {
-            case .voucheeFingerprint:
-                guard value.count == fingerprintSize else { return nil }
-                fingerprint = value
-            case .voucheeSigningKey:
-                guard value.count == signingKeySize else { return nil }
-                signingKey = value
-            case .timestamp:
-                guard value.count == 8 else { return nil }
-                timestampMs = value.reduce(UInt64(0)) { ($0 << 8) | UInt64($1) }
-            case .signature:
-                guard value.count == signatureSize else { return nil }
-                signature = value
-            case nil:
-                break // Unknown TLV: skip for forward compatibility.
-            }
-            offset = valueEnd
         }
 
         guard let fingerprint, let signingKey, let timestampMs, let signature else { return nil }
@@ -196,8 +187,7 @@ struct VouchAttestation: Equatable {
         data.append(UInt8(attestations.count))
         for attestation in attestations {
             guard let encoded = attestation.encode(), encoded.count <= Int(UInt16.max) else { return nil }
-            var lengthBE = UInt16(encoded.count).bigEndian
-            withUnsafeBytes(of: &lengthBE) { data.append(contentsOf: $0) }
+            data.appendBigEndian(UInt16(encoded.count))
             data.append(encoded)
         }
         return data
