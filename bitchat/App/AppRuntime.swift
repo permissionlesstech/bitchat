@@ -202,6 +202,7 @@ final class AppRuntime: ObservableObject {
 
     #if os(macOS)
     func handleMacDidBecomeActiveNotification() {
+        chatViewModel.setAppActive(true)
         guard chatViewModel.networkActivationAllowed else { return }
         chatViewModel.handleDidBecomeActive()
         checkForSharedContent()
@@ -374,6 +375,13 @@ private extension AppRuntime {
             .receive(on: DispatchQueue.main)
             .sink { [weak self] _ in
                 self?.handleScreenshotCaptured()
+            }
+            .store(in: &cancellables)
+        #elseif os(macOS)
+        NotificationCenter.default.publisher(for: NSApplication.didResignActiveNotification)
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in
+                self?.chatViewModel.setAppActive(false)
             }
             .store(in: &cancellables)
         #endif
