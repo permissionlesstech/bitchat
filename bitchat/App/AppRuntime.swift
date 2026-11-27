@@ -182,7 +182,7 @@ final class AppRuntime: ObservableObject {
     /// best-effort, nothing at launch depends on their results.
     private func performMediaMaintenance() {
         Task.detached(priority: .utility) {
-            let store = BLEIncomingFileStore()
+            let store = BLEIncomingFileStore.shared
             store.expireAgedMedia()
             store.migrateFileProtectionIfNeeded()
         }

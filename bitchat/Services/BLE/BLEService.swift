@@ -521,7 +521,7 @@ final class BLEService: NSObject {
         idBridge: NostrIdentityBridge,
         identityManager: SecureIdentityStateManagerProtocol,
         initializeBluetoothManagers: Bool = true,
-        incomingFileStore: BLEIncomingFileStore = BLEIncomingFileStore(),
+        incomingFileStore: BLEIncomingFileStore = .shared,
         startSuspendedForPanicRecovery: Bool = false,
         noiseResponderHandshakeTimeout: TimeInterval =
             NoiseSecurityConstants.ordinaryResponderHandshakeTimeout,
@@ -2715,18 +2715,6 @@ final class BLEService: NSObject {
             removeIncomingFile: { [weak self] storedURL in
                 self?.incomingFileStore.removeIncomingFile(at: storedURL)
             },
-            finishIncomingFileDelivery: { [weak self] storedURL in
-                // Serialize pending-owner release behind deletion barriers.
-                // If /clear snapshots before this UI insertion, its already
-                // queued barrier must still observe the path as pending. If
-                // insertion wins first, the next MainActor snapshot sees the
-                // new bubble and protects the path explicitly.
-                self?.messageQueue.async {
-                    self?.incomingFileStore.finishIncomingFileDelivery(
-                        at: storedURL
-                    )
-                }
-            },
             isPrivateMediaSenderBlocked: { [weak self] peerID in
                 guard let self else { return false }
                 let senderStaticKey = self.noiseService.getPeerPublicKeyData(peerID)
@@ -3500,29 +3488,14 @@ extension BLEService: PrivateMediaDeletionPersisting {
     func persistDeletedPrivateMedia(
         messageIDs: [String],
         payloadRelativePaths: [String: String],
-        protectedPayloadRelativePaths: Set<String>,
         completion: @escaping @MainActor (Bool) -> Void
     ) {
         let fileStore = incomingFileStore
         messageQueue.async {
-            guard let reservation = fileStore
-                    .reservePrivateMediaDeletion(
-                        messageIDs: messageIDs,
-                        payloadRelativePaths: payloadRelativePaths
-                    ) else {
-                Task { @MainActor in
-                    completion(false)
-                }
-                return
-            }
-            let persisted = fileStore
-                .commitPrivateMediaDeletion(
-                    reservation: reservation,
-                    messageIDs: messageIDs,
-                    payloadRelativePaths: payloadRelativePaths,
-                    protectedPayloadRelativePaths:
-                        protectedPayloadRelativePaths
-                )
+            let persisted = fileStore.commitPrivateMediaDeletion(
+                messageIDs: messageIDs,
+                payloadRelativePaths: payloadRelativePaths
+            )
             Task { @MainActor in
                 completion(persisted)
             }
@@ -3548,38 +3521,6 @@ enum TransportEventDeliveryOutcome: Equatable {
     case invokedUnconfirmed
     /// No sink accepted the event, or receipt revalidation rejected it.
     case rejected
-}
-
-enum TransportEventDeliveryGate {
-    /// Runs finalization exactly once for every attempted main-actor delivery,
-    /// including pre-insertion rejection, a missing/rejecting sink, and
-    /// post-insertion revalidation failure. Only a fully accepted delivery
-    /// runs `completion` (for example, a stable-media ACK).
-    @MainActor
-    static func attempt(
-        shouldDeliver: () -> Bool,
-        deliver: () -> TransportEventDeliveryOutcome,
-        completion: () -> Void,
-        finalization: (TransportEventDeliveryOutcome) -> Void
-    ) {
-        var outcome = TransportEventDeliveryOutcome.rejected
-        defer { finalization(outcome) }
-        guard shouldDeliver() else {
-            return
-        }
-        switch deliver() {
-        case .rejected:
-            return
-        case .invokedUnconfirmed:
-            outcome = .invokedUnconfirmed
-            return
-        case .accepted:
-            break
-        }
-        guard shouldDeliver() else { return }
-        outcome = .accepted
-        completion()
-    }
 }
 
 extension BLEService {
@@ -3615,22 +3556,28 @@ extension BLEService {
             return
         }
         Task { @MainActor [weak self] in
+            var outcome = TransportEventDeliveryOutcome.rejected
+            defer { finalization?(outcome) }
             guard let self,
-                  self.isCurrentPanicLifecycleGeneration(generation) else {
-                finalization?(.rejected)
+                  self.isCurrentPanicLifecycleGeneration(generation),
+                  shouldDeliver?() ?? true else {
                 return
             }
-            TransportEventDeliveryGate.attempt(
-                shouldDeliver: {
-                    self.isCurrentPanicLifecycleGeneration(generation)
-                        && (shouldDeliver?() ?? true)
-                },
-                deliver: {
-                    return self.deliverTransportEvent(event)
-                },
-                completion: { completion?() },
-                finalization: { finalization?($0) }
-            )
+            switch self.deliverTransportEvent(event) {
+            case .rejected:
+                return
+            case .invokedUnconfirmed:
+                outcome = .invokedUnconfirmed
+                return
+            case .accepted:
+                break
+            }
+            guard self.isCurrentPanicLifecycleGeneration(generation),
+                  shouldDeliver?() ?? true else {
+                return
+            }
+            outcome = .accepted
+            completion?()
         }
     }
 

@@ -1544,6 +1544,7 @@ struct PrivateMediaEndToEndTests {
             guard let url = item as? URL,
                   !url.pathComponents.contains(".private-media-receipts"),
                   url.lastPathComponent != ".private-media-receipts.json",
+                  url.lastPathComponent != BLEPrivateMediaReceiptStore.ledgerFileName,
                   (try? url.resourceValues(forKeys: [.isRegularFileKey]).isRegularFile) == true else {
                 return nil
             }

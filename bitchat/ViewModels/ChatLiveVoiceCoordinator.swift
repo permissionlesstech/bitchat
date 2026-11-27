@@ -219,7 +219,7 @@ final class ChatLiveVoiceCoordinator {
     /// `ioQueue` in production while keeping synchronous unit tests deterministic.
     init(
         context: any ChatLiveVoiceContext,
-        fileStore: BLEIncomingFileStore = BLEIncomingFileStore(),
+        fileStore: BLEIncomingFileStore = .shared,
         sweepsOnInit: Bool = true,
         asyncStartupSweep: Bool = false,
         asyncQuotaEnforcement: Bool = false

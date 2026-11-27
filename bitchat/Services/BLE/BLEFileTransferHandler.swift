@@ -40,9 +40,6 @@ struct BLEFileTransferHandlerEnvironment {
     let commitPrivateMediaFile: (_ messageID: String, _ storedURL: URL) -> Bool
     /// Rolls back a saved payload when its durable receipt commit fails.
     let removeIncomingFile: (_ storedURL: URL) -> Void
-    /// Releases the allocator's save-to-UI ownership guard after synchronous
-    /// conversation insertion has completed.
-    let finishIncomingFileDelivery: (_ storedURL: URL) -> Void
     /// Checks the authenticated sender before any private-media disk work.
     let isPrivateMediaSenderBlocked: (PeerID) -> Bool
     /// Updates the registry last-seen timestamp for the peer (async barrier write).
@@ -387,14 +384,8 @@ final class BLEFileTransferHandler {
                 { outcome in
                     if outcome == .rejected {
                         // Raw media has no durable receipt that can redeliver
-                        // it later. Do not leave a newly saved, UI-unowned file
-                        // available for a stale fallback path to misidentify.
+                        // it later; roll back the unowned file on disk.
                         env.removeIncomingFile(destination)
-                    } else {
-                        // Plain delegates are invoked without synchronous
-                        // insertion confirmation. Preserve the payload for
-                        // that supported delivery path.
-                        env.finishIncomingFileDelivery(destination)
                     }
                 }
             )
@@ -422,9 +413,7 @@ final class BLEFileTransferHandler {
             {
                 env.acknowledgePrivateMedia(messageID, peerID)
             },
-            { _ in
-                env.finishIncomingFileDelivery(expectedURL)
-            }
+            { _ in }
         )
     }
 

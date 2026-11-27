@@ -44,7 +44,6 @@ final class MockTransport: Transport, PrivateMediaDeletionPersisting,
     private(set) var deletedPrivateMediaRelativePaths: [
         [String: String]
     ] = []
-    private(set) var protectedPrivateMediaRelativePaths: [Set<String>] = []
     private(set) var sentVerifyChallenges: [(peerID: PeerID, noiseKeyHex: String, nonceA: Data)] = []
     private(set) var sentVerifyResponses: [(peerID: PeerID, noiseKeyHex: String, nonceA: Data)] = []
     private(set) var sentCourierMessages: [(content: String, messageID: String, recipientNoiseKey: Data, couriers: [PeerID])] = []
@@ -252,14 +251,10 @@ final class MockTransport: Transport, PrivateMediaDeletionPersisting,
     func persistDeletedPrivateMedia(
         messageIDs: [String],
         payloadRelativePaths: [String: String],
-        protectedPayloadRelativePaths: Set<String>,
         completion: @escaping @MainActor (Bool) -> Void
     ) {
         deletedPrivateMediaMessageIDBatches.append(messageIDs)
         deletedPrivateMediaRelativePaths.append(payloadRelativePaths)
-        protectedPrivateMediaRelativePaths.append(
-            protectedPayloadRelativePaths
-        )
         if deferDeletedPrivateMediaPersistence {
             pendingDeletedPrivateMediaCompletions.append(completion)
         } else {
@@ -381,7 +376,6 @@ final class MockTransport: Transport, PrivateMediaDeletionPersisting,
         cancelledTransfers.removeAll()
         deletedPrivateMediaMessageIDBatches.removeAll()
         deletedPrivateMediaRelativePaths.removeAll()
-        protectedPrivateMediaRelativePaths.removeAll()
         sentVerifyChallenges.removeAll()
         sentVerifyResponses.removeAll()
         startServicesCallCount = 0
