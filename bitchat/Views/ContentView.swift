@@ -183,6 +183,8 @@ struct ContentView: View {
     @ScaledMetric(relativeTo: .subheadline) private var headerPeerCountFontSize: CGFloat = 12
     @State private var windowCountPublic: Int = TransportConfig.uiWindowInitialCountPublic
     @State private var windowCountPrivate: [PeerID: Int] = [:]
+    @State private var topChromeHeight: CGFloat = 0
+    @State private var bottomChromeHeight: CGFloat = 0
 
     @ThemedPalette private var palette
 
@@ -467,18 +469,31 @@ struct ContentView: View {
     }
 
     /// Matrix: classic opaque bars with dividers. Glass: full-bleed message
-    /// list scrolling underneath floating chrome panels (safe-area insets),
-    /// so the translucency gains usable space instead of losing it.
+    /// list scrolling underneath floating chrome overlays with explicit scroll
+    /// content margins, avoiding SwiftUI `.safeAreaInset` double top-insetting
+    /// on iOS while preserving full-bleed translucency behind the bars.
     @ViewBuilder
     private var mainContent: some View {
         if usesGlassLayout {
             publicMessageList
-                .safeAreaInset(edge: .top, spacing: 0) {
+                .overlay(alignment: .top) {
                     headerView
+                        .background(ChromeHeightReader(edge: .top))
                 }
-                .safeAreaInset(edge: .bottom, spacing: 0) {
+                .overlay(alignment: .bottom) {
                     if selectedPrivatePeerID == nil {
                         composerView
+                            .background(ChromeHeightReader(edge: .bottom))
+                    }
+                }
+                .onPreferenceChange(TopChromeHeightKey.self) { height in
+                    if abs(topChromeHeight - height) > 0.5 {
+                        topChromeHeight = height
+                    }
+                }
+                .onPreferenceChange(BottomChromeHeightKey.self) { height in
+                    if abs(bottomChromeHeight - height) > 0.5 {
+                        bottomChromeHeight = height
                     }
                 }
         } else {
@@ -522,6 +537,8 @@ struct ContentView: View {
             ) {
                 ConnectivityStatusBanner(issue: issue)
             }
+
+            NearbyNotesStripView()
         }
         // Hosted here rather than on the logo Text so the pending dialog
         // survives whatever happens to the header chrome.
@@ -543,6 +560,16 @@ struct ContentView: View {
         }
     }
 
+    private var glassTopContentInset: CGFloat {
+        guard usesGlassLayout else { return 0 }
+        return topChromeHeight > 0 ? topChromeHeight : headerHeight + 4
+    }
+
+    private var glassBottomContentInset: CGFloat {
+        guard usesGlassLayout, selectedPrivatePeerID == nil else { return 0 }
+        return bottomChromeHeight > 0 ? bottomChromeHeight : 58
+    }
+
     private var publicMessageList: some View {
         PublicMessageListView(
             isAtBottom: $isAtBottomPublic,
@@ -551,7 +578,9 @@ struct ContentView: View {
             imagePreviewURL: $imagePreviewURL,
             windowCountPublic: $windowCountPublic,
             showSidebar: $showSidebar,
-            isTextFieldFocused: $isTextFieldFocused
+            isTextFieldFocused: $isTextFieldFocused,
+            topContentInset: glassTopContentInset,
+            bottomContentInset: glassBottomContentInset
         )
     }
 
@@ -574,6 +603,35 @@ struct ContentView: View {
 
         DispatchQueue.main.async {
             uiModel?.sendMessage(trimmed)
+        }
+    }
+}
+
+private struct TopChromeHeightKey: PreferenceKey {
+    static let defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = max(value, nextValue())
+    }
+}
+
+private struct BottomChromeHeightKey: PreferenceKey {
+    static let defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = max(value, nextValue())
+    }
+}
+
+private struct ChromeHeightReader: View {
+    let edge: VerticalEdge
+
+    var body: some View {
+        GeometryReader { proxy in
+            switch edge {
+            case .top:
+                Color.clear.preference(key: TopChromeHeightKey.self, value: proxy.size.height)
+            case .bottom:
+                Color.clear.preference(key: BottomChromeHeightKey.self, value: proxy.size.height)
+            }
         }
     }
 }

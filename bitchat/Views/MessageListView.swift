@@ -48,7 +48,6 @@ struct PublicMessageListView: View {
     @EnvironmentObject private var publicChatModel: PublicChatModel
     @EnvironmentObject private var locationChannelsModel: LocationChannelsModel
     @EnvironmentObject private var appChromeModel: AppChromeModel
-    @ObservedObject private var nearbyNotes = NearbyNotesCounter.shared
 
     @Binding var isAtBottom: Bool
     @Binding var selectedMessageSender: String?
@@ -57,12 +56,12 @@ struct PublicMessageListView: View {
     @Binding var windowCountPublic: Int
     @Binding var showSidebar: Bool
     var isTextFieldFocused: FocusState<Bool>.Binding
+    var topContentInset: CGFloat = 0
+    var bottomContentInset: CGFloat = 0
 
     /// Whether this instance holds the nearby-notes counter active (mesh
     /// public timeline only); balanced against activate/deactivate.
     @State private var holdsNotesCounter = false
-    @Environment(\.appTheme) private var theme
-    @ThemedPalette private var palette
 
     var body: some View {
         MessageListContentView(
@@ -71,6 +70,8 @@ struct PublicMessageListView: View {
             contextKey: publicChatModel.activeChannel.contextKey,
             selectedPublicChannel: locationChannelsModel.selectedChannel,
             bluetoothCanScan: bluetoothCanScan,
+            topContentInset: topContentInset,
+            bottomContentInset: bottomContentInset,
             liveMessages: { _ in publicChatModel.messages },
             liveContextKey: { _ in publicChatModel.activeChannel.contextKey },
             liveWindowCount: { _ in windowCountPublic },
@@ -82,17 +83,6 @@ struct PublicMessageListView: View {
             showSidebar: $showSidebar,
             isTextFieldFocused: isTextFieldFocused
         )
-        // Keep the scroll view as the direct body under ContentView's
-        // safeAreaInsets (no wrapping VStack): notesHereStrip joins the top
-        // safe area instead so messages never receive double top insets.
-        .safeAreaInset(edge: .top, spacing: 0) {
-            // Notes pinned to this place stay visible while chatting — a
-            // conversation starting must not hide what's left here.
-            if case .mesh = locationChannelsModel.selectedChannel,
-               nearbyNotes.noteCount > 0 {
-                notesHereStrip
-            }
-        }
         .onAppear { updateNotesCounterHold() }
         .onDisappear { releaseNotesCounterHold() }
         .onChange(of: locationChannelsModel.selectedChannel) { _ in updateNotesCounterHold() }
@@ -105,38 +95,6 @@ struct PublicMessageListView: View {
         case .poweredOff, .unauthorized, .unsupported: return false
         default: return true
         }
-    }
-
-    /// Tappable strip above the mesh timeline while notes are pinned at this
-    /// place: opens the notices sheet on the geo tab.
-    private var notesHereStrip: some View {
-        let text: String = nearbyNotes.noteCount == 1
-            ? String(localized: "content.empty.notes_one", comment: "Hint when exactly one note was left at this place")
-            : String(
-                format: String(localized: "content.empty.notes_many", comment: "Hint counting notes left at this place"),
-                locale: .current,
-                nearbyNotes.noteCount
-            )
-
-        return Button {
-            appChromeModel.presentNotices(geoTab: true)
-        } label: {
-            HStack(spacing: 6) {
-                Text(verbatim: "📍 \(text)")
-                    .bitchatFont(size: 12)
-                    .foregroundColor(palette.primary)
-                Spacer()
-                Image(systemName: "chevron.right")
-                    .font(.bitchatSystem(size: 10))
-                    .foregroundColor(palette.secondary)
-            }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 7)
-            .background(palette.secondary.opacity(0.08))
-            .background(theme.usesGlassChrome ? AnyShapeStyle(.ultraThinMaterial) : AnyShapeStyle(palette.background))
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
     }
 
     /// The nearby-notes counter is held whenever the mesh public timeline is
@@ -158,6 +116,51 @@ struct PublicMessageListView: View {
         guard holdsNotesCounter else { return }
         holdsNotesCounter = false
         NearbyNotesCounter.shared.deactivate()
+    }
+}
+
+/// Tappable strip beneath the header while notes are pinned at this place
+/// on the mesh channel: opens the notices sheet on the geo tab. Hosted
+/// inside `ContentView.headerView` rather than a nested `.safeAreaInset`
+/// so the header chrome contributes a single measured top inset.
+struct NearbyNotesStripView: View {
+    @EnvironmentObject private var locationChannelsModel: LocationChannelsModel
+    @EnvironmentObject private var appChromeModel: AppChromeModel
+    @ObservedObject private var nearbyNotes = NearbyNotesCounter.shared
+    @Environment(\.appTheme) private var theme
+    @ThemedPalette private var palette
+
+    var body: some View {
+        if case .mesh = locationChannelsModel.selectedChannel,
+           nearbyNotes.noteCount > 0 {
+            let text: String = nearbyNotes.noteCount == 1
+                ? String(localized: "content.empty.notes_one", comment: "Hint when exactly one note was left at this place")
+                : String(
+                    format: String(localized: "content.empty.notes_many", comment: "Hint counting notes left at this place"),
+                    locale: .current,
+                    nearbyNotes.noteCount
+                )
+
+            Button {
+                appChromeModel.presentNotices(geoTab: true)
+            } label: {
+                HStack(spacing: 6) {
+                    Text(verbatim: "📍 \(text)")
+                        .bitchatFont(size: 12)
+                        .foregroundColor(palette.primary)
+                    Spacer()
+                    Image(systemName: "chevron.right")
+                        .font(.bitchatSystem(size: 10))
+                        .foregroundColor(palette.secondary)
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 7)
+                .background(palette.secondary.opacity(0.08))
+                .background(theme.usesGlassChrome ? AnyShapeStyle(.ultraThinMaterial) : AnyShapeStyle(palette.background))
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+        }
     }
 }
 
@@ -183,6 +186,8 @@ struct PrivateMessageListView: View {
             contextKey: Self.contextKey(for: privatePeer),
             selectedPublicChannel: nil,
             bluetoothCanScan: false,
+            topContentInset: 0,
+            bottomContentInset: 0,
             liveMessages: { peer in privateInboxModel.messages(for: peer) },
             liveContextKey: { peer in Self.contextKey(for: peer) },
             liveWindowCount: { peer in
@@ -224,6 +229,8 @@ private struct MessageListContentView: View {
     let contextKey: String
     let selectedPublicChannel: ChannelID?
     let bluetoothCanScan: Bool
+    let topContentInset: CGFloat
+    let bottomContentInset: CGFloat
     let liveMessages: (PeerID?) -> [BitchatMessage]
     let liveContextKey: (PeerID?) -> String
     let liveWindowCount: (PeerID?) -> Int
@@ -297,79 +304,85 @@ private struct MessageListContentView: View {
 
         ScrollViewReader { proxy in
             ScrollView {
-                if isEmptyPublic {
-                    publicEmptyState(fillHeight: emptyStateViewportHeight)
-                } else {
-                    VStack(alignment: .leading, spacing: 0) {
-                        LazyVStack(alignment: .leading, spacing: 0) {
-                            ForEach(messageItems) { item in
-                                let message = item.message
-                                MessageRowView(
-                                    message: message,
-                                    deliveryStatus: message.deliveryStatus,
-                                    privatePeer: privatePeer,
-                                    imagePreviewURL: $imagePreviewURL,
-                                    showSidebar: $showSidebar,
-                                    onInsertMention: insertMention
-                                )
-                                .equatable()
-                                .onAppear {
-                                    // Callbacks lag a timeline switch: the new
-                                    // rows appear before the old ones disappear,
-                                    // each with its own render's view of which row
-                                    // was last. Only rows of the timeline the list
-                                    // has landed in may move its state, checked
-                                    // against live state rather than the render's.
-                                    guard isLandedRow(item.id) else { return }
-                                    if item.id == newestRowID(for: privatePeer) {
-                                        isAtBottom = true
-                                        unseenCount = 0
-                                        if bottomRowID != item.id {
-                                            bottomRowID = item.id
+                Group {
+                    if isEmptyPublic {
+                        publicEmptyState(
+                            fillHeight: max(0, emptyStateViewportHeight - topContentInset - bottomContentInset)
+                        )
+                    } else {
+                        VStack(alignment: .leading, spacing: 0) {
+                            LazyVStack(alignment: .leading, spacing: 0) {
+                                ForEach(messageItems) { item in
+                                    let message = item.message
+                                    MessageRowView(
+                                        message: message,
+                                        deliveryStatus: message.deliveryStatus,
+                                        privatePeer: privatePeer,
+                                        imagePreviewURL: $imagePreviewURL,
+                                        showSidebar: $showSidebar,
+                                        onInsertMention: insertMention
+                                    )
+                                    .equatable()
+                                    .onAppear {
+                                        // Callbacks lag a timeline switch: the new
+                                        // rows appear before the old ones disappear,
+                                        // each with its own render's view of which row
+                                        // was last. Only rows of the timeline the list
+                                        // has landed in may move its state, checked
+                                        // against live state rather than the render's.
+                                        guard isLandedRow(item.id) else { return }
+                                        if item.id == newestRowID(for: privatePeer) {
+                                            isAtBottom = true
+                                            unseenCount = 0
+                                            if bottomRowID != item.id {
+                                                bottomRowID = item.id
+                                            }
+                                            if bottomSettledContextKey != contextKey {
+                                                bottomSettledContextKey = contextKey
+                                            }
+                                            returnWindowToInitialSize(for: privatePeer, contextKey: contextKey, messages: messages)
                                         }
-                                        if bottomSettledContextKey != contextKey {
-                                            bottomSettledContextKey = contextKey
+                                        if item.id == firstRowID, hasEarlierMessages {
+                                            expandWindow(
+                                                ifNeededFor: message,
+                                                allMessages: messages,
+                                                privatePeer: privatePeer,
+                                                proxy: proxy
+                                            )
                                         }
-                                        returnWindowToInitialSize(for: privatePeer, contextKey: contextKey, messages: messages)
                                     }
-                                    if item.id == firstRowID, hasEarlierMessages {
-                                        expandWindow(
-                                            ifNeededFor: message,
-                                            allMessages: messages,
-                                            privatePeer: privatePeer,
-                                            proxy: proxy
-                                        )
-                                    }
-                                }
-                                .onDisappear {
-                                    // A row of the landed timeline shares this
-                                    // closure's peer, so newestRowID is live here.
-                                    guard isLandedRow(item.id) else { return }
-                                    if item.id == newestRowID(for: privatePeer) || item.id == bottomRowID {
-                                        isAtBottom = false
-                                        bottomRowID = nil
-                                        // Leaving the bottom drops a follow-scroll
-                                        // still waiting on the throttle: it would
-                                        // yank the reader back down.
-                                        cancelFollowScroll()
+                                    .onDisappear {
+                                        // A row of the landed timeline shares this
+                                        // closure's peer, so newestRowID is live here.
+                                        guard isLandedRow(item.id) else { return }
+                                        if item.id == newestRowID(for: privatePeer) || item.id == bottomRowID {
+                                            isAtBottom = false
+                                            bottomRowID = nil
+                                            // Leaving the bottom drops a follow-scroll
+                                            // still waiting on the throttle: it would
+                                            // yank the reader back down.
+                                            cancelFollowScroll()
+                                        }
                                     }
                                 }
                             }
-                        }
-                        .padding(.vertical, 2)
+                            .padding(.vertical, 2)
 
-                        // Only carried history on screen: the ambient layer (radar,
-                        // sightings, live hints) stays visible below it instead of
-                        // vanishing the moment echoes exist.
-                        if privatePeer == nil, showsAmbientFooter(messageItems: messageItems) {
-                            MeshEmptyStateView(compact: true, bluetoothAvailable: bluetoothCanScan)
-                                .padding(.horizontal, 12)
-                                .padding(.top, 20)
-                                .padding(.bottom, 8)
+                            // Only carried history on screen: the ambient layer (radar,
+                            // sightings, live hints) stays visible below it instead of
+                            // vanishing the moment echoes exist.
+                            if privatePeer == nil, showsAmbientFooter(messageItems: messageItems) {
+                                MeshEmptyStateView(compact: true, bluetoothAvailable: bluetoothCanScan)
+                                    .padding(.horizontal, 12)
+                                    .padding(.top, 20)
+                                    .padding(.bottom, 8)
+                            }
                         }
                     }
                 }
+                .modifier(LegacyScrollChromePaddingModifier(top: topContentInset, bottom: bottomContentInset))
             }
+            .modifier(ScrollChromeInsetsModifier(top: topContentInset, bottom: bottomContentInset))
             .background {
                 if isEmptyPublic {
                     GeometryReader { geometry in
@@ -390,6 +403,7 @@ private struct MessageListContentView: View {
             .overlay(alignment: .bottomTrailing) {
                 if !isAtBottom && !messageItems.isEmpty {
                     jumpToLatestPill(proxy: proxy)
+                        .padding(.bottom, bottomContentInset)
                 }
             }
             .onOpenURL(perform: handleOpenURL)
@@ -959,6 +973,40 @@ private struct MessageRowView: View, Equatable {
               case .failed = deliveryStatus
         else { return false }
         return true
+    }
+}
+
+private struct ScrollChromeInsetsModifier: ViewModifier {
+    let top: CGFloat
+    let bottom: CGFloat
+
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        if #available(iOS 17.0, macOS 14.0, *) {
+            content
+                .contentMargins(.top, top, for: .scrollContent)
+                .contentMargins(.bottom, bottom, for: .scrollContent)
+                .contentMargins(.top, top, for: .scrollIndicators)
+                .contentMargins(.bottom, bottom, for: .scrollIndicators)
+        } else {
+            content
+        }
+    }
+}
+
+private struct LegacyScrollChromePaddingModifier: ViewModifier {
+    let top: CGFloat
+    let bottom: CGFloat
+
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        if #available(iOS 17.0, macOS 14.0, *) {
+            content
+        } else {
+            content
+                .padding(.top, top)
+                .padding(.bottom, bottom)
+        }
     }
 }
 
