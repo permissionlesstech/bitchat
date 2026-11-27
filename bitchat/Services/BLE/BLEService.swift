@@ -917,7 +917,6 @@ final class BLEService: NSObject {
 
     // MARK: Delegates
 
-    weak var delegate: BitchatDelegate?
     weak var eventDelegate: TransportEventDelegate?
     weak var peerEventsDelegate: TransportPeerEventsDelegate?
 
@@ -3688,6 +3687,7 @@ extension BLEService {
     private func deliverTransportEvent(
         _ event: TransportEvent
     ) -> TransportEventDeliveryOutcome {
+        guard let eventDelegate else { return .rejected }
         if case .messageReceived(let message) = event {
             if let synchronousDelegate =
                 eventDelegate as? SynchronousMessageTransportEventDelegate {
@@ -3696,30 +3696,12 @@ extension BLEService {
                     ? .accepted
                     : .rejected
             }
-            if let eventDelegate {
-                eventDelegate.didReceiveTransportEvent(event)
-                return .invokedUnconfirmed
-            }
-            if let synchronousDelegate =
-                delegate as? SynchronousMessageTransportEventDelegate {
-                return synchronousDelegate
-                    .didReceiveTransportMessageSynchronously(message)
-                    ? .accepted
-                    : .rejected
-            }
+            eventDelegate.didReceiveTransportEvent(event)
+            return .invokedUnconfirmed
         }
 
-        if let eventDelegate {
-            eventDelegate.didReceiveTransportEvent(event)
-            return .accepted
-        } else {
-            guard let delegate else { return .rejected }
-            delegate.receiveTransportEvent(event)
-            if case .messageReceived = event {
-                return .invokedUnconfirmed
-            }
-            return .accepted
-        }
+        eventDelegate.didReceiveTransportEvent(event)
+        return .accepted
     }
 
     func logBluetoothStatus(_ context: String) {

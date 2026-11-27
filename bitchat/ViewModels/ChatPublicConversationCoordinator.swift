@@ -24,8 +24,6 @@ protocol ChatPublicConversationContext: AnyObject {
     var currentGeohash: String? { get }
     var nickname: String { get }
     var myPeerID: PeerID { get }
-    /// Signals that message state changed so observers refresh (e.g. `objectWillChange.send()`).
-    func notifyUIChanged()
 
     // MARK: Public conversation store (single-writer intents)
     /// Appends a public message in timestamp order. Returns `false` when a
@@ -284,7 +282,6 @@ final class ChatPublicConversationCoordinator: PublicMessagePipelineDelegate {
             context.cleanupLocalFile(forMessage: removedMessage)
         }
 
-        context.notifyUIChanged()
     }
 
     func clearCurrentPublicTimeline() {

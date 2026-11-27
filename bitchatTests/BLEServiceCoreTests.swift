@@ -69,7 +69,7 @@ struct BLEServiceCoreTests {
     func duplicatePacket_isDeduped() async throws {
         let ble = makeService()
         let delegate = PublicCaptureDelegate()
-        ble.delegate = delegate
+        ble.eventDelegate = delegate
 
         // Public messages must carry a valid signature from the claimed sender;
         // sign the packet and preseed the sender's signing key so the receiver
@@ -104,7 +104,7 @@ struct BLEServiceCoreTests {
     func staleBroadcast_isIgnored() async {
         let ble = makeService()
         let delegate = PublicCaptureDelegate()
-        ble.delegate = delegate
+        ble.eventDelegate = delegate
 
         let sender = PeerID(str: "A1B2C3D4E5F60708")
         let oldTimestamp = UInt64(Date().addingTimeInterval(-901).timeIntervalSince1970 * 1000)
@@ -1566,11 +1566,15 @@ private func makeLeavePacket(sender: PeerID, marker: String) -> BitchatPacket {
     )
 }
 
-private final class PublicCaptureDelegate: BitchatDelegate {
+private final class PublicCaptureDelegate: TransportEventDelegate {
     private let lock = NSLock()
     private(set) var publicMessages: [BitchatMessage] = []
 
-    func didReceivePublicMessage(from peerID: PeerID, nickname: String, content: String, timestamp: Date, messageID: String?) {
+    @MainActor
+    func didReceiveTransportEvent(_ event: TransportEvent) {
+        guard case let .publicMessageReceived(peerID, nickname, content, timestamp, messageID) = event else {
+            return
+        }
         let message = BitchatMessage(
             id: messageID,
             sender: nickname,
@@ -1587,12 +1591,6 @@ private final class PublicCaptureDelegate: BitchatDelegate {
         publicMessages.append(message)
         lock.unlock()
     }
-
-    func didReceiveMessage(_ message: BitchatMessage) {}
-    func didConnectToPeer(_ peerID: PeerID) {}
-    func didDisconnectFromPeer(_ peerID: PeerID) {}
-    func didUpdatePeerList(_ peers: [PeerID]) {}
-    func didUpdateBluetoothState(_ state: CBManagerState) {}
 
     func publicMessagesSnapshot() -> [BitchatMessage] {
         lock.lock()

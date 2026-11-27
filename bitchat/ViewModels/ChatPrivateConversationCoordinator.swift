@@ -58,8 +58,6 @@ protocol ChatPrivateConversationContext: AnyObject {
     /// Moves the open private chat to `newPeerID` when the current selection is
     /// one of the peer IDs being migrated away.
     func handOffSelectedPrivateChat(from oldPeerIDs: [PeerID], to newPeerID: PeerID)
-    /// Signals that message state changed so observers refresh (e.g. `objectWillChange.send()`).
-    func notifyUIChanged()
 
     // MARK: Peers & identity
     var myPeerID: PeerID { get }
@@ -378,7 +376,6 @@ final class ChatPrivateConversationCoordinator {
         )
 
         context.appendPrivateMessage(message, to: peerID)
-        context.notifyUIChanged()
 
         // Always hand the message to the router — it owns delivery. A live
         // link sends now; an unreachable peer gets the retained-outbox path
@@ -427,7 +424,6 @@ final class ChatPrivateConversationCoordinator {
         )
 
         context.appendPrivateMessage(message, to: peerID)
-        context.notifyUIChanged()
 
         guard let recipientHex = context.nostrKeyMapping[peerID] else {
             context.setPrivateDeliveryStatus(
@@ -574,7 +570,6 @@ final class ChatPrivateConversationCoordinator {
             context.notifyPrivateMessage(from: senderName, message: pm.content, peerID: conversationPeerID)
         }
 
-        context.notifyUIChanged()
     }
 
     func handleDelivered(_ payload: NoisePayload, senderPubkey: String, convKey: PeerID) {
@@ -595,7 +590,6 @@ final class ChatPrivateConversationCoordinator {
                 peerID: conversationPeerID
             )
             if didChange {
-                context.notifyUIChanged()
             }
             SecureLogger.info(
                 "GeoDM: recv DELIVERED for mid=\(messageID.prefix(8))… from=\(senderPubkey.prefix(8))…",
@@ -632,7 +626,6 @@ final class ChatPrivateConversationCoordinator {
                 peerID: conversationPeerID
             )
             if didChange {
-                context.notifyUIChanged()
             }
             SecureLogger.info("GeoDM: recv READ for mid=\(messageID.prefix(8))… from=\(senderPubkey.prefix(8))…", category: .session)
         } else if clearedRetainedMessage {
@@ -713,7 +706,6 @@ final class ChatPrivateConversationCoordinator {
             context.notifyPrivateMessage(from: message.sender, message: message.content, peerID: peerID)
         }
 
-        context.notifyUIChanged()
     }
 
     /// O(1)-per-conversation dedup via the store's message-ID indexes
@@ -863,7 +855,6 @@ final class ChatPrivateConversationCoordinator {
             }
 
             if didMigrate {
-                context.notifyUIChanged()
             }
         }
     }

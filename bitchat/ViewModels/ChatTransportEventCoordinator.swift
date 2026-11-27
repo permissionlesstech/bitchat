@@ -31,8 +31,6 @@ protocol ChatTransportEventContext: AnyObject {
     /// re-sent after the peer reconnects. (Single mutation path for the
     /// owner's `sentReadReceipts`; this coordinator never reads the raw set.)
     func unmarkReadReceiptsSent(_ ids: [String])
-    /// Signals that message state changed so observers refresh (e.g. `objectWillChange.send()`).
-    func notifyUIChanged()
 
     // MARK: Inbound message handling
     func isMessageBlocked(_ message: BitchatMessage) -> Bool
@@ -164,12 +162,6 @@ final class ChatTransportEventCoordinator {
         self.context = context
     }
 
-    func didReceiveMessage(_ message: BitchatMessage) {
-        runOnMain { [self] context in
-            handleReceivedMessage(message, in: context)
-        }
-    }
-
     /// Typed transport events already arrive on the main actor. Handle them
     /// synchronously so observers see the ConversationStore mutation before
     /// the transport completes delivery.
@@ -177,25 +169,6 @@ final class ChatTransportEventCoordinator {
     @discardableResult
     func didReceiveMessageSynchronously(_ message: BitchatMessage) -> Bool {
         handleReceivedMessage(message, in: context)
-    }
-
-    func didReceivePublicMessage(
-        from peerID: PeerID,
-        nickname: String,
-        content: String,
-        timestamp: Date,
-        messageID: String?
-    ) {
-        runOnMain { [self] context in
-            handlePublicMessage(
-                from: peerID,
-                nickname: nickname,
-                content: content,
-                timestamp: timestamp,
-                messageID: messageID,
-                in: context
-            )
-        }
     }
 
     @MainActor
@@ -216,23 +189,6 @@ final class ChatTransportEventCoordinator {
         )
     }
 
-    func didReceiveNoisePayload(
-        from peerID: PeerID,
-        type: NoisePayloadType,
-        payload: Data,
-        timestamp: Date
-    ) {
-        runOnMain { [self] context in
-            handleNoisePayload(
-                from: peerID,
-                type: type,
-                payload: payload,
-                timestamp: timestamp,
-                in: context
-            )
-        }
-    }
-
     @MainActor
     func didReceiveNoisePayloadSynchronously(
         from peerID: PeerID,
@@ -249,17 +205,9 @@ final class ChatTransportEventCoordinator {
         )
     }
 
-    func didConnectToPeer(_ peerID: PeerID) {
-        runOnMain { [weak self] _ in
-            self?.didConnectToPeerSynchronously(peerID)
-        }
-    }
-
     @MainActor
     func didConnectToPeerSynchronously(_ peerID: PeerID) {
         SecureLogger.debug("🤝 Peer connected: \(peerID)", category: .session)
-
-        context.notifyUIChanged()
 
         if let peer = context.unifiedPeer(for: peerID) {
             let stablePeerID = PeerID(hexData: peer.noisePublicKey)
@@ -268,12 +216,6 @@ final class ChatTransportEventCoordinator {
 
         context.flushRouterOutbox(for: peerID)
         context.retryCourierDeposits(via: peerID)
-    }
-
-    func didDisconnectFromPeer(_ peerID: PeerID) {
-        runOnMain { [weak self] _ in
-            self?.didDisconnectFromPeerSynchronously(peerID)
-        }
     }
 
     @MainActor
@@ -302,8 +244,6 @@ final class ChatTransportEventCoordinator {
             .filter { $0.senderPeerID == peerID }
             .map(\.id)
         context.unmarkReadReceiptsSent(receiptIDs)
-
-        context.notifyUIChanged()
     }
 }
 
@@ -355,13 +295,6 @@ private extension ChatTransportEventCoordinator {
         context.checkForMentions(message)
         context.sendHapticFeedback(for: message)
         return true
-    }
-
-    func runOnMain(_ action: @escaping @MainActor (any ChatTransportEventContext) -> Void) {
-        Task { @MainActor [weak context = self.context] in
-            guard let context else { return }
-            action(context)
-        }
     }
 
     @MainActor

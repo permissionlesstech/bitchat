@@ -19,7 +19,7 @@ struct FragmentationTests {
     func reassemblyFromFragmentsDeliversPublicMessage() async throws {
         let ble = makeBLEService()
         let capture = CaptureDelegate()
-        ble.delegate = capture
+        ble.eventDelegate = capture
 
         // Construct a big SIGNED public packet (3KB) from a remote sender. Public
         // messages must carry a valid signature, so the reassembled packet is
@@ -53,7 +53,7 @@ struct FragmentationTests {
     func duplicateFragmentDoesNotBreakReassembly() async throws {
         let ble = makeBLEService()
         let capture = CaptureDelegate()
-        ble.delegate = capture
+        ble.eventDelegate = capture
 
         let signer = NoiseEncryptionService(keychain: MockKeychain())
         let signingKey = signer.getSigningPublicKeyData()
@@ -83,7 +83,7 @@ struct FragmentationTests {
     func maxSizedFileTransferSurvivesReassembly() async throws {
         let ble = makeBLEService()
         let capture = CaptureDelegate()
-        ble.delegate = capture
+        ble.eventDelegate = capture
 
         // Broadcast file transfers must carry a valid sender signature (same
         // gate as public messages), so sign the packet and preseed the
@@ -139,7 +139,7 @@ struct FragmentationTests {
     func invalidFragmentHeaderIsIgnored() async throws {
         let ble = makeBLEService()
         let capture = CaptureDelegate()
-        ble.delegate = capture
+        ble.eventDelegate = capture
         
         let remoteShortID = PeerID(str: "0011223344556677")
         let original = makeLargePublicPacket(senderShortHex: remoteShortID, size: 1000)
@@ -187,7 +187,7 @@ extension FragmentationTests {
     }
 
     /// Thread-safe delegate that supports awaiting message delivery
-    private final class CaptureDelegate: BitchatDelegate, @unchecked Sendable {
+    private final class CaptureDelegate: TransportEventDelegate, @unchecked Sendable {
         private let lock = NSLock()
         private var _publicMessages: [(peerID: PeerID, nickname: String, content: String)] = []
         private var _receivedMessages: [BitchatMessage] = []
@@ -206,20 +206,17 @@ extension FragmentationTests {
             withLock { _receivedMessages }
         }
 
-        func didReceiveMessage(_ message: BitchatMessage) {
-            withLock { _receivedMessages.append(message) }
+        @MainActor
+        func didReceiveTransportEvent(_ event: TransportEvent) {
+            switch event {
+            case .messageReceived(let message):
+                withLock { _receivedMessages.append(message) }
+            case .publicMessageReceived(let peerID, let nickname, let content, _, _):
+                withLock { _publicMessages.append((peerID, nickname, content)) }
+            default:
+                break
+            }
         }
-
-        func didReceivePublicMessage(from peerID: PeerID, nickname: String, content: String, timestamp: Date, messageID: String?) {
-            withLock { _publicMessages.append((peerID, nickname, content)) }
-        }
-
-        func didConnectToPeer(_ peerID: PeerID) {}
-        func didDisconnectFromPeer(_ peerID: PeerID) {}
-        func didUpdatePeerList(_ peers: [PeerID]) {}
-        func didUpdateMessageDeliveryStatus(_ messageID: String, status: DeliveryStatus) {}
-        func didReceiveNoisePayload(from peerID: PeerID, type: NoisePayloadType, payload: Data, timestamp: Date) {}
-        func didUpdateBluetoothState(_ state: CBManagerState) {}
     }
 
     // Helper: build a large message packet (unencrypted public message)

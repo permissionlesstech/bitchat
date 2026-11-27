@@ -30,11 +30,7 @@ private final class MockChatPublicConversationContext: ChatPublicConversationCon
     var currentGeohash: String?
     var nickname = "me"
     var myPeerID = PeerID(str: "0011223344556677")
-    private(set) var notifyUIChangedCount = 0
 
-    func notifyUIChanged() {
-        notifyUIChangedCount += 1
-    }
 
     // Public conversation store (single-writer intents)
     var conversations: [ConversationID: [BitchatMessage]] = [:]
@@ -484,7 +480,6 @@ struct ChatPublicConversationCoordinatorContextTests {
         #expect(context.publicMessages(in: .mesh).isEmpty)
         #expect(context.privateChats[peerID] == nil)
         #expect(context.cleanedUpFileMessageIDs == ["doomed-msg"])
-        #expect(context.notifyUIChangedCount == 1)
     }
 
     @Test @MainActor

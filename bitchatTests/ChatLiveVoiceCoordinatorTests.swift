@@ -63,7 +63,6 @@ private final class MockChatLiveVoiceContext: ChatLiveVoiceContext {
             talkerUpdates.append(nickname)
         }
     }
-    func notifyUIChanged() {}
 }
 
 @MainActor

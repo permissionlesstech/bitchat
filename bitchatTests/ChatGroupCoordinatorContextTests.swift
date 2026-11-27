@@ -66,7 +66,6 @@ private final class MockChatGroupContext: ChatGroupContext {
     func endPrivateChat() { endPrivateChatCount += 1 }
     func addSystemMessage(_ content: String) { systemMessages.append(content) }
     func addLocalPrivateSystemMessage(_ content: String, to peerID: PeerID) {}
-    func notifyUIChanged() {}
     func notifyPrivateMessage(from senderName: String, message: String, peerID: PeerID) {}
 
     func clearRecordedEffects() {
