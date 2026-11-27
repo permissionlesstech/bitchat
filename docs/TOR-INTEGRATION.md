@@ -46,6 +46,8 @@ Private messages target the built-in relay set plus any relays added by hand (`N
 
 So in a country that blocks Tor by blocking the public relays and directory authorities, bootstrap never completes. The app reports that clearly now instead of appearing to start forever, and the BLE mesh is unaffected, but there is no circumvention path: obfs4, snowflake, and meek are all unavailable.
 
+The other half of the cost is detectability rather than reachability: a direct connection to the public Tor network is recognisable as Tor to anyone inspecting the traffic, so in a place where *using* Tor is itself the risk, turning this on is a disclosure. The settings toggle says so under `app_info.settings.tor.no_bridges_note` while Tor is on, so the limitation is visible where the choice is made and not only here.
+
 Closing this means enabling the pluggable-transport features, plumbing bridge configuration through the FFI and a settings surface, and rebuilding the xcframework under the pinned toolchain with a provenance-manifest update. That is the single largest remaining gap in censorship resilience for the internet transport.
 
 ## Dev bypass (local only)
