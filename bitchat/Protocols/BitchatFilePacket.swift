@@ -41,11 +41,6 @@ struct BitchatFilePacket {
         guard canEncode else { return nil }
         let resolvedSize = fileSize ?? UInt64(content.count)
 
-        func appendBE<T: FixedWidthInteger>(_ value: T, into data: inout Data) {
-            var big = value.bigEndian
-            withUnsafeBytes(of: &big) { data.append(contentsOf: $0) }
-        }
-
         let nameData: Data? = {
             guard let name = fileName, let d = name.data(using: .utf8), d.count <= Int(UInt16.max) else { return nil }
             return d
@@ -59,28 +54,21 @@ struct BitchatFilePacket {
             + 7
             + (mimeData.map { 3 + $0.count } ?? 0)
             + 5 + content.count
-        var encoded = Data(capacity: capacity)
+        var writer = TLVWriter(lengthWidth: .twoBytes, capacity: capacity)
 
         if let nameData {
-            encoded.append(TLVType.fileName.rawValue)
-            appendBE(UInt16(nameData.count), into: &encoded)
-            encoded.append(nameData)
+            writer.append(TLVType.fileName.rawValue, nameData)
         }
-
-        encoded.append(TLVType.fileSize.rawValue)
-        appendBE(UInt16(4), into: &encoded)
-        appendBE(UInt32(resolvedSize), into: &encoded)
-
+        writer.append(TLVType.fileSize.rawValue, bigEndian: UInt32(resolvedSize))
         if let mimeData {
-            encoded.append(TLVType.mimeType.rawValue)
-            appendBE(UInt16(mimeData.count), into: &encoded)
-            encoded.append(mimeData)
+            writer.append(TLVType.mimeType.rawValue, mimeData)
         }
 
+        // CONTENT uses a 4-byte BE length per v2 canonical file TLV spec.
+        var encoded = writer.data
         encoded.append(TLVType.content.rawValue)
-        appendBE(UInt32(content.count), into: &encoded)
+        encoded.appendBigEndian(UInt32(content.count))
         encoded.append(content)
-
         return encoded
     }
 
@@ -238,10 +226,7 @@ enum PrivateMediaMessageIdentity {
         var input = domain
         for field in fields {
             guard let length = UInt32(exactly: field.count) else { return nil }
-            var bigEndianLength = length.bigEndian
-            withUnsafeBytes(of: &bigEndianLength) {
-                input.append(contentsOf: $0)
-            }
+            input.appendBigEndian(length)
             input.append(field)
         }
 

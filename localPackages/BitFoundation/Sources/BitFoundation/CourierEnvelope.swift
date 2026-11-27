@@ -78,85 +78,64 @@ public struct CourierEnvelope: Equatable {
         guard recipientTag.count == Self.tagLength else { return nil }
         guard !ciphertext.isEmpty, ciphertext.count <= Self.maxCiphertextBytes else { return nil }
 
-        func appendBE<T: FixedWidthInteger>(_ value: T, into data: inout Data) {
-            var big = value.bigEndian
-            withUnsafeBytes(of: &big) { data.append(contentsOf: $0) }
-        }
-
-        var encoded = Data()
-        encoded.reserveCapacity(3 * 3 + Self.tagLength + 8 + ciphertext.count)
-
-        encoded.append(TLVType.recipientTag.rawValue)
-        appendBE(UInt16(recipientTag.count), into: &encoded)
-        encoded.append(recipientTag)
-
-        encoded.append(TLVType.expiry.rawValue)
-        appendBE(UInt16(8), into: &encoded)
-        appendBE(expiry, into: &encoded)
-
-        encoded.append(TLVType.ciphertext.rawValue)
-        appendBE(UInt16(ciphertext.count), into: &encoded)
-        encoded.append(ciphertext)
+        var writer = TLVWriter(
+            lengthWidth: .twoBytes,
+            capacity: 3 * 3 + Self.tagLength + 8 + ciphertext.count
+        )
+        writer.append(TLVType.recipientTag.rawValue, recipientTag)
+        writer.append(TLVType.expiry.rawValue, bigEndian: expiry)
+        writer.append(TLVType.ciphertext.rawValue, ciphertext)
 
         // Omitted when 1 so carry-only envelopes stay byte-identical to the
         // pre-spray wire format (old clients skip the TLV as unknown anyway).
         if copies > 1 {
-            encoded.append(TLVType.copies.rawValue)
-            appendBE(UInt16(1), into: &encoded)
-            encoded.append(copies)
+            writer.append(TLVType.copies.rawValue, byte: copies)
         }
 
         // Omitted for v1 static-sealed envelopes so they stay byte-identical
         // to the pre-prekey wire format.
         if let prekeyID {
-            encoded.append(TLVType.prekeyID.rawValue)
-            appendBE(UInt16(4), into: &encoded)
-            appendBE(prekeyID, into: &encoded)
+            writer.append(TLVType.prekeyID.rawValue, bigEndian: prekeyID)
         }
 
-        return encoded
+        return writer.data
     }
 
     public static func decode(_ data: Data) -> CourierEnvelope? {
-        var cursor = data.startIndex
-        let end = data.endIndex
-
+        var reader = TLVReader(data, lengthWidth: .twoBytes)
         var recipientTag: Data?
         var expiry: UInt64?
         var ciphertext: Data?
         var copies: UInt8 = 1
         var prekeyID: UInt32?
 
-        while cursor < end {
-            let typeRaw = data[cursor]
-            cursor = data.index(after: cursor)
-
-            guard data.distance(from: cursor, to: end) >= 2 else { return nil }
-            let length = Int(data[cursor]) << 8 | Int(data[data.index(after: cursor)])
-            cursor = data.index(cursor, offsetBy: 2)
-            guard data.distance(from: cursor, to: end) >= length else { return nil }
-            let value = data[cursor..<data.index(cursor, offsetBy: length)]
-            cursor = data.index(cursor, offsetBy: length)
-
-            switch TLVType(rawValue: typeRaw) {
-            case .recipientTag:
-                guard length == tagLength else { return nil }
-                recipientTag = Data(value)
-            case .expiry:
-                guard length == 8 else { return nil }
-                expiry = value.reduce(UInt64(0)) { ($0 << 8) | UInt64($1) }
-            case .ciphertext:
-                guard length > 0, length <= maxCiphertextBytes else { return nil }
-                ciphertext = Data(value)
-            case .copies:
-                guard length == 1 else { return nil }
-                copies = value.first ?? 1
-            case .prekeyID:
-                guard length == 4 else { return nil }
-                prekeyID = value.reduce(UInt32(0)) { ($0 << 8) | UInt32($1) }
-            case nil:
-                // Unknown TLV: skip for forward compatibility.
-                continue
+        loop: while true {
+            switch reader.next() {
+            case .end:
+                break loop
+            case .malformed:
+                return nil
+            case .entry(let typeRaw, let value):
+                switch TLVType(rawValue: typeRaw) {
+                case .recipientTag:
+                    guard value.count == tagLength else { return nil }
+                    recipientTag = Data(value)
+                case .expiry:
+                    guard let parsed: UInt64 = value.readBigEndian() else { return nil }
+                    expiry = parsed
+                case .ciphertext:
+                    guard !value.isEmpty, value.count <= maxCiphertextBytes else { return nil }
+                    ciphertext = Data(value)
+                case .copies:
+                    guard value.count == 1 else { return nil }
+                    copies = value.first ?? 1
+                case .prekeyID:
+                    guard let parsed: UInt32 = value.readBigEndian() else { return nil }
+                    prekeyID = parsed
+                case nil:
+                    // Unknown TLV: skip for forward compatibility.
+                    continue
+                }
             }
         }
 

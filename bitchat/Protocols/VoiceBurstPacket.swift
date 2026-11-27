@@ -6,6 +6,7 @@
 // For more information, see <https://unlicense.org>
 //
 
+import BitFoundation
 import Foundation
 import Security
 
@@ -69,8 +70,7 @@ struct VoiceBurstPacket: Equatable {
     func encode() -> Data {
         var data = Data(capacity: Self.headerSize + payloadSize)
         data.append(burstID)
-        data.append(UInt8((seq >> 8) & 0xFF))
-        data.append(UInt8(seq & 0xFF))
+        data.appendBigEndian(seq)
         switch kind {
         case .start(let codec):
             data.append(Flags.start)
@@ -78,18 +78,13 @@ struct VoiceBurstPacket: Equatable {
         case .frames(let frames):
             data.append(0)
             for frame in frames {
-                let length = UInt16(frame.count)
-                data.append(UInt8((length >> 8) & 0xFF))
-                data.append(UInt8(length & 0xFF))
+                data.appendBigEndian(UInt16(frame.count))
                 data.append(frame)
             }
         case .end(let totalDataPackets, let durationMs):
             data.append(Flags.end)
-            data.append(UInt8((totalDataPackets >> 8) & 0xFF))
-            data.append(UInt8(totalDataPackets & 0xFF))
-            for shift in stride(from: 24, through: 0, by: -8) {
-                data.append(UInt8((durationMs >> UInt32(shift)) & 0xFF))
-            }
+            data.appendBigEndian(totalDataPackets)
+            data.appendBigEndian(durationMs)
         case .canceled:
             data.append(Flags.canceled)
         }
@@ -99,10 +94,10 @@ struct VoiceBurstPacket: Equatable {
     static func decode(_ data: Data) -> VoiceBurstPacket? {
         // Work on a re-based copy so subscripting is offset-safe.
         let data = Data(data)
-        guard data.count >= headerSize else { return nil }
+        guard data.count >= headerSize,
+              let seq: UInt16 = data[burstIDSize..<(burstIDSize + 2)].readBigEndian() else { return nil }
 
         let burstID = data.prefix(burstIDSize)
-        let seq = (UInt16(data[burstIDSize]) << 8) | UInt16(data[burstIDSize + 1])
         let flags = data[burstIDSize + 2]
         let payload = data.dropFirst(headerSize)
 
@@ -114,10 +109,10 @@ struct VoiceBurstPacket: Equatable {
             else { return nil }
             kind = .start(codec: codec)
         case Flags.end:
-            guard payload.count >= 6 else { return nil }
-            let bytes = Array(payload)
-            let total = (UInt16(bytes[0]) << 8) | UInt16(bytes[1])
-            let duration = bytes[2...5].reduce(UInt32(0)) { ($0 << 8) | UInt32($1) }
+            guard payload.count >= 6,
+                  let total: UInt16 = payload.prefix(2).readBigEndian(),
+                  let duration: UInt32 = payload.dropFirst(2).prefix(4).readBigEndian()
+            else { return nil }
             kind = .end(totalDataPackets: total, durationMs: duration)
         case Flags.canceled:
             kind = .canceled
