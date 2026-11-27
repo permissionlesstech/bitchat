@@ -94,7 +94,7 @@
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "공유된 링크",
+            "value" : "공유 링크",
             "comment" : "Fallback title when saving a shared link"
           }
         },
@@ -657,7 +657,7 @@
         "id" : { "stringUnit" : { "state" : "needs_review", "value" : "✓ Disimpan di bitchat — buka aplikasi untuk meninjau" } },
         "it" : { "stringUnit" : { "state" : "needs_review", "value" : "✓ Salvato in bitchat — apri l’app per controllare" } },
         "ja" : { "stringUnit" : { "state" : "needs_review", "value" : "✓ bitchat に保存しました — アプリを開いて確認してください" } },
-        "ko" : { "stringUnit" : { "state" : "needs_review", "value" : "✓ bitchat에 저장됨 — 앱을 열어 검토하세요" } },
+        "ko" : { "stringUnit" : { "state" : "needs_review", "value" : "✓ bitchat에 저장되었습니다. 앱을 열어 확인하세요" } },
         "ms" : { "stringUnit" : { "state" : "needs_review", "value" : "✓ Disimpan dalam bitchat — buka aplikasi untuk menyemak" } },
         "ne" : { "stringUnit" : { "state" : "needs_review", "value" : "✓ bitchat मा सुरक्षित गरियो — समीक्षा गर्न एप खोल्नुहोस्" } },
         "nl" : { "stringUnit" : { "state" : "needs_review", "value" : "✓ Opgeslagen in bitchat — open de app om te bekijken" } },
