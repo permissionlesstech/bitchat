@@ -1599,8 +1599,19 @@ final class ChatViewModel: ObservableObject, SynchronousMessageTransportEventDel
 
     // MARK: - App Lifecycle
 
+    /// Tracks whether the app is currently active in the foreground so an open
+    /// DM does not emit read receipts or suppress alerts while backgrounded or
+    /// locked. Defaults to `true` for headless tests and foreground launch.
+    private(set) var isAppActive: Bool = true
+
+    @MainActor
+    func setAppActive(_ active: Bool) {
+        isAppActive = active
+    }
+
     @MainActor
     func handleDidBecomeActive() {
+        isAppActive = true
         lifecycleCoordinator.handleDidBecomeActive()
     }
 

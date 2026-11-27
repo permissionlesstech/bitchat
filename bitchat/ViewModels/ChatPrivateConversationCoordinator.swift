@@ -17,6 +17,10 @@ protocol ChatPrivateConversationContext: ChatIdentityContext, ChatDirectMessageS
     var privateChats: [PeerID: [BitchatMessage]] { get }
     var sentReadReceipts: Set<String> { get }
     var selectedPrivateChatPeer: PeerID? { get }
+    /// Whether the app is currently active in the foreground. A DM left open
+    /// while the app is backgrounded or the phone is locked must not emit
+    /// instant read receipts or suppress notifications.
+    var isAppActive: Bool { get }
     var nostrKeyMapping: [PeerID: String] { get }
 
     // MARK: Conversation store intents
@@ -563,10 +567,9 @@ final class ChatPrivateConversationCoordinator {
 
         context.appendPrivateMessage(message, to: conversationPeerID)
 
-        let isViewing = context.selectedPrivateChatPeer == conversationPeerID
+        let isViewing = context.isAppActive && context.selectedPrivateChatPeer == conversationPeerID
         let wasReadBefore = context.sentReadReceipts.contains(messageId)
-        let isRecentMessage = Date().timeIntervalSince(messageTimestamp) < 30
-        let shouldMarkUnread = !wasReadBefore && !isViewing && isRecentMessage
+        let shouldMarkUnread = !wasReadBefore && !isViewing
         if shouldMarkUnread {
             context.markPrivateChatUnread(conversationPeerID)
         }
@@ -701,7 +704,7 @@ final class ChatPrivateConversationCoordinator {
         let noiseKey = peerID.noiseKey ?? context.noisePublicKey(for: peerID)
         mirrorToEphemeralIfNeeded(message, targetPeerID: peerID, key: noiseKey)
 
-        let isViewing = context.selectedPrivateChatPeer == peerID
+        let isViewing = context.isAppActive && context.selectedPrivateChatPeer == peerID
         if isViewing {
             let receipt = ReadReceipt(
                 originalMessageID: message.id,
