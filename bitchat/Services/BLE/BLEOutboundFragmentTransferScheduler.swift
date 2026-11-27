@@ -78,6 +78,7 @@ struct BLEOutboundFragmentTransferScheduler {
         var workItems: [DispatchWorkItem]
         var contentKey: String?
         var directedPeer: PeerID?
+        var scanPauseToken: UUID? = nil
     }
 
     private var activeTransfers: [String: ActiveTransferState] = [:]
@@ -163,14 +164,20 @@ struct BLEOutboundFragmentTransferScheduler {
     mutating func activateReservedTransfer(
         id transferId: String,
         totalFragments: Int,
-        workItems: [DispatchWorkItem]
+        workItems: [DispatchWorkItem],
+        scanPauseToken: UUID? = nil
     ) -> Bool {
         guard var state = activeTransfers[transferId] else { return false }
         state.totalFragments = totalFragments
         state.sentFragments = 0
         state.workItems = workItems
+        state.scanPauseToken = scanPauseToken
         activeTransfers[transferId] = state
         return true
+    }
+
+    func scanPauseToken(for transferId: String) -> UUID? {
+        activeTransfers[transferId]?.scanPauseToken
     }
 
     mutating func updateWorkItems(_ workItems: [DispatchWorkItem], for transferId: String) -> Bool {

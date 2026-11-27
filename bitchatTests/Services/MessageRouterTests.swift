@@ -1271,6 +1271,77 @@ struct MessageRouterTests {
     }
 
     @Test @MainActor
+    func unknownAckDuringFailedRecoveryWriteStillSuppressesUnseenDurableMessage() async {
+        let fileURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("router-unseen-recovery-ack-\(UUID().uuidString).sealed")
+        defer { try? FileManager.default.removeItem(at: fileURL) }
+        let keychain = MockKeychain()
+        let peerID = PeerID(str: "00000000000000e7")
+        let durable = MessageOutboxStore.QueuedMessage(
+            content: "Unseen before unlock",
+            nickname: "Peer",
+            messageID: "unseen-recovery-ack-target",
+            timestamp: Date()
+        )
+        MessageOutboxStore(keychain: keychain, fileURL: fileURL).save([peerID: [durable]])
+
+        var protectedDataUnavailable = true
+        var failWrites = false
+        let restoredStore = MessageOutboxStore(
+            keychain: keychain,
+            fileURL: fileURL,
+            readData: { url in
+                if protectedDataUnavailable {
+                    throw NSError(domain: NSCocoaErrorDomain, code: NSFileReadNoPermissionError)
+                }
+                return try Data(contentsOf: url)
+            },
+            writeData: { data, url, options in
+                if failWrites {
+                    throw NSError(domain: NSCocoaErrorDomain, code: NSFileWriteNoPermissionError)
+                }
+                try data.write(to: url, options: options)
+            }
+        )
+        let transport = MockTransport()
+        let router = MessageRouter(transports: [transport], outboxStore: restoredStore)
+        router.sendPrivate(
+            "Known wake",
+            to: peerID,
+            recipientNickname: "Peer",
+            messageID: "unseen-recovery-ack-known"
+        )
+
+        // Trigger post-unlock read with failing disk write so the store enters
+        // `unseenRecoveryPendingPersistence == true`.
+        protectedDataUnavailable = false
+        failWrites = true
+        router.sendPrivate(
+            "Known wake",
+            to: peerID,
+            recipientNickname: "Peer",
+            messageID: "unseen-recovery-ack-known"
+        )
+        #expect(restoredStore.hasDeferredDiskState)
+
+        // Ack the unseen durable message while `cleared == false`: the router
+        // must still record the removal tombstone so recovery does not resend it.
+        failWrites = false
+        router.markDelivered("unseen-recovery-ack-target")
+
+        transport.connectedPeers.insert(peerID)
+        transport.securePeers = [peerID]
+        restoredStore.retryDeferredLoad()
+        await Task.yield()
+        await Task.yield()
+
+        let sentIDs = transport.sentPrivateMessages.map(\.messageID)
+        #expect(!sentIDs.contains("unseen-recovery-ack-target"))
+        let remaining = MessageOutboxStore(keychain: keychain, fileURL: fileURL).load()[peerID]?.map(\.messageID) ?? []
+        #expect(!remaining.contains("unseen-recovery-ack-target"))
+    }
+
+    @Test @MainActor
     func flushOutboxForShortIDDeliversMessagesQueuedUnderStableNoiseKeyID() {
         let noiseKey = Data(repeating: 0x5A, count: 32)
         let stableID = PeerID(hexData: noiseKey)

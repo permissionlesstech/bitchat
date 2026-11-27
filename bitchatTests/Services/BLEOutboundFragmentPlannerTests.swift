@@ -160,6 +160,51 @@ struct BLEOutboundFragmentPlannerTests {
         #expect(!BLEOutboundFragmentPlanner.isPrivateMediaV1Compatible(at257))
     }
 
+    @Test("direct makePlan overload matches request-based plan without building a request")
+    func directMakePlanOverloadMatchesRequestOverload() throws {
+        let directedPeer = PeerID(str: "8877665544332211")
+        let packet = BitchatPacket(
+            type: MessageType.fileTransfer.rawValue,
+            senderID: Data(hexString: "0011223344556677") ?? Data(),
+            recipientID: Data(hexString: directedPeer.id),
+            timestamp: 0x0102030405,
+            payload: makePayload(count: 1024),
+            signature: nil,
+            ttl: 3,
+            version: 2
+        )
+        let fragmentID = Data(repeating: 0xE5, count: 8)
+        let request = BLEOutboundFragmentTransferRequest(
+            packet: packet,
+            pad: true,
+            maxChunk: 120,
+            directedPeer: directedPeer,
+            transferId: "compat-check"
+        )
+
+        let viaRequest = try #require(BLEOutboundFragmentPlanner.makePlan(
+            for: request,
+            defaultChunkSize: 256,
+            bleMaxMTU: 512,
+            fragmentID: fragmentID
+        ))
+        let direct = try #require(BLEOutboundFragmentPlanner.makePlan(
+            packet: packet,
+            pad: true,
+            maxChunk: 120,
+            directedPeer: directedPeer,
+            defaultChunkSize: 256,
+            bleMaxMTU: 512,
+            fragmentID: fragmentID
+        ))
+
+        #expect(direct.totalFragments == viaRequest.totalFragments)
+        #expect(direct.fragmentVersion == viaRequest.fragmentVersion)
+        #expect(direct.chunkSize == viaRequest.chunkSize)
+        #expect(direct.spacingMs == viaRequest.spacingMs)
+        #expect(direct.fragmentPackets.map(\.payload) == viaRequest.fragmentPackets.map(\.payload))
+    }
+
     private func makePacket(
         payload: Data,
         route: [Data]? = nil,

@@ -520,4 +520,106 @@ final class PanicWipeCoverageTests: XCTestCase {
         XCTAssertNil(CashuTokenDecoder.decode(huge))
         XCTAssertFalse(CashuTokenDecoder.hasCachedDecode(for: huge))
     }
+
+    func test_bleService_courierDepositAndSpray_fencedAcrossPanicLifecycle() async throws {
+        func makeIsolatedBLEService() -> BLEService {
+            let keychain = MockKeychain()
+            let service = BLEService(
+                keychain: keychain,
+                idBridge: NostrIdentityBridge(keychain: MockKeychainHelper()),
+                identityManager: MockIdentityManager(keychain),
+                initializeBluetoothManagers: false
+            )
+            service.courierStore = CourierStore(persistsToDisk: false)
+            return service
+        }
+
+        // Part A: A courier deposit arriving before panic must not write to
+        // `courierStore` on `messageQueue.async` after panic suspends & wipes.
+        let carol = makeIsolatedBLEService()
+        let alice = NoiseEncryptionService(keychain: MockKeychain())
+        let bobKey = NoiseEncryptionService(keychain: MockKeychain()).getStaticPublicKeyData()
+        let typedPayload = try XCTUnwrap(
+            BLENoisePayloadFactory.privateMessage(content: "pre-panic deposit", messageID: "panic-deposit-1")
+        )
+        let sealed = try alice.sealCourierPayload(typedPayload, recipientStaticKey: bobKey)
+        let now = Date()
+        let envelope = CourierEnvelope(
+            recipientTag: CourierEnvelope.recipientTag(
+                noiseStaticKey: bobKey,
+                epochDay: CourierEnvelope.epochDay(for: now)
+            ),
+            expiry: UInt64((now.timeIntervalSince1970 + 3600) * 1000),
+            ciphertext: sealed,
+            copies: 4,
+            prekeyID: nil
+        )
+        let alicePeerID = PeerID(publicKey: alice.getStaticPublicKeyData())
+        let unsigned = BitchatPacket(
+            type: MessageType.courierEnvelope.rawValue,
+            senderID: Data(hexString: alicePeerID.id) ?? Data(),
+            recipientID: Data(hexString: carol.myPeerID.id),
+            timestamp: UInt64(now.timeIntervalSince1970 * 1000),
+            payload: try XCTUnwrap(envelope.encode()),
+            signature: nil,
+            ttl: 1
+        )
+        let signedPacket = try XCTUnwrap(alice.signPacket(unsigned))
+
+        let depositPolicyEvaluated = expectation(description: "deposit policy evaluated")
+        carol.courierDepositPolicy = { _, _ in
+            carol.suspendForPanicReset()
+            carol.courierStore.wipe()
+            depositPolicyEvaluated.fulfill()
+            return .favorite
+        }
+
+        carol._test_handlePacket(
+            signedPacket,
+            fromPeerID: alicePeerID,
+            signingPublicKey: alice.getSigningPublicKeyData()
+        )
+        await fulfillment(of: [depositPolicyEvaluated], timeout: TestConstants.settleTimeout)
+        await carol._test_drainPrivateMediaSendPipeline()
+        XCTAssertTrue(carol.courierStore.isEmpty)
+
+        // Part B: A courier spray triggered before panic must not run
+        // `sendSpray()` on `messageQueue.async` after panic suspends.
+        let sender = makeIsolatedBLEService()
+        let peerNoise = NoiseEncryptionService(keychain: MockKeychain())
+        let peerID = PeerID(publicKey: peerNoise.getStaticPublicKeyData())
+        XCTAssertTrue(
+            sender.courierStore.deposit(envelope, from: alice.getStaticPublicKeyData(), tier: .favorite)
+        )
+        XCTAssertFalse(sender.courierStore.isEmpty)
+
+        let packetLock = NSLock()
+        var outboundCourierPackets: [BitchatPacket] = []
+        sender._test_onOutboundPacket = { packet in
+            guard packet.type == MessageType.courierEnvelope.rawValue else { return }
+            packetLock.lock()
+            outboundCourierPackets.append(packet)
+            packetLock.unlock()
+        }
+
+        let sprayPolicyEvaluated = expectation(description: "spray policy evaluated")
+        sender.courierDepositPolicy = { _, _ in
+            sender.suspendForPanicReset()
+            sprayPolicyEvaluated.fulfill()
+            return .favorite
+        }
+
+        sender.sprayCourierMail(
+            to: peerID,
+            noiseKey: peerNoise.getStaticPublicKeyData(),
+            isVerifiedPeer: true
+        )
+        await fulfillment(of: [sprayPolicyEvaluated], timeout: TestConstants.settleTimeout)
+        await sender._test_drainPrivateMediaSendPipeline()
+
+        let sentCount = packetLock.withLock {
+            outboundCourierPackets.count
+        }
+        XCTAssertEqual(sentCount, 0)
+    }
 }

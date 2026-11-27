@@ -314,10 +314,6 @@ final class BLEService: NSObject {
     // 5. Fragment Reassembly (necessary for messages > MTU)
     private var fragmentAssemblyBuffer = BLEFragmentAssemblyBuffer()
     var outboundFragmentTransfers = BLEOutboundFragmentTransferScheduler()
-    /// bleQueue-confined tokens holding scanning paused while outbound
-    /// fragment trains are active, preventing overlapping transfers from
-    /// prematurely restarting scanning.
-    private var fragmentScanPauseTokens = Set<UUID>()
     lazy var privateMediaTransferAdmissions = BLEPrivateMediaTransferAdmissionRegistry { [weak self] transferId in
         self?.handlePrivateMediaAdmissionExpiry(transferId)
     }
@@ -1129,6 +1125,7 @@ final class BLEService: NSObject {
             maintenanceTimer?.cancel()
             maintenanceTimer = nil
             radio.stopDutyCycle()
+            radio.cancelFragmentScanPauses()
         }
 
         centralManager?.stopScan()
@@ -1557,9 +1554,15 @@ final class BLEService: NSObject {
         messageQueue.async { [weak self] in
             guard let self = self else { return }
 
+            let pauseToken = self.outboundFragmentTransfers.scanPauseToken(for: transferId)
             switch self.outboundFragmentTransfers.cancelTransfer(transferId) {
             case let .active(id, workItems):
                 workItems.forEach { $0.cancel() }
+                if let pauseToken {
+                    self.bleQueue.async { [weak self] in
+                        self?.radio.endFragmentScanPause(token: pauseToken)
+                    }
+                }
                 TransferProgressManager.shared.cancel(id: transferId)
                 SecureLogger.debug("🛑 Cancelled transfer \(id.prefix(8))…", category: .session)
                 self.messageQueue.async { [weak self] in
@@ -2077,15 +2080,11 @@ final class BLEService: NSObject {
         if let transferId,
            let recipientPeerID = PeerID(hexData: packetToSend.recipientID),
            packetToSend.type == MessageType.fileTransfer.rawValue {
-            let compatibilityRequest = BLEOutboundFragmentTransferRequest(
+            guard let plan = BLEOutboundFragmentPlanner.makePlan(
                 packet: packetToSend,
                 pad: padForBLE,
                 maxChunk: nil,
                 directedPeer: recipientPeerID,
-                transferId: transferId
-            )
-            guard let plan = BLEOutboundFragmentPlanner.makePlan(
-                for: compatibilityRequest,
                 defaultChunkSize: defaultFragmentSize,
                 bleMaxMTU: bleMaxMTU
             ), BLEOutboundFragmentPlanner.isPrivateMediaV1Compatible(plan) else {
@@ -3939,7 +3938,14 @@ extension BLEService {
             guard let self = self else { return }
             TransferProgressManager.shared.cancel(id: id)
             messageQueue.async { [weak self] in
-                _ = self?.outboundFragmentTransfers.releaseReservation(id)
+                guard let self else { return }
+                let pauseToken = self.outboundFragmentTransfers.scanPauseToken(for: id)
+                if self.outboundFragmentTransfers.releaseReservation(id) != nil,
+                   let pauseToken {
+                    self.bleQueue.async { [weak self] in
+                        self?.radio.endFragmentScanPause(token: pauseToken)
+                    }
+                }
             }
             self.messageQueue.async { [weak self] in
                 self?.startNextPendingTransferIfNeeded()
@@ -3957,35 +3963,30 @@ extension BLEService {
             return false
         }
 
-        // Lightweight pacing to reduce floods and allow BLE buffers to drain
-        // Also pause scanning during long fragment trains to save battery and
-        // keep it paused until overlapping transfers finish.
-        if plan.shouldPauseScanning {
-            let pauseToken = UUID()
-            let totalFragments = plan.totalFragments
-            let expectedMs = min(TransportConfig.bleExpectedWriteMaxMs, totalFragments * TransportConfig.bleExpectedWritePerFragmentMs)
-            bleQueue.async { [weak self] in
-                guard let self = self, let c = self.centralManager, c.state == .poweredOn else { return }
-                self.fragmentScanPauseTokens.insert(pauseToken)
-                if c.isScanning { c.stopScan() }
-                self.bleQueue.asyncAfter(deadline: .now() + .milliseconds(expectedMs)) { [weak self] in
-                    guard let self else { return }
-                    self.fragmentScanPauseTokens.remove(pauseToken)
-                    if self.fragmentScanPauseTokens.isEmpty {
-                        self.radio.startScanning()
-                    }
-                }
-            }
-        }
+        // Lightweight pacing to reduce floods and allow BLE buffers to drain.
+        // Pause scanning during long fragment trains to save battery and keep
+        // it paused via BLERadioController until overlapping transfers finish.
+        let pauseToken: UUID? = plan.shouldPauseScanning ? UUID() : nil
+        let pauseDuration = Double(min(
+            TransportConfig.bleExpectedWriteMaxMs,
+            plan.totalFragments * TransportConfig.bleExpectedWritePerFragmentMs
+        )) / 1_000.0
 
         let transferIdentifier: String?
         if let id = reservedTransferId {
-            let activated = onEngine {
-                self.outboundFragmentTransfers.activateReservedTransfer(
+            let activated: Bool = onEngine {
+                let didActivate = self.outboundFragmentTransfers.activateReservedTransfer(
                     id: id,
                     totalFragments: plan.totalFragments,
-                    workItems: []
+                    workItems: [],
+                    scanPauseToken: pauseToken
                 )
+                if didActivate, let pauseToken {
+                    self.bleQueue.async { [weak self] in
+                        self?.radio.beginFragmentScanPause(token: pauseToken, duration: pauseDuration)
+                    }
+                }
+                return didActivate
             }
             // Cancellation may remove the reservation between submit and plan
             // construction. Treat that as cancellation, not as permission to
@@ -3994,6 +3995,11 @@ extension BLEService {
             TransferProgressManager.shared.start(id: id, totalFragments: plan.totalFragments)
             transferIdentifier = id
         } else {
+            if let pauseToken {
+                bleQueue.async { [weak self] in
+                    self?.radio.beginFragmentScanPause(token: pauseToken, duration: pauseDuration)
+                }
+            }
             transferIdentifier = nil
         }
 
@@ -4074,6 +4080,7 @@ extension BLEService {
         messageQueue.async { [weak self] in
             guard let self = self else { return }
 
+            let pauseToken = self.outboundFragmentTransfers.scanPauseToken(for: transferId)
             switch self.outboundFragmentTransfers.markFragmentSent(transferId: transferId) {
             case .progress, .complete:
                 TransferProgressManager.shared.recordFragmentSent(id: transferId)
@@ -4083,11 +4090,9 @@ extension BLEService {
             }
 
             if !self.outboundFragmentTransfers.isActive(transferId) {
-                if self.outboundFragmentTransfers.activeCount == 0 && self.outboundFragmentTransfers.pendingCount == 0 {
+                if let pauseToken {
                     self.bleQueue.async { [weak self] in
-                        guard let self, !self.fragmentScanPauseTokens.isEmpty else { return }
-                        self.fragmentScanPauseTokens.removeAll()
-                        self.radio.startScanning()
+                        self?.radio.endFragmentScanPause(token: pauseToken)
                     }
                 }
                 self.messageQueue.async { [weak self] in

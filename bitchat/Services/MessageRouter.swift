@@ -752,7 +752,6 @@ final class MessageRouter {
         }
     }
 
-    @discardableResult
     private func flushOutbox(for peerID: PeerID, fallbackPeerID: PeerID? = nil, persist: Bool) -> Bool {
         guard let queued = outbox[peerID], !queued.isEmpty else { return false }
         SecureLogger.debug("Flushing outbox for \(peerID.id.prefix(8))… count=\(queued.count)", category: .session)
