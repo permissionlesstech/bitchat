@@ -425,14 +425,6 @@ final class ChatMessageFormatter {
         return false
     }
 
-    func senderColor(for message: BitchatMessage, isDark: Bool) -> Color {
-        peerColor(for: message, isDark: isDark)
-    }
-
-    func peerURL(for peerID: PeerID) -> URL? {
-        URL(string: "bitchat://user/\(peerID.toPercentEncoded())")
-    }
-
     func colorForNostrPubkey(_ pubkeyHexLowercased: String, isDark: Bool) -> Color {
         getNostrPaletteColor(for: pubkeyHexLowercased.lowercased(), isDark: isDark)
     }
