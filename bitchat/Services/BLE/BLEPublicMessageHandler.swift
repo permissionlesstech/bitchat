@@ -22,8 +22,6 @@ struct BLEPublicMessageHandlerEnvironment {
     let signedSenderDisplayName: (_ packet: BitchatPacket, _ peerID: PeerID) -> String?
     /// Tracks the broadcast message packet for gossip sync.
     let trackPacketSeen: (BitchatPacket) -> Void
-    /// Direct link state for the peer (BLE-queue read).
-    let linkState: (PeerID) -> (hasPeripheral: Bool, hasCentral: Bool)
     /// Resolves and consumes the original message ID for our own re-broadcast.
     let takeSelfBroadcastMessageID: (BitchatPacket) -> String?
     /// Delivers `.publicMessageReceived` to the UI as one main-actor hop.
@@ -126,12 +124,7 @@ final class BLEPublicMessageHandler {
             SecureLogger.error("❌ Failed to decode message payload as UTF-8", category: .session)
             return
         }
-        // Determine if we have a direct link to the sender
-        let directLink = env.linkState(peerID)
-        let hasDirectLink = directLink.hasPeripheral || directLink.hasCentral
-
-        let pathTag = hasDirectLink ? "direct" : "mesh"
-        SecureLogger.debug("💬 [\(senderNickname)] TTL:\(packet.ttl) (\(pathTag)) chars=\(content.count) bytes=\(packet.payload.count)", category: .session)
+        SecureLogger.debug("💬 [\(senderNickname)] TTL:\(packet.ttl) chars=\(content.count) bytes=\(packet.payload.count)", category: .session)
 
         let ts = Date(timeIntervalSince1970: Double(packet.timestamp) / 1000)
         let messageID: String?

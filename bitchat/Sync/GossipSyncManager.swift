@@ -86,18 +86,18 @@ final class GossipSyncManager {
     }
 
     struct Config {
-        var seenCapacity: Int = 1000          // max packets per sync (cap across types)
-        var gcsMaxBytes: Int = 400           // filter size budget (128..1024)
-        var gcsTargetFpr: Double = 0.01      // 1%
-        var maxMessageAgeSeconds: TimeInterval = 900  // 15 min - fragments/files/announces
+        var seenCapacity: Int = TransportConfig.syncSeenCapacity
+        var gcsMaxBytes: Int = TransportConfig.syncGCSMaxBytes
+        var gcsTargetFpr: Double = TransportConfig.syncGCSTargetFpr
+        var maxMessageAgeSeconds: TimeInterval = TransportConfig.syncMaxMessageAgeSeconds
         // Whole public messages stay sync-able much longer so devices carry
         // the room's recent history between partitions and across restarts.
-        var publicMessageMaxAgeSeconds: TimeInterval = 900
-        var maintenanceIntervalSeconds: TimeInterval = 30.0
-        var stalePeerCleanupIntervalSeconds: TimeInterval = 60.0
-        var stalePeerTimeoutSeconds: TimeInterval = 60.0
-        var fragmentCapacity: Int = 600
-        var fileTransferCapacity: Int = 200
+        var publicMessageMaxAgeSeconds: TimeInterval = TransportConfig.syncPublicMessageMaxAgeSeconds
+        var maintenanceIntervalSeconds: TimeInterval = TransportConfig.syncMaintenanceIntervalSeconds
+        var stalePeerCleanupIntervalSeconds: TimeInterval = TransportConfig.syncStalePeerCleanupIntervalSeconds
+        var stalePeerTimeoutSeconds: TimeInterval = TransportConfig.syncStalePeerTimeoutSeconds
+        var fragmentCapacity: Int = TransportConfig.syncFragmentCapacity
+        var fileTransferCapacity: Int = TransportConfig.syncFileTransferCapacity
         var groupMessageCapacity: Int = 200
         // Payload byte budgets on top of the count caps. Each sits well above
         // what the count cap holds in ordinary traffic (1000 chat messages,
@@ -107,21 +107,21 @@ final class GossipSyncManager {
         var fragmentByteBudget: Int = 1024 * 1024
         var fileTransferByteBudget: Int = 32 * 1024 * 1024
         var groupMessageByteBudget: Int = 4 * 1024 * 1024
-        var fragmentSyncIntervalSeconds: TimeInterval = 30.0
-        var fileTransferSyncIntervalSeconds: TimeInterval = 60.0
-        var messageSyncIntervalSeconds: TimeInterval = 15.0
+        var fragmentSyncIntervalSeconds: TimeInterval = TransportConfig.syncFragmentIntervalSeconds
+        var fileTransferSyncIntervalSeconds: TimeInterval = TransportConfig.syncFileTransferIntervalSeconds
+        var messageSyncIntervalSeconds: TimeInterval = TransportConfig.syncMessageIntervalSeconds
         // Board posts are few but long-lived (days, until each post's own
         // expiry), so they get a slow round with their own capacity instead
         // of competing with the 15-minute message window.
         var boardCapacity: Int = 200
         var boardSyncIntervalSeconds: TimeInterval = 60.0
-        var responseRateLimitMaxResponses: Int = 8
-        var responseRateLimitWindowSeconds: TimeInterval = 30.0
+        var responseRateLimitMaxResponses: Int = TransportConfig.syncResponseRateLimitMaxResponses
+        var responseRateLimitWindowSeconds: TimeInterval = TransportConfig.syncResponseRateLimitWindowSeconds
         // Prekey bundles: one per peer, own sync round, long freshness so
         // bundles persist mesh-wide while their owners are offline.
-        var prekeyBundleCapacity: Int = 200
-        var prekeyBundleSyncIntervalSeconds: TimeInterval = 60.0
-        var prekeyBundleMaxAgeSeconds: TimeInterval = 24 * 60 * 60
+        var prekeyBundleCapacity: Int = TransportConfig.syncPrekeyBundleCapacity
+        var prekeyBundleSyncIntervalSeconds: TimeInterval = TransportConfig.syncPrekeyBundleIntervalSeconds
+        var prekeyBundleMaxAgeSeconds: TimeInterval = TransportConfig.syncPrekeyBundleMaxAgeSeconds
         // Future bound for every store: matches the ingress skew so nothing
         // the radio accepts is refused here.
         var maxFutureSkewMs: UInt64 = TransportConfig.bleMaxTimestampSkewMs
@@ -294,52 +294,42 @@ final class GossipSyncManager {
 
     private func _onPublicPacketSeen(_ packet: BitchatPacket) {
         guard let messageType = MessageType(rawValue: packet.type) else { return }
-        let isBroadcastRecipient: Bool = {
-            guard let r = packet.recipientID else { return true }
-            return r.count == 8 && r.allSatisfy { $0 == 0xFF }
-        }()
         let nowMs = UInt64(Date().timeIntervalSince1970 * 1000)
 
-        switch messageType {
-        case .announce:
+        if messageType == .announce {
             guard isPacketFresh(packet, nowMs: nowMs) else { return }
+            let sender = PeerID(hexData: packet.senderID)
             guard isAnnouncementFresh(packet, nowMs: nowMs) else {
-                let sender = PeerID(hexData: packet.senderID)
                 removeState(for: sender)
                 return
             }
-            let sender = PeerID(hexData: packet.senderID)
-            let idBytes = PacketIdUtil.computeId(packet)
-            latestAnnouncementByPeer[sender] = StoredEntry(packet: packet, hash64: GCSFilter.hash64(idBytes))
+            latestAnnouncementByPeer[sender] = Self.makeEntry(packet).entry
+            return
+        }
+
+        guard BLEPacketFreshnessPolicy.isBroadcastRecipient(packet.recipientID),
+              isPacketFresh(packet, nowMs: nowMs) else { return }
+
+        switch messageType {
         case .message:
-            guard isBroadcastRecipient else { return }
-            guard isPacketFresh(packet, nowMs: nowMs) else { return }
             let (idHex, entry) = Self.makeEntry(packet)
             messages.insert(idHex: idHex, hash64: entry.hash64, packet: packet, capacity: max(1, config.seenCapacity), byteBudget: config.messageByteBudget)
             archiveDirty = true
         case .fragment:
-            guard isBroadcastRecipient else { return }
-            guard isPacketFresh(packet, nowMs: nowMs) else { return }
             let (idHex, entry) = Self.makeEntry(packet)
             fragments.insert(idHex: idHex, hash64: entry.hash64, packet: packet, capacity: max(1, config.fragmentCapacity), byteBudget: config.fragmentByteBudget)
         case .fileTransfer:
-            guard isBroadcastRecipient else { return }
-            guard isPacketFresh(packet, nowMs: nowMs) else { return }
             let (idHex, entry) = Self.makeEntry(packet)
             fileTransfers.insert(idHex: idHex, hash64: entry.hash64, packet: packet, capacity: max(1, config.fileTransferCapacity), byteBudget: config.fileTransferByteBudget)
         case .groupMessage:
             // Opaque ciphertext to non-members; carried and served like any
             // other broadcast so members get backfill from any relay.
-            guard isBroadcastRecipient else { return }
-            guard isPacketFresh(packet, nowMs: nowMs) else { return }
             let (idHex, entry) = Self.makeEntry(packet)
             groupMessages.insert(idHex: idHex, hash64: entry.hash64, packet: packet, capacity: max(1, config.groupMessageCapacity), byteBudget: config.groupMessageByteBudget)
         case .prekeyBundle:
             // Callers only feed verified bundles here (own bundles at send
             // time, peers' after signature verification), so gossip never
             // spreads a bundle this node couldn't attribute.
-            guard isBroadcastRecipient else { return }
-            guard isPacketFresh(packet, nowMs: nowMs) else { return }
             // Key by the bundle's authenticated identity (its noise static key),
             // NOT the unauthenticated packet senderID. Otherwise one valid
             // bundle re-broadcast under many fabricated sender IDs would create
@@ -355,8 +345,7 @@ final class GossipSyncManager {
             // allowed so the cap can't block refreshes.
             guard latestPrekeyBundleByPeer[owner] != nil
                     || latestPrekeyBundleByPeer.count < max(1, config.prekeyBundleCapacity) else { return }
-            let idBytes = PacketIdUtil.computeId(packet)
-            latestPrekeyBundleByPeer[owner] = StoredEntry(packet: packet, hash64: GCSFilter.hash64(idBytes))
+            latestPrekeyBundleByPeer[owner] = Self.makeEntry(packet).entry
         default:
             break
         }

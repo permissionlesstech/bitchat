@@ -20,11 +20,6 @@ struct BLEPeerAnnounceUpdate: Equatable {
     let previousNickname: String?
 }
 
-struct BLEPeerLinkPresence: Equatable {
-    var hasPeripheral: Bool
-    var hasCentral: Bool
-}
-
 struct BLERemovedPeer: Equatable {
     let peerID: PeerID
     let nickname: String
@@ -246,7 +241,7 @@ struct BLEPeerRegistry {
 
     mutating func reconcileConnectivity(
         now: Date,
-        linkStates: [PeerID: BLEPeerLinkPresence]
+        linkStates: [PeerID: BLEDirectLinkState]
     ) -> BLEPeerConnectivityChanges {
         var changes = BLEPeerConnectivityChanges()
 
@@ -257,8 +252,8 @@ struct BLEPeerRegistry {
                 : TransportConfig.bleReachabilityRetentionUnverifiedSeconds
 
             if peer.isConnected && age > TransportConfig.blePeerInactivityTimeoutSeconds {
-                let state = linkStates[peerID] ?? BLEPeerLinkPresence(hasPeripheral: false, hasCentral: false)
-                if !state.hasPeripheral && !state.hasCentral {
+                let state = linkStates[peerID] ?? .none
+                if !state.isConnected {
                     var updated = peer
                     updated.isConnected = false
                     peers[peerID] = updated

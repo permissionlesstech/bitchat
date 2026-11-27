@@ -16,7 +16,7 @@ import BitFoundation
 /// that we have actively requested sync from.
 final class RequestSyncManager {
     
-    private let queue = DispatchQueue(label: "request.sync.manager", attributes: .concurrent)
+    private let lock = NSLock()
     private var pendingRequests: [PeerID: TimeInterval] = [:]
     private let responseWindow: TimeInterval
     private let now: () -> TimeInterval
@@ -33,10 +33,10 @@ final class RequestSyncManager {
     /// - Parameter peerID: The peer we are requesting sync from
     func registerRequest(to peerID: PeerID) {
         let now = self.now()
-        queue.async(flags: .barrier) {
-            SecureLogger.debug("Registering sync request to \(peerID.id.prefix(8))…", category: .sync)
-            self.pendingRequests[peerID] = now
+        lock.withLock {
+            pendingRequests[peerID] = now
         }
+        SecureLogger.debug("Registering sync request to \(peerID.id.prefix(8))…", category: .sync)
     }
     
     /// Check if a packet from a peer is a valid response to a sync request.
@@ -48,41 +48,39 @@ final class RequestSyncManager {
     func isValidResponse(from peerID: PeerID, isRSR: Bool) -> Bool {
         guard isRSR else { return false }
         
-        return queue.sync {
-            guard let requestTime = pendingRequests[peerID] else {
-                SecureLogger.warning("Received unsolicited RSR packet from \(peerID.id.prefix(8))…", category: .security)
-                return false
-            }
-            
-            let now = self.now()
-            if now - requestTime > responseWindow {
-                SecureLogger.warning("Received RSR packet from \(peerID.id.prefix(8))… outside of response window", category: .security)
-                // We don't remove here because we might receive multiple packets for one request
-                return false
-            }
-            
-            return true
+        let requestTime = lock.withLock { pendingRequests[peerID] }
+        guard let requestTime else {
+            SecureLogger.warning("Received unsolicited RSR packet from \(peerID.id.prefix(8))…", category: .security)
+            return false
         }
+        
+        if self.now() - requestTime > responseWindow {
+            SecureLogger.warning("Received RSR packet from \(peerID.id.prefix(8))… outside of response window", category: .security)
+            // We don't remove here because we might receive multiple packets for one request
+            return false
+        }
+        
+        return true
     }
     
     /// Periodic cleanup of expired requests
     func cleanup() {
         let now = self.now()
-        queue.async(flags: .barrier) {
-            let originalCount = self.pendingRequests.count
-            self.pendingRequests = self.pendingRequests.filter { _, timestamp in
-                now - timestamp <= self.responseWindow
+        let removed: Int = lock.withLock {
+            let originalCount = pendingRequests.count
+            pendingRequests = pendingRequests.filter { _, timestamp in
+                now - timestamp <= responseWindow
             }
-            let removed = originalCount - self.pendingRequests.count
-            if removed > 0 {
-                SecureLogger.debug("Cleaned up \(removed) expired sync requests", category: .sync)
-            }
+            return originalCount - pendingRequests.count
+        }
+        if removed > 0 {
+            SecureLogger.debug("Cleaned up \(removed) expired sync requests", category: .sync)
         }
     }
 
     #if DEBUG
     var debugPendingRequestCount: Int {
-        queue.sync { pendingRequests.count }
+        lock.withLock { pendingRequests.count }
     }
     #endif
 }

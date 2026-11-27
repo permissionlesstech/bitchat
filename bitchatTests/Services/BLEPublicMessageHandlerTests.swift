@@ -9,7 +9,6 @@ struct BLEPublicMessageHandlerTests {
         var peers: [PeerID: BLEPeerInfo] = [:]
         var signedName: String?
         var verifyPacketSignatureResult = false
-        var linkState: (hasPeripheral: Bool, hasCentral: Bool) = (false, false)
         var selfBroadcastMessageID: String?
 
         var peersSnapshotReads = 0
@@ -48,7 +47,6 @@ struct BLEPublicMessageHandlerTests {
             trackPacketSeen: { packet in
                 recorder.trackedPackets.append(packet)
             },
-            linkState: { _ in recorder.linkState },
             takeSelfBroadcastMessageID: { packet in
                 recorder.selfBroadcastTakes.append(packet)
                 return recorder.selfBroadcastMessageID
