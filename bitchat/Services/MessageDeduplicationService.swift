@@ -15,86 +15,36 @@ import Foundation
 /// Thread-safe via @MainActor - all callers are already on main actor.
 @MainActor
 final class LRUDeduplicationCache<Value> {
-    private var map: [String: Value] = [:]
-    private var order: [String] = []
-    private var head: Int = 0
-    private let capacity: Int
+    private var cache: BoundedCache<String, Value>
 
-    /// Creates a new LRU cache with the specified capacity.
+    /// Creates a new bounded cache with the specified capacity.
     /// - Parameter capacity: Maximum number of entries before eviction
     init(capacity: Int) {
-        precondition(capacity > 0, "LRU cache capacity must be positive")
-        self.capacity = capacity
+        self.cache = BoundedCache(capacity: capacity)
     }
 
     /// Number of active entries in the cache
-    var count: Int {
-        order.count - head
-    }
+    var count: Int { cache.count }
 
     /// Checks if a key exists in the cache
-    func contains(_ key: String) -> Bool {
-        map[key] != nil
-    }
+    func contains(_ key: String) -> Bool { cache.contains(key) }
 
     /// Gets the value for a key, or nil if not present
-    func value(for key: String) -> Value? {
-        map[key]
-    }
+    func value(for key: String) -> Value? { cache.value(for: key) }
 
     /// Records a key-value pair, updating if exists or inserting if new
     func record(_ key: String, value: Value) {
-        if map[key] == nil {
-            order.append(key)
-        }
-        map[key] = value
-        trimIfNeeded()
+        cache.set(key, value: value, refreshOrder: false)
     }
 
     /// Removes a specific key from the cache
     func remove(_ key: String) {
-        map.removeValue(forKey: key)
-        // Note: key remains in order array but will be skipped during eviction
+        cache.remove(key)
     }
 
     /// Clears all entries from the cache
     func clear() {
-        map.removeAll()
-        order.removeAll()
-        head = 0
-    }
-
-    // MARK: - Private
-
-    private func trimIfNeeded() {
-        let activeCount = order.count - head
-        guard activeCount > capacity else { return }
-
-        let overflow = activeCount - capacity
-        for _ in 0..<overflow {
-            guard let victim = popOldest() else { break }
-            map.removeValue(forKey: victim)
-        }
-    }
-
-    private func popOldest() -> String? {
-        // Skip keys that were already removed from map
-        while head < order.count {
-            let key = order[head]
-            head += 1
-
-            // Periodically compact the backing storage
-            if head >= 32 && head * 2 >= order.count {
-                order.removeFirst(head)
-                head = 0
-            }
-
-            // Only return if key is still in map
-            if map[key] != nil {
-                return key
-            }
-        }
-        return nil
+        cache.removeAll()
     }
 }
 

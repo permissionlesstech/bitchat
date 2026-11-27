@@ -804,6 +804,7 @@ final class BLEService: NSObject {
             radio.reset()
         }
         disconnectNotifyDebouncer.removeAll()
+        reconnectLogDebouncer.removeAll()
 
         // The crypto-service replacement and the derived identity swap must be
         // one atomic unit with respect to messageQueue senders: a queued send

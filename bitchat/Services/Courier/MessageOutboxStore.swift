@@ -91,7 +91,8 @@ final class MessageOutboxStore {
         let unseenDurable: Snapshot
     }
 
-    private let fileURL: URL?
+    private let fileStore: AppSupportFileStore
+    private var fileURL: URL? { fileStore.fileURL }
     private let keychain: KeychainManagerProtocol
     private let readData: (URL) throws -> Data
     private let writeData: (Data, URL, Data.WritingOptions) throws -> Void
@@ -152,7 +153,12 @@ final class MessageOutboxStore {
         beforeRecoveryNotification: @escaping () -> Void = {}
     ) {
         self.keychain = keychain
-        self.fileURL = fileURL ?? Self.defaultFileURL()
+        self.fileStore = AppSupportFileStore(
+            fileURL: fileURL,
+            subdirectory: "courier",
+            fileName: "outbox.sealed",
+            protection: .untilFirstUserAuthentication
+        )
         self.readData = readData
         self.writeData = writeData
         self.beforeRecoveryNotification = beforeRecoveryNotification
@@ -476,9 +482,7 @@ final class MessageOutboxStore {
         unreportedRecoveredSnapshot = nil
         lifecycleGeneration &+= 1
         cachedEncryptionKey = nil
-        if let fileURL {
-            try? FileManager.default.removeItem(at: fileURL)
-        }
+        fileStore.removeIgnoringErrors()
         keychain.delete(key: Self.keychainKey, service: Self.keychainService)
         lock.unlock()
     }
@@ -583,7 +587,7 @@ final class MessageOutboxStore {
             for (peerID, queue) in decoded where !queue.isEmpty {
                 outbox[PeerID(str: peerID)] = queue
             }
-            Self.migrateFileProtectionIfNeeded(at: fileURL)
+            fileStore.migrateProtectionIfNeeded(logContext: "outbox")
             return .loaded(outbox)
         } catch {
             return .corrupt(error)
@@ -623,15 +627,7 @@ final class MessageOutboxStore {
             let keyed = Dictionary(uniqueKeysWithValues: snapshot.map { ($0.key.id, $0.value) })
             let plaintext = try JSONEncoder().encode(keyed)
             let sealed = try ChaChaPoly.seal(plaintext, using: key).combined
-            try FileManager.default.createDirectory(
-                at: fileURL.deletingLastPathComponent(),
-                withIntermediateDirectories: true
-            )
-            var options: Data.WritingOptions = [.atomic]
-            #if os(iOS)
-            options.insert(.completeFileProtectionUntilFirstUserAuthentication)
-            #endif
-            try writeData(sealed, fileURL, options)
+            try fileStore.writeRaw(sealed, write: writeData)
             return true
         } catch {
             SecureLogger.error("Failed to persist outbox: \(error)", category: .session)
@@ -746,30 +742,5 @@ final class MessageOutboxStore {
         recoveryRouterSnapshot = [:]
         unreportedRecoveredSnapshot = nil
         return latest
-    }
-
-    private static func migrateFileProtectionIfNeeded(at fileURL: URL) {
-        #if os(iOS)
-        do {
-            try FileManager.default.setAttributes(
-                [.protectionKey: FileProtectionType.completeUntilFirstUserAuthentication],
-                ofItemAtPath: fileURL.path
-            )
-        } catch {
-            SecureLogger.warning("Failed to migrate outbox file protection: \(error)", category: .session)
-        }
-        #endif
-    }
-
-    private static func defaultFileURL() -> URL? {
-        guard let base = try? FileManager.default.url(
-            for: .applicationSupportDirectory,
-            in: .userDomainMask,
-            appropriateFor: nil,
-            create: true
-        ) else { return nil }
-        return base
-            .appendingPathComponent("courier", isDirectory: true)
-            .appendingPathComponent("outbox.sealed")
     }
 }

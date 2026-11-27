@@ -50,7 +50,7 @@ final class PrekeyBundleStore {
 
     private var bundles: [Data: StoredBundle] = [:]
     private let queue = DispatchQueue(label: "chat.bitchat.prekeys.bundles")
-    private let fileURL: URL?
+    private let fileStore: AppSupportFileStore
     private let maxPeers: Int
     private let now: () -> Date
 
@@ -64,7 +64,13 @@ final class PrekeyBundleStore {
     ) {
         self.now = now
         self.maxPeers = maxPeers
-        self.fileURL = persistsToDisk ? (fileURL ?? Self.defaultFileURL()) : nil
+        self.fileStore = AppSupportFileStore(
+            persistsToDisk: persistsToDisk,
+            fileURL: fileURL,
+            subdirectory: "prekeys",
+            fileName: "bundles.json",
+            protection: .complete
+        )
         loadFromDisk()
     }
 
@@ -149,9 +155,7 @@ final class PrekeyBundleStore {
     func wipe() {
         queue.sync {
             bundles.removeAll()
-            if let fileURL {
-                try? FileManager.default.removeItem(at: fileURL)
-            }
+            fileStore.removeIgnoringErrors()
         }
     }
 
@@ -170,49 +174,20 @@ final class PrekeyBundleStore {
     }
 
     private func persistLocked() {
-        guard let fileURL else { return }
         do {
-            if bundles.isEmpty {
-                try? FileManager.default.removeItem(at: fileURL)
-                return
-            }
-            try FileManager.default.createDirectory(
-                at: fileURL.deletingLastPathComponent(),
-                withIntermediateDirectories: true
-            )
-            let data = try JSONEncoder().encode(Array(bundles.values))
-            var options: Data.WritingOptions = [.atomic]
-            #if os(iOS)
-            options.insert(.completeFileProtection)
-            #endif
-            try data.write(to: fileURL, options: options)
+            try fileStore.saveJSON(Array(bundles.values), isEmpty: bundles.isEmpty)
         } catch {
             SecureLogger.error("Failed to persist prekey bundle store: \(error)", category: .security)
         }
     }
 
     private func loadFromDisk() {
-        guard let fileURL else { return }
+        guard fileStore.fileURL != nil else { return }
         queue.sync {
-            guard let data = try? Data(contentsOf: fileURL),
-                  let stored = try? JSONDecoder().decode([StoredBundle].self, from: data) else {
-                return
-            }
+            guard let stored = try? fileStore.loadJSON([StoredBundle].self) else { return }
             for bundle in stored where bundle.prekeyIDs.count == bundle.prekeyPublicKeys.count {
                 bundles[bundle.noiseKey] = bundle
             }
         }
-    }
-
-    private static func defaultFileURL() -> URL? {
-        guard let base = try? FileManager.default.url(
-            for: .applicationSupportDirectory,
-            in: .userDomainMask,
-            appropriateFor: nil,
-            create: true
-        ) else { return nil }
-        return base
-            .appendingPathComponent("prekeys", isDirectory: true)
-            .appendingPathComponent("bundles.json")
     }
 }

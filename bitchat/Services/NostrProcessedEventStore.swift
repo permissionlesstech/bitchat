@@ -26,7 +26,7 @@ final class NostrProcessedEventStore {
         case transientError
     }
 
-    private let fileURL: URL?
+    private let fileStore: AppSupportFileStore
     private let readData: (URL) throws -> Data
     // All file access is serialized here: appends are read-modify-write, and
     // overlapping debounced flushes would otherwise race and drop IDs.
@@ -35,13 +35,17 @@ final class NostrProcessedEventStore {
     private var cachedIDs: [String]?
     private var cachedKnown: Set<String> = []
     private var deferredIDs: [String] = []
-    private var directoryCreated = false
 
     init(
         fileURL: URL? = nil,
         readData: @escaping (URL) throws -> Data = { try Data(contentsOf: $0) }
     ) {
-        self.fileURL = fileURL ?? Self.defaultFileURL()
+        self.fileStore = AppSupportFileStore(
+            fileURL: fileURL,
+            subdirectory: "nostr",
+            fileName: "processed-events.json",
+            protection: .untilFirstUserAuthentication
+        )
         self.readData = readData
     }
 
@@ -114,9 +118,7 @@ final class NostrProcessedEventStore {
             cachedIDs = []
             cachedKnown.removeAll()
             deferredIDs.removeAll()
-            directoryCreated = false
-            guard let fileURL else { return }
-            try? FileManager.default.removeItem(at: fileURL)
+            fileStore.removeIgnoringErrors()
         }
     }
 
@@ -124,12 +126,8 @@ final class NostrProcessedEventStore {
         if let cachedIDs {
             return .loaded(cachedIDs)
         }
-        guard let fileURL else {
-            cachedIDs = []
-            cachedKnown = []
-            return .loaded([])
-        }
-        guard FileManager.default.fileExists(atPath: fileURL.path) else {
+        guard let fileURL = fileStore.fileURL,
+              FileManager.default.fileExists(atPath: fileURL.path) else {
             cachedIDs = []
             cachedKnown = []
             return .loaded([])
@@ -138,7 +136,7 @@ final class NostrProcessedEventStore {
         do {
             data = try readData(fileURL)
         } catch {
-            if Self.isMissingFileError(error) {
+            if AppSupportFileStore.isMissingFileError(error) {
                 cachedIDs = []
                 cachedKnown = []
                 return .loaded([])
@@ -157,55 +155,11 @@ final class NostrProcessedEventStore {
         return .loaded(ids)
     }
 
-    private static func isMissingFileError(_ error: Error) -> Bool {
-        let nsError = error as NSError
-        if nsError.domain == NSCocoaErrorDomain && nsError.code == NSFileReadNoSuchFileError {
-            return true
-        }
-        if nsError.domain == NSPOSIXErrorDomain && nsError.code == Int(ENOENT) {
-            return true
-        }
-        if let underlying = nsError.userInfo[NSUnderlyingErrorKey] as? Error {
-            return isMissingFileError(underlying)
-        }
-        return false
-    }
-
     private func saveLocked(_ eventIDs: [String]) {
-        guard let fileURL else { return }
-        guard !eventIDs.isEmpty else {
-            try? FileManager.default.removeItem(at: fileURL)
-            return
-        }
         do {
-            if !directoryCreated {
-                try FileManager.default.createDirectory(
-                    at: fileURL.deletingLastPathComponent(),
-                    withIntermediateDirectories: true
-                )
-                directoryCreated = true
-            }
-            let data = try JSONEncoder().encode(eventIDs)
-            var options: Data.WritingOptions = [.atomic]
-            #if os(iOS)
-            options.insert(.completeFileProtectionUntilFirstUserAuthentication)
-            #endif
-            try data.write(to: fileURL, options: options)
+            try fileStore.saveJSON(eventIDs, isEmpty: eventIDs.isEmpty)
         } catch {
-            directoryCreated = false
             SecureLogger.error("Failed to persist processed Nostr events: \(error)", category: .session)
         }
-    }
-
-    private static func defaultFileURL() -> URL? {
-        guard let base = try? FileManager.default.url(
-            for: .applicationSupportDirectory,
-            in: .userDomainMask,
-            appropriateFor: nil,
-            create: true
-        ) else { return nil }
-        return base
-            .appendingPathComponent("nostr", isDirectory: true)
-            .appendingPathComponent("processed-events.json")
     }
 }

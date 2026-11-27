@@ -22,14 +22,20 @@ final class GroupStore: ObservableObject {
     @Published private(set) var groups: [BitchatGroup] = []
 
     private let keychain: KeychainManagerProtocol
-    private let fileURL: URL?
+    private let fileStore: AppSupportFileStore
     private var keyCache: [Data: Data] = [:]
 
     /// - Parameter fileURL: Overrides the on-disk location (tests). Ignored
     ///   when `persistsToDisk` is false.
     init(keychain: KeychainManagerProtocol, persistsToDisk: Bool = true, fileURL: URL? = nil) {
         self.keychain = keychain
-        self.fileURL = persistsToDisk ? (fileURL ?? Self.defaultFileURL()) : nil
+        self.fileStore = AppSupportFileStore(
+            persistsToDisk: persistsToDisk,
+            fileURL: fileURL,
+            subdirectory: "groups",
+            fileName: "groups.json",
+            protection: .complete
+        )
         loadFromDisk()
     }
 
@@ -146,9 +152,7 @@ final class GroupStore: ObservableObject {
         }
         groups.removeAll()
         keyCache.removeAll()
-        if let fileURL {
-            try? FileManager.default.removeItem(at: fileURL)
-        }
+        fileStore.removeIgnoringErrors()
     }
 
     // MARK: - Internals
@@ -176,31 +180,15 @@ final class GroupStore: ObservableObject {
     }
 
     private func persist() {
-        guard let fileURL else { return }
         do {
-            if groups.isEmpty {
-                try? FileManager.default.removeItem(at: fileURL)
-                return
-            }
-            try FileManager.default.createDirectory(
-                at: fileURL.deletingLastPathComponent(),
-                withIntermediateDirectories: true
-            )
-            let data = try JSONEncoder().encode(groups)
-            var options: Data.WritingOptions = [.atomic]
-            #if os(iOS)
-            options.insert(.completeFileProtection)
-            #endif
-            try data.write(to: fileURL, options: options)
+            try fileStore.saveJSON(groups, isEmpty: groups.isEmpty)
         } catch {
             SecureLogger.error("Failed to persist group store: \(error)", category: .session)
         }
     }
 
     private func loadFromDisk() {
-        guard let fileURL,
-              let data = try? Data(contentsOf: fileURL),
-              let stored = try? JSONDecoder().decode([BitchatGroup].self, from: data) else {
+        guard let stored = try? fileStore.loadJSON([BitchatGroup].self) else {
             return
         }
         // Only groups whose key survived in the keychain are usable. Loading
@@ -212,17 +200,5 @@ final class GroupStore: ObservableObject {
                 && seenGroupIDs.insert(group.groupID).inserted
                 && key(forGroupID: group.groupID) != nil
         }
-    }
-
-    private static func defaultFileURL() -> URL? {
-        guard let base = try? FileManager.default.url(
-            for: .applicationSupportDirectory,
-            in: .userDomainMask,
-            appropriateFor: nil,
-            create: true
-        ) else { return nil }
-        return base
-            .appendingPathComponent("groups", isDirectory: true)
-            .appendingPathComponent("groups.json")
     }
 }
