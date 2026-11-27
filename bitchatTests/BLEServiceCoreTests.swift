@@ -89,11 +89,7 @@ struct BLEServiceCoreTests {
         #expect(receivedFirst)
 
         ble._test_handlePacket(packet, fromPeerID: sender, signingPublicKey: signingKey)
-        let receivedDuplicate = await TestHelpers.waitUntil(
-            { delegate.publicMessagesSnapshot().count > 1 },
-            timeout: TestConstants.negativeWaitWindow
-        )
-        #expect(!receivedDuplicate)
+        await ble._test_drainAllPipelines()
 
         let messages = delegate.publicMessagesSnapshot()
         #expect(messages.count == 1)
@@ -167,11 +163,8 @@ struct BLEServiceCoreTests {
             signingPublicKey: alice.getSigningPublicKeyData()
         )
 
-        let unsignedRelayed = await TestHelpers.waitUntil(
-            { outbound.count(ofType: .leave) > 0 },
-            timeout: TestConstants.negativeWaitWindow
-        )
-        #expect(!unsignedRelayed)
+        await ble._test_drainAllPipelines()
+        #expect(outbound.count(ofType: .leave) == 0)
         #expect(ble.currentPeerSnapshots().contains { $0.peerID == alicePeerID })
 
         let badSignature = try #require(
@@ -183,11 +176,8 @@ struct BLEServiceCoreTests {
             signingPublicKey: alice.getSigningPublicKeyData()
         )
 
-        let badSignatureRelayed = await TestHelpers.waitUntil(
-            { outbound.count(ofType: .leave) > 0 },
-            timeout: TestConstants.negativeWaitWindow
-        )
-        #expect(!badSignatureRelayed)
+        await ble._test_drainAllPipelines()
+        #expect(outbound.count(ofType: .leave) == 0)
         #expect(ble.currentPeerSnapshots().contains { $0.peerID == alicePeerID })
     }
 
@@ -1480,13 +1470,9 @@ struct BLEServiceCoreTests {
             timeout: TestConstants.longTimeout
         )
         #expect(reachedBudget)
-        // Give any over-budget pong a chance to surface, then confirm the
-        // rotated sender IDs never bought a sixth response.
-        let exceededBudget = await TestHelpers.waitUntil(
-            { outbound.count(ofType: .pong) > budget },
-            timeout: TestConstants.negativeWaitWindow
-        )
-        #expect(!exceededBudget)
+        // Drain all BLE/message queues to confirm the rotated sender IDs never
+        // bought a sixth response.
+        await ble._test_drainAllPipelines()
         #expect(outbound.count(ofType: .pong) == budget)
     }
 }

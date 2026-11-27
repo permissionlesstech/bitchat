@@ -210,11 +210,7 @@ struct PrekeyEndToEndTests {
             ttl: 1
         )
         bob._test_handlePacket(redelivery, fromPeerID: carol.myPeerID)
-        let redelivered = await TestHelpers.waitUntil(
-            { bobDelegate.snapshot().count == 2 },
-            timeout: TestConstants.negativeWaitWindow
-        )
-        #expect(!redelivered)
+        await bob._test_drainAllPipelines()
         #expect(bobDelegate.snapshot().count == 1)
     }
 
@@ -274,11 +270,8 @@ struct PrekeyEndToEndTests {
         let (_, bundlePacket) = try await captureAnnounceAndBundle(from: bob, tap: bobOut)
         alice._test_handlePacket(bundlePacket, fromPeerID: bob.myPeerID, preseedPeer: false)
 
-        let cached = await TestHelpers.waitUntil(
-            { alice.prekeyBundleStore.hasUsableBundle(for: bob.noiseStaticPublicKeyData()) },
-            timeout: TestConstants.negativeWaitWindow
-        )
-        #expect(!cached)
+        await alice._test_drainAllPipelines()
+        #expect(!alice.prekeyBundleStore.hasUsableBundle(for: bob.noiseStaticPublicKeyData()))
     }
 
     @Test func tofuOnlyForgedAnnounceAndPrekeyBundleCannotInterceptCourierMail() async throws {
@@ -341,11 +334,8 @@ struct PrekeyEndToEndTests {
         alice._test_handlePacket(fakeAnnouncePacket, fromPeerID: bobPeerID, preseedPeer: false)
         alice._test_handlePacket(forgedBundlePacket, fromPeerID: bobPeerID, preseedPeer: false)
 
-        let cached = await TestHelpers.waitUntil(
-            { alice.prekeyBundleStore.hasUsableBundle(for: bobNoiseKey) },
-            timeout: TestConstants.negativeWaitWindow
-        )
-        #expect(!cached)
+        await alice._test_drainAllPipelines()
+        #expect(!alice.prekeyBundleStore.hasUsableBundle(for: bobNoiseKey))
         #expect(!alice._test_hasGossipPrekeyBundle(for: bobPeerID))
 
         // Alice seals courier mail for Bob: must fall back to static-key
@@ -398,11 +388,8 @@ struct PrekeyEndToEndTests {
         )
         alice._test_handlePacket(forgedPacket, fromPeerID: bob.myPeerID, preseedPeer: false)
 
-        let cached = await TestHelpers.waitUntil(
-            { alice.prekeyBundleStore.hasUsableBundle(for: bob.noiseStaticPublicKeyData()) },
-            timeout: TestConstants.negativeWaitWindow
-        )
-        #expect(!cached)
+        await alice._test_drainAllPipelines()
+        #expect(!alice.prekeyBundleStore.hasUsableBundle(for: bob.noiseStaticPublicKeyData()))
     }
 
     @Test func verifiedBundleEntersGossipStore() async throws {
@@ -454,11 +441,8 @@ struct PrekeyEndToEndTests {
         )
         alice._test_handlePacket(spoofed, fromPeerID: PeerID(hexData: fakeSender), preseedPeer: false)
 
-        let cached = await TestHelpers.waitUntil(
-            { alice.prekeyBundleStore.hasUsableBundle(for: bob.noiseStaticPublicKeyData()) },
-            timeout: TestConstants.negativeWaitWindow
-        )
-        #expect(!cached)
+        await alice._test_drainAllPipelines()
+        #expect(!alice.prekeyBundleStore.hasUsableBundle(for: bob.noiseStaticPublicKeyData()))
         #expect(!alice._test_hasGossipPrekeyBundle(for: bob.myPeerID))
         #expect(!alice._test_hasGossipPrekeyBundle(for: PeerID(hexData: fakeSender)))
     }
@@ -487,11 +471,8 @@ struct PrekeyEndToEndTests {
         )
         alice._test_handlePacket(replay, fromPeerID: bob.myPeerID, preseedPeer: false)
 
-        let cached = await TestHelpers.waitUntil(
-            { alice.prekeyBundleStore.hasUsableBundle(for: bob.noiseStaticPublicKeyData()) },
-            timeout: TestConstants.negativeWaitWindow
-        )
-        #expect(!cached)
+        await alice._test_drainAllPipelines()
+        #expect(!alice.prekeyBundleStore.hasUsableBundle(for: bob.noiseStaticPublicKeyData()))
         #expect(!alice._test_hasGossipPrekeyBundle(for: bob.myPeerID))
     }
 }

@@ -14,7 +14,7 @@ XCODE_PACKAGE_RESOLVED = (
     / "bitchat.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved"
 )
 
-SHA_PINNED_USES = re.compile(r"uses:\s*[\w.-]+/[\w.-]+@[0-9a-f]{40}\b")
+SHA_PINNED_USES = re.compile(r"uses:\s*[\w.-]+/[\w.-]+(?:/[\w.-]+)*@[0-9a-f]{40}\b")
 ANY_USES = re.compile(r"uses:\s*([^\s#]+)")
 
 
