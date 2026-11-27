@@ -28,17 +28,24 @@ enum ChannelShare {
 
     /// Channel-not-presence framing: "join #x", never "I'm in #x".
     static func payload(forGeohash geohash: String) -> String {
-        let gh = geohash.lowercased()
-        return String(
+        payload(
+            forGeohash: geohash,
             format: String(
                 localized: "channel.share.payload",
                 defaultValue: "join the #%1$@ channel on bitchat: bitchat://geohash/%1$@ — new to bitchat? get it at %2$@ then type #%1$@ under location channels.",
                 comment: "Plain-text share payload for a location channel; %1$@ is the geohash, %2$@ is the App Store URL"
-            ),
-            locale: .current,
-            gh,
-            appStoreURL
+            )
         )
+    }
+
+    /// Formats without a locale on purpose. With one, Foundation wraps each
+    /// argument of a right-to-left format (ar, fa, he, ur) in bidi isolates
+    /// (U+2068…U+2069), and NSDataDetector then stops at the first one,
+    /// cutting the deep link off at `bitchat://geohash`. Both arguments are
+    /// plain strings, so a locale has nothing else to contribute. Takes the
+    /// format so tests can run every locale's string through it.
+    static func payload(forGeohash geohash: String, format: String) -> String {
+        String(format: format, locale: nil, geohash.lowercased(), appStoreURL)
     }
 }
 
