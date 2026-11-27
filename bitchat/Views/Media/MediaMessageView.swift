@@ -69,6 +69,7 @@ struct MediaMessageView: View {
                             isSending: state.isSending,
                             sendProgress: state.progress,
                             isLive: conversationUIModel.isLiveVoiceMessage(message),
+                            blocksPrivateChatSwipe: message.isPrivate,
                             onCancel: cancelAction
                         )
                     case .image(let url):

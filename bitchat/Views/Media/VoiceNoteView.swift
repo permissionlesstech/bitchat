@@ -13,13 +13,23 @@ struct VoiceNoteView: View {
     @StateObject private var playback: VoiceNotePlaybackController
     @State private var waveform: [Float] = []
 
-    init(url: URL, isSending: Bool, sendProgress: Double?, isLive: Bool = false, onCancel: (() -> Void)?) {
+    init(
+        url: URL,
+        isSending: Bool,
+        sendProgress: Double?,
+        isLive: Bool = false,
+        blocksPrivateChatSwipe: Bool = false,
+        onCancel: (() -> Void)?
+    ) {
         self.url = url
         self.isSending = isSending
         self.sendProgress = sendProgress
         self.isLive = isLive
         self.onCancel = onCancel
-        _playback = StateObject(wrappedValue: VoiceNotePlaybackController(url: url))
+        _playback = StateObject(wrappedValue: VoiceNotePlaybackController(
+            url: url,
+            blocksPrivateChatSwipe: blocksPrivateChatSwipe
+        ))
     }
 
     private var samples: [Float] {
