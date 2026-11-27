@@ -20,6 +20,7 @@ struct BLEIngressLinkRecord: Equatable {
 enum BLEIngressRejection: Error, Equatable {
     case selfLoopback(packetType: UInt8)
     case directSenderMismatch(boundPeerID: PeerID, claimedSenderID: PeerID)
+    case foreignRequestSync(recipientID: PeerID)
 }
 
 struct BLEIngressLinkRegistry {
@@ -97,6 +98,18 @@ struct BLEIngressLinkRegistry {
             return .failure(.selfLoopback(packetType: packet.type))
         }
 
+        // A directed REQUEST_SYNC is link-local to its intended recipient.
+        // Drop requests addressed to another peer at ingress before dedup or
+        // sync processing.
+        if packet.type == MessageType.requestSync.rawValue,
+           let recipientID = packet.recipientID,
+           !BLEPacketFreshnessPolicy.isBroadcastRecipient(recipientID) {
+            let targetPeer = PeerID(hexData: recipientID)
+            if targetPeer != localPeerID {
+                return .failure(.foreignRequestSync(recipientID: targetPeer))
+            }
+        }
+
         if let boundPeerID, boundPeerID != claimedSenderID {
             if requiresDirectSenderBinding(packet) {
                 return .failure(.directSenderMismatch(boundPeerID: boundPeerID, claimedSenderID: claimedSenderID))
@@ -151,6 +164,7 @@ enum BLEIngressPacketGuard {
     enum Rejection: Error, Equatable {
         case selfLoopback(packetType: UInt8)
         case directSenderMismatch(boundPeerID: PeerID, claimedSenderID: PeerID)
+        case foreignRequestSync(recipientID: PeerID)
         case invalidRSR(peerID: PeerID)
         case timestampSkew(peerID: PeerID, skewMs: UInt64, maxSkewMs: UInt64)
     }
@@ -181,6 +195,8 @@ enum BLEIngressPacketGuard {
             return .failure(.selfLoopback(packetType: packetType))
         case .failure(.directSenderMismatch(let boundPeerID, let claimedSenderID)):
             return .failure(.directSenderMismatch(boundPeerID: boundPeerID, claimedSenderID: claimedSenderID))
+        case .failure(.foreignRequestSync(let recipientID)):
+            return .failure(.foreignRequestSync(recipientID: recipientID))
         }
 
         switch validatePayload(

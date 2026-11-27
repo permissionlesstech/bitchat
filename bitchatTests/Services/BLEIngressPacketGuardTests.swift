@@ -217,16 +217,78 @@ struct BLEIngressPacketGuardTests {
         #expect(result == .failure(.invalidRSR(peerID: bound)))
     }
 
+    @Test("directed request-sync for another peer is rejected while local and broadcast are accepted")
+    func foreignDirectedRequestSyncIsRejected() throws {
+        let local = PeerID(str: "0011223344556677")
+        let sender = PeerID(str: "1122334455667788")
+        let other = PeerID(str: "8899aabbccddeeff")
+
+        let foreignPacket = makePacket(
+            type: .requestSync,
+            sender: sender,
+            recipient: other,
+            timestamp: 1_000,
+            ttl: 0
+        )
+        let localPacket = makePacket(
+            type: .requestSync,
+            sender: sender,
+            recipient: local,
+            timestamp: 1_000,
+            ttl: 0
+        )
+        let broadcastPacket = makePacket(
+            type: .requestSync,
+            sender: sender,
+            recipient: nil,
+            timestamp: 1_000,
+            ttl: 0
+        )
+
+        let foreignResult = BLEIngressPacketGuard.evaluate(
+            packet: foreignPacket,
+            claimedSenderID: sender,
+            boundPeerID: sender,
+            localPeerID: local,
+            directAnnounceTTL: 7,
+            nowMs: 1_000,
+            isValidSyncResponse: { _ in false }
+        )
+        let localContext = try #require(success(BLEIngressPacketGuard.evaluate(
+            packet: localPacket,
+            claimedSenderID: sender,
+            boundPeerID: sender,
+            localPeerID: local,
+            directAnnounceTTL: 7,
+            nowMs: 1_000,
+            isValidSyncResponse: { _ in false }
+        )))
+        let broadcastContext = try #require(success(BLEIngressPacketGuard.evaluate(
+            packet: broadcastPacket,
+            claimedSenderID: sender,
+            boundPeerID: sender,
+            localPeerID: local,
+            directAnnounceTTL: 7,
+            nowMs: 1_000,
+            isValidSyncResponse: { _ in false }
+        )))
+
+        #expect(foreignResult == .failure(.foreignRequestSync(recipientID: other)))
+        #expect(localContext.receivedFromPeerID == sender)
+        #expect(broadcastContext.receivedFromPeerID == sender)
+    }
+
     private func makePacket(
         type: MessageType = .message,
         sender: PeerID,
+        recipient: PeerID? = nil,
         timestamp: UInt64,
         ttl: UInt8 = 3
     ) -> BitchatPacket {
         BitchatPacket(
             type: type.rawValue,
             senderID: Data(hexString: sender.id) ?? Data(),
-            recipientID: nil,
+            recipientID: recipient.flatMap { Data(hexString: $0.id) },
             timestamp: timestamp,
             payload: Data([0x01, 0x02, 0x03]),
             signature: nil,

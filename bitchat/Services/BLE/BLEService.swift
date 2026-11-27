@@ -1962,6 +1962,8 @@ final class BLEService: NSObject {
         case .failure(.directSenderMismatch(let boundPeerID, let claimedSenderID)):
             SecureLogger.warning("🚫 SECURITY: Sender ID spoofing attempt detected! \(linkDescription) claimed to be \(claimedSenderID.id.prefix(8))… but is bound to \(boundPeerID.id.prefix(8))…", category: .security)
             return nil
+        case .failure(.foreignRequestSync):
+            return nil
         case .failure(.invalidRSR(let peerID)):
             SecureLogger.warning("Invalid or unsolicited RSR packet from \(peerID.id.prefix(8))… - rejecting", category: .security)
             return nil
@@ -1990,7 +1992,7 @@ final class BLEService: NSObject {
         case .failure(.timestampSkew(let peerID, let skewMs, let maxSkewMs)):
             SecureLogger.warning("Packet timestamp skewed by \(skewMs)ms (max \(maxSkewMs)ms) from \(peerID.id.prefix(8))…", category: .security)
             return false
-        case .failure(.selfLoopback), .failure(.directSenderMismatch):
+        case .failure(.selfLoopback), .failure(.directSenderMismatch), .failure(.foreignRequestSync):
             return false
         }
     }
@@ -5085,6 +5087,11 @@ extension BLEService {
 
     // Handle REQUEST_SYNC: decode payload and respond with missing packets via sync manager
     private func handleRequestSync(_ packet: BitchatPacket, from peerID: PeerID) {
+        if let recipientID = packet.recipientID,
+           !BLEPacketFreshnessPolicy.isBroadcastRecipient(recipientID),
+           recipientID != myPeerIDData {
+            return
+        }
         // REQUEST_SYNC is link-local by design (always sent with ttl 0): a
         // nonzero TTL means a crafted or relayed request, and answering one
         // would let a single small packet fan a full store replay out of
