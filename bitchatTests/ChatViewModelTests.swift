@@ -1608,6 +1608,8 @@ struct ChatViewModelPrivateMediaDeletionTests {
             kind: .canceled
         ))
         let coordinator = viewModel.liveVoiceCoordinator
+        // Live voice defaults off; this fixture exercises the opted-in path.
+        coordinator.liveVoiceEnabled = { true }
         defer {
             coordinator.handleVoiceFramePayload(
                 from: peerID,
@@ -2151,6 +2153,27 @@ struct ChatViewModelPrivateMediaDeletionTests {
 struct ChatViewModelPanicTests {
 
     @Test @MainActor
+    func panicClearAllData_turnsLiveVoiceBackOff() {
+        let defaults = UserDefaults.standard
+        let previous = defaults.object(forKey: PTTSettings.liveVoiceEnabledKey)
+        defer {
+            if let previous {
+                defaults.set(previous, forKey: PTTSettings.liveVoiceEnabledKey)
+            } else {
+                defaults.removeObject(forKey: PTTSettings.liveVoiceEnabledKey)
+            }
+        }
+        PTTSettings.liveVoiceEnabled = true
+        let (viewModel, _) = makeTestableViewModel()
+
+        viewModel.panicClearAllData()
+
+        // A wiped device comes back like a fresh install: not streaming holds
+        // and not auto-playing strangers.
+        #expect(!PTTSettings.liveVoiceEnabled)
+    }
+
+    @Test @MainActor
     func panicClearAllData_finishesMediaWipeBeforeReturning() {
         var wipeFinished = false
         let (viewModel, _) = makeTestableViewModel(panicMediaWipe: {
@@ -2409,5 +2432,32 @@ struct ChatViewModelLifecycleTests {
         let (_, transport) = makeTestableViewModel()
 
         #expect(transport.startServicesCallCount == 1)
+    }
+}
+
+// MARK: - Live Voice Gate Tests
+
+struct ChatViewModelLiveVoiceGateTests {
+
+    @Test @MainActor
+    func holdOnPublicMesh_recordsAClassicNoteWhileLiveVoiceIsOff() {
+        let (viewModel, _) = makeTestableViewModel()
+        viewModel.activeChannel = .mesh
+        viewModel.liveVoiceCoordinator.liveVoiceEnabled = { false }
+
+        // Off means nothing leaves the device before release: the hold records
+        // a classic voice note that sends only once it is finished.
+        #expect(!viewModel.makeVoiceCaptureSession().isLive)
+    }
+
+    @Test @MainActor
+    func holdOnPublicMesh_streamsLiveOnlyAfterOptingIn() {
+        let (viewModel, _) = makeTestableViewModel()
+        viewModel.activeChannel = .mesh
+        viewModel.liveVoiceCoordinator.liveVoiceEnabled = { true }
+
+        // The same hold goes live once the switch is on, so the test above
+        // fails if the gate is removed instead of passing vacuously.
+        #expect(viewModel.makeVoiceCaptureSession().isLive)
     }
 }
