@@ -172,7 +172,6 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, SynchronousMessage
     private var visibleMessagesCache: [BitchatMessage]?
     @Published var currentColorScheme: ColorScheme = .light
     @Published var currentTheme: AppTheme = .matrix
-    @Published var isConnected = false
     @Published private(set) var panicRecoveryBlocked = false
     var networkActivationAllowed: Bool { !panicRecoveryBlocked }
     @Published var nickname: String = "" {
@@ -430,8 +429,6 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, SynchronousMessage
             update(self.deliveryCoordinator)
         }
     }
-    // Channel activity tracking for background nudges
-    var lastPublicActivityAt: [String: Date] = [:]   // channelKey -> last activity time
     // Geohash participant tracker
     let participantTracker = GeohashParticipantTracker(activityCutoff: -TransportConfig.uiRecentCutoffFiveMinutesSeconds)
     // Participants who indicated they teleported (by tag in their events)
@@ -1332,12 +1329,6 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, SynchronousMessage
         if networkActivationAllowed {
             ChatViewModelBootstrapper(viewModel: self).configure()
         }
-    }
-
-    // MARK: - Deinitialization
-
-    deinit {
-        // No need to force UserDefaults synchronization
     }
 
     // MARK: - Nickname Management
@@ -2357,12 +2348,6 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, SynchronousMessage
     }
 
     // MARK: - Delivery Tracking
-
-    func didReceiveReadReceipt(_ receipt: ReadReceipt) {
-        performDeliveryUpdate { coordinator in
-            coordinator.didReceiveReadReceipt(receipt)
-        }
-    }
 
     func didUpdateMessageDeliveryStatus(_ messageID: String, status: DeliveryStatus) {
         performDeliveryUpdate { coordinator in

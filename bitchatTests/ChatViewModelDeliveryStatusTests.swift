@@ -271,42 +271,6 @@ struct ChatViewModelDeliveryStatusTests {
     // MARK: - Read Receipt Handling
 
     @Test @MainActor
-    func didReceiveReadReceipt_updatesMessageStatus() async {
-        let (viewModel, transport) = makeTestableViewModel()
-        let peerID = PeerID(str: "0102030405060708")
-        let messageID = "test-msg-4"
-
-        // Setup: create a message with .sent status
-        let message = BitchatMessage(
-            id: messageID,
-            sender: viewModel.nickname,
-            content: "Test message",
-            timestamp: Date(),
-            isRelay: false,
-            isPrivate: true,
-            recipientNickname: "Peer",
-            senderPeerID: transport.myPeerID,
-            deliveryStatus: .sent
-        )
-        viewModel.seedPrivateChat([message], for: peerID)
-
-        // Action: receive read receipt
-        let receipt = ReadReceipt(
-            originalMessageID: messageID,
-            readerID: peerID,
-            readerNickname: "Peer"
-        )
-        viewModel.didReceiveReadReceipt(receipt)
-
-        // Assert: status should be .read
-        let currentStatus = viewModel.privateChats[peerID]?.first?.deliveryStatus
-        #expect({
-            if case .read = currentStatus { return true }
-            return false
-        }())
-    }
-
-    @Test @MainActor
     func authenticatedNoiseAckCannotClearAnotherPeersRetryState() async {
         let (viewModel, transport) = makeTestableViewModel()
         let intendedPeer = PeerID(str: "0102030405060708")
@@ -916,8 +880,10 @@ struct ChatDeliveryCoordinatorContextTests {
             to: .directPeer(peerID)
         )
 
-        coordinator.didReceiveReadReceipt(
-            ReadReceipt(originalMessageID: messageID, readerID: peerID, readerNickname: "Peer")
+        coordinator.updateAcknowledgedMessageDeliveryStatus(
+            messageID,
+            status: .read(by: "Peer", at: Date()),
+            from: [peerID]
         )
 
         #expect(isRead(coordinator.deliveryStatus(for: messageID)))
@@ -1028,12 +994,10 @@ struct ChatDeliveryCoordinatorContextTests {
             to: .directPeer(intendedPeer)
         )
 
-        coordinator.didReceiveReadReceipt(
-            ReadReceipt(
-                originalMessageID: messageID,
-                readerID: otherPeer,
-                readerNickname: "Other"
-            )
+        coordinator.updateAcknowledgedMessageDeliveryStatus(
+            messageID,
+            status: .read(by: "Other", at: Date()),
+            from: [otherPeer]
         )
 
         #expect(isSent(coordinator.deliveryStatus(for: messageID)))

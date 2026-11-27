@@ -73,11 +73,8 @@ private final class MockChatOutgoingContext: ChatOutgoingContext {
     }
 
     // Outbound routing
-    private(set) var recordedActivityKeys: [String] = []
     private(set) var sentMeshMessages: [(content: String, mentions: [String], messageID: String, timestamp: Date)] = []
     private(set) var sentGeohashContexts: [ChatViewModel.GeoOutgoingContext] = []
-
-    func recordPublicActivity(forChannelKey key: String) { recordedActivityKeys.append(key) }
 
     func sendMeshMessage(_ content: String, mentions: [String], messageID: String, timestamp: Date) {
         sentMeshMessages.append((content, mentions, messageID, timestamp))
@@ -179,7 +176,6 @@ struct ChatOutgoingCoordinatorContextTests {
 
         // The mesh send carries the original (untrimmed) content and reuses
         // the echo's message ID and timestamp; activity is stamped for "mesh".
-        #expect(context.recordedActivityKeys == ["mesh"])
         #expect(context.sentMeshMessages.count == 1)
         let sent = context.sentMeshMessages[0]
         #expect(sent.content == "  hello @bob  ")
@@ -210,7 +206,6 @@ struct ChatOutgoingCoordinatorContextTests {
         #expect(echo.sender == "me#2222")
         // The echo is told apart as mine by this ID, not by its name.
         #expect(echo.senderPeerID == PeerID(nostr: MockChatOutgoingContext.dummyIdentity.publicKeyHex))
-        #expect(context.recordedActivityKeys == ["geo:u4pruydq"])
         #expect(context.sentGeohashContexts.count == 1)
         let geoContext = context.sentGeohashContexts[0]
         #expect(geoContext.channel == channel)

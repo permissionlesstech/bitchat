@@ -168,7 +168,7 @@ struct ChatViewModelTorTests {
         viewModel.torBlocked = true
 
         // Action
-        viewModel.handleTorPreferenceChanged(Notification(name: .init("test")))
+        viewModel.handleTorPreferenceChanged()
         try? await Task.sleep(nanoseconds: 100_000_000)
 
         // Assert: all flags reset — torBlocked drives the connectivity

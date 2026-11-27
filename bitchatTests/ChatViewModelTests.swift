@@ -918,8 +918,6 @@ struct ChatViewModelPeerTests {
 
         viewModel.didReceiveTransportEvent(.peerConnected(peerID))
 
-        #expect(viewModel.isConnected)
-
         viewModel.didReceiveTransportEvent(.peerDisconnected(peerID))
 
         #expect(!viewModel.sentReadReceipts.contains(incoming.id))

@@ -315,7 +315,7 @@ struct ViewSmokeTests {
 
         transport.peerFingerprints[peerID] = fingerprint
         transport.updatePeerSnapshots([makeSnapshot(peerID: peerID, nickname: "Verifier", noiseByte: 0x33)])
-        featureModels.privateConversationModel.startConversation(with: peerID)
+        featureModels.privateConversationModel.openConversation(for: peerID)
         viewModel.verifiedFingerprints.insert(fingerprint)
 
         let image = try makeCGImage()
@@ -555,7 +555,7 @@ struct ViewSmokeTests {
         _ = mount(installSmokeEnvironment(ContentView(), featureModels: featureModels))
         _ = mount(installSmokeEnvironment(ContentPeopleSheetHarness(draftModel: featureModels.composerDraftModel), featureModels: featureModels))
 
-        featureModels.privateConversationModel.startConversation(with: peerID)
+        featureModels.privateConversationModel.openConversation(for: peerID)
         try? await Task.sleep(nanoseconds: 50_000_000)
 
         _ = mount(installSmokeEnvironment(ContentPeopleSheetHarness(draftModel: featureModels.composerDraftModel), featureModels: featureModels))

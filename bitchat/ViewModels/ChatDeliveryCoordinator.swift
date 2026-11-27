@@ -137,15 +137,6 @@ final class ChatDeliveryCoordinator {
     }
 
     @MainActor
-    func didReceiveReadReceipt(_ receipt: ReadReceipt) {
-        updateAcknowledgedMessageDeliveryStatus(
-            receipt.originalMessageID,
-            status: .read(by: receipt.readerNickname, at: receipt.timestamp),
-            from: [receipt.readerID]
-        )
-    }
-
-    @MainActor
     func didUpdateMessageDeliveryStatus(_ messageID: String, status: DeliveryStatus) {
         updateMessageDeliveryStatus(messageID, status: status)
     }

@@ -12,7 +12,6 @@ import Foundation
 @MainActor
 protocol ChatTransportEventContext: AnyObject {
     // MARK: Connection & chat state
-    var isConnected: Bool { get set }
     var nickname: String { get }
     var myPeerID: PeerID { get }
     /// A single private chat's timeline (store-direct lookup on
@@ -270,7 +269,6 @@ final class ChatTransportEventCoordinator {
     func didConnectToPeerSynchronously(_ peerID: PeerID) {
         SecureLogger.debug("🤝 Peer connected: \(peerID)", category: .session)
 
-        context.isConnected = true
         context.registerEphemeralSession(peerID: peerID)
         context.notifyUIChanged()
 
