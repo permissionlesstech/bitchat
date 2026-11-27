@@ -109,7 +109,7 @@ final class MockBLEService: NSObject {
             mentions: mentions.isEmpty ? nil : mentions
         )
         
-        if let payload = message.toBinaryPayload() {
+        if let payload = message.toTestPayload() {
             let packet = BitchatPacket(
                 type: 0x01,
                 senderID: myPeerID.id.data(using: .utf8)!,
@@ -151,7 +151,7 @@ final class MockBLEService: NSObject {
             mentions: nil
         )
         
-        if let payload = message.toBinaryPayload() {
+        if let payload = message.toTestPayload() {
             let packet = BitchatPacket(
                 type: 0x01,
                 senderID: myPeerID.id.data(using: .utf8)!,
@@ -211,7 +211,7 @@ final class MockBLEService: NSObject {
 
     func simulateIncomingPacket(_ packet: BitchatPacket) {
         // Process through the actual handling logic
-        if let message = BitchatMessage(packet.payload) {
+        if let message = BitchatMessage.fromTestPayload(packet.payload) {
             var shouldDeliver = false
             seenLock.lock()
             if !seenMessageIDs.contains(message.id) {
@@ -267,5 +267,15 @@ extension MockBLEService {
     func simulateConnection(with otherPeer: MockBLEService) {
         simulateConnectedPeer(otherPeer.myPeerID)
         otherPeer.simulateConnectedPeer(myPeerID)
+    }
+}
+
+extension BitchatMessage {
+    func toTestPayload() -> Data? {
+        try? JSONEncoder().encode(self)
+    }
+
+    static func fromTestPayload(_ data: Data) -> BitchatMessage? {
+        try? JSONDecoder().decode(BitchatMessage.self, from: data)
     }
 }

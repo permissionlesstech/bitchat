@@ -195,7 +195,7 @@ final class BLEService: NSObject {
     // Default per-fragment chunk size when link limits are unknown
     private let defaultFragmentSize = TransportConfig.bleDefaultFragmentSize
     private let bleMaxMTU = 512
-    private let maxMessageLength = InputValidator.Limits.maxMessageLength
+    private let maxMessageLength = TransportConfig.maxMessageLength
     private let messageTTL: UInt8 = TransportConfig.messageTTLDefault
     // Flood/battery controls
     private let maxInFlightAssemblies = TransportConfig.bleMaxInFlightAssemblies // cap concurrent fragment assemblies
