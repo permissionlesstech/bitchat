@@ -1620,4 +1620,3 @@ final class NostrRelayManager: ObservableObject {
         return false
     }
 }
-
