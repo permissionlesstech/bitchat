@@ -1,8 +1,6 @@
 import BitLogger
 import Foundation
-import Network
 import Combine
-import Tor
 
 /// Manages WebSocket connections to Nostr relays
 @MainActor
