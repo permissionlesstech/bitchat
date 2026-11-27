@@ -44,7 +44,7 @@ struct AppInfoView: View {
     /// Overwrites the remembered pane so the next presentation opens there.
     /// `selectedPane` is sticky by design; a caller whose control promises a
     /// specific pane (e.g., the gateway globe opens settings) uses this so the
-    /// sheet doesn't land first-time users on the Info default instead.
+    /// sheet lands there even against the sticky memory.
     static func setSelectedPane(_ pane: Pane) {
         UserDefaults.standard.set(pane.rawValue, forKey: selectedPaneStorageKey)
     }
@@ -425,7 +425,7 @@ struct AppInfoView: View {
                 }
             }
 
-            // Connectivity: mesh bridge, internet gateway, tor routing
+            // Connectivity: mesh bridge, tor routing
             VStack(alignment: .leading, spacing: 12) {
                 SectionHeader(verbatim: Strings.Settings.connectivityTitle)
 
