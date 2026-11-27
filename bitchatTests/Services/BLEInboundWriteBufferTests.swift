@@ -262,6 +262,82 @@ struct BLEInboundWriteBufferTests {
         }
     }
 
+    @Test
+    func appendDecodesSlicedFirstChunkFollowedByOutOfOrderOrOverlappingChunk() throws {
+        var buffer = BLEInboundWriteBuffer()
+        let packet = makePacket(timestamp: 0x765432)
+        let frame = try #require(packet.toBinaryData(padding: false))
+        let splitIndex = max(2, frame.count / 2)
+
+        let padded = Data([0xFF, 0xFE, 0xFD]) + frame
+        let firstSlice = padded[3..<(3 + splitIndex)]
+        #expect(firstSlice.startIndex == 3)
+
+        let firstResult = buffer.append(
+            chunks: [BLEInboundWriteChunk(offset: 0, data: firstSlice)],
+            for: "central-slice",
+            capBytes: 1024
+        )
+        if case .waiting = firstResult {
+            // Expected: partial sliced frame buffered.
+        } else {
+            Issue.record("Expected sliced first chunk to wait for remaining bytes")
+        }
+
+        // Overlapping non-sequential write triggers replaceSubrange on combined.
+        let secondResult = buffer.append(
+            chunks: [BLEInboundWriteChunk(offset: splitIndex - 1, data: frame.suffix(from: splitIndex - 1))],
+            for: "central-slice",
+            capBytes: 1024
+        )
+        if case let .decoded(decoded, _) = secondResult {
+            #expect(decoded.timestamp == packet.timestamp)
+        } else {
+            Issue.record("Expected overlapping chunk after sliced first chunk to decode")
+        }
+    }
+
+    @Test
+    func appendHandlesOversizedSlicedChunkWithoutCrashing() throws {
+        var buffer = BLEInboundWriteBuffer()
+        let packet = makePacket(timestamp: 0xABCDEF)
+        let frame = try #require(packet.toBinaryData(padding: false))
+        let padded = Data([0xAA, 0xBB]) + frame
+
+        // Single oversized sliced chunk (chunk.data.startIndex > 0)
+        let singleSlice = padded[2...]
+        #expect(singleSlice.startIndex == 2)
+        let singleOversized = buffer.append(
+            chunks: [BLEInboundWriteChunk(offset: 0, data: singleSlice)],
+            for: "central-oversized-1",
+            capBytes: frame.count - 1
+        )
+        if case let .oversized(metadata) = singleOversized {
+            #expect(metadata.packetType == MessageType.message.rawValue)
+        } else {
+            Issue.record("Expected single sliced chunk above cap to be rejected as oversized")
+        }
+
+        // Sliced first chunk followed by an oversized second chunk (combined.startIndex > 0)
+        let firstSlice = padded[2..<6]
+        #expect(firstSlice.startIndex == 2)
+        _ = buffer.append(
+            chunks: [BLEInboundWriteChunk(offset: 0, data: firstSlice)],
+            for: "central-oversized-2",
+            capBytes: 16
+        )
+        let secondOversized = buffer.append(
+            chunks: [BLEInboundWriteChunk(offset: 4, data: Data(repeating: 0x01, count: 20))],
+            for: "central-oversized-2",
+            capBytes: 16
+        )
+        if case let .oversized(metadata) = secondOversized {
+            #expect(metadata.packetType == MessageType.message.rawValue)
+        } else {
+            Issue.record("Expected oversized second chunk after sliced first chunk to be rejected")
+        }
+    }
+
     private func makePacket(timestamp: UInt64 = 0x0102030405) -> BitchatPacket {
         BitchatPacket(
             type: MessageType.message.rawValue,

@@ -323,6 +323,40 @@ struct BLEOutboundFragmentTransferSchedulerTests {
         #expect(scheduler.pendingCount == 0)
     }
 
+    @Test
+    func scanPauseTokenIsStoredAndClearedAcrossCompletionCancellationAndRelease() {
+        var scheduler = BLEOutboundFragmentTransferScheduler()
+        let token1 = UUID()
+        let token2 = UUID()
+        let token3 = UUID()
+
+        let r1 = makeRequest(type: MessageType.fileTransfer.rawValue, transferId: "t1")
+        _ = scheduler.submit(r1, maxConcurrentTransfers: 3)
+        let activated1 = scheduler.activateReservedTransfer(id: "t1", totalFragments: 1, workItems: [], scanPauseToken: token1)
+        #expect(activated1)
+        #expect(scheduler.scanPauseToken(for: "t1") == token1)
+        let sent1 = scheduler.markFragmentSent(transferId: "t1")
+        #expect(sent1 == .complete(sentFragments: 1, totalFragments: 1))
+        #expect(scheduler.scanPauseToken(for: "t1") == nil)
+
+        let r2 = makeRequest(type: MessageType.fileTransfer.rawValue, transferId: "t2")
+        _ = scheduler.submit(r2, maxConcurrentTransfers: 3)
+        let activated2 = scheduler.activateReservedTransfer(id: "t2", totalFragments: 2, workItems: [], scanPauseToken: token2)
+        #expect(activated2)
+        #expect(scheduler.scanPauseToken(for: "t2") == token2)
+        _ = scheduler.cancelTransfer("t2")
+        #expect(scheduler.scanPauseToken(for: "t2") == nil)
+
+        let r3 = makeRequest(type: MessageType.fileTransfer.rawValue, transferId: "t3")
+        _ = scheduler.submit(r3, maxConcurrentTransfers: 3)
+        let activated3 = scheduler.activateReservedTransfer(id: "t3", totalFragments: 2, workItems: [], scanPauseToken: token3)
+        #expect(activated3)
+        #expect(scheduler.scanPauseToken(for: "t3") == token3)
+        let released3 = scheduler.releaseReservation("t3")
+        #expect(released3 != nil)
+        #expect(scheduler.scanPauseToken(for: "t3") == nil)
+    }
+
     private func makeRequest(
         type: UInt8,
         transferId: String?,

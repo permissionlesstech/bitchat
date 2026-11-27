@@ -29,14 +29,34 @@ enum BLEOutboundFragmentPlanner {
         bleMaxMTU: Int,
         fragmentID: Data = randomFragmentID()
     ) -> BLEOutboundFragmentPlan? {
+        makePlan(
+            packet: request.packet,
+            pad: request.pad,
+            maxChunk: request.maxChunk,
+            directedPeer: request.directedPeer,
+            defaultChunkSize: defaultChunkSize,
+            bleMaxMTU: bleMaxMTU,
+            fragmentID: fragmentID
+        )
+    }
+
+    static func makePlan(
+        packet: BitchatPacket,
+        pad: Bool,
+        maxChunk: Int?,
+        directedPeer: PeerID?,
+        defaultChunkSize: Int,
+        bleMaxMTU: Int,
+        fragmentID: Data = randomFragmentID()
+    ) -> BLEOutboundFragmentPlan? {
         guard fragmentID.count == fragmentIDLength,
-              let fullData = request.packet.toBinaryData(padding: request.pad) else {
+              let fullData = packet.toBinaryData(padding: pad) else {
             return nil
         }
 
         let sizing = sizingPolicy(
-            for: request.packet,
-            requestedMaxChunk: request.maxChunk,
+            for: packet,
+            requestedMaxChunk: maxChunk,
             defaultChunkSize: defaultChunkSize,
             bleMaxMTU: bleMaxMTU
         )
@@ -48,15 +68,15 @@ enum BLEOutboundFragmentPlanner {
         guard !chunks.isEmpty else { return nil }
 
         let fragmentRecipient: Data? = {
-            if let directedPeer = request.directedPeer {
+            if let directedPeer {
                 return Data(hexString: directedPeer.id)
             }
-            return request.packet.recipientID
+            return packet.recipientID
         }()
 
         let fragmentPackets = chunks.enumerated().map { index, chunk in
             makeFragmentPacket(
-                original: request.packet,
+                original: packet,
                 fragmentID: fragmentID,
                 index: index,
                 total: chunks.count,
@@ -70,7 +90,7 @@ enum BLEOutboundFragmentPlanner {
             fragmentPackets: fragmentPackets,
             fragmentVersion: sizing.fragmentVersion,
             chunkSize: sizing.chunkSize,
-            spacingMs: spacingMs(for: request)
+            spacingMs: spacingMs(directedPeer: directedPeer, recipientID: packet.recipientID)
         )
     }
 
@@ -130,8 +150,8 @@ enum BLEOutboundFragmentPlanner {
         )
     }
 
-    private static func spacingMs(for request: BLEOutboundFragmentTransferRequest) -> Int {
-        if request.directedPeer != nil || request.packet.recipientID != nil {
+    private static func spacingMs(directedPeer: PeerID?, recipientID: Data?) -> Int {
+        if directedPeer != nil || recipientID != nil {
             return TransportConfig.bleFragmentSpacingDirectedMs
         }
 

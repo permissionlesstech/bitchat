@@ -59,14 +59,16 @@ struct BLEInboundWriteBuffer {
                     accumulatedBytes: reportedAccumulated,
                     appendedBytes: appendedBytes + chunk.data.count,
                     offsets: offsets,
-                    packetType: combined.count >= 2 ? combined[1] : (chunk.offset == 0 && chunk.data.count >= 2 ? chunk.data[1] : nil)
+                    packetType: combined.count >= 2
+                        ? combined[combined.startIndex + 1]
+                        : (chunk.offset == 0 && chunk.data.count >= 2 ? chunk.data[chunk.data.startIndex + 1] : nil)
                 )
                 return .oversized(metadata: metadata)
             }
 
             if chunk.offset == combined.count {
                 if combined.isEmpty {
-                    combined = chunk.data
+                    combined = chunk.data.startIndex == 0 ? chunk.data : Data(chunk.data)
                 } else {
                     combined.append(chunk.data)
                 }
@@ -74,7 +76,8 @@ struct BLEInboundWriteBuffer {
                 if combined.count < end {
                     combined.append(Data(repeating: 0, count: end - combined.count))
                 }
-                combined.replaceSubrange(chunk.offset..<end, with: chunk.data)
+                let base = combined.startIndex
+                combined.replaceSubrange((base + chunk.offset)..<(base + end), with: chunk.data)
             }
             appendedBytes += chunk.data.count
         }

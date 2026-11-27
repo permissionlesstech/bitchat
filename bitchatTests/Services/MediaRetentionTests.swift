@@ -182,6 +182,48 @@ struct MediaRetentionTests {
         #expect(!FileManager.default.fileExists(atPath: privateFile.path))
     }
 
+    @Test
+    func saveRecreatesDeletedFilesDirectoryAndFormatsFallbackTimestamp() throws {
+        let root = makeRoot()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let fixedDate = Date(timeIntervalSince1970: 1_700_000_000)
+        let store = BLEIncomingFileStore(baseDirectory: root, dateProvider: { fixedDate })
+
+        let first = try #require(store.save(
+            data: Data([0x01, 0x02]),
+            preferredName: nil,
+            subdirectory: "images/incoming",
+            fallbackExtension: "jpg",
+            defaultPrefix: "img"
+        ))
+        #expect(FileManager.default.fileExists(atPath: first.path))
+
+        // Validate deterministic yyyyMMdd_HHmmss fallback naming when preferredName is nil.
+        let comps = Calendar.current.dateComponents([.year, .month, .day, .hour, .minute, .second], from: fixedDate)
+        let expectedStamp = String(
+            format: "%04d%02d%02d_%02d%02d%02d",
+            locale: Locale(identifier: "en_US_POSIX"),
+            comps.year ?? 0,
+            comps.month ?? 0,
+            comps.day ?? 0,
+            comps.hour ?? 0,
+            comps.minute ?? 0,
+            comps.second ?? 0
+        )
+        #expect(first.lastPathComponent.contains("_img_\(expectedStamp).jpg"))
+
+        // Removing files/ externally must not leave a stale directory cache.
+        try FileManager.default.removeItem(at: root.appendingPathComponent("files", isDirectory: true))
+        let second = try #require(store.save(
+            data: Data([0x03, 0x04]),
+            preferredName: "second.jpg",
+            subdirectory: "images/incoming",
+            fallbackExtension: "jpg",
+            defaultPrefix: "img"
+        ))
+        #expect(FileManager.default.fileExists(atPath: second.path))
+    }
+
     #if os(iOS)
     /// Media was the one persistence layer that never stated a protection
     /// class at its write site, so payloads inherited the container
