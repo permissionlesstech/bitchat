@@ -9,7 +9,6 @@
 @preconcurrency import AVFoundation
 import BitLogger
 import Foundation
-import os
 
 /// The engine operations behind live-burst playback, abstracted so the
 /// player's lifecycle (jitter start, category-escalation restart, stop) is
@@ -30,10 +29,8 @@ protocol PTTPlaybackEngine: AnyObject {
 }
 
 /// The lifecycle point requested from `AVAudioPlayerNode` for a scheduled
-/// buffer. `dataConsumed` only means the node no longer needs the bytes; it
-/// may arrive before the render pipeline has made the audio audible.
+/// buffer.
 enum PTTPlaybackCompletionType: Equatable, Sendable {
-    case dataConsumed
     case dataPlayedBack
 }
 
@@ -81,7 +78,6 @@ private final class SystemPTTPlaybackEngine: PTTPlaybackEngine {
         completionHandler: @escaping @Sendable (PTTPlaybackCompletionEvent) -> Void
     ) {
         let callbackType: AVAudioPlayerNodeCompletionCallbackType = switch completionType {
-        case .dataConsumed: .dataConsumed
         case .dataPlayedBack: .dataPlayedBack
         }
         let scheduledEngine = engine
@@ -128,37 +124,27 @@ private final class PTTPlaybackCompletionState: @unchecked Sendable {
         case retired
     }
 
-    private let lock: UnsafeMutablePointer<os_unfair_lock>
+    private let lock = NSLock()
     private var state: State = .scheduled
-
-    init() {
-        lock = UnsafeMutablePointer<os_unfair_lock>.allocate(capacity: 1)
-        lock.initialize(to: os_unfair_lock())
-    }
-
-    deinit {
-        lock.deinitialize(count: 1)
-        lock.deallocate()
-    }
 
     /// Returns true exactly once when playback completion wins the race with
     /// an engine rebuild or stop.
     func complete() -> Bool {
-        os_unfair_lock_lock(lock)
-        defer { os_unfair_lock_unlock(lock) }
-        guard case .scheduled = state else { return false }
-        state = .completed
-        return true
+        lock.withLock {
+            guard case .scheduled = state else { return false }
+            state = .completed
+            return true
+        }
     }
 
     /// Returns true exactly once when a rebuild or stop claims this
     /// still-pending schedule. Later callbacks from that engine are stale.
     func retireIfPending() -> Bool {
-        os_unfair_lock_lock(lock)
-        defer { os_unfair_lock_unlock(lock) }
-        guard case .scheduled = state else { return false }
-        state = .retired
-        return true
+        lock.withLock {
+            guard case .scheduled = state else { return false }
+            state = .retired
+            return true
+        }
     }
 }
 

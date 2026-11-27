@@ -1,5 +1,7 @@
 import Testing
 import Foundation
+import ImageIO
+import UniformTypeIdentifiers
 #if os(iOS)
 import UIKit
 #else
@@ -15,23 +17,29 @@ private func makeTemporaryDirectoryURL(_ name: String) -> URL {
     FileManager.default.temporaryDirectory.appendingPathComponent(name, isDirectory: true)
 }
 
-#if os(iOS)
-private func makePlatformImage(size: CGSize) -> UIImage {
-    UIGraphicsImageRenderer(size: size).image { context in
-        UIColor.systemTeal.setFill()
-        context.fill(CGRect(origin: .zero, size: size))
-    }
+private func writeSourcePNG(size: CGSize, to directory: URL) throws -> URL {
+    try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+    let url = directory.appendingPathComponent("src_\(UUID().uuidString).png")
+    let width = Int(size.width)
+    let height = Int(size.height)
+    let colorSpace = CGColorSpaceCreateDeviceRGB()
+    let context = try #require(CGContext(
+        data: nil,
+        width: width,
+        height: height,
+        bitsPerComponent: 8,
+        bytesPerRow: 0,
+        space: colorSpace,
+        bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+    ))
+    context.setFillColor(CGColor(red: 0.0, green: 0.5, blue: 0.6, alpha: 1.0))
+    context.fill(CGRect(origin: .zero, size: size))
+    let cgImage = try #require(context.makeImage())
+    let destination = try #require(CGImageDestinationCreateWithURL(url as CFURL, UTType.png.identifier as CFString, 1, nil))
+    CGImageDestinationAddImage(destination, cgImage, nil)
+    #expect(CGImageDestinationFinalize(destination))
+    return url
 }
-#else
-private func makePlatformImage(size: CGSize) -> NSImage {
-    let image = NSImage(size: size)
-    image.lockFocus()
-    NSColor.systemTeal.setFill()
-    NSBezierPath(rect: CGRect(origin: .zero, size: size)).fill()
-    image.unlockFocus()
-    return image
-}
-#endif
 
 struct ImageUtilsTests {
     @Test
@@ -58,11 +66,15 @@ struct ImageUtilsTests {
 
     @Test
     func processImage_writesCompressedJpeg() throws {
-        let image = makePlatformImage(size: CGSize(width: 1024, height: 768))
+        let sourceDir = makeTemporaryDirectoryURL("image-src-\(UUID().uuidString)")
         let outputDirectory = makeTemporaryDirectoryURL("image-output-\(UUID().uuidString)")
-        defer { try? FileManager.default.removeItem(at: outputDirectory) }
+        defer {
+            try? FileManager.default.removeItem(at: sourceDir)
+            try? FileManager.default.removeItem(at: outputDirectory)
+        }
 
-        let outputURL = try ImageUtils.processImage(image, maxDimension: 256, outputDirectory: outputDirectory)
+        let sourceURL = try writeSourcePNG(size: CGSize(width: 1024, height: 768), to: sourceDir)
+        let outputURL = try ImageUtils.processImage(at: sourceURL, maxDimension: 256, outputDirectory: outputDirectory)
 
         let data = try Data(contentsOf: outputURL)
 
@@ -74,12 +86,16 @@ struct ImageUtilsTests {
 
     @Test
     func processImage_usesUniqueOutputURLs() throws {
-        let image = makePlatformImage(size: CGSize(width: 64, height: 64))
+        let sourceDir = makeTemporaryDirectoryURL("image-src-\(UUID().uuidString)")
         let outputDirectory = makeTemporaryDirectoryURL("image-output-\(UUID().uuidString)")
-        defer { try? FileManager.default.removeItem(at: outputDirectory) }
+        defer {
+            try? FileManager.default.removeItem(at: sourceDir)
+            try? FileManager.default.removeItem(at: outputDirectory)
+        }
 
-        let firstURL = try ImageUtils.processImage(image, maxDimension: 64, outputDirectory: outputDirectory)
-        let secondURL = try ImageUtils.processImage(image, maxDimension: 64, outputDirectory: outputDirectory)
+        let sourceURL = try writeSourcePNG(size: CGSize(width: 64, height: 64), to: sourceDir)
+        let firstURL = try ImageUtils.processImage(at: sourceURL, maxDimension: 64, outputDirectory: outputDirectory)
+        let secondURL = try ImageUtils.processImage(at: sourceURL, maxDimension: 64, outputDirectory: outputDirectory)
 
         #expect(firstURL != secondURL)
         #expect(FileManager.default.fileExists(atPath: firstURL.path))
@@ -88,7 +104,6 @@ struct ImageUtilsTests {
 
     @Test
     func processImageAtURL_downsamplesAndWritesJpeg() throws {
-        let sourceImage = makePlatformImage(size: CGSize(width: 800, height: 600))
         let sourceDir = makeTemporaryDirectoryURL("image-src-\(UUID().uuidString)")
         let outputDir = makeTemporaryDirectoryURL("image-dst-\(UUID().uuidString)")
         defer {
@@ -96,7 +111,7 @@ struct ImageUtilsTests {
             try? FileManager.default.removeItem(at: outputDir)
         }
 
-        let sourceURL = try ImageUtils.processImage(sourceImage, maxDimension: 800, outputDirectory: sourceDir)
+        let sourceURL = try writeSourcePNG(size: CGSize(width: 800, height: 600), to: sourceDir)
         let downsampledURL = try ImageUtils.processImage(at: sourceURL, maxDimension: 200, outputDirectory: outputDir)
 
         let data = try Data(contentsOf: downsampledURL)
@@ -107,11 +122,15 @@ struct ImageUtilsTests {
 
     @Test
     func imageDownsampler_cachesAndClearsOnPanicReset() throws {
-        let image = makePlatformImage(size: CGSize(width: 128, height: 128))
+        let sourceDir = makeTemporaryDirectoryURL("image-src-\(UUID().uuidString)")
         let dir = makeTemporaryDirectoryURL("image-cache-\(UUID().uuidString)")
-        defer { try? FileManager.default.removeItem(at: dir) }
+        defer {
+            try? FileManager.default.removeItem(at: sourceDir)
+            try? FileManager.default.removeItem(at: dir)
+        }
 
-        let fileURL = try ImageUtils.processImage(image, maxDimension: 128, outputDirectory: dir)
+        let sourceURL = try writeSourcePNG(size: CGSize(width: 128, height: 128), to: sourceDir)
+        let fileURL = try ImageUtils.processImage(at: sourceURL, maxDimension: 128, outputDirectory: dir)
         #expect(ImageDownsampler.cachedImage(for: fileURL, maxPixelSize: 64) == nil)
         let decoded = try #require(ImageDownsampler.loadDownsampledImage(from: fileURL, maxPixelSize: 64))
         let cached = try #require(ImageDownsampler.cachedImage(for: fileURL, maxPixelSize: 64))

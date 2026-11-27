@@ -318,18 +318,13 @@ struct ViewSmokeTests {
         featureModels.privateConversationModel.openConversation(for: peerID)
         viewModel.verifiedFingerprints.insert(fingerprint)
 
-        let image = try makeCGImage()
-
         let myQR = MyQRView(qrString: "bitchat://verify?name=alice&npub=npub1test")
         let qrCode = QRCodeImage(data: "bitchat://verify?hello=world", size: 96)
-        let imageWrapper = ImageWrapper(image: image)
 
         _ = myQR.body
         _ = qrCode.body
-        _ = imageWrapper.body
         _ = mount(myQR)
         _ = mount(qrCode)
-        _ = mount(imageWrapper)
         _ = mount(
             VerificationSheetView(
                 isPresented: Binding(

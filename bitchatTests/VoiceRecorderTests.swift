@@ -85,7 +85,6 @@ private final class TestVoiceAudioRecorder: VoiceAudioRecording {
 
     private let lock = NSLock()
     private var _isRecording = false
-    private var _isMeteringEnabled = false
     private var _prepareCallCount = 0
     private var _recordedDurations: [TimeInterval] = []
     private var _stopCallCount = 0
@@ -96,10 +95,6 @@ private final class TestVoiceAudioRecorder: VoiceAudioRecording {
     }
 
     var isRecording: Bool { lock.withLock { _isRecording } }
-    var isMeteringEnabled: Bool {
-        get { lock.withLock { _isMeteringEnabled } }
-        set { lock.withLock { _isMeteringEnabled = newValue } }
-    }
     var prepareCallCount: Int { lock.withLock { _prepareCallCount } }
     var recordedDurations: [TimeInterval] { lock.withLock { _recordedDurations } }
     var stopCallCount: Int { lock.withLock { _stopCallCount } }

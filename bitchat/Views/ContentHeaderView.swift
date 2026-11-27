@@ -2,7 +2,6 @@ import SwiftUI
 
 struct ContentHeaderView: View {
     @EnvironmentObject private var appChromeModel: AppChromeModel
-    @EnvironmentObject private var verificationModel: VerificationModel
     @EnvironmentObject private var locationChannelsModel: LocationChannelsModel
     @EnvironmentObject private var peerListModel: PeerListModel
     @EnvironmentObject private var boardAlertsModel: BoardAlertsModel
@@ -12,7 +11,6 @@ struct ContentHeaderView: View {
     @ThemedPalette private var palette
 
     @Binding var showSidebar: Bool
-    @Binding var showVerifySheet: Bool
     var isNicknameFieldFocused: FocusState<Bool>.Binding
 
     let headerHeight: CGFloat
@@ -314,10 +312,6 @@ struct ContentHeaderView: View {
                 )
             }
             .layoutPriority(3)
-            .sheet(isPresented: $showVerifySheet) {
-                VerificationSheetView(isPresented: $showVerifySheet)
-                    .environmentObject(verificationModel)
-            }
         }
         // Fixed height is load-bearing: children fill the bar with
         // .frame(maxHeight: .infinity) tap targets, so an open-ended
