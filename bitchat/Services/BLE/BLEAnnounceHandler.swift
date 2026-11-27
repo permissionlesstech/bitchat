@@ -174,6 +174,7 @@ final class BLEAnnounceHandler {
 
         var isNewPeer = false
         var isReconnectedPeer = false
+        var isStaleAnnounce = false
         let directLinkState = env.linkState(peerID)
         let isDirectAnnounce = packet.ttl == env.messageTTL
         // A "direct" announce arriving on a link that another peer already
@@ -211,7 +212,6 @@ final class BLEAnnounceHandler {
             // The pre-barrier trust check reads the registry outside the
             // barrier, so this closes the race where two announces for the
             // same peer are evaluated concurrently.
-            var isStaleAnnounce = false
             guard let update = env.upsertVerifiedAnnounce(
                 peerID,
                 announcement,
