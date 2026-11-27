@@ -100,12 +100,6 @@ final class BridgeService: ObservableObject {
         static let cellPrecision = 6
     }
 
-    struct QueuedUplink {
-        let depositor: PeerID
-        let cell: String
-        let event: NostrEvent
-    }
-
     /// A validated rendezvous message ready for the timeline.
     struct InboundBridgeMessage {
         let messageID: String
@@ -238,10 +232,8 @@ final class BridgeService: ObservableObject {
     private let verifyEventSignature: (NostrEvent) -> Bool
     private static let enabledKey = "bridge.userEnabled"
 
-    var queuedUplinks: [QueuedUplink] {
-        relayEngine.queuedUplinks.map {
-            QueuedUplink(depositor: $0.depositor, cell: $0.scope, event: $0.event)
-        }
+    var queuedUplinks: [CarrierRelayEngine.QueuedUplink] {
+        relayEngine.queuedUplinks
     }
 
     init(

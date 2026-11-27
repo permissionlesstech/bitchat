@@ -115,6 +115,31 @@ struct MediaRetentionTests {
         #expect(BLEIncomingFileStore.defaultMediaRetention == 7 * 24 * 60 * 60)
     }
 
+    @Test
+    func quotaEvictionSkipsFilesAwaitingUIDeliveryUntilFinalized() throws {
+        let root = makeRoot()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let store = BLEIncomingFileStore(baseDirectory: root, quotaBytes: 12)
+
+        let pending = try #require(store.save(
+            data: Data(repeating: 0xAA, count: 10),
+            preferredName: "first.jpg",
+            subdirectory: "images/incoming",
+            fallbackExtension: "jpg",
+            defaultPrefix: "img"
+        ))
+        store.beginPendingDelivery(at: pending)
+
+        // Even under quota pressure from a second arrival, the pending file
+        // stays protected on disk until UI delivery finishes.
+        store.enforceQuota(reservingBytes: 10)
+        #expect(FileManager.default.fileExists(atPath: pending.path))
+
+        store.finishPendingDelivery(at: pending)
+        store.enforceQuota(reservingBytes: 10)
+        #expect(!FileManager.default.fileExists(atPath: pending.path))
+    }
+
     #if os(iOS)
     /// Media was the one persistence layer that never stated a protection
     /// class at its write site, so payloads inherited the container

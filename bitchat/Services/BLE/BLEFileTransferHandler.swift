@@ -40,6 +40,10 @@ struct BLEFileTransferHandlerEnvironment {
     let commitPrivateMediaFile: (_ messageID: String, _ storedURL: URL) -> Bool
     /// Rolls back a saved payload when its durable receipt commit fails.
     let removeIncomingFile: (_ storedURL: URL) -> Void
+    /// Protects an incoming file from quota eviction while UI delivery is pending.
+    let beginPendingDelivery: (_ storedURL: URL) -> Void
+    /// Releases quota-eviction protection once UI delivery finalizes.
+    let finishPendingDelivery: (_ storedURL: URL) -> Void
     /// Checks the authenticated sender before any private-media disk work.
     let isPrivateMediaSenderBlocked: (PeerID) -> Bool
     /// Updates the registry last-seen timestamp for the peer (async barrier write).
@@ -295,6 +299,7 @@ final class BLEFileTransferHandler {
                     "📁 Restored durable private media duplicate id=\(messageID.prefix(12))… from \(peerID.id.prefix(8))… -> \(existingFile.lastPathComponent)",
                     category: .session
                 )
+                env.beginPendingDelivery(existingFile)
                 deliverStableMessage(
                     message,
                     messageID: messageID,
@@ -343,10 +348,15 @@ final class BLEFileTransferHandler {
             return false
         }
 
+        // Protect the saved payload from quota eviction until its async UI
+        // delivery finalizes (or commit rollback removes it).
+        env.beginPendingDelivery(destination)
+
         if let messageID,
            !env.commitPrivateMediaFile(messageID, destination) {
             // A payload without its durable ID mapping cannot safely suppress
             // a retry after relaunch. Roll it back and withhold UI/ACK.
+            env.finishPendingDelivery(destination)
             env.removeIncomingFile(destination)
             return false
         }
@@ -382,6 +392,7 @@ final class BLEFileTransferHandler {
                 { true },
                 {},
                 { outcome in
+                    env.finishPendingDelivery(destination)
                     if outcome == .rejected {
                         // Raw media has no durable receipt that can redeliver
                         // it later; roll back the unowned file on disk.
@@ -413,7 +424,9 @@ final class BLEFileTransferHandler {
             {
                 env.acknowledgePrivateMedia(messageID, peerID)
             },
-            { _ in }
+            { _ in
+                env.finishPendingDelivery(expectedURL)
+            }
         )
     }
 

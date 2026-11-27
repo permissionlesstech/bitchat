@@ -78,12 +78,6 @@ final class GatewayService: ObservableObject {
         static let maxTrackedEventIDs = 512
     }
 
-    struct QueuedUplink {
-        let depositor: PeerID
-        let geohash: String
-        let event: NostrEvent
-    }
-
     static let shared = GatewayService()
 
     /// The user toggle. While true this device advertises `.gateway` and
@@ -121,10 +115,8 @@ final class GatewayService: ObservableObject {
     private let defaults: UserDefaults
     private static let enabledKey = "gateway.userEnabled"
 
-    var queuedUplinks: [QueuedUplink] {
-        relayEngine.queuedUplinks.map {
-            QueuedUplink(depositor: $0.depositor, geohash: $0.scope, event: $0.event)
-        }
+    var queuedUplinks: [CarrierRelayEngine.QueuedUplink] {
+        relayEngine.queuedUplinks
     }
 
     init(defaults: UserDefaults = .standard, now: @escaping () -> Date = Date.init) {

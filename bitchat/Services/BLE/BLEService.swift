@@ -2715,6 +2715,12 @@ final class BLEService: NSObject {
             removeIncomingFile: { [weak self] storedURL in
                 self?.incomingFileStore.removeIncomingFile(at: storedURL)
             },
+            beginPendingDelivery: { [weak self] storedURL in
+                self?.incomingFileStore.beginPendingDelivery(at: storedURL)
+            },
+            finishPendingDelivery: { [weak self] storedURL in
+                self?.incomingFileStore.finishPendingDelivery(at: storedURL)
+            },
             isPrivateMediaSenderBlocked: { [weak self] peerID in
                 guard let self else { return false }
                 let senderStaticKey = self.noiseService.getPeerPublicKeyData(peerID)

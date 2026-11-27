@@ -21,6 +21,8 @@ struct BLEFileTransferHandlerTests {
         var receiptCommits: [(messageID: String, storedURL: URL)] = []
         var receiptCommitSucceeds = true
         var removedIncomingFiles: [URL] = []
+        var beganPendingDeliveries: [URL] = []
+        var finishedPendingDeliveries: [URL] = []
         var lastSeenUpdates: [PeerID] = []
         var deliveryAcks: [(messageID: String, peerID: PeerID)] = []
         var deliveredMessages: [BitchatMessage] = []
@@ -88,6 +90,12 @@ struct BLEFileTransferHandlerTests {
                 recorder.removedIncomingFiles.append(storedURL)
                 recorder.removeIncomingFileOverride?(storedURL)
             },
+            beginPendingDelivery: { storedURL in
+                recorder.beganPendingDeliveries.append(storedURL)
+            },
+            finishPendingDelivery: { storedURL in
+                recorder.finishedPendingDeliveries.append(storedURL)
+            },
             isPrivateMediaSenderBlocked: { peerID in
                 recorder.blockedPeers.contains(peerID)
             },
@@ -138,6 +146,8 @@ struct BLEFileTransferHandlerTests {
         #expect(recorder.saveCalls.first?.defaultPrefix == "file")
         #expect(recorder.lastSeenUpdates.isEmpty)
         #expect(recorder.deliveredMessages.count == 1)
+        #expect(recorder.beganPendingDeliveries == [recorder.saveResult])
+        #expect(recorder.finishedPendingDeliveries == [recorder.saveResult])
         let message = recorder.deliveredMessages.first
         #expect(message?.sender == "Alice")
         #expect(message?.content == "[file] sample.pdf")
@@ -211,6 +221,8 @@ struct BLEFileTransferHandlerTests {
 
         #expect(recorder.signedNameQueries == [remotePeerID])
         #expect(recorder.deliveredMessages.count == 1)
+        #expect(recorder.beganPendingDeliveries == [recorder.saveResult])
+        #expect(recorder.finishedPendingDeliveries == [recorder.saveResult])
         #expect(recorder.deliveredMessages.first?.sender == "Bob")
     }
 
@@ -233,6 +245,8 @@ struct BLEFileTransferHandlerTests {
         #expect(recorder.signatureVerifyCount == 1)
         #expect(recorder.signedNameQueries.isEmpty)
         #expect(recorder.deliveredMessages.count == 1)
+        #expect(recorder.beganPendingDeliveries == [recorder.saveResult])
+        #expect(recorder.finishedPendingDeliveries == [recorder.saveResult])
         #expect(recorder.deliveredMessages.first?.sender == "Me")
     }
 
@@ -249,6 +263,8 @@ struct BLEFileTransferHandlerTests {
         // signature lookup (mirrors BLEPublicMessageHandler).
         #expect(recorder.signedNameQueries == [remotePeerID])
         #expect(recorder.deliveredMessages.count == 1)
+        #expect(recorder.beganPendingDeliveries == [recorder.saveResult])
+        #expect(recorder.finishedPendingDeliveries == [recorder.saveResult])
         #expect(recorder.deliveredMessages.first?.sender == "Carol")
     }
 
@@ -340,6 +356,8 @@ struct BLEFileTransferHandlerTests {
         #expect(recorder.trackedPackets.isEmpty)
         #expect(recorder.lastSeenUpdates == [remotePeerID])
         #expect(recorder.deliveredMessages.count == 1)
+        #expect(recorder.beganPendingDeliveries == [recorder.saveResult])
+        #expect(recorder.finishedPendingDeliveries == [recorder.saveResult])
         #expect(recorder.deliveredMessages.first?.isPrivate == true)
         #expect(recorder.deliveredMessages.first?.id.hasPrefix("media-") == false)
         // Must be explicit: BitchatMessage defaults private messages to
@@ -373,6 +391,8 @@ struct BLEFileTransferHandlerTests {
         #expect(recorder.saveCalls.first?.data == content)
         #expect(recorder.lastSeenUpdates == [remotePeerID])
         #expect(recorder.deliveredMessages.count == 1)
+        #expect(recorder.beganPendingDeliveries == [recorder.saveResult])
+        #expect(recorder.finishedPendingDeliveries == [recorder.saveResult])
         #expect(recorder.deliveredMessages.first?.isPrivate == true)
         #expect(recorder.deliveredMessages.first?.timestamp == timestamp)
         #expect(recorder.deliveredMessages.first?.id == PrivateMediaMessageIdentity.stableID(
@@ -472,6 +492,8 @@ struct BLEFileTransferHandlerTests {
         #expect(recorder.receiptCommits.isEmpty)
         #expect(recorder.deliveryAcks.isEmpty)
         #expect(recorder.deliveredMessages.count == 1)
+        #expect(recorder.beganPendingDeliveries == [recorder.saveResult])
+        #expect(recorder.finishedPendingDeliveries == [recorder.saveResult])
         #expect(recorder.deliveredMessages.first?.id.hasPrefix("media-") == false)
     }
 
@@ -523,6 +545,8 @@ struct BLEFileTransferHandlerTests {
 
         #expect(handler.handle(packet, from: remotePeerID))
         #expect(recorder.deliveredMessages.count == 1)
+        #expect(recorder.beganPendingDeliveries == [recorder.saveResult])
+        #expect(recorder.finishedPendingDeliveries == [recorder.saveResult])
         #expect(recorder.deliveryAcks.isEmpty)
         #expect(recorder.removedIncomingFiles.isEmpty)
     }
@@ -728,6 +752,8 @@ struct BLEFileTransferHandlerTests {
         #expect(recorder.saveCalls.count == 2)
         #expect(recorder.deliveryAcks.count == 1)
         #expect(recorder.deliveredMessages.count == 1)
+        #expect(recorder.beganPendingDeliveries == [recorder.saveResult])
+        #expect(recorder.finishedPendingDeliveries == [recorder.saveResult])
     }
 
     @Test
@@ -835,6 +861,8 @@ struct BLEFileTransferHandlerTests {
         ))
         #expect(recorder.saveCalls.count == 1)
         #expect(recorder.deliveredMessages.count == 1)
+        #expect(recorder.beganPendingDeliveries == [recorder.saveResult])
+        #expect(recorder.finishedPendingDeliveries == [recorder.saveResult])
         #expect(recorder.deliveryAcks.count == 1)
     }
 

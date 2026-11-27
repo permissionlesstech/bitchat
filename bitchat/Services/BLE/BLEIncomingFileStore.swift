@@ -113,13 +113,39 @@ struct BLEIncomingFileStore: @unchecked Sendable {
         var filesRoot: URL?
         var incomingDirectoryPaths: Set<String> = []
         var createdSubdirectories: Set<String> = []
+        var pendingDeliveryCounts: [String: Int] = [:]
 
         func invalidate() {
             lock.lock()
             filesRoot = nil
             incomingDirectoryPaths.removeAll(keepingCapacity: false)
             createdSubdirectories.removeAll(keepingCapacity: false)
+            pendingDeliveryCounts.removeAll(keepingCapacity: false)
             lock.unlock()
+        }
+
+        func beginPendingDelivery(path: String) {
+            lock.lock()
+            pendingDeliveryCounts[path, default: 0] += 1
+            lock.unlock()
+        }
+
+        func finishPendingDelivery(path: String) {
+            lock.lock()
+            if let count = pendingDeliveryCounts[path] {
+                if count <= 1 {
+                    pendingDeliveryCounts.removeValue(forKey: path)
+                } else {
+                    pendingDeliveryCounts[path] = count - 1
+                }
+            }
+            lock.unlock()
+        }
+
+        func pendingDeliveryPathsSnapshot() -> Set<String> {
+            lock.lock()
+            defer { lock.unlock() }
+            return Set(pendingDeliveryCounts.keys)
         }
     }
 
@@ -311,6 +337,17 @@ struct BLEIncomingFileStore: @unchecked Sendable {
         privateMediaReceipts.resetForPanic()
     }
 
+    /// Marks an incoming file as awaiting asynchronous UI delivery so quota
+    /// eviction and age-based retention cannot unlink it before the UI receives
+    /// the message. Ref-counted per standardized path.
+    func beginPendingDelivery(at url: URL) {
+        directoryCache.beginPendingDelivery(path: url.standardizedFileURL.path)
+    }
+
+    func finishPendingDelivery(at url: URL) {
+        directoryCache.finishPendingDelivery(path: url.standardizedFileURL.path)
+    }
+
     func privateMediaReceiptState(messageID: String) -> BLEPrivateMediaReceiptState {
         privateMediaReceipts.state(for: messageID)
     }
@@ -398,10 +435,12 @@ struct BLEIncomingFileStore: @unchecked Sendable {
             guard currentUsage > targetUsage else { return }
 
             let needToFree = currentUsage - targetUsage
+            let protectedPaths = directoryCache.pendingDeliveryPathsSnapshot()
             var freedSpace: Int64 = 0
             for file in allFiles.sorted(by: { $0.modified < $1.modified }) {
                 guard freedSpace < needToFree else { break }
-                guard !file.url.lastPathComponent.hasPrefix(Self.liveCapturePrefix) else { continue }
+                guard !file.url.lastPathComponent.hasPrefix(Self.liveCapturePrefix),
+                      !protectedPaths.contains(file.url.standardizedFileURL.path) else { continue }
                 do {
                     try fileManager.removeItem(at: file.url)
                     freedSpace += file.size
@@ -426,6 +465,7 @@ struct BLEIncomingFileStore: @unchecked Sendable {
         guard retention > 0 else { return 0 }
 
         let cutoff = dateProvider().addingTimeInterval(-retention)
+        let protectedPaths = directoryCache.pendingDeliveryPathsSnapshot()
         var removed = 0
         do {
             let base = try filesDirectory()
@@ -443,7 +483,8 @@ struct BLEIncomingFileStore: @unchecked Sendable {
                         forKeys: [.contentModificationDateKey]
                     ).contentModificationDate,
                           modified < cutoff,
-                          !fileURL.lastPathComponent.hasPrefix(Self.liveCapturePrefix) else {
+                          !fileURL.lastPathComponent.hasPrefix(Self.liveCapturePrefix),
+                          !protectedPaths.contains(fileURL.standardizedFileURL.path) else {
                         continue
                     }
 
