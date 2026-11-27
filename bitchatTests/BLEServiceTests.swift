@@ -281,7 +281,7 @@ struct BLEServiceTests {
 
 // MARK: - Mock Delegate Helper
 
-private final class MockBitchatDelegate: BitchatDelegate {
+private final class MockBitchatDelegate: MockBLEDelegate {
     private let messageHandler: (BitchatMessage) -> Void
     
     init(_ handler: @escaping (BitchatMessage) -> Void) {
@@ -291,12 +291,4 @@ private final class MockBitchatDelegate: BitchatDelegate {
     func didReceiveMessage(_ message: BitchatMessage) {
         messageHandler(message)
     }
-    
-    func didConnectToPeer(_ peerID: PeerID) {}
-    func didDisconnectFromPeer(_ peerID: PeerID) {}
-    func didUpdatePeerList(_ peers: [PeerID]) {}
-    func didUpdateMessageDeliveryStatus(_ messageID: String, status: DeliveryStatus) {}
-    func didReceiveNoisePayload(from peerID: PeerID, type: NoisePayloadType, payload: Data, timestamp: Date) {}
-    func didUpdateBluetoothState(_ state: CBManagerState) {}
-    func didReceivePublicMessage(from peerID: PeerID, nickname: String, content: String, timestamp: Date, messageID: String?) {}
 }

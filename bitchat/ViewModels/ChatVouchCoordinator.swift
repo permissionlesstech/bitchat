@@ -97,7 +97,6 @@ extension ChatViewModel: ChatVouchContext {
         // PeerListModel refreshes on this notification; the view-model change
         // covers FingerprintView / VerificationModel consumers.
         NotificationCenter.default.post(name: Notification.Name("peerStatusUpdated"), object: nil)
-        notifyUIChanged()
     }
 }
 

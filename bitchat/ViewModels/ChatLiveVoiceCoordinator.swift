@@ -42,7 +42,6 @@ protocol ChatLiveVoiceContext: AnyObject {
     /// Publishes who is currently talking live in the public mesh channel
     /// (floor-courtesy indicator on the composer mic), nil when nobody is.
     func setActivePublicVoiceTalker(_ nickname: String?)
-    func notifyUIChanged()
 }
 
 extension ChatViewModel: ChatLiveVoiceContext {
@@ -420,7 +419,6 @@ final class ChatLiveVoiceCoordinator {
         try? fileManager.removeItem(at: finished.fileURL)
         finishedBursts.removeValue(forKey: entry.key)
 
-        context.notifyUIChanged()
         SecureLogger.debug("PTT: absorbed finalized note for burst \(burstID.hexEncodedString())", category: .session)
         return true
     }
@@ -619,7 +617,6 @@ final class ChatLiveVoiceCoordinator {
             // Nothing audible ever arrived — drop the empty bubble.
             removeBubble(of: assembly)
             try? fileManager.removeItem(at: assembly.fileURL)
-            context.notifyUIChanged()
             return
         }
 
@@ -656,7 +653,6 @@ final class ChatLiveVoiceCoordinator {
             messageTimestamp: assembly.messageTimestamp,
             expiresAt: Date().addingTimeInterval(TransportConfig.pttFinishedBurstRegistrySeconds)
         )
-        context.notifyUIChanged()
         SecureLogger.debug("PTT: burst \(assembly.burstID.hexEncodedString()) finalized (\(assembly.deliveredFrames) frames)", category: .session)
     }
 
@@ -726,7 +722,6 @@ final class ChatLiveVoiceCoordinator {
         removeBubble(of: assembly)
         WaveformCache.shared.purge(url: assembly.fileURL)
         try? fileManager.removeItem(at: assembly.fileURL)
-        context.notifyUIChanged()
     }
 
     // MARK: - Timers

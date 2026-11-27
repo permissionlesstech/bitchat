@@ -448,13 +448,13 @@ final class PerformanceBaselineTests: XCTestCase {
             keepAlive.append(fixture)
             let start = Date()
             for item in items {
-                fixture.viewModel.didReceivePublicMessage(
-                    from: item.peerID,
+                fixture.viewModel.didReceiveTransportEvent(.publicMessageReceived(
+                    peerID: item.peerID,
                     nickname: item.nickname,
                     content: item.content,
                     timestamp: item.timestamp,
                     messageID: item.messageID
-                )
+                ))
             }
             // Drain the per-message main-actor hops and whichever surfacing
             // path wins (the pipeline's batched timer flush or the startup
@@ -765,7 +765,6 @@ private final class PerfDeliveryContext: ChatDeliveryContext {
     private var publicIDs: [String] = []
     private var privateIDsByPeer: [(peerID: PeerID, messageIDs: [String])] = []
 
-    func notifyUIChanged() {}
     func markMessageDelivered(_ messageID: String) {}
     func markMessageDelivered(_ messageID: String, from peerIDs: Set<PeerID>) {}
     func confirmPrivateMediaDelivery(_ messageID: String) {}

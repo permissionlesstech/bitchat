@@ -21,7 +21,6 @@ final class MockTransport: Transport, PrivateMediaDeletionPersisting,
 
     // MARK: - Protocol Properties
 
-    weak var delegate: BitchatDelegate?
     weak var eventDelegate: TransportEventDelegate?
     weak var peerEventsDelegate: TransportPeerEventsDelegate?
 
@@ -392,14 +391,26 @@ final class MockTransport: Transport, PrivateMediaDeletionPersisting,
         triggeredHandshakes.removeAll()
     }
 
+    private func emitEvent(_ event: TransportEvent) {
+        if Thread.isMainThread {
+            MainActor.assumeIsolated {
+                eventDelegate?.didReceiveTransportEvent(event)
+            }
+        } else {
+            Task { @MainActor [weak self] in
+                self?.eventDelegate?.didReceiveTransportEvent(event)
+            }
+        }
+    }
+
     /// Simulates a peer connecting
     func simulateConnect(_ peerID: PeerID, nickname: String? = nil) {
         connectedPeers.insert(peerID)
         if let nickname = nickname {
             peerNicknames[peerID] = nickname
         }
-        delegate?.didConnectToPeer(peerID)
-        delegate?.didUpdatePeerList(Array(connectedPeers))
+        emitEvent(.peerConnected(peerID))
+        emitEvent(.peerListUpdated(Array(connectedPeers)))
         publishPeerSnapshots()
     }
 
@@ -407,14 +418,14 @@ final class MockTransport: Transport, PrivateMediaDeletionPersisting,
     func simulateDisconnect(_ peerID: PeerID) {
         connectedPeers.remove(peerID)
         peerNicknames.removeValue(forKey: peerID)
-        delegate?.didDisconnectFromPeer(peerID)
-        delegate?.didUpdatePeerList(Array(connectedPeers))
+        emitEvent(.peerDisconnected(peerID))
+        emitEvent(.peerListUpdated(Array(connectedPeers)))
         publishPeerSnapshots()
     }
 
     /// Simulates receiving a message
     func simulateIncomingMessage(_ message: BitchatMessage) {
-        delegate?.didReceiveMessage(message)
+        emitEvent(.messageReceived(message))
     }
 
     /// Simulates receiving a public message
@@ -425,18 +436,18 @@ final class MockTransport: Transport, PrivateMediaDeletionPersisting,
         timestamp: Date = Date(),
         messageID: String? = nil
     ) {
-        delegate?.didReceivePublicMessage(
-            from: peerID,
+        emitEvent(.publicMessageReceived(
+            peerID: peerID,
             nickname: nickname,
             content: content,
             timestamp: timestamp,
             messageID: messageID
-        )
+        ))
     }
 
     /// Simulates Bluetooth state change
     func simulateBluetoothStateChange(_ state: CBManagerState) {
-        delegate?.didUpdateBluetoothState(state)
+        emitEvent(.bluetoothStateUpdated(state))
     }
 
     /// Updates the peer snapshot publisher

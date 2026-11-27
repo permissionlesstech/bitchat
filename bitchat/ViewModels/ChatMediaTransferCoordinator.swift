@@ -94,8 +94,6 @@ protocol ChatMediaTransferContext: AnyObject {
     /// Surfaces a refused explicit media deletion in the affected chat so a
     /// wedged delete never looks like success.
     func notifyMediaDeletionRefused(messageID: String)
-    /// Signals that message state changed so observers refresh (e.g. `objectWillChange.send()`).
-    func notifyUIChanged()
 
     // MARK: Delivery status & dedup
     func updateMessageDeliveryStatus(_ messageID: String, status: DeliveryStatus)
@@ -813,7 +811,6 @@ final class ChatMediaTransferCoordinator {
 
         let key = context.normalizedContentKey(message.content)
         context.recordContentKey(key, timestamp: timestamp)
-        context.notifyUIChanged()
         return message
     }
 

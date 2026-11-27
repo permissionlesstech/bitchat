@@ -52,7 +52,6 @@ protocol ChatGroupContext: AnyObject {
     func endPrivateChat()
     func addSystemMessage(_ content: String)
     func addLocalPrivateSystemMessage(_ content: String, to peerID: PeerID)
-    func notifyUIChanged()
     func notifyPrivateMessage(from senderName: String, message: String, peerID: PeerID)
 }
 
@@ -309,7 +308,6 @@ final class ChatGroupCoordinator {
         context.endPrivateChat()
         context.removePrivateChat(group.peerID)
         context.groupStore.removeGroup(withID: group.groupID)
-        context.notifyUIChanged()
         return .success(message: String(
             format: String(localized: "system.group.left", comment: "System message after leaving a group; placeholder is the group name"),
             locale: .current,
@@ -386,7 +384,6 @@ final class ChatGroupCoordinator {
         )
         context.appendPrivateMessage(message, to: groupPeerID)
         context.broadcastGroupMessagePayload(payload)
-        context.notifyUIChanged()
     }
 
     // MARK: - Receiving
@@ -459,7 +456,6 @@ final class ChatGroupCoordinator {
                 )
             }
         }
-        context.notifyUIChanged()
     }
 
     /// Accepts creator-signed group state arriving as an invite. The Noise
@@ -607,7 +603,6 @@ private extension ChatGroupCoordinator {
                     locale: .current,
                     existing.name
                 ))
-                context.notifyUIChanged()
             }
             return
         }
@@ -636,6 +631,5 @@ private extension ChatGroupCoordinator {
         } else if isInvite == false, let existing, state.epoch > existing.epoch {
             SecureLogger.info("Group '\(trimmedName)' rotated to epoch \(state.epoch)", category: .session)
         }
-        context.notifyUIChanged()
     }
 }

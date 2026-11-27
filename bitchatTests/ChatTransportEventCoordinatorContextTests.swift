@@ -34,7 +34,6 @@ private final class MockChatTransportEventContext: ChatTransportEventContext {
     var unreadPrivateMessages: Set<PeerID> = []
     var selectedPrivateChatPeer: PeerID?
     private(set) var unmarkedReadReceiptBatches: [[String]] = []
-    private(set) var notifyUIChangedCount = 0
 
     // Conversation store intents (mirror `ConversationStore` semantics)
     @discardableResult
@@ -64,9 +63,6 @@ private final class MockChatTransportEventContext: ChatTransportEventContext {
         unmarkedReadReceiptBatches.append(ids)
     }
 
-    func notifyUIChanged() {
-        notifyUIChangedCount += 1
-    }
 
     // Inbound message handling
     var blockedMessageIDs: Set<String> = []
@@ -186,12 +182,6 @@ private final class MockChatTransportEventContext: ChatTransportEventContext {
 
 // MARK: - Helpers
 
-/// Lets the coordinator's internal `Task { @MainActor … }` hops run.
-@MainActor
-private func drainMainActorTasks() async {
-    for _ in 0..<10 { await Task.yield() }
-}
-
 private func makeMessage(
     id: String,
     sender: String = "alice",
@@ -218,22 +208,21 @@ private func makeMessage(
 struct ChatTransportEventCoordinatorContextTests {
 
     @Test @MainActor
-    func didReceiveMessage_routesPrivateAndPublic_skipsBlockedAndEmpty() async {
+    func didReceiveMessage_routesPrivateAndPublic_skipsBlockedAndEmpty() {
         let context = MockChatTransportEventContext()
         let coordinator = ChatTransportEventCoordinator(context: context)
         let peerID = PeerID(str: "1122334455667788")
 
         // Blocked messages are dropped before any handling.
         context.blockedMessageIDs = ["blocked", "blocked-private"]
-        coordinator.didReceiveMessage(makeMessage(id: "blocked"))
-        coordinator.didReceiveMessage(makeMessage(
+        coordinator.didReceiveMessageSynchronously(makeMessage(id: "blocked"))
+        coordinator.didReceiveMessageSynchronously(makeMessage(
             id: "blocked-private",
             isPrivate: true,
             senderPeerID: peerID
         ))
         // Empty public content is dropped too.
-        coordinator.didReceiveMessage(makeMessage(id: "empty", content: "   "))
-        await drainMainActorTasks()
+        coordinator.didReceiveMessageSynchronously(makeMessage(id: "empty", content: "   "))
         #expect(context.handledPublicMessages.isEmpty)
         #expect(context.handledPrivateMessages.isEmpty)
         #expect(context.mentionCheckedMessageIDs.isEmpty)
@@ -244,19 +233,18 @@ struct ChatTransportEventCoordinatorContextTests {
         // belongs to BLEFileTransferHandler after its durable commit and this
         // synchronous acceptance result, not to the generic UI coordinator.
         let stableMediaID = "media-\(String(repeating: "a", count: 32))"
-        coordinator.didReceiveMessage(makeMessage(
+        coordinator.didReceiveMessageSynchronously(makeMessage(
             id: stableMediaID,
             isPrivate: true,
             senderPeerID: peerID
         ))
-        coordinator.didReceiveMessage(makeMessage(
+        coordinator.didReceiveMessageSynchronously(makeMessage(
             id: "legacy-media",
             isPrivate: true,
             senderPeerID: peerID
         ))
-        coordinator.didReceiveMessage(makeMessage(id: "pm-missing-sender", isPrivate: true))
-        coordinator.didReceiveMessage(makeMessage(id: "pub"))
-        await drainMainActorTasks()
+        coordinator.didReceiveMessageSynchronously(makeMessage(id: "pm-missing-sender", isPrivate: true))
+        coordinator.didReceiveMessageSynchronously(makeMessage(id: "pub"))
         #expect(context.handledPrivateMessages.map(\.id) == [
             stableMediaID,
             "legacy-media",
@@ -303,19 +291,18 @@ struct ChatTransportEventCoordinatorContextTests {
     }
 
     @Test @MainActor
-    func didReceivePublicMessage_trimsContentAndParsesMentions() async {
+    func didReceivePublicMessage_trimsContentAndParsesMentions() {
         let context = MockChatTransportEventContext()
         let coordinator = ChatTransportEventCoordinator(context: context)
         let peerID = PeerID(str: "aabbccdd00112233")
 
-        coordinator.didReceivePublicMessage(
+        coordinator.didReceivePublicMessageSynchronously(
             from: peerID,
             nickname: "alice",
             content: "  hi @me  ",
             timestamp: Date(),
             messageID: "m1"
         )
-        await drainMainActorTasks()
 
         #expect(context.handledPublicMessages.count == 1)
         let message = context.handledPublicMessages[0]
@@ -326,18 +313,16 @@ struct ChatTransportEventCoordinatorContextTests {
     }
 
     @Test @MainActor
-    func didConnectAndDisconnect_manageSessionsStableIDsAndReadReceipts() async {
+    func didConnectAndDisconnect_manageSessionsStableIDsAndReadReceipts() {
         let context = MockChatTransportEventContext()
         let coordinator = ChatTransportEventCoordinator(context: context)
         let peerID = PeerID(str: "1122334455667788")
         let noiseKey = Data(repeating: 0xAB, count: 32)
         context.peersByID[peerID] = BitchatPeer(peerID: peerID, noisePublicKey: noiseKey, nickname: "alice")
 
-        coordinator.didConnectToPeer(peerID)
-        await drainMainActorTasks()
+        coordinator.didConnectToPeerSynchronously(peerID)
         #expect(context.stablePeerIDCache[peerID] == PeerID(hexData: noiseKey))
         #expect(context.flushedOutboxPeerIDs == [peerID])
-        #expect(context.notifyUIChangedCount == 1)
 
         // Their messages' read receipts are un-marked on disconnect so READ
         // acks can be re-sent after reconnect; our own messages are not.
@@ -346,10 +331,8 @@ struct ChatTransportEventCoordinatorContextTests {
             makeMessage(id: "mine-1", sender: "me", isPrivate: true, senderPeerID: context.myPeerID),
             makeMessage(id: "theirs-2", isPrivate: true, senderPeerID: peerID)
         ]
-        coordinator.didDisconnectFromPeer(peerID)
-        await drainMainActorTasks()
+        coordinator.didDisconnectFromPeerSynchronously(peerID)
         #expect(context.unmarkedReadReceiptBatches == [["theirs-1", "theirs-2"]])
-        #expect(context.notifyUIChangedCount == 2)
     }
 
     @Test @MainActor
@@ -372,11 +355,10 @@ struct ChatTransportEventCoordinatorContextTests {
         coordinator.didDisconnectFromPeerSynchronously(peerID)
 
         #expect(context.unmarkedReadReceiptBatches == [[incoming.id]])
-        #expect(context.notifyUIChangedCount == 2)
     }
 
     @Test @MainActor
-    func didDisconnect_whileViewingChat_migratesConversationToStablePeerID() async {
+    func didDisconnect_whileViewingChat_migratesConversationToStablePeerID() {
         let context = MockChatTransportEventContext()
         let coordinator = ChatTransportEventCoordinator(context: context)
         let peerID = PeerID(str: "1122334455667788")
@@ -392,8 +374,7 @@ struct ChatTransportEventCoordinatorContextTests {
             makeMessage(id: "mine", sender: "me", isPrivate: true, senderPeerID: context.myPeerID)
         ]
 
-        coordinator.didDisconnectFromPeer(peerID)
-        await drainMainActorTasks()
+        coordinator.didDisconnectFromPeerSynchronously(peerID)
 
         #expect(context.privateChats[peerID] == nil)
         #expect(context.privateChats[stablePeerID]?.map(\.id) == ["m1", "mine"])
@@ -406,7 +387,7 @@ struct ChatTransportEventCoordinatorContextTests {
     }
 
     @Test @MainActor
-    func noisePayloads_driveDeliveryStatusAcksAndVerification() async {
+    func noisePayloads_driveDeliveryStatusAcksAndVerification() {
         let context = MockChatTransportEventContext()
         let coordinator = ChatTransportEventCoordinator(context: context)
         let peerID = PeerID(str: "99aabbccddeeff00")
@@ -419,22 +400,20 @@ struct ChatTransportEventCoordinatorContextTests {
 
         // Inbound private message: decoded, handled, and delivery-acked.
         let packet = PrivateMessagePacket(messageID: "pm-1", content: "hi there")
-        coordinator.didReceiveNoisePayload(
+        coordinator.didReceiveNoisePayloadSynchronously(
             from: peerID,
             type: .privateMessage,
             payload: packet.encode() ?? Data(),
             timestamp: Date()
         )
-        await drainMainActorTasks()
         #expect(context.handledPrivateMessages.map(\.id) == ["pm-1"])
         #expect(context.handledPrivateMessages.first?.sender == "alice")
         #expect(context.meshDeliveryAcks.count == 1)
         #expect(context.meshDeliveryAcks.first?.messageID == "pm-1")
 
         // Delivered / read acks resolve the display name from the unified peer.
-        coordinator.didReceiveNoisePayload(from: peerID, type: .delivered, payload: Data("m-1".utf8), timestamp: Date())
-        coordinator.didReceiveNoisePayload(from: peerID, type: .readReceipt, payload: Data("m-2".utf8), timestamp: Date())
-        await drainMainActorTasks()
+        coordinator.didReceiveNoisePayloadSynchronously(from: peerID, type: .delivered, payload: Data("m-1".utf8), timestamp: Date())
+        coordinator.didReceiveNoisePayloadSynchronously(from: peerID, type: .readReceipt, payload: Data("m-2".utf8), timestamp: Date())
         #expect(context.appliedDeliveryStatuses.count == 2)
         #expect(context.appliedDeliveryStatuses[0].messageID == "m-1")
         #expect(context.appliedDeliveryStatuses[0].peerIDAliases == [peerID, stablePeerID])
@@ -451,21 +430,19 @@ struct ChatTransportEventCoordinatorContextTests {
         }
 
         // Verification payloads are forwarded untouched.
-        coordinator.didReceiveNoisePayload(from: peerID, type: .verifyChallenge, payload: Data([0x01]), timestamp: Date())
-        coordinator.didReceiveNoisePayload(from: peerID, type: .verifyResponse, payload: Data([0x02]), timestamp: Date())
-        await drainMainActorTasks()
+        coordinator.didReceiveNoisePayloadSynchronously(from: peerID, type: .verifyChallenge, payload: Data([0x01]), timestamp: Date())
+        coordinator.didReceiveNoisePayloadSynchronously(from: peerID, type: .verifyResponse, payload: Data([0x02]), timestamp: Date())
         #expect(context.verifyChallengePayloads.count == 1)
         #expect(context.verifyResponsePayloads.count == 1)
 
         // Blocked peers' private messages are dropped (no handling, no ack).
         context.blockedPeers = [peerID]
-        coordinator.didReceiveNoisePayload(
+        coordinator.didReceiveNoisePayloadSynchronously(
             from: peerID,
             type: .privateMessage,
             payload: packet.encode() ?? Data(),
             timestamp: Date()
         )
-        await drainMainActorTasks()
         #expect(context.handledPrivateMessages.count == 1)
         #expect(context.meshDeliveryAcks.count == 1)
     }

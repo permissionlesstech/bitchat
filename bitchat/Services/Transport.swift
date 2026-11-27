@@ -129,9 +129,7 @@ protocol SynchronousMessageTransportEventDelegate: TransportEventDelegate {
 }
 
 protocol Transport: AnyObject {
-    // Event sink
-    var delegate: BitchatDelegate? { get set }
-    // Typed event sink for transport-domain events. Prefer this over BitchatDelegate for new code.
+    // Typed event sink for transport-domain events.
     var eventDelegate: TransportEventDelegate? { get set }
     // Peer events (preferred over publishers for UI)
     var peerEventsDelegate: TransportPeerEventsDelegate? { get set }
@@ -265,40 +263,6 @@ extension Transport {
 
 protocol TransportPeerEventsDelegate: AnyObject {
     @MainActor func didUpdatePeerSnapshots(_: [TransportPeerSnapshot])
-}
-
-extension BitchatDelegate {
-    @MainActor
-    func receiveTransportEvent(_ event: TransportEvent) {
-        switch event {
-        case .messageReceived(let message):
-            didReceiveMessage(message)
-        case let .publicMessageReceived(peerID, nickname, content, timestamp, messageID):
-            didReceivePublicMessage(
-                from: peerID,
-                nickname: nickname,
-                content: content,
-                timestamp: timestamp,
-                messageID: messageID
-            )
-        case let .noisePayloadReceived(peerID, type, payload, timestamp):
-            didReceiveNoisePayload(from: peerID, type: type, payload: payload, timestamp: timestamp)
-        case let .groupMessageReceived(payload, timestamp):
-            didReceiveGroupMessage(payload: payload, timestamp: timestamp)
-        case let .publicVoiceFrameReceived(peerID, nickname, payload, timestamp):
-            didReceivePublicVoiceFrame(from: peerID, nickname: nickname, payload: payload, timestamp: timestamp)
-        case .peerConnected(let peerID):
-            didConnectToPeer(peerID)
-        case .peerDisconnected(let peerID):
-            didDisconnectFromPeer(peerID)
-        case .peerListUpdated(let peers):
-            didUpdatePeerList(peers)
-        case let .messageDeliveryStatusUpdated(messageID, status):
-            didUpdateMessageDeliveryStatus(messageID, status: status)
-        case .bluetoothStateUpdated(let state):
-            didUpdateBluetoothState(state)
-        }
-    }
 }
 
 extension BLEService: Transport {}

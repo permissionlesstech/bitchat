@@ -58,7 +58,6 @@ private final class MockChatVerificationContext: ChatVerificationContext {
     private(set) var encryptionStatuses: [PeerID: EncryptionStatus?] = [:]
     private(set) var updatedEncryptionStatusPeers: [PeerID] = []
     private(set) var invalidatedEncryptionCachePeers: [PeerID?] = []
-    private(set) var notifyUIChangedCount = 0
 
     func setEncryptionStatus(_ status: EncryptionStatus?, for peerID: PeerID) {
         encryptionStatuses[peerID] = status
@@ -72,7 +71,6 @@ private final class MockChatVerificationContext: ChatVerificationContext {
         invalidatedEncryptionCachePeers.append(peerID)
     }
 
-    func notifyUIChanged() { notifyUIChangedCount += 1 }
 
     // Peers
     var unifiedPeers: [BitchatPeer] = []
@@ -264,7 +262,6 @@ struct ChatVerificationCoordinatorContextTests {
 
         #expect(context.verifiedFingerprints == ["fp1", "fp2"])
         #expect(context.invalidatedEncryptionCachePeers == [nil])
-        #expect(context.notifyUIChangedCount == 1)
     }
 
     @Test @MainActor

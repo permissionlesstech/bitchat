@@ -26,12 +26,16 @@ import CoreBluetooth
 /// - `autoFloodEnabled` is disabled by default; Integration tests enable it in `setUp()` to
 ///   simulate broadcast propagation across the mesh. E2E tests keep it off and perform explicit
 ///   relays when needed.
+protocol MockBLEDelegate: AnyObject {
+    func didReceiveMessage(_ message: BitchatMessage)
+}
+
 final class MockBLEService: NSObject {
     private let bus: MockBLEBus
     
     // MARK: - Properties matching BLEService
     
-    weak var delegate: BitchatDelegate?
+    weak var delegate: MockBLEDelegate?
     var myPeerID = PeerID(str: "MOCK1234")
     var myNickname: String = "MockUser"
 
@@ -189,15 +193,11 @@ final class MockBLEService: NSObject {
         registerIfNeeded()
         bus.connect(myPeerID, peerID)
         connectedPeers.insert(peerID)
-        delegate?.didConnectToPeer(peerID)
-        delegate?.didUpdatePeerList(Array(connectedPeers))
     }
     
     func simulateDisconnectedPeer(_ peerID: PeerID) {
         bus.disconnect(myPeerID, peerID)
         connectedPeers.remove(peerID)
-        delegate?.didDisconnectFromPeer(peerID)
-        delegate?.didUpdatePeerList(Array(connectedPeers))
     }
     
     func simulateIncomingMessage(_ message: BitchatMessage) {

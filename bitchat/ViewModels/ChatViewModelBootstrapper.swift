@@ -140,22 +140,6 @@ private extension ChatViewModelBootstrapper {
     }
 
     func bindFeatureObjectChanges() {
-        viewModel.privateChatManager.objectWillChange
-            .sink { [weak viewModel] _ in
-                viewModel?.objectWillChange.send()
-            }
-            .store(in: &viewModel.cancellables)
-
-        // Private message state flows through the single-writer
-        // `ConversationStore` intents and its `changes` subject; selection
-        // is owned by the store too (`PrivateChatManager.selectedPeer` is a
-        // read-only mirror), so no selection bridge is needed here.
-        viewModel.participantTracker.objectWillChange
-            .sink { [weak viewModel] _ in
-                viewModel?.objectWillChange.send()
-            }
-            .store(in: &viewModel.cancellables)
-
         // Teleport markers describe people present now, so they follow the
         // roster (pruned against it as it is when this runs, not the
         // delivered snapshot). Nicknames don't: they name the authors of
@@ -180,7 +164,6 @@ private extension ChatViewModelBootstrapper {
     }
 
     func configureTransport() {
-        viewModel.meshService.delegate = viewModel
         viewModel.meshService.eventDelegate = viewModel
 
         DispatchQueue.main.asyncAfter(deadline: .now() + TransportConfig.uiStartupInitialDelaySeconds) { [weak viewModel] in

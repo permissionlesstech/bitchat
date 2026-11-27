@@ -27,7 +27,6 @@ private final class MockChatPrivateConversationContext: ChatPrivateConversationC
     var nickname = "me"
     var activeChannel: ChannelID = .mesh
     var nostrKeyMapping: [PeerID: String] = [:]
-    private(set) var notifyUIChangedCount = 0
 
     @discardableResult
     func markReadReceiptSent(_ messageID: String) -> Bool {
@@ -44,9 +43,6 @@ private final class MockChatPrivateConversationContext: ChatPrivateConversationC
         selectedPrivateChatPeer = newPeerID
     }
 
-    func notifyUIChanged() {
-        notifyUIChangedCount += 1
-    }
 
     // Conversation store intents (mirror `ConversationStore` semantics:
     // ordered insert, dedup by ID, no-downgrade status, unread carry on
@@ -364,7 +360,6 @@ struct ChatPrivateConversationCoordinatorContextTests {
             convKey: convKey
         )
         #expect(isDelivered(context.privateChats[convKey]?.first?.deliveryStatus, to: "alice#1234"))
-        #expect(context.notifyUIChangedCount == 1)
 
         coordinator.handleReadReceipt(
             NoisePayload(type: .readReceipt, data: Data("mine-2".utf8)),
@@ -372,7 +367,6 @@ struct ChatPrivateConversationCoordinatorContextTests {
             convKey: convKey
         )
         #expect(isRead(context.privateChats[convKey]?.last?.deliveryStatus, by: "alice#1234"))
-        #expect(context.notifyUIChangedCount == 2)
 
         // Unknown message id: no state change, no UI notification.
         coordinator.handleDelivered(
@@ -380,7 +374,6 @@ struct ChatPrivateConversationCoordinatorContextTests {
             senderPubkey: senderPubkey,
             convKey: convKey
         )
-        #expect(context.notifyUIChangedCount == 2)
         #expect(context.deliveryAckAttempts.isEmpty)
         #expect(context.deliveredMessageIDs.isEmpty)
     }
@@ -417,7 +410,6 @@ struct ChatPrivateConversationCoordinatorContextTests {
         #expect(isRead(context.privateChats[stablePeerID]?.last?.deliveryStatus, by: "alice"))
         #expect(context.selectedPrivateChatPeer == stablePeerID)
         #expect(context.deliveredMessageIDs == ["mine-short-1", "mine-short-2"])
-        #expect(context.notifyUIChangedCount == 2)
     }
 
     @Test @MainActor
@@ -440,7 +432,6 @@ struct ChatPrivateConversationCoordinatorContextTests {
         #expect(isDelivered(context.privateChats[unrelatedPeerID]?.first?.deliveryStatus, to: "me"))
         #expect(context.deliveredMessageIDs.isEmpty)
         #expect(context.queuedMessageIDsByPeerID[unrelatedPeerID] == ["collision"])
-        #expect(context.notifyUIChangedCount == 0)
     }
 
     @Test @MainActor
@@ -469,7 +460,6 @@ struct ChatPrivateConversationCoordinatorContextTests {
         #expect(context.privateChats[convKey]?.map(\.id) == ["geo-1"])
         #expect(context.privateChats[convKey]?.first?.sender == "bob#5678")
         #expect(context.unreadPrivateMessages.isEmpty)
-        #expect(context.notifyUIChangedCount == 1)
 
         // Redelivery: ack is deduplicated and the message is not appended twice.
         coordinator.handlePrivateMessage(
@@ -582,7 +572,6 @@ struct ChatPrivateConversationCoordinatorContextTests {
         #expect(context.selectedPrivateChatPeer == stablePeerID)
         #expect(context.geoReadReceipts.map(\.messageID) == ["account-live-1"])
         #expect(context.unreadPrivateMessages.isEmpty)
-        #expect(context.notifyUIChangedCount == 1)
     }
 
     @Test @MainActor
@@ -677,7 +666,6 @@ struct ChatPrivateConversationCoordinatorContextTests {
 
         #expect(isRead(context.privateChats[stablePeerID]?.first?.deliveryStatus, by: "bob"))
         #expect(context.deliveredMessageIDs == ["already-read"])
-        #expect(context.notifyUIChangedCount == 0)
     }
 
     @Test @MainActor
@@ -697,7 +685,6 @@ struct ChatPrivateConversationCoordinatorContextTests {
         #expect(context.privateChats.isEmpty)
         #expect(context.queuedMessageIDsByPeerID[shortPeerID] == nil)
         #expect(context.deliveredMessageIDs == ["cleared-bubble"])
-        #expect(context.notifyUIChangedCount == 0)
     }
 
     @Test @MainActor
@@ -724,7 +711,6 @@ struct ChatPrivateConversationCoordinatorContextTests {
         // The wholesale move went through the store's migrate intent.
         #expect(context.migratedChats.map(\.from) == [oldPeerID])
         #expect(context.migratedChats.map(\.to) == [newPeerID])
-        #expect(context.notifyUIChangedCount == 1)
     }
 
     @Test @MainActor
