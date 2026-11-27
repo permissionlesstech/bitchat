@@ -5,6 +5,7 @@ struct ChatUnreadPeerContext {
     let peerID: PeerID
     let noiseKeyPeerID: PeerID?
     let nostrPeerID: PeerID?
+    var nickname: String? = nil
 }
 
 enum ChatUnreadStateResolver {

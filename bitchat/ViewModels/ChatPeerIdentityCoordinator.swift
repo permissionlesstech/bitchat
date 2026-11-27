@@ -269,7 +269,8 @@ final class ChatPeerIdentityCoordinator {
         return ChatUnreadPeerContext(
             peerID: peerID,
             noiseKeyPeerID: noiseKeyPeerID,
-            nostrPeerID: nostrPeerID
+            nostrPeerID: nostrPeerID,
+            nickname: context.unifiedPeer(for: peerID)?.nickname
         )
     }
 
