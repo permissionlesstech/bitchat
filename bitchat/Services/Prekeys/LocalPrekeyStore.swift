@@ -141,12 +141,14 @@ final class LocalPrekeyStore {
         }
     }
 
+    #if DEBUG
     var unconsumedCount: Int {
         queue.sync {
             loadLocked()
             return records.filter { $0.consumedAt == nil }.count
         }
     }
+    #endif
 
     /// Panic wipe: drop all prekey privates from memory and the Keychain.
     func wipe() {

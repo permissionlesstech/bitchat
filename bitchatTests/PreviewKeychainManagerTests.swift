@@ -128,11 +128,8 @@ struct PreviewKeychainManagerTests {
         #expect(manager.load(key: "blob", service: serviceKey) == nil)
 
         var secretData = Data([4, 3, 2, 1])
-        var secretString = "secret"
         manager.secureClear(&secretData)
-        manager.secureClear(&secretString)
         #expect(secretData == Data([4, 3, 2, 1]))
-        #expect(secretString == "secret")
 
         #expect(manager.deleteIdentityKey(forKey: "noiseStaticKey"))
         #expect(manager.deleteIdentityKey(forKey: "identity_noiseStaticKey"))

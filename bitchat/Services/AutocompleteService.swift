@@ -37,15 +37,7 @@ final class AutocompleteService {
     /// Apply selected suggestion to text
     func applySuggestion(_ suggestion: String, to text: String, range: NSRange) -> String {
         guard let textRange = Range(range, in: text) else { return text }
-
-        var replacement = suggestion
-
-        // Add space after command if it takes arguments
-        if suggestion.hasPrefix("/") && needsArgument(command: suggestion) {
-            replacement += " "
-        }
-
-        return text.replacingCharacters(in: textRange, with: replacement)
+        return text.replacingCharacters(in: textRange, with: suggestion)
     }
 
     // MARK: - Private Methods
@@ -71,14 +63,5 @@ final class AutocompleteService {
             .map { "@\($0)" }
 
         return suggestions.isEmpty ? nil : (Array(suggestions), fullRange)
-    }
-
-    private func needsArgument(command: String) -> Bool {
-        switch command {
-        case "/who", "/clear":
-            return false
-        default:
-            return true
-        }
     }
 }

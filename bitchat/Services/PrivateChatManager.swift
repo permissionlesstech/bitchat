@@ -65,6 +65,7 @@ final class PrivateChatManager: ObservableObject {
             }
     }
 
+    #if DEBUG
     // MARK: - Derived message state (read-only compat views)
 
     /// All private chats keyed by routing peer ID, derived from the store.
@@ -79,6 +80,7 @@ final class PrivateChatManager: ObservableObject {
     var unreadMessages: Set<PeerID> {
         conversationStore?.unreadDirectRoutingPeerIDs() ?? []
     }
+    #endif
 
     @MainActor
     private func messages(for peerID: PeerID) -> [BitchatMessage] {

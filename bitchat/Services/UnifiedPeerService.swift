@@ -21,7 +21,6 @@ final class UnifiedPeerService: ObservableObject, TransportPeerEventsDelegate {
     @Published private(set) var peers: [BitchatPeer] = []
     @Published private(set) var connectedPeerIDs: Set<PeerID> = []
     @Published private(set) var favorites: [BitchatPeer] = []
-    @Published private(set) var mutualFavorites: [BitchatPeer] = []
     
     // MARK: - Private Properties
     
@@ -149,7 +148,6 @@ final class UnifiedPeerService: ObservableObject, TransportPeerEventsDelegate {
         
         // Phase 4: Build subsets and indices
         var favoritesList: [BitchatPeer] = []
-        var mutualsList: [BitchatPeer] = []
         var newIndex: [PeerID: BitchatPeer] = [:]
         newIndex.reserveCapacity(enrichedPeers.count)
         
@@ -158,9 +156,6 @@ final class UnifiedPeerService: ObservableObject, TransportPeerEventsDelegate {
             
             if peer.isFavorite {
                 favoritesList.append(peer)
-            }
-            if peer.isMutualFavorite {
-                mutualsList.append(peer)
             }
         }
         
@@ -177,9 +172,6 @@ final class UnifiedPeerService: ObservableObject, TransportPeerEventsDelegate {
         }
         if !Self.peersVisuallyEqual(self.favorites, favoritesList) {
             self.favorites = favoritesList
-        }
-        if !Self.peersVisuallyEqual(self.mutualFavorites, mutualsList) {
-            self.mutualFavorites = mutualsList
         }
         
         // Log summary (commented out to reduce noise)

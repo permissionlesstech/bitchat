@@ -1175,7 +1175,6 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, SynchronousMessage
             identityManager: identityManager,
             startSuspendedForPanicRecovery: startSuspendedForRecovery
         )
-        meshService.sfMetrics = .shared
         self.init(
             keychain: keychain,
             idBridge: idBridge,
@@ -1186,7 +1185,6 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, SynchronousMessage
             locationPresenceStore: locationPresenceStore ?? LocationPresenceStore(),
             locationManager: locationManager,
             outboxStore: MessageOutboxStore(keychain: keychain),
-            sfMetrics: .shared,
             panicRecoveryOperations: panicRecoveryOperations,
             panicNetworkLifecycle: .live
         )
@@ -1206,7 +1204,6 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, SynchronousMessage
         locationManager: LocationChannelManager = .shared,
         readReceiptsDefaults: UserDefaults? = nil,
         outboxStore: MessageOutboxStore? = nil,
-        sfMetrics: StoreAndForwardMetrics? = nil,
         panicMediaWipe: (() throws -> Void)? = nil,
         panicRecoveryOperations: PanicRecoveryOperations? = nil,
         panicNetworkLifecycle: PanicNetworkLifecycle = .noop
@@ -1219,8 +1216,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, SynchronousMessage
             idBridge: idBridge,
             identityManager: identityManager,
             meshService: transport,
-            outboxStore: outboxStore,
-            sfMetrics: sfMetrics
+            outboxStore: outboxStore
         )
 
         self.keychain = keychain
@@ -1684,7 +1680,6 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, SynchronousMessage
         GatewayService.shared.resetForPanic()
         messageRouter.wipeOutbox()
         GossipMessageArchive.wipeDefault()
-        StoreAndForwardMetrics.shared.reset()
 
         // Ambient-liveliness bookkeeping: sampled nearby-chat previews, the
         // daily sightings tally, and the echoes-dismissed watermark

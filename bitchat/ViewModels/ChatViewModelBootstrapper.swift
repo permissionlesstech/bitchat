@@ -18,8 +18,7 @@ struct ChatViewModelServiceBundle {
         idBridge: NostrIdentityBridge,
         identityManager: SecureIdentityStateManagerProtocol,
         meshService: Transport,
-        outboxStore: MessageOutboxStore? = nil,
-        sfMetrics: StoreAndForwardMetrics? = nil
+        outboxStore: MessageOutboxStore? = nil
     ) {
         let commandProcessor = CommandProcessor(identityManager: identityManager)
         let privateChatManager = PrivateChatManager(meshService: meshService)
@@ -32,8 +31,7 @@ struct ChatViewModelServiceBundle {
         nostrTransport.senderPeerID = meshService.myPeerID
         let messageRouter = MessageRouter(
             transports: [meshService, nostrTransport],
-            outboxStore: outboxStore,
-            metrics: sfMetrics
+            outboxStore: outboxStore
         )
 
         self.commandProcessor = commandProcessor

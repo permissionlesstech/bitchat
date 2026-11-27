@@ -173,13 +173,7 @@ final class NotificationService {
     func requestAuthorization() {
         guard !isRunningTests else { return }
         registerCategories()
-        authorizer.requestAuthorization(options: [.alert, .sound, .badge]) { granted, _ in
-            if granted {
-                // Permission granted
-            } else {
-                // Permission denied
-            }
-        }
+        authorizer.requestAuthorization(options: [.alert, .sound, .badge]) { _, _ in }
     }
 
     private func registerCategories() {

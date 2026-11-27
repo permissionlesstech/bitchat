@@ -17,7 +17,6 @@ public protocol KeychainManagerProtocol {
     func deleteAllKeychainData() -> Bool
 
     func secureClear(_ data: inout Data)
-    func secureClear(_ string: inout String)
 
     func verifyIdentityKeyExists() -> Bool
 
