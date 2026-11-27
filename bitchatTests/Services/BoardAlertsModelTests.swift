@@ -30,7 +30,11 @@ struct BoardAlertsModelTests {
         }
     }
 
-    private func makeModel(harness: Harness, now: Date? = nil) -> BoardAlertsModel {
+    private func makeModel(
+        harness: Harness,
+        now: Date? = nil,
+        confirmation: @escaping @MainActor (BoardEndorsementPacket) -> (post: BoardPostPacket, trustedCount: Int)? = { _ in nil }
+    ) -> BoardAlertsModel {
         let fixedNow = now ?? baseDate
         return BoardAlertsModel(
             arrivals: Empty(completeImmediately: false).eraseToAnyPublisher(),
@@ -39,6 +43,7 @@ struct BoardAlertsModelTests {
                 emitSystemLine: { content, geohash in
                     harness.lines.append((content, geohash))
                 },
+                confirmation: confirmation,
                 now: { fixedNow },
                 scheduleFlush: { flush in
                     harness.pendingFlushes.append(flush)
@@ -211,5 +216,98 @@ struct BoardAlertsModelTests {
         #expect(harness.lines.count == 1)
         #expect(harness.lines[0].content.count < 200)
         #expect(harness.lines[0].content.contains("…"))
+    }
+
+    // MARK: - Trusted confirmations
+
+    private func endorsement(of post: BoardPostPacket) -> BoardEndorsementPacket {
+        BoardEndorsementPacket(
+            postID: post.postID,
+            postAuthorSigningKey: post.authorSigningKey,
+            postDigest: post.digest,
+            endorserSigningKey: Data(repeating: 9, count: 32),
+            endorsedAt: baseMs + 1,
+            signature: Data(repeating: 2, count: 64)
+        )
+    }
+
+    @Test
+    func trustedEndorsementOfRecentUrgentPost_emitsOneConfirmedLine() {
+        let harness = Harness()
+        let post = makePost(content: "road closed", geohash: "9q8yy", urgent: true)
+        var count = 1
+        let model = makeModel(harness: harness) { _ in (post, count) }
+
+        model.handleEndorsement(endorsement(of: post))
+        count = 2
+        model.handleEndorsement(endorsement(of: post))
+
+        #expect(harness.lines.count == 1)
+        #expect(harness.lines[0].geohash == "9q8yy")
+        #expect(harness.lines[0].content.contains("road closed"))
+        #expect(harness.lines[0].content.contains("@alice"))
+        #expect(harness.lines[0].content.contains("1"))
+    }
+
+    @Test
+    func untrustedEndorsement_staysSilent() {
+        let harness = Harness()
+        let post = makePost(urgent: true)
+        let model = makeModel(harness: harness) { _ in (post, 0) }
+
+        model.handleEndorsement(endorsement(of: post))
+        #expect(harness.lines.isEmpty)
+    }
+
+    @Test
+    func endorsementOfCalmPost_staysSilent() {
+        let harness = Harness()
+        let post = makePost(urgent: false)
+        let model = makeModel(harness: harness) { _ in (post, 3) }
+
+        model.handleEndorsement(endorsement(of: post))
+        #expect(harness.lines.isEmpty)
+    }
+
+    @Test
+    func endorsementOfOwnPost_staysSilent() {
+        let harness = Harness()
+        let post = makePost(urgent: true, authorKey: ownKey)
+        let model = makeModel(harness: harness) { _ in (post, 2) }
+
+        model.handleEndorsement(endorsement(of: post))
+        #expect(harness.lines.isEmpty)
+    }
+
+    @Test
+    func endorsementOfStaleUrgentPost_staysSilent() {
+        let harness = Harness()
+        let post = makePost(createdAt: baseMs, urgent: true)
+        let later = baseDate.addingTimeInterval(BoardAlertsModel.inlineRecencyWindow + 60)
+        let model = makeModel(harness: harness, now: later) { _ in (post, 2) }
+
+        model.handleEndorsement(endorsement(of: post))
+        #expect(harness.lines.isEmpty)
+    }
+
+    @Test
+    func endorsementOfUnknownPost_staysSilent() {
+        let harness = Harness()
+        let model = makeModel(harness: harness)
+
+        model.handleEndorsement(endorsement(of: makePost(urgent: true)))
+        #expect(harness.lines.isEmpty)
+    }
+
+    @Test
+    func reset_allowsConfirmationAgainAfterWipe() {
+        let harness = Harness()
+        let post = makePost(urgent: true)
+        let model = makeModel(harness: harness) { _ in (post, 1) }
+
+        model.handleEndorsement(endorsement(of: post))
+        model.reset()
+        model.handleEndorsement(endorsement(of: post))
+        #expect(harness.lines.count == 2)
     }
 }

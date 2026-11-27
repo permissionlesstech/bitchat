@@ -12,23 +12,30 @@ import Foundation
 // MARK: - Board wire format (MessageType.boardPost payloads)
 //
 // TLV layout (type u8, length u16 big-endian, value), matching REQUEST_SYNC:
-//  - 0x01: kind (u8) — 0x01 post, 0x02 tombstone
+//  - 0x01: kind (u8) — 0x01 post, 0x02 tombstone, 0x03 endorsement
 //  - 0x02: postID (16B random)
 //  - 0x03: geohash (UTF-8, empty = mesh-local board, max 12 chars)
 //  - 0x04: content (UTF-8, 1...512 bytes) [post]
-//  - 0x05: authorSigningKey (32B Ed25519 public key)
+//  - 0x05: authorSigningKey (32B Ed25519 public key; for an endorsement,
+//          the endorsed post's author)
 //  - 0x06: authorNickname (UTF-8, max 64 bytes)
 //  - 0x07: createdAt (u64 big-endian, ms) [post]
 //  - 0x08: expiresAt (u64 big-endian, ms, max 7 days after createdAt) [post]
 //  - 0x09: flags (u8, bit0 = urgent) [post]
 //  - 0x0A: signature (64B Ed25519)
 //  - 0x0B: deletedAt (u64 big-endian, ms) [tombstone]
-// Unknown TLVs are skipped for forward compatibility.
+//  - 0x0C: endorserSigningKey (32B Ed25519 public key) [endorsement]
+//  - 0x0D: endorsedAt (u64 big-endian, ms) [endorsement]
+//  - 0x0E: postDigest (32B SHA-256 of the endorsed post's signing bytes)
+//          [endorsement]
+// Unknown TLVs are skipped for forward compatibility. Clients that predate a
+// kind fail to decode it and drop it without relaying.
 
 enum BoardWireConstants {
     static let postIDLength = 16
     static let signingKeyLength = 32
     static let signatureLength = 64
+    static let postDigestLength = 32
     static let contentMaxBytes = 512
     static let nicknameMaxBytes = 64
     static let geohashMaxLength = 12
@@ -36,6 +43,7 @@ enum BoardWireConstants {
     static let maxLifetimeMs: UInt64 = 7 * 24 * 60 * 60 * 1000
     static let postSigningContext = "bitchat-board-v1"
     static let tombstoneSigningContext = "bitchat-board-del-v1"
+    static let endorsementSigningContext = "bitchat-board-endorse-v1"
     static let geohashAlphabet = Set("0123456789bcdefghjkmnpqrstuvwxyz")
 }
 
@@ -51,11 +59,15 @@ private enum BoardTLVType: UInt8 {
     case flags = 0x09
     case signature = 0x0A
     case deletedAt = 0x0B
+    case endorserSigningKey = 0x0C
+    case endorsedAt = 0x0D
+    case postDigest = 0x0E
 }
 
 private enum BoardWireKind: UInt8 {
     case post = 0x01
     case tombstone = 0x02
+    case endorsement = 0x03
 }
 
 /// A signed, persistent bulletin-board notice.
@@ -116,6 +128,12 @@ struct BoardPostPacket: Equatable {
     func verifySignature() -> Bool {
         BoardWireEncoding.verify(signature: signature, over: signingBytes, publicKey: authorSigningKey)
     }
+
+    /// Names this exact post (content, scope, flags, and timestamps), so an
+    /// endorsement can't carry over to another post reusing the ID.
+    var digest: Data {
+        Data(SHA256.hash(data: signingBytes))
+    }
 }
 
 /// A signed deletion marker. Only the author's key can produce one; receivers
@@ -143,10 +161,58 @@ struct BoardTombstonePacket: Equatable {
     }
 }
 
-/// Decoded board payload: either a live post or a tombstone.
+/// A signed "I vouch for this post" from someone other than its author.
+/// Receivers count only endorsements from keys they already trust, so a
+/// stranger minting keys cannot manufacture confirmation.
+struct BoardEndorsementPacket: Equatable {
+    let postID: Data
+    /// Bound into the signature so an endorsement cannot be re-pointed at a
+    /// different author's post that reuses the ID.
+    let postAuthorSigningKey: Data
+    /// The endorsed post's `digest`. The author could otherwise collect an
+    /// endorsement and re-sign different content under the same ID.
+    let postDigest: Data
+    let endorserSigningKey: Data
+    let endorsedAt: UInt64
+    let signature: Data
+
+    static func signingBytes(
+        postID: Data,
+        postAuthorSigningKey: Data,
+        postDigest: Data,
+        endorserSigningKey: Data,
+        endorsedAt: UInt64
+    ) -> Data {
+        var out = Data()
+        BoardWireEncoding.appendContext(BoardWireConstants.endorsementSigningContext, to: &out)
+        out.append(postID)
+        out.append(postAuthorSigningKey)
+        out.append(postDigest)
+        out.append(endorserSigningKey)
+        BoardWireEncoding.appendUInt64(endorsedAt, to: &out)
+        return out
+    }
+
+    var signingBytes: Data {
+        Self.signingBytes(
+            postID: postID,
+            postAuthorSigningKey: postAuthorSigningKey,
+            postDigest: postDigest,
+            endorserSigningKey: endorserSigningKey,
+            endorsedAt: endorsedAt
+        )
+    }
+
+    func verifySignature() -> Bool {
+        BoardWireEncoding.verify(signature: signature, over: signingBytes, publicKey: endorserSigningKey)
+    }
+}
+
+/// Decoded board payload: a live post, a tombstone, or an endorsement.
 enum BoardWire: Equatable {
     case post(BoardPostPacket)
     case tombstone(BoardTombstonePacket)
+    case endorsement(BoardEndorsementPacket)
 
     func encode() -> Data {
         var out = Data()
@@ -175,6 +241,14 @@ enum BoardWire: Equatable {
             putTLV(.authorSigningKey, tombstone.authorSigningKey)
             putTLV(.deletedAt, BoardWireEncoding.uint64Data(tombstone.deletedAt))
             putTLV(.signature, tombstone.signature)
+        case .endorsement(let endorsement):
+            putTLV(.kind, Data([BoardWireKind.endorsement.rawValue]))
+            putTLV(.postID, endorsement.postID)
+            putTLV(.authorSigningKey, endorsement.postAuthorSigningKey)
+            putTLV(.postDigest, endorsement.postDigest)
+            putTLV(.endorserSigningKey, endorsement.endorserSigningKey)
+            putTLV(.endorsedAt, BoardWireEncoding.uint64Data(endorsement.endorsedAt))
+            putTLV(.signature, endorsement.signature)
         }
         return out
     }
@@ -196,6 +270,9 @@ enum BoardWire: Equatable {
         var flags: UInt8?
         var signature: Data?
         var deletedAt: UInt64?
+        var endorserSigningKey: Data?
+        var endorsedAt: UInt64?
+        var postDigest: Data?
 
         while off + 3 <= data.endIndex {
             let t = data[off]; off += 1
@@ -235,6 +312,14 @@ enum BoardWire: Equatable {
                 signature = v
             case .deletedAt:
                 deletedAt = BoardWireEncoding.uint64(from: v)
+            case .endorserSigningKey:
+                guard v.count == BoardWireConstants.signingKeyLength else { return nil }
+                endorserSigningKey = v
+            case .endorsedAt:
+                endorsedAt = BoardWireEncoding.uint64(from: v)
+            case .postDigest:
+                guard v.count == BoardWireConstants.postDigestLength else { return nil }
+                postDigest = v
             case nil:
                 continue // forward compatible; ignore unknown TLVs
             }
@@ -272,6 +357,20 @@ enum BoardWire: Equatable {
                 deletedAt: deletedAt,
                 signature: signature
             ))
+        case .endorsement:
+            // Post-only fields have no place here; a flags TLV in particular
+            // would read as urgent to the relay peek.
+            guard let endorserSigningKey, let endorsedAt, let postDigest,
+                  flags == nil, content == nil, geohash == nil, authorNickname == nil,
+                  createdAt == nil, expiresAt == nil, deletedAt == nil else { return nil }
+            return .endorsement(BoardEndorsementPacket(
+                postID: postID,
+                postAuthorSigningKey: authorSigningKey,
+                postDigest: postDigest,
+                endorserSigningKey: endorserSigningKey,
+                endorsedAt: endorsedAt,
+                signature: signature
+            ))
         case nil:
             return nil
         }
@@ -281,23 +380,30 @@ enum BoardWire: Equatable {
         switch self {
         case .post(let post): return post.verifySignature()
         case .tombstone(let tombstone): return tombstone.verifySignature()
+        case .endorsement(let endorsement): return endorsement.verifySignature()
         }
     }
 
     /// Cheap TLV peek for relay policy: is this payload an urgent post?
-    /// Avoids a full decode on the hot relay path.
+    /// Avoids a full decode on the hot relay path. Only the post kind can be
+    /// urgent, so a flags TLV slipped onto a tombstone or endorsement never
+    /// earns the longer relay reach.
     static func urgentFlag(in data: Data) -> Bool {
         var off = data.startIndex
+        var isPost = false
+        var isUrgent = false
         while off + 3 <= data.endIndex {
             let t = data[off]; off += 1
             let len = (Int(data[off]) << 8) | Int(data[off + 1]); off += 2
             guard off + len <= data.endIndex else { return false }
-            if t == BoardTLVType.flags.rawValue, len == 1 {
-                return data[off] & BoardPostPacket.urgentFlag != 0
+            if t == BoardTLVType.kind.rawValue, len == 1 {
+                isPost = data[off] == BoardWireKind.post.rawValue
+            } else if t == BoardTLVType.flags.rawValue, len == 1 {
+                isUrgent = data[off] & BoardPostPacket.urgentFlag != 0
             }
             off += len
         }
-        return false
+        return isPost && isUrgent
     }
 
     /// Empty geohash = mesh-local board; otherwise 1-12 chars of the geohash

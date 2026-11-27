@@ -17,8 +17,13 @@ import Foundation
 final class BoardManager: ObservableObject {
     /// Live posts across all boards, newest state from the store.
     @Published private(set) var posts: [BoardPostPacket] = []
+    /// Endorser signing keys per postID, newest state from the store.
+    @Published private(set) var endorsements: [Data: [Data]] = [:]
 
     private let transport: Transport
+    /// Keys whose endorsements count as confirmation (verified or vouched
+    /// peers). Read per call so a fresh verification shows up immediately.
+    private let trustedSigningKeys: @Sendable () -> Set<Data>
     /// Board broadcast rides the mesh only; absent on other transports.
     private var boardTransport: MeshBoardBroadcasting? { transport as? MeshBoardBroadcasting }
     /// Publishes a bridged kind-1 note (expiring with the board post via
@@ -31,22 +36,34 @@ final class BoardManager: ObservableObject {
     /// after a relaunch a delete still tombstones the board copy, but the
     /// Nostr copy is left to expire with relay retention.
     private var bridgedEventIDs: [Data: String] = [:]
-    private var cancellable: AnyCancellable?
+    private var cancellables = Set<AnyCancellable>()
 
     init(
         transport: Transport,
         store: BoardStore = .shared,
+        trustedSigningKeys: (@Sendable () -> Set<Data>)? = nil,
         publishToNostr: ((String, String, String, UInt64, Bool) -> String?)? = nil,
         deleteFromNostr: ((String, String) -> Void)? = nil
     ) {
         self.transport = transport
+        self.trustedSigningKeys = trustedSigningKeys ?? { [] }
+        if let trustedSigningKeys {
+            store.setTrustedEndorsers(trustedSigningKeys)
+        }
         self.publishToNostr = publishToNostr ?? Self.livePublishToNostr
         self.deleteFromNostr = deleteFromNostr ?? Self.liveDeleteFromNostr
-        cancellable = store.$postsSnapshot
+        store.$postsSnapshot
             .receive(on: DispatchQueue.main)
             .sink { [weak self] snapshot in
                 self?.posts = snapshot
             }
+            .store(in: &cancellables)
+        store.$endorsementsSnapshot
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] snapshot in
+                self?.endorsements = snapshot
+            }
+            .store(in: &cancellables)
     }
 
     /// Posts for one board context, urgent first, then newest first.
@@ -62,6 +79,59 @@ final class BoardManager: ObservableObject {
     func isOwnPost(_ post: BoardPostPacket) -> Bool {
         let key = transport.noiseSigningPublicKeyData()
         return !key.isEmpty && key == post.authorSigningKey
+    }
+
+    /// How many people we trust have endorsed the post. Endorsements from
+    /// strangers are stored and relayed but never counted here.
+    func confirmationCount(for post: BoardPostPacket) -> Int {
+        guard let endorsers = endorsements[post.postID], !endorsers.isEmpty else { return 0 }
+        return Self.trustedConfirmationCount(endorsers: endorsers, trusted: trustedSigningKeys(), author: post.authorSigningKey)
+    }
+
+    /// Distinct trusted endorsers, never counting the author.
+    nonisolated static func trustedConfirmationCount(endorsers: [Data], trusted: Set<Data>, author: Data) -> Int {
+        Set(endorsers).filter { trusted.contains($0) && $0 != author }.count
+    }
+
+    func hasEndorsed(_ post: BoardPostPacket) -> Bool {
+        let key = transport.noiseSigningPublicKeyData()
+        return !key.isEmpty && endorsements[post.postID]?.contains(key) == true
+    }
+
+    /// Endorsing is offered on urgent posts only: that is where a single
+    /// unverified voice is the risk, and calm notices need no quorum.
+    func canEndorse(_ post: BoardPostPacket) -> Bool {
+        post.isUrgent && !isOwnPost(post) && !hasEndorsed(post)
+    }
+
+    /// Signs and broadcasts our endorsement of someone else's post.
+    @discardableResult
+    func endorsePost(_ post: BoardPostPacket) -> Bool {
+        guard canEndorse(post) else { return false }
+        let signingKey = transport.noiseSigningPublicKeyData()
+        guard signingKey.count == BoardWireConstants.signingKeyLength else { return false }
+        let endorsedAt = UInt64(Date().timeIntervalSince1970 * 1000)
+        let signingBytes = BoardEndorsementPacket.signingBytes(
+            postID: post.postID,
+            postAuthorSigningKey: post.authorSigningKey,
+            postDigest: post.digest,
+            endorserSigningKey: signingKey,
+            endorsedAt: endorsedAt
+        )
+        guard let signature = transport.noiseSignData(signingBytes) else {
+            SecureLogger.error("Board: failed to sign endorsement", category: .session)
+            return false
+        }
+        let endorsement = BoardEndorsementPacket(
+            postID: post.postID,
+            postAuthorSigningKey: post.authorSigningKey,
+            postDigest: post.digest,
+            endorserSigningKey: signingKey,
+            endorsedAt: endorsedAt,
+            signature: signature
+        )
+        boardTransport?.sendBoardPayload(BoardWire.endorsement(endorsement).encode())
+        return true
     }
 
     /// Creates, signs, and broadcasts a board post. Returns false when the
