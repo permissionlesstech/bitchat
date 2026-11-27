@@ -20,13 +20,7 @@ struct ContentComposerView: View {
     @ObservedObject var voiceRecordingVM: VoiceRecordingViewModel
 
     let onSendMessage: () -> Void
-
-    #if os(iOS)
-    @Binding var showImagePicker: Bool
-    @Binding var imagePickerSourceType: UIImagePickerController.SourceType
-    #else
-    @Binding var showMacImagePicker: Bool
-    #endif
+    @Binding var mediaPickerMode: MediaPickerMode?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
@@ -270,12 +264,10 @@ private extension ContentComposerView {
             .frame(width: 36, height: 36)
             .contentShape(Circle())
             .onTapGesture {
-                imagePickerSourceType = .photoLibrary
-                showImagePicker = true
+                mediaPickerMode = .photoLibrary
             }
             .onLongPressGesture(minimumDuration: 0.3) {
-                imagePickerSourceType = .camera
-                showImagePicker = true
+                mediaPickerMode = .camera
             }
             .accessibilityLabel(Strings.attachPhoto)
             .accessibilityHint(Strings.attachPhotoHint)
@@ -283,11 +275,10 @@ private extension ContentComposerView {
             // The long-press → camera path is unreachable for VoiceOver users;
             // mirror it as a named action.
             .accessibilityAction(named: Text("content.accessibility.take_photo", comment: "Accessibility action name for taking a photo with the camera")) {
-                imagePickerSourceType = .camera
-                showImagePicker = true
+                mediaPickerMode = .camera
             }
         #else
-        Button(action: { showMacImagePicker = true }) {
+        Button(action: { mediaPickerMode = .photoLibrary }) {
             Image(systemName: "photo.circle.fill")
                 .font(.bitchatSystem(size: 24))
                 .foregroundColor(composerAccentColor)

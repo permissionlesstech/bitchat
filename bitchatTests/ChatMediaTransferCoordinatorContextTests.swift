@@ -61,7 +61,6 @@ private final class MockChatMediaTransferContext: ChatMediaTransferContext {
     private(set) var untombstonedMediaRemovals: [String] = []
     private(set) var outgoingMediaRemovals: [String] = []
     private(set) var systemMessages: [String] = []
-    private(set) var notifyUIChangedCount = 0
 
     @discardableResult
     func appendPublicMessage(_ message: BitchatMessage, to conversationID: ConversationID) -> Bool {
@@ -88,7 +87,6 @@ private final class MockChatMediaTransferContext: ChatMediaTransferContext {
     func notifyMediaDeletionRefused(messageID: String) {
         mediaDeletionRefusals.append(messageID)
     }
-    func notifyUIChanged() { notifyUIChangedCount += 1 }
 
     // Delivery status & dedup
     private(set) var deliveryStatusUpdates: [(messageID: String, status: DeliveryStatus)] = []
@@ -384,7 +382,6 @@ struct ChatMediaTransferCoordinatorContextTests {
         #expect(message.senderPeerID == context.myPeerID)
         #expect(message.deliveryStatus == .sending)
         #expect(context.recordedContentKeys == ["[voice] note.m4a"])
-        #expect(context.notifyUIChangedCount == 1)
         #expect(context.appendedPublicMessages.isEmpty)
     }
 
@@ -400,7 +397,6 @@ struct ChatMediaTransferCoordinatorContextTests {
         #expect(!message.isPrivate)
         #expect(message.sender == "me")
         #expect(context.privateChats.isEmpty)
-        #expect(context.notifyUIChangedCount == 1)
     }
 
     @Test @MainActor

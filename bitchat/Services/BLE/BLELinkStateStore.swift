@@ -20,6 +20,9 @@ struct BLEPeripheralLinkState {
 struct BLEDirectLinkState: Equatable {
     let hasPeripheral: Bool
     let hasCentral: Bool
+
+    static let none = BLEDirectLinkState(hasPeripheral: false, hasCentral: false)
+    var isConnected: Bool { hasPeripheral || hasCentral }
 }
 
 struct BLESubscribedCentralSnapshot {

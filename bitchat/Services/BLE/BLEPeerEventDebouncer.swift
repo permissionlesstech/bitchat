@@ -2,7 +2,8 @@ import BitFoundation
 import Foundation
 
 struct BLEPeerEventDebouncer {
-    private var lastEmitByPeer: [PeerID: Date] = [:]
+    private static let maxTrackedPeers = 512
+    private var lastEmitByPeer = BoundedCache<PeerID, Date>(capacity: maxTrackedPeers)
 
     var count: Int {
         lastEmitByPeer.count
@@ -10,12 +11,12 @@ struct BLEPeerEventDebouncer {
 
     @discardableResult
     mutating func shouldEmit(peerID: PeerID, now: Date, minimumInterval: TimeInterval) -> Bool {
-        if let lastEmit = lastEmitByPeer[peerID],
+        if let lastEmit = lastEmitByPeer.value(for: peerID),
            now.timeIntervalSince(lastEmit) < minimumInterval {
             return false
         }
 
-        lastEmitByPeer[peerID] = now
+        lastEmitByPeer.set(peerID, value: now, refreshOrder: true)
         return true
     }
 

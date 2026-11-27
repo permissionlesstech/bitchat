@@ -109,7 +109,7 @@ struct ChatViewModelRefactoringTests {
         )
 
         // Action: Simulate incoming private message
-        viewModel.didReceiveMessage(message)
+        viewModel.didReceiveTransportEvent(.messageReceived(message))
 
         // Wait for async processing with proper timeout
         let found = await TestHelpers.waitUntil(
@@ -127,13 +127,13 @@ struct ChatViewModelRefactoringTests {
         let senderID = PeerID(str: "sender_2")
 
         // Action
-        viewModel.didReceivePublicMessage(
-            from: senderID,
+        viewModel.didReceiveTransportEvent(.publicMessageReceived(
+            peerID: senderID,
             nickname: "charlie",
             content: "Public Hi",
             timestamp: Date(),
             messageID: "msg_2"
-        )
+        ))
 
         // Wait for async processing with proper timeout
         let found = await TestHelpers.waitUntil(

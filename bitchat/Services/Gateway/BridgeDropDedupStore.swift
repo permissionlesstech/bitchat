@@ -14,46 +14,37 @@ import Foundation
 /// instead of `BoundedIDSet` because their contents persist across relaunches
 /// and must age out with the 24h drop window they guard.
 struct ExpiringIDSet {
-    private(set) var entries: [String: Date]
-    let capacity: Int
-    let lifetime: TimeInterval
+    private var cache: BoundedCache<String, Date>
+
+    var entries: [String: Date] { cache.allValues }
 
     init(capacity: Int, lifetime: TimeInterval, entries: [String: Date] = [:], now: Date = Date()) {
-        self.capacity = capacity
-        self.lifetime = lifetime
-        self.entries = entries
-        prune(now: now)
+        var cache = BoundedCache<String, Date>(capacity: capacity, ttl: lifetime)
+        // Insert persisted entries in chronological order so oldest age out first.
+        for (id, recorded) in entries.sorted(by: { $0.value < $1.value })
+        where now.timeIntervalSince(recorded) <= lifetime {
+            cache.set(id, value: recorded, now: recorded, refreshOrder: true)
+        }
+        cache.pruneExpired(now: now)
+        self.cache = cache
     }
 
     func contains(_ id: String, now: Date) -> Bool {
-        guard let recorded = entries[id] else { return false }
-        return now.timeIntervalSince(recorded) <= lifetime
+        cache.contains(id, now: now)
     }
 
     /// Returns false when the ID was already present (and unexpired).
     @discardableResult
     mutating func insert(_ id: String, now: Date) -> Bool {
         guard !contains(id, now: now) else { return false }
-        entries[id] = now
-        prune(now: now)
+        cache.set(id, value: now, now: now, refreshOrder: true)
         return true
     }
 
     /// Releases a previously inserted ID so it can be re-added later (e.g. a
     /// queued drop evicted before it ever published must become retryable).
     mutating func remove(_ id: String) {
-        entries.removeValue(forKey: id)
-    }
-
-    private mutating func prune(now: Date) {
-        if entries.contains(where: { now.timeIntervalSince($0.value) > lifetime }) {
-            entries = entries.filter { now.timeIntervalSince($0.value) <= lifetime }
-        }
-        let overflow = entries.count - capacity
-        guard overflow > 0 else { return }
-        for (id, _) in entries.sorted(by: { $0.value < $1.value }).prefix(overflow) {
-            entries.removeValue(forKey: id)
-        }
+        cache.remove(id)
     }
 }
 
@@ -78,40 +69,31 @@ final class BridgeDropDedupStore {
         var seenDropEventIDs: [String: Date]
     }
 
-    private let fileURL: URL?
+    private let fileStore: AppSupportFileStore
 
     /// - Parameter fileURL: Overrides the on-disk location (tests). Ignored
     ///   when `persistsToDisk` is false.
     init(persistsToDisk: Bool = true, fileURL: URL? = nil) {
-        self.fileURL = persistsToDisk ? (fileURL ?? Self.defaultFileURL()) : nil
+        self.fileStore = AppSupportFileStore(
+            persistsToDisk: persistsToDisk,
+            fileURL: fileURL,
+            subdirectory: "courier",
+            fileName: "bridge-drop-dedup.json",
+            protection: .untilFirstUserAuthentication
+        )
     }
 
     func load() -> Snapshot {
-        guard let fileURL,
-              let data = try? Data(contentsOf: fileURL),
-              let snapshot = try? JSONDecoder().decode(Snapshot.self, from: data) else {
-            return Snapshot(publishedDropKeys: [:], seenDropEventIDs: [:])
-        }
-        return snapshot
+        (try? fileStore.loadJSON(Snapshot.self))
+            ?? Snapshot(publishedDropKeys: [:], seenDropEventIDs: [:])
     }
 
     func save(_ snapshot: Snapshot) {
-        guard let fileURL else { return }
-        guard !(snapshot.publishedDropKeys.isEmpty && snapshot.seenDropEventIDs.isEmpty) else {
-            try? FileManager.default.removeItem(at: fileURL)
-            return
-        }
         do {
-            try FileManager.default.createDirectory(
-                at: fileURL.deletingLastPathComponent(),
-                withIntermediateDirectories: true
+            try fileStore.saveJSON(
+                snapshot,
+                isEmpty: snapshot.publishedDropKeys.isEmpty && snapshot.seenDropEventIDs.isEmpty
             )
-            let data = try JSONEncoder().encode(snapshot)
-            var options: Data.WritingOptions = [.atomic]
-            #if os(iOS)
-            options.insert(.completeFileProtectionUntilFirstUserAuthentication)
-            #endif
-            try data.write(to: fileURL, options: options)
         } catch {
             SecureLogger.error("Failed to persist bridge drop dedup record: \(error)", category: .session)
         }
@@ -119,19 +101,6 @@ final class BridgeDropDedupStore {
 
     /// Panic wipe: forget which drops we published or handled.
     func wipe() {
-        guard let fileURL else { return }
-        try? FileManager.default.removeItem(at: fileURL)
-    }
-
-    private static func defaultFileURL() -> URL? {
-        guard let base = try? FileManager.default.url(
-            for: .applicationSupportDirectory,
-            in: .userDomainMask,
-            appropriateFor: nil,
-            create: true
-        ) else { return nil }
-        return base
-            .appendingPathComponent("courier", isDirectory: true)
-            .appendingPathComponent("bridge-drop-dedup.json")
+        fileStore.removeIgnoringErrors()
     }
 }

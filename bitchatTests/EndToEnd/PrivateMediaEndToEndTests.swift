@@ -190,7 +190,7 @@ struct PrivateMediaEndToEndTests {
         let tap = PacketTap()
         let delegate = MessageCaptureDelegate()
         alice._test_onOutboundPacket = tap.record
-        bob.delegate = delegate
+        bob.eventDelegate = delegate
         let content = Data("%PDF-1.7\nprivate".utf8)
         let file = BitchatFilePacket(
             fileName: "private.pdf",
@@ -1199,7 +1199,7 @@ struct PrivateMediaEndToEndTests {
         let alice = makeService(baseDirectory: aliceRoot)
         let bob = makeService(baseDirectory: bobRoot)
         let delegate = MessageCaptureDelegate()
-        bob.delegate = delegate
+        bob.eventDelegate = delegate
         try await establishSession(alice: alice, bob: bob)
 
         let file = BitchatFilePacket(
@@ -1321,7 +1321,7 @@ struct PrivateMediaEndToEndTests {
         let bob = makeService(baseDirectory: bobRoot)
         let tap = PacketTap()
         let delegate = MessageCaptureDelegate()
-        bob.delegate = delegate
+        bob.eventDelegate = delegate
 
         alice._test_seedConnectedPeer(
             bob.myPeerID,
@@ -1661,11 +1661,13 @@ private final class ReceiptCapabilityRecorder: @unchecked Sendable {
     }
 }
 
-private final class MessageCaptureDelegate: BitchatDelegate, @unchecked Sendable {
+private final class MessageCaptureDelegate: TransportEventDelegate, @unchecked Sendable {
     private let lock = NSLock()
     private var messages: [BitchatMessage] = []
 
-    func didReceiveMessage(_ message: BitchatMessage) {
+    @MainActor
+    func didReceiveTransportEvent(_ event: TransportEvent) {
+        guard case .messageReceived(let message) = event else { return }
         lock.lock()
         messages.append(message)
         lock.unlock()
@@ -1676,11 +1678,6 @@ private final class MessageCaptureDelegate: BitchatDelegate, @unchecked Sendable
         defer { lock.unlock() }
         return messages
     }
-
-    func didConnectToPeer(_ peerID: PeerID) {}
-    func didDisconnectFromPeer(_ peerID: PeerID) {}
-    func didUpdatePeerList(_ peers: [PeerID]) {}
-    func didUpdateBluetoothState(_ state: CBManagerState) {}
 }
 
 private final class TransferCancellationRecorder: @unchecked Sendable {

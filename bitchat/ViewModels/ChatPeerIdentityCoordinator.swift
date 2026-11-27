@@ -31,8 +31,6 @@ protocol ChatPeerIdentityContext: AnyObject {
     var selectedPrivateChatFingerprint: String? { get set }
     var myPeerID: PeerID { get }
     var activeChannel: ChannelID { get }
-    /// Signals that message state changed so observers refresh (e.g. `objectWillChange.send()`).
-    func notifyUIChanged()
     func addSystemMessage(_ content: String)
 
     // MARK: Private chat session lifecycle
@@ -286,7 +284,6 @@ final class ChatPeerIdentityCoordinator {
         }
 
         context.unifiedToggleFavorite(peerID)
-        context.notifyUIChanged()
     }
 
     @MainActor
@@ -636,7 +633,6 @@ private extension ChatPeerIdentityCoordinator {
     func toggleFavoriteForNoiseKey(_ noisePublicKey: Data, peerID: PeerID) {
         if let ephemeralID = context.ephemeralPeerID(forNoiseKey: noisePublicKey) {
             context.unifiedToggleFavorite(ephemeralID)
-            context.notifyUIChanged()
             return
         }
 
@@ -660,7 +656,6 @@ private extension ChatPeerIdentityCoordinator {
             context.removeFavorite(noiseKey: noisePublicKey)
         }
 
-        context.notifyUIChanged()
 
         if case .send(let isFavorite) = plan.notification {
             context.sendFavoriteNotificationViaNostr(

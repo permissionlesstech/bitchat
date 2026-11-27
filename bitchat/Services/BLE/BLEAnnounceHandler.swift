@@ -28,7 +28,7 @@ struct BLEAnnounceHandlerEnvironment {
     /// Verifies the packet signature against the announced signing key.
     let verifySignature: (_ packet: BitchatPacket, _ signingPublicKey: Data) -> Bool
     /// Direct link state for the peer (BLE-queue read).
-    let linkState: (PeerID) -> (hasPeripheral: Bool, hasCentral: Bool)
+    let linkState: (PeerID) -> BLEDirectLinkState
     /// Whether the link this packet arrived on is already bound to a
     /// different peer ID (ingress-registry + BLE-queue read). Directness
     /// rides on the unsigned TTL, so a replayed announce can look "direct"

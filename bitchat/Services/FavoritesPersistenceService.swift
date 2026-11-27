@@ -40,7 +40,6 @@ final class FavoritesPersistenceService: ObservableObject {
     init(keychain: KeychainManagerProtocol = KeychainManager.makeDefault()) {
         self.keychain = keychain
         loadFavorites()
-        rebuildNostrKeyIndex()
         
         // Update mutual favorites when favorites change
         $favorites
@@ -226,7 +225,6 @@ final class FavoritesPersistenceService: ObservableObject {
         SecureLogger.warning("🧹 Clearing all favorites (panic mode)", category: .session)
         
         favorites.removeAll()
-        saveFavorites()
         
         // Delete from keychain directly
         keychain.delete(
@@ -285,49 +283,27 @@ final class FavoritesPersistenceService: ObservableObject {
                 }
             }
             
-            // Convert to dictionary, cleaning up duplicates by public key (not nickname)
-            var seenPublicKeys: [Data: FavoriteRelationship] = [:]
-            var cleanedRelationships: [FavoriteRelationship] = []
-            
+            // Build dictionary locally and assign once so `favorites.didSet`
+            // runs `rebuildNostrKeyIndex()` once in O(N) instead of O(N²).
+            var loaded: [Data: FavoriteRelationship] = [:]
+            loaded.reserveCapacity(relationships.count)
+
             for relationship in relationships {
-                // Check for duplicates by public key (the actual unique identifier)
-                if let existing = seenPublicKeys[relationship.peerNoisePublicKey] {
+                if let existing = loaded[relationship.peerNoisePublicKey] {
                     SecureLogger.warning("⚠️ Duplicate favorite found for public key \(relationship.peerNoisePublicKey.hexEncodedString()) - nicknames: '\(existing.peerNickname)' vs '\(relationship.peerNickname)'", category: .session)
-                    
-                    // Keep the most recent or most complete relationship
                     if relationship.lastUpdated > existing.lastUpdated ||
                        (relationship.peerNostrPublicKey != nil && existing.peerNostrPublicKey == nil) {
-                        // Replace with newer/more complete entry
-                        seenPublicKeys[relationship.peerNoisePublicKey] = relationship
-                        cleanedRelationships.removeAll { $0.peerNoisePublicKey == relationship.peerNoisePublicKey }
-                        cleanedRelationships.append(relationship)
+                        loaded[relationship.peerNoisePublicKey] = relationship
                     }
                 } else {
-                    seenPublicKeys[relationship.peerNoisePublicKey] = relationship
-                    cleanedRelationships.append(relationship)
+                    loaded[relationship.peerNoisePublicKey] = relationship
                 }
             }
-            
-            // If we cleaned up duplicates, save the cleaned list
-            if cleanedRelationships.count < relationships.count {
-                // Cleaned up duplicates
-                
-                // Clear and rebuild favorites dictionary
-                favorites.removeAll()
-                for relationship in cleanedRelationships {
-                    favorites[relationship.peerNoisePublicKey] = relationship
-                }
-                
-                // Save cleaned favorites
+
+            favorites = loaded
+            if loaded.count < relationships.count {
                 saveFavorites()
-                
-                // Notify that favorites have been cleaned up (synchronously since we're already on main actor)
                 NotificationCenter.default.post(name: .favoriteStatusChanged, object: nil)
-            } else {
-                // No duplicates, just populate normally
-                for relationship in cleanedRelationships {
-                    favorites[relationship.peerNoisePublicKey] = relationship
-                }
             }
             
             // Log loaded relationships

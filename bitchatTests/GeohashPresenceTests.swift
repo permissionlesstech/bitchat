@@ -240,8 +240,8 @@ struct ChatViewModelPresenceHandlingTests {
         )
         let signed = try event.sign(with: identity.schnorrSigningKey())
 
-        // subscribeNostrEvent should accept kind 20001
-        viewModel.subscribeNostrEvent(signed)
+        // handleNostrEvent should accept kind 20001
+        viewModel.handleNostrEvent(signed)
 
         try? await Task.sleep(nanoseconds: 50_000_000)
 
@@ -319,7 +319,7 @@ struct ChatViewModelPresenceHandlingTests {
         viewModel.subscribeNostrEvent(signed, gh: sampleGeohash)
         #expect(!viewModel.deduplicationService.hasProcessedNostrEvent(signed.id))
 
-        viewModel.subscribeNostrEvent(signed)
+        viewModel.handleNostrEvent(signed)
 
         #expect(viewModel.geohashParticipantCount(for: sampleGeohash) == 1)
         #expect(viewModel.deduplicationService.hasProcessedNostrEvent(signed.id))

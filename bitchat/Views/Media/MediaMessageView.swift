@@ -11,7 +11,6 @@ import BitFoundation
 struct MediaMessageView: View {
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.appTheme) private var theme
-    @ThemedPalette private var palette
     @EnvironmentObject private var conversationUIModel: ConversationUIModel
     let message: BitchatMessage
     let media: BitchatMessage.Media
@@ -36,66 +35,30 @@ struct MediaMessageView: View {
         let isFromMe = conversationUIModel.isMediaMessageFromCurrentUser(message)
         let state = mediaSendState(for: deliveryStatus, isFromMe: isFromMe)
         let cancelAction: (() -> Void)? = state.canCancel ? { conversationUIModel.cancelMediaSend(messageID: message.id) } : nil
+        let showsDeliveryStatus = message.isPrivate
+            && conversationUIModel.isSentByCurrentUser(message)
+            && deliveryStatus != .notSentYet
 
         // Baseline alignment (via the header text inside the VStack) keeps the
         // lock on the header line; a fixed top padding left its solid body
         // hanging below the line's visual center.
         HStack(alignment: .firstTextBaseline, spacing: 0) {
-            if message.isPrivate {
-                Image(systemName: "lock.fill")
-                    .font(.bitchatSystem(size: 8))
-                    .foregroundColor(Color.orange.opacity(0.75))
-                    .padding(.trailing, 4)
-                    .accessibilityHidden(true)
-            }
-            if conversationUIModel.showsVerifiedSeal(for: message) {
-                Image(systemName: "checkmark.seal.fill")
-                    .font(.bitchatSystem(size: 8))
-                    .foregroundColor(Color.green.opacity(0.85))
-                    .padding(.trailing, 4)
-                    .accessibilityLabel(
-                        String(localized: "content.accessibility.verified_sender", defaultValue: "Verified sender", comment: "Accessibility label for the seal next to a verified peer's name on a private message")
-                    )
-            }
+            MessageLeadingBadges(
+                isPrivate: message.isPrivate,
+                showsVerifiedSeal: conversationUIModel.showsVerifiedSeal(for: message)
+            )
             VStack(alignment: .leading, spacing: 2) {
                 HStack(alignment: .center, spacing: 4) {
                     Text(conversationUIModel.formatMessageHeader(message, colorScheme: colorScheme, theme: theme))
                         .fixedSize(horizontal: false, vertical: true)
                         .frame(maxWidth: .infinity, alignment: .leading)
-                    // Delivery status indicator for private messages. Tappable:
-                    // .help() tooltips only exist on macOS, so iOS users get the
-                    // explanation as a caption under the row instead.
-                    if message.isPrivate && conversationUIModel.isSentByCurrentUser(message),
-                       deliveryStatus != .notSentYet {
-                        Button {
-                            showDeliveryDetail.toggle()
-                        } label: {
-                            DeliveryStatusView(status: deliveryStatus)
-                                .padding(.leading, 4)
-                                .contentShape(Rectangle())
-                        }
-                        .buttonStyle(.plain)
-                        .accessibilityHint(
-                            String(localized: "content.accessibility.delivery_detail_hint", comment: "Accessibility hint for the delivery status glyph explaining a tap reveals details")
-                        )
+                    if showsDeliveryStatus {
+                        MessageDeliveryStatusButton(status: deliveryStatus, showDetail: $showDeliveryDetail)
                     }
                 }
 
-                // Failure reasons stay visible without a tap; other statuses
-                // reveal on demand.
-                if message.isPrivate && conversationUIModel.isSentByCurrentUser(message),
-                   deliveryStatus != .notSentYet {
-                    if case .failed = deliveryStatus {
-                        Text(verbatim: deliveryStatus.bitchatDescription)
-                            .bitchatFont(size: 11)
-                            .foregroundColor(Color.red.opacity(0.9))
-                            .fixedSize(horizontal: false, vertical: true)
-                    } else if showDeliveryDetail {
-                        Text(verbatim: deliveryStatus.bitchatDescription)
-                            .bitchatFont(size: 11)
-                            .foregroundColor(palette.secondary)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
+                if showsDeliveryStatus {
+                    MessageDeliveryDetailCaption(status: deliveryStatus, showDetail: showDeliveryDetail)
                 }
 
                 Group {

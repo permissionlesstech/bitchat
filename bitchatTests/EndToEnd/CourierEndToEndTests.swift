@@ -45,11 +45,15 @@ struct CourierEndToEndTests {
         }
     }
 
-    private final class NoiseCaptureDelegate: BitchatDelegate {
+    private final class NoiseCaptureDelegate: TransportEventDelegate {
         private let lock = NSLock()
         private var payloads: [(peerID: PeerID, type: NoisePayloadType, payload: Data)] = []
 
-        func didReceiveNoisePayload(from peerID: PeerID, type: NoisePayloadType, payload: Data, timestamp: Date) {
+        @MainActor
+        func didReceiveTransportEvent(_ event: TransportEvent) {
+            guard case let .noisePayloadReceived(peerID, type, payload, _) = event else {
+                return
+            }
             lock.lock(); payloads.append((peerID, type, payload)); lock.unlock()
         }
 
@@ -57,14 +61,6 @@ struct CourierEndToEndTests {
             lock.lock(); defer { lock.unlock() }
             return payloads
         }
-
-        // Unused BitchatDelegate requirements.
-        func didReceiveMessage(_ message: BitchatMessage) {}
-        func didConnectToPeer(_ peerID: PeerID) {}
-        func didDisconnectFromPeer(_ peerID: PeerID) {}
-        func didUpdatePeerList(_ peers: [PeerID]) {}
-        func didUpdateBluetoothState(_ state: CBManagerState) {}
-        func didReceivePublicMessage(from peerID: PeerID, nickname: String, content: String, timestamp: Date, messageID: String?) {}
     }
 
     private func makeService(identityManager: MockIdentityManager? = nil) -> BLEService {
@@ -121,7 +117,7 @@ struct CourierEndToEndTests {
         carol.courierDepositPolicy = { _, _ in .favorite }
 
         let bobDelegate = NoiseCaptureDelegate()
-        bob.delegate = bobDelegate
+        bob.eventDelegate = bobDelegate
 
         let aliceOut = PacketTap()
         alice._test_onOutboundPacket = aliceOut.record
@@ -208,7 +204,7 @@ struct CourierEndToEndTests {
         carol.courierDepositPolicy = { _, _ in .favorite }
 
         let bobDelegate = NoiseCaptureDelegate()
-        bob.delegate = bobDelegate
+        bob.eventDelegate = bobDelegate
         let aliceOut = PacketTap()
         alice._test_onOutboundPacket = aliceOut.record
         let carolOut = PacketTap()
@@ -589,7 +585,7 @@ struct CourierEndToEndTests {
         let alice = makeService()
         let bob = makeService()
         let bobDelegate = NoiseCaptureDelegate()
-        bob.delegate = bobDelegate
+        bob.eventDelegate = bobDelegate
 
         let bobKey = bob.noiseStaticPublicKeyData()
         let first = try #require(alice.sealBridgeCourierEnvelope("once", messageID: "dup-1", recipientNoiseKey: bobKey))
@@ -670,7 +666,6 @@ struct CourierEndToEndTests {
 /// Minimal transport stub for exercising MessageRouter's courier deposit
 /// logic without BLE plumbing.
 private final class CourierCaptureTransport: Transport, MeshCourierTransporting {
-    weak var delegate: BitchatDelegate?
     weak var eventDelegate: TransportEventDelegate?
     weak var peerEventsDelegate: TransportPeerEventsDelegate?
 

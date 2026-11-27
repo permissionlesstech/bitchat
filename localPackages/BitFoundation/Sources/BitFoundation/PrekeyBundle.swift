@@ -75,10 +75,10 @@ public struct PrekeyBundle: Equatable {
         out.append(paddedKey(noiseStaticPublicKey))
         out.append(UInt8(min(prekeys.count, 255)))
         for prekey in prekeys.prefix(255) {
-            appendBE(prekey.id, into: &out)
+            out.appendBigEndian(prekey.id)
             out.append(paddedKey(prekey.publicKey))
         }
-        appendBE(generatedAt, into: &out)
+        out.appendBigEndian(generatedAt)
         return out
     }
 
@@ -93,78 +93,62 @@ public struct PrekeyBundle: Equatable {
         var entries = Data()
         entries.reserveCapacity(prekeys.count * Self.prekeyEntryLength)
         for prekey in prekeys {
-            appendBE(prekey.id, into: &entries)
+            entries.appendBigEndian(prekey.id)
             entries.append(prekey.publicKey)
         }
 
-        var encoded = Data()
-        encoded.reserveCapacity(4 * 3 + Self.keyLength + entries.count + 8 + Self.signatureLength)
-
-        encoded.append(TLVType.noiseStaticPublicKey.rawValue)
-        appendBE(UInt16(noiseStaticPublicKey.count), into: &encoded)
-        encoded.append(noiseStaticPublicKey)
-
-        encoded.append(TLVType.prekeys.rawValue)
-        appendBE(UInt16(entries.count), into: &encoded)
-        encoded.append(entries)
-
-        encoded.append(TLVType.generatedAt.rawValue)
-        appendBE(UInt16(8), into: &encoded)
-        appendBE(generatedAt, into: &encoded)
-
-        encoded.append(TLVType.signature.rawValue)
-        appendBE(UInt16(signature.count), into: &encoded)
-        encoded.append(signature)
-
-        return encoded
+        var writer = TLVWriter(
+            lengthWidth: .twoBytes,
+            capacity: 4 * 3 + Self.keyLength + entries.count + 8 + Self.signatureLength
+        )
+        writer.append(TLVType.noiseStaticPublicKey.rawValue, noiseStaticPublicKey)
+        writer.append(TLVType.prekeys.rawValue, entries)
+        writer.append(TLVType.generatedAt.rawValue, bigEndian: generatedAt)
+        writer.append(TLVType.signature.rawValue, signature)
+        return writer.data
     }
 
     public static func decode(_ data: Data) -> PrekeyBundle? {
-        var cursor = data.startIndex
-        let end = data.endIndex
-
+        var reader = TLVReader(data, lengthWidth: .twoBytes)
         var noiseStaticPublicKey: Data?
         var prekeys: [Prekey]?
         var generatedAt: UInt64?
         var signature: Data?
 
-        while cursor < end {
-            let typeRaw = data[cursor]
-            cursor = data.index(after: cursor)
-
-            guard data.distance(from: cursor, to: end) >= 2 else { return nil }
-            let length = Int(data[cursor]) << 8 | Int(data[data.index(after: cursor)])
-            cursor = data.index(cursor, offsetBy: 2)
-            guard data.distance(from: cursor, to: end) >= length else { return nil }
-            let value = data[cursor..<data.index(cursor, offsetBy: length)]
-            cursor = data.index(cursor, offsetBy: length)
-
-            switch TLVType(rawValue: typeRaw) {
-            case .noiseStaticPublicKey:
-                guard length == keyLength else { return nil }
-                noiseStaticPublicKey = Data(value)
-            case .prekeys:
-                guard length > 0, length % prekeyEntryLength == 0,
-                      length / prekeyEntryLength <= maxPrekeys else { return nil }
-                var parsed: [Prekey] = []
-                var entryStart = value.startIndex
-                while entryStart < value.endIndex {
-                    let idEnd = value.index(entryStart, offsetBy: 4)
-                    let id = value[entryStart..<idEnd].reduce(UInt32(0)) { ($0 << 8) | UInt32($1) }
-                    let keyEnd = value.index(idEnd, offsetBy: keyLength)
-                    parsed.append(Prekey(id: id, publicKey: Data(value[idEnd..<keyEnd])))
-                    entryStart = keyEnd
+        loop: while true {
+            switch reader.next() {
+            case .end:
+                break loop
+            case .malformed:
+                return nil
+            case .entry(let typeRaw, let value):
+                switch TLVType(rawValue: typeRaw) {
+                case .noiseStaticPublicKey:
+                    guard value.count == keyLength else { return nil }
+                    noiseStaticPublicKey = Data(value)
+                case .prekeys:
+                    guard !value.isEmpty, value.count % prekeyEntryLength == 0,
+                          value.count / prekeyEntryLength <= maxPrekeys else { return nil }
+                    var parsed: [Prekey] = []
+                    var entryStart = value.startIndex
+                    while entryStart < value.endIndex {
+                        let idEnd = value.index(entryStart, offsetBy: 4)
+                        guard let id: UInt32 = value[entryStart..<idEnd].readBigEndian() else { return nil }
+                        let keyEnd = value.index(idEnd, offsetBy: keyLength)
+                        parsed.append(Prekey(id: id, publicKey: Data(value[idEnd..<keyEnd])))
+                        entryStart = keyEnd
+                    }
+                    prekeys = parsed
+                case .generatedAt:
+                    guard let parsed: UInt64 = value.readBigEndian() else { return nil }
+                    generatedAt = parsed
+                case .signature:
+                    guard value.count == signatureLength else { return nil }
+                    signature = Data(value)
+                case nil:
+                    // Unknown TLV: skip for forward compatibility.
+                    continue
                 }
-                prekeys = parsed
-            case .generatedAt:
-                guard length == 8 else { return nil }
-                generatedAt = value.reduce(UInt64(0)) { ($0 << 8) | UInt64($1) }
-            case .signature:
-                guard length == signatureLength else { return nil }
-                signature = Data(value)
-            case nil:
-                // Unknown TLV: skip for forward compatibility.
-                continue
             }
         }
 
@@ -187,9 +171,4 @@ public struct PrekeyBundle: Equatable {
         guard fixed.count < Self.keyLength else { return Data(fixed) }
         return Data(fixed) + Data(repeating: 0, count: Self.keyLength - fixed.count)
     }
-}
-
-private func appendBE<T: FixedWidthInteger>(_ value: T, into data: inout Data) {
-    var big = value.bigEndian
-    withUnsafeBytes(of: &big) { data.append(contentsOf: $0) }
 }

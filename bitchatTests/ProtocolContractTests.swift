@@ -5,16 +5,7 @@ import CoreBluetooth
 import BitFoundation
 @testable import bitchat
 
-private final class DefaultDelegateProbe: BitchatDelegate {
-    func didReceiveMessage(_ message: BitchatMessage) {}
-    func didConnectToPeer(_ peerID: PeerID) {}
-    func didDisconnectFromPeer(_ peerID: PeerID) {}
-    func didUpdatePeerList(_ peers: [PeerID]) {}
-    func didUpdateBluetoothState(_ state: CBManagerState) {}
-}
-
 private final class DefaultTransportProbe: Transport {
-    weak var delegate: BitchatDelegate?
     weak var eventDelegate: TransportEventDelegate?
     weak var peerEventsDelegate: TransportPeerEventsDelegate?
 
@@ -62,10 +53,7 @@ struct ProtocolContractTests {
     }
 
     @Test
-    func protocolEnums_andDelegateDefaults_haveStableContracts() {
-        let delegate = DefaultDelegateProbe()
-        let peerID = PeerID(str: "8899aabbccddeeff")
-
+    func protocolEnums_haveStableContracts() {
         #expect(MessageType.requestSync.description == "requestSync")
         #expect(NoisePayloadType.verifyResponse.description == "verifyResponse")
         #expect(DeliveryStatus.sending.displayText == "Sending...")
@@ -74,10 +62,6 @@ struct ProtocolContractTests {
         #expect(DeliveryStatus.read(by: "Bob", at: Date()).displayText == "Read by Bob")
         #expect(DeliveryStatus.failed(reason: "oops").displayText == "Failed: oops")
         #expect(DeliveryStatus.partiallyDelivered(reached: 1, total: 3).displayText == "Delivered to 1/3")
-
-        delegate.didUpdateMessageDeliveryStatus("msg-1", status: .sent)
-        delegate.didReceiveNoisePayload(from: peerID, type: .privateMessage, payload: Data(), timestamp: Date())
-        delegate.didReceivePublicMessage(from: peerID, nickname: "Alice", content: "hi", timestamp: Date(), messageID: "msg-1")
     }
 
     @Test

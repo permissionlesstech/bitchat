@@ -56,36 +56,24 @@ struct RequestSyncPacket {
     }
 
     func encode() -> Data {
-        var out = Data()
-        func putTLV(_ t: UInt8, _ v: Data) {
-            out.append(t)
-            let len = UInt16(v.count)
-            out.append(UInt8((len >> 8) & 0xFF))
-            out.append(UInt8(len & 0xFF))
-            out.append(v)
-        }
-        // P
-        putTLV(0x01, Data([UInt8(p & 0xFF)]))
-        // M (uint32)
-        var mBE = m.bigEndian
-        putTLV(0x02, withUnsafeBytes(of: &mBE) { Data($0) })
-        // data
-        putTLV(0x03, data)
+        var writer = TLVWriter(lengthWidth: .twoBytes)
+        writer.append(0x01, byte: UInt8(p & 0xFF))
+        writer.append(0x02, bigEndian: m)
+        writer.append(0x03, data)
         if let typesData = types?.toData() {
-            putTLV(0x04, typesData)
+            writer.append(0x04, typesData)
         }
         if let ts = sinceTimestamp {
-            var tsBE = ts.bigEndian
-            putTLV(0x05, withUnsafeBytes(of: &tsBE) { Data($0) })
+            writer.append(0x05, bigEndian: ts)
         }
         if let fid = fragmentIdFilter, let fidData = fid.data(using: .utf8) {
-            putTLV(0x06, fidData)
+            writer.append(0x06, fidData)
         }
-        return out
+        return writer.data
     }
     
     static func decode(from data: Data, maxAcceptBytes: Int = 1024) -> RequestSyncPacket? {
-        var off = 0
+        var reader = TLVReader(data, lengthWidth: .twoBytes)
         var p: Int? = nil
         var m: UInt32? = nil
         var payload: Data? = nil
@@ -93,42 +81,36 @@ struct RequestSyncPacket {
         var sinceTimestamp: UInt64? = nil
         var fragmentIdFilter: String? = nil
 
-        while off + 3 <= data.count {
-            let t = Int(data[off]); off += 1
-            guard off + 2 <= data.count else { return nil }
-            let len = (Int(data[off]) << 8) | Int(data[off+1]); off += 2
-            guard off + len <= data.count else { return nil }
-            let v = data.subdata(in: off..<(off+len)); off += len
-            switch t {
-            case 0x01:
-                if v.count == 1 { p = Int(v[0]) }
-            case 0x02:
-                if v.count == 4 {
-                    var mm: UInt32 = 0
-                    for b in v { mm = (mm << 8) | UInt32(b) }
-                    m = mm
+        loop: while true {
+            switch reader.next(allowTrailingHeaderRemainder: true) {
+            case .end:
+                break loop
+            case .malformed:
+                return nil
+            case .entry(let t, let v):
+                switch t {
+                case 0x01:
+                    if v.count == 1 { p = Int(v[v.startIndex]) }
+                case 0x02:
+                    if let parsed: UInt32 = v.readBigEndian() { m = parsed }
+                case 0x03:
+                    if v.count > maxAcceptBytes { return nil }
+                    payload = Data(v)
+                case 0x04:
+                    if let decoded = SyncTypeFlags.decode(Data(v)) {
+                        types = decoded
+                    }
+                case 0x05:
+                    if let parsed: UInt64 = v.readBigEndian() { sinceTimestamp = parsed }
+                case 0x06:
+                    // Same acceptance cap as the GCS payload; an oversized filter
+                    // is ignored rather than failing the whole request.
+                    if v.count <= maxAcceptBytes, let fid = String(data: v, encoding: .utf8) {
+                        fragmentIdFilter = fid
+                    }
+                default:
+                    break // forward compatible; ignore unknown TLVs
                 }
-            case 0x03:
-                if v.count > maxAcceptBytes { return nil }
-                payload = v
-            case 0x04:
-                if let decoded = SyncTypeFlags.decode(v) {
-                    types = decoded
-                }
-            case 0x05:
-                if v.count == 8 {
-                    var ts: UInt64 = 0
-                    for b in v { ts = (ts << 8) | UInt64(b) }
-                    sinceTimestamp = ts
-                }
-            case 0x06:
-                // Same acceptance cap as the GCS payload; an oversized filter
-                // is ignored rather than failing the whole request.
-                if v.count <= maxAcceptBytes, let fid = String(data: v, encoding: .utf8) {
-                    fragmentIdFilter = fid
-                }
-            default:
-                break // forward compatible; ignore unknown TLVs
             }
         }
 

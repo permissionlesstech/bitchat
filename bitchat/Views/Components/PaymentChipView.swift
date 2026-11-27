@@ -223,12 +223,7 @@ struct PaymentChipView: View {
     }
 
     private func copyToPasteboard(_ string: String) {
-        #if os(iOS)
-        UIPasteboard.general.string = string
-        #else
-        NSPasteboard.general.clearContents()
-        NSPasteboard.general.setString(string, forType: .string)
-        #endif
+        ClipboardHelper.copy(string)
     }
 }
 

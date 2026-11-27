@@ -44,34 +44,53 @@ struct BLEAuthenticatedPeerStateSendProgress {
 /// but taking a leaf lock is safe). Every method is one whole transition
 /// under the lock, so no caller can observe a torn intermediate state.
 final class BLEPrivateMediaSessionStore: @unchecked Sendable {
+    private struct PeerSessionState {
+        var sessionGeneration: UUID?
+        var authenticatedState: BLEAuthenticatedPeerStateObservation?
+        var proofTimeoutMarker: BLEPrivateMediaProofTimeoutMarker?
+        var proofWatchdog: BLEPrivateMediaProofWatchdog?
+        var pendingPolicyResolution: BLEPendingPrivateMediaPolicyResolution?
+        var stateSendProgress: BLEAuthenticatedPeerStateSendProgress?
+        /// Parked outbound queues must stay parked until the convergence retry
+        /// re-authenticates: a timeout-restore brings back keys the counterpart
+        /// may have already discarded, so nothing — not even the capability-
+        /// proof watchdog — may drain the queues under them.
+        var outboundConvergenceDeferred = false
+
+        var isEmpty: Bool {
+            sessionGeneration == nil
+                && authenticatedState == nil
+                && proofTimeoutMarker == nil
+                && proofWatchdog == nil
+                && pendingPolicyResolution == nil
+                && stateSendProgress == nil
+                && !outboundConvergenceDeferred
+        }
+    }
+
     private let lock = NSLock()
-    private var sessionGenerations: [PeerID: UUID] = [:]
-    private var authenticatedStates: [PeerID: BLEAuthenticatedPeerStateObservation] = [:]
-    private var proofTimeoutMarkers: [PeerID: BLEPrivateMediaProofTimeoutMarker] = [:]
-    private var proofWatchdogs: [PeerID: BLEPrivateMediaProofWatchdog] = [:]
-    private var pendingPolicyResolutions: [PeerID: BLEPendingPrivateMediaPolicyResolution] = [:]
-    private var stateSendProgress: [PeerID: BLEAuthenticatedPeerStateSendProgress] = [:]
-    /// Peers whose parked outbound queues must stay parked until the
-    /// convergence retry re-authenticates: a timeout-restore brings back
-    /// keys the counterpart may have already discarded, so nothing — not
-    /// even the capability-proof watchdog — may drain the queues under
-    /// them. Set on the deferred restore transition, cleared by any
-    /// transition that is allowed to drain.
-    private var outboundConvergenceDeferred: Set<PeerID> = []
+    private var peers: [PeerID: PeerSessionState] = [:]
+
+    private func pruneIfEmpty(_ peerID: PeerID) {
+        if peers[peerID]?.isEmpty == true {
+            peers.removeValue(forKey: peerID)
+        }
+    }
 
     // MARK: Reads
 
     func currentGeneration(for peerID: PeerID) -> UUID? {
-        lock.withLock { sessionGenerations[peerID] }
+        lock.withLock { peers[peerID]?.sessionGeneration }
     }
 
     /// The exact current generation iff it authenticated both encrypted
     /// private media (bit 8) and durable receipts/retry (bit 9).
     func receiptSessionGeneration(for peerID: PeerID, currentNoiseGeneration: UUID?) -> UUID? {
         lock.withLock {
-            guard let generation = sessionGenerations[peerID],
+            guard let state = peers[peerID],
+                  let generation = state.sessionGeneration,
                   generation == currentNoiseGeneration,
-                  let authenticated = authenticatedStates[peerID],
+                  let authenticated = state.authenticatedState,
                   authenticated.sessionGeneration == generation,
                   authenticated.capabilities.contains(.privateMedia),
                   authenticated.capabilities.contains(.privateMediaReceipts) else {
@@ -88,26 +107,27 @@ final class BLEPrivateMediaSessionStore: @unchecked Sendable {
         timedOut: BLEPrivateMediaProofTimeoutMarker?
     ) {
         lock.withLock {
-            (
-                sessionGenerations[peerID],
-                authenticatedStates[peerID],
-                proofTimeoutMarkers[peerID]
+            let state = peers[peerID]
+            return (
+                state?.sessionGeneration,
+                state?.authenticatedState,
+                state?.proofTimeoutMarker
             )
         }
     }
 
     func hasPendingPolicyResolution(for peerID: PeerID) -> Bool {
-        lock.withLock { pendingPolicyResolutions[peerID] != nil }
+        lock.withLock { peers[peerID]?.pendingPolicyResolution != nil }
     }
 
     /// The live proof-timeout identity for a peer (watchdog first, then a
     /// registered waiter) — what a forced/expired timeout must present.
     func proofTimeoutTarget(for peerID: PeerID) -> (fingerprint: String, generation: UUID?, nonce: UUID)? {
         lock.withLock {
-            if let watchdog = proofWatchdogs[peerID] {
+            if let watchdog = peers[peerID]?.proofWatchdog {
                 return (watchdog.fingerprint, watchdog.sessionGeneration, watchdog.timeoutNonce)
             }
-            if let pending = pendingPolicyResolutions[peerID] {
+            if let pending = peers[peerID]?.pendingPolicyResolution {
                 return (pending.fingerprint, pending.sessionGeneration, pending.timeoutNonce)
             }
             return nil
@@ -128,29 +148,33 @@ final class BLEPrivateMediaSessionStore: @unchecked Sendable {
         generation: UUID
     ) -> (watchdogNonce: UUID, rejected: [@MainActor (PrivateMediaSendPolicy) -> Void])? {
         lock.withLock {
-            guard sessionGenerations[peerID] != generation else { return nil }
+            var state = peers[peerID] ?? PeerSessionState()
+            guard state.sessionGeneration != generation else { return nil }
             let watchdogNonce = UUID()
-            sessionGenerations[peerID] = generation
-            authenticatedStates.removeValue(forKey: peerID)
-            proofTimeoutMarkers.removeValue(forKey: peerID)
-            proofWatchdogs[peerID] = BLEPrivateMediaProofWatchdog(
+            state.sessionGeneration = generation
+            state.authenticatedState = nil
+            state.proofTimeoutMarker = nil
+            state.proofWatchdog = BLEPrivateMediaProofWatchdog(
                 fingerprint: fingerprint,
                 sessionGeneration: generation,
                 timeoutNonce: watchdogNonce
             )
-            stateSendProgress[peerID] =
+            state.stateSendProgress =
                 BLEAuthenticatedPeerStateSendProgress(sessionGeneration: generation)
 
-            guard var pending = pendingPolicyResolutions[peerID] else {
+            guard var pending = state.pendingPolicyResolution else {
+                peers[peerID] = state
                 return (watchdogNonce, [])
             }
             guard pending.fingerprint.caseInsensitiveCompare(fingerprint) == .orderedSame else {
-                pendingPolicyResolutions.removeValue(forKey: peerID)
+                state.pendingPolicyResolution = nil
+                peers[peerID] = state
                 return (watchdogNonce, Array(pending.completions.values))
             }
             pending.sessionGeneration = generation
             pending.timeoutNonce = watchdogNonce
-            pendingPolicyResolutions[peerID] = pending
+            state.pendingPolicyResolution = pending
+            peers[peerID] = state
             return (watchdogNonce, [])
         }
     }
@@ -166,15 +190,18 @@ final class BLEPrivateMediaSessionStore: @unchecked Sendable {
         capabilities: PeerCapabilities
     ) -> [@MainActor (PrivateMediaSendPolicy) -> Void]? {
         lock.withLock {
-            guard sessionGenerations[peerID] == generation else { return nil }
-            authenticatedStates[peerID] = BLEAuthenticatedPeerStateObservation(
+            guard var state = peers[peerID], state.sessionGeneration == generation else { return nil }
+            state.authenticatedState = BLEAuthenticatedPeerStateObservation(
                 fingerprint: fingerprint,
                 sessionGeneration: generation,
                 capabilities: capabilities
             )
-            proofTimeoutMarkers.removeValue(forKey: peerID)
-            proofWatchdogs.removeValue(forKey: peerID)
-            guard let pending = pendingPolicyResolutions.removeValue(forKey: peerID),
+            state.proofTimeoutMarker = nil
+            state.proofWatchdog = nil
+            let pending = state.pendingPolicyResolution
+            state.pendingPolicyResolution = nil
+            peers[peerID] = state
+            guard let pending,
                   pending.fingerprint.caseInsensitiveCompare(fingerprint) == .orderedSame,
                   pending.sessionGeneration == generation else {
                 return []
@@ -187,8 +214,9 @@ final class BLEPrivateMediaSessionStore: @unchecked Sendable {
     /// generation. Returns whether the packet should actually go out.
     func markPeerStateSend(for peerID: PeerID, echo: Bool) -> Bool {
         lock.withLock {
-            guard let generation = sessionGenerations[peerID],
-                  var progress = stateSendProgress[peerID],
+            guard var state = peers[peerID],
+                  let generation = state.sessionGeneration,
+                  var progress = state.stateSendProgress,
                   progress.sessionGeneration == generation else { return false }
             if echo {
                 guard !progress.sentEcho else { return false }
@@ -197,7 +225,8 @@ final class BLEPrivateMediaSessionStore: @unchecked Sendable {
                 guard !progress.sentInitial else { return false }
                 progress.sentInitial = true
             }
-            stateSendProgress[peerID] = progress
+            state.stateSendProgress = progress
+            peers[peerID] = state
             return true
         }
     }
@@ -205,11 +234,14 @@ final class BLEPrivateMediaSessionStore: @unchecked Sendable {
     // MARK: Outbound convergence deferral
 
     func setOutboundDeferredUntilConvergence(_ peerID: PeerID) {
-        lock.withLock { _ = outboundConvergenceDeferred.insert(peerID) }
+        lock.withLock { peers[peerID, default: PeerSessionState()].outboundConvergenceDeferred = true }
     }
 
     func clearOutboundDeferredUntilConvergence(_ peerID: PeerID) {
-        lock.withLock { _ = outboundConvergenceDeferred.remove(peerID) }
+        lock.withLock {
+            peers[peerID]?.outboundConvergenceDeferred = false
+            pruneIfEmpty(peerID)
+        }
     }
 
     // MARK: Proof timeout
@@ -226,11 +258,12 @@ final class BLEPrivateMediaSessionStore: @unchecked Sendable {
         nonce: UUID
     ) -> (expired: Bool, deferredOutbound: Bool, completions: [@MainActor (PrivateMediaSendPolicy) -> Void]) {
         lock.withLock {
-            let pending = pendingPolicyResolutions[peerID]
+            guard var state = peers[peerID] else { return (false, false, []) }
+            let pending = state.pendingPolicyResolution
             let pendingMatches = pending?.timeoutNonce == nonce
                 && pending?.sessionGeneration == sessionGeneration
                 && pending?.fingerprint.caseInsensitiveCompare(fingerprint) == .orderedSame
-            let watchdog = proofWatchdogs[peerID]
+            let watchdog = state.proofWatchdog
             let watchdogMatches = sessionGeneration != nil
                 && watchdog?.timeoutNonce == nonce
                 && watchdog?.sessionGeneration == sessionGeneration
@@ -241,18 +274,17 @@ final class BLEPrivateMediaSessionStore: @unchecked Sendable {
             var completions: [@MainActor (PrivateMediaSendPolicy) -> Void] = []
             if pendingMatches, let pending {
                 completions = Array(pending.completions.values)
-            }
-            if pendingMatches {
-                pendingPolicyResolutions.removeValue(forKey: peerID)
+                state.pendingPolicyResolution = nil
             }
             if watchdogMatches {
-                proofWatchdogs.removeValue(forKey: peerID)
+                state.proofWatchdog = nil
             }
-            proofTimeoutMarkers[peerID] = BLEPrivateMediaProofTimeoutMarker(
+            state.proofTimeoutMarker = BLEPrivateMediaProofTimeoutMarker(
                 fingerprint: fingerprint,
                 sessionGeneration: sessionGeneration
             )
-            return (true, outboundConvergenceDeferred.contains(peerID), completions)
+            peers[peerID] = state
+            return (true, state.outboundConvergenceDeferred, completions)
         }
     }
 
@@ -269,39 +301,38 @@ final class BLEPrivateMediaSessionStore: @unchecked Sendable {
         completion: @escaping @MainActor (PrivateMediaSendPolicy) -> Void
     ) -> (registered: Bool, shouldSchedule: Bool, nonce: UUID, generation: UUID?) {
         lock.withLock {
-            let generation = sessionGenerations[peerID]
-            if var pending = pendingPolicyResolutions[peerID] {
+            var state = peers[peerID] ?? PeerSessionState()
+            let generation = state.sessionGeneration
+            if var pending = state.pendingPolicyResolution {
                 guard pending.fingerprint.caseInsensitiveCompare(fingerprint) == .orderedSame,
                       pending.completions.count
                         < TransportConfig.privateMediaCapabilityProofWaitersPerPeerCap else {
                     return (false, false, UUID(), generation)
                 }
                 pending.completions[requestID] = completion
-                pendingPolicyResolutions[peerID] = pending
+                state.pendingPolicyResolution = pending
+                peers[peerID] = state
                 return (true, false, pending.timeoutNonce, pending.sessionGeneration)
             }
 
-            guard pendingPolicyResolutions.count
+            let pendingPeerCount = peers.values.reduce(0) { $0 + ($1.pendingPolicyResolution != nil ? 1 : 0) }
+            guard pendingPeerCount
                     < TransportConfig.privateMediaCapabilityProofPendingPeerCap else {
                 return (false, false, UUID(), generation)
             }
-            let currentWatchdog = proofWatchdogs[peerID]
+            let currentWatchdog = state.proofWatchdog
             let reusesWatchdog = currentWatchdog?.fingerprint
                 .caseInsensitiveCompare(fingerprint) == .orderedSame
                 && currentWatchdog?.sessionGeneration == generation
-            let nonce: UUID
-            if reusesWatchdog, let currentWatchdog {
-                nonce = currentWatchdog.timeoutNonce
-            } else {
-                nonce = UUID()
-            }
-            pendingPolicyResolutions[peerID] =
+            let nonce: UUID = (reusesWatchdog ? currentWatchdog?.timeoutNonce : nil) ?? UUID()
+            state.pendingPolicyResolution =
                 BLEPendingPrivateMediaPolicyResolution(
                     fingerprint: fingerprint,
                     sessionGeneration: generation,
                     timeoutNonce: nonce,
                     completions: [requestID: completion]
                 )
+            peers[peerID] = state
             return (true, !reusesWatchdog, nonce, generation)
         }
     }
@@ -313,19 +344,22 @@ final class BLEPrivateMediaSessionStore: @unchecked Sendable {
     /// returned so the caller re-arms their timeout.
     func clearSession(for peerID: PeerID) -> (fingerprint: String, nonce: UUID)? {
         lock.withLock {
-            sessionGenerations.removeValue(forKey: peerID)
-            authenticatedStates.removeValue(forKey: peerID)
-            proofTimeoutMarkers.removeValue(forKey: peerID)
-            proofWatchdogs.removeValue(forKey: peerID)
-            stateSendProgress.removeValue(forKey: peerID)
-            outboundConvergenceDeferred.remove(peerID)
-            guard var pending = pendingPolicyResolutions[peerID] else {
+            guard var state = peers[peerID] else { return nil }
+            state.sessionGeneration = nil
+            state.authenticatedState = nil
+            state.proofTimeoutMarker = nil
+            state.proofWatchdog = nil
+            state.stateSendProgress = nil
+            state.outboundConvergenceDeferred = false
+            guard var pending = state.pendingPolicyResolution else {
+                peers.removeValue(forKey: peerID)
                 return nil
             }
             let nonce = UUID()
             pending.sessionGeneration = nil
             pending.timeoutNonce = nonce
-            pendingPolicyResolutions[peerID] = pending
+            state.pendingPolicyResolution = pending
+            peers[peerID] = state
             return (pending.fingerprint, nonce)
         }
     }
@@ -335,13 +369,7 @@ final class BLEPrivateMediaSessionStore: @unchecked Sendable {
     /// wiped media — drop everything.
     func panicReset() {
         lock.withLock {
-            sessionGenerations.removeAll()
-            authenticatedStates.removeAll()
-            proofTimeoutMarkers.removeAll()
-            proofWatchdogs.removeAll()
-            pendingPolicyResolutions.removeAll()
-            stateSendProgress.removeAll()
-            outboundConvergenceDeferred.removeAll()
+            peers.removeAll()
         }
     }
 }

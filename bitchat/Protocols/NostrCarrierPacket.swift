@@ -86,59 +86,46 @@ struct NostrCarrierPacket: Equatable {
     }
 
     func encode() -> Data? {
-        var data = Data()
-        data.reserveCapacity(eventJSON.count + geohash.utf8.count + 12)
-
-        func appendTLV(_ type: TLVType, _ value: Data) {
-            data.append(type.rawValue)
-            data.append(UInt8((value.count >> 8) & 0xFF))
-            data.append(UInt8(value.count & 0xFF))
-            data.append(value)
-        }
-
-        appendTLV(.direction, Data([direction.rawValue]))
-        appendTLV(.geohash, Data(geohash.utf8))
-        appendTLV(.eventJSON, eventJSON)
-        return data
+        var writer = TLVWriter(
+            lengthWidth: .twoBytes,
+            capacity: eventJSON.count + geohash.utf8.count + 12
+        )
+        writer.append(TLVType.direction.rawValue, byte: direction.rawValue)
+        writer.append(TLVType.geohash.rawValue, Data(geohash.utf8))
+        writer.append(TLVType.eventJSON.rawValue, eventJSON)
+        return writer.data
     }
 
     static func decode(_ data: Data) -> NostrCarrierPacket? {
-        // Defensive slice re-base (Data slices keep parent indices).
-        let data = Data(data)
-        var offset = 0
+        var reader = TLVReader(data, lengthWidth: .twoBytes)
         var direction: Direction?
         var geohash: String?
         var eventJSON: Data?
 
-        while offset + 3 <= data.count {
-            let typeRaw = data[offset]
-            let length = (Int(data[offset + 1]) << 8) | Int(data[offset + 2])
-            offset += 3
-            guard offset + length <= data.count else { return nil }
-            let value = data.subdata(in: offset..<offset + length)
-            offset += length
-
-            switch TLVType(rawValue: typeRaw) {
-            case .direction:
-                guard value.count == 1, let parsed = Direction(rawValue: value[0]) else { return nil }
-                direction = parsed
-            case .geohash:
-                guard let parsed = String(data: value, encoding: .utf8) else { return nil }
-                geohash = parsed
-            case .eventJSON:
-                eventJSON = value
-            case nil:
-                // Unknown TLV; skip (tolerant decoder for forward compatibility).
-                continue
+        loop: while true {
+            switch reader.next() {
+            case .end:
+                break loop
+            case .malformed:
+                return nil
+            case .entry(let typeRaw, let value):
+                switch TLVType(rawValue: typeRaw) {
+                case .direction:
+                    guard value.count == 1, let parsed = Direction(rawValue: value[value.startIndex]) else { return nil }
+                    direction = parsed
+                case .geohash:
+                    guard let parsed = String(data: value, encoding: .utf8) else { return nil }
+                    geohash = parsed
+                case .eventJSON:
+                    eventJSON = Data(value)
+                case nil:
+                    // Unknown TLV; skip (tolerant decoder for forward compatibility).
+                    continue
+                }
             }
         }
 
-        guard offset == data.count,
-              let direction,
-              let geohash,
-              let eventJSON else {
-            return nil
-        }
+        guard let direction, let geohash, let eventJSON else { return nil }
         return NostrCarrierPacket(direction: direction, geohash: geohash, eventJSON: eventJSON)
     }
 }

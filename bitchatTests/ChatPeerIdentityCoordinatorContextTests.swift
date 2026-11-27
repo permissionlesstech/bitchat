@@ -31,10 +31,8 @@ private final class MockChatPeerIdentityContext: ChatPeerIdentityContext {
     var selectedPrivateChatFingerprint: String?
     var myPeerID = PeerID(str: "0011223344556677")
     var activeChannel: ChannelID = .mesh
-    private(set) var notifyUIChangedCount = 0
     private(set) var systemMessages: [String] = []
 
-    func notifyUIChanged() { notifyUIChangedCount += 1 }
     func addSystemMessage(_ content: String) { systemMessages.append(content) }
 
     // Conversation store intents (mirror `ConversationStore` migrate

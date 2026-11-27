@@ -75,3 +75,34 @@ enum NoiseSecurityConstants {
     static let maxGlobalHandshakesPerMinute = 30
     static let maxGlobalMessagesPerSecond = 500
 }
+
+enum NoiseSecurityError: Error {
+    case sessionExpired
+    case sessionExhausted
+    case messageTooLarge
+    case invalidPeerID
+    case rateLimitExceeded
+}
+
+struct NoiseSecurityValidator {
+    static func validateMessageSize(_ data: Data) -> Bool {
+        data.count <= NoiseSecurityConstants.maxMessageSize
+    }
+
+    static func validateCiphertextSize(_ data: Data) -> Bool {
+        data.count <= NoiseSecurityConstants.maxMessageSize
+            + NoiseSecurityConstants.transportCiphertextOverhead
+    }
+
+    static func validatePrivateFileMessageSize(_ data: Data) -> Bool {
+        data.count <= NoiseSecurityConstants.maxPrivateFilePlaintextSize
+    }
+
+    static func validatePrivateFileCiphertextSize(_ data: Data) -> Bool {
+        data.count <= NoiseSecurityConstants.maxPrivateFileCiphertextSize
+    }
+
+    static func validateHandshakeMessageSize(_ data: Data) -> Bool {
+        data.count <= NoiseSecurityConstants.maxHandshakeMessageSize
+    }
+}

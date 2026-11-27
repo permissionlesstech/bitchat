@@ -260,14 +260,6 @@ final class PTTBurstPlayer {
     }
 
     deinit {
-        // Backstop for an owner dropping the player before it stopped: the
-        // session coordinator retains registered tokens strongly, so a token
-        // leaked here would keep the session active (and pin any escalated
-        // category) for the app's lifetime. `release` is fire-and-forget
-        // onto the coordinator's queue, so it is deinit-safe.
-        if let token = sessionToken {
-            coordinator.release(token)
-        }
         if let observer = configChangeObserver {
             NotificationCenter.default.removeObserver(observer)
         }

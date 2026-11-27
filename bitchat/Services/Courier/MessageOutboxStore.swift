@@ -91,7 +91,8 @@ final class MessageOutboxStore {
         let unseenDurable: Snapshot
     }
 
-    private let fileURL: URL?
+    private let fileStore: AppSupportFileStore
+    private var fileURL: URL? { fileStore.fileURL }
     private let keychain: KeychainManagerProtocol
     private let readData: (URL) throws -> Data
     private let writeData: (Data, URL, Data.WritingOptions) throws -> Void
@@ -152,7 +153,12 @@ final class MessageOutboxStore {
         beforeRecoveryNotification: @escaping () -> Void = {}
     ) {
         self.keychain = keychain
-        self.fileURL = fileURL ?? Self.defaultFileURL()
+        self.fileStore = AppSupportFileStore(
+            fileURL: fileURL,
+            subdirectory: "courier",
+            fileName: "outbox.sealed",
+            protection: .untilFirstUserAuthentication
+        )
         self.readData = readData
         self.writeData = writeData
         self.beforeRecoveryNotification = beforeRecoveryNotification
@@ -201,64 +207,35 @@ final class MessageOutboxStore {
         }
 
         let wasDeferred = diskState == .deferred
+        let durable: Snapshot?
         switch readSnapshotLocked() {
-        case .loaded(let durable):
-            cachedSnapshot = applyingPendingRemovalsLocked(pendingSnapshotIsAuthoritative
-                ? (pendingSnapshot ?? [:])
-                : Self.merge(durable, pendingSnapshot ?? [:]))
-            diskState = .loaded
-            if pendingSnapshot != nil || hasPendingRemovalsLocked {
-                if persistSnapshotAndClearRemovalsLocked(cachedSnapshot) {
-                    pendingSnapshot = nil
-                    pendingSnapshotIsAuthoritative = false
-                } else {
-                    pendingSnapshot = cachedSnapshot
-                    pendingSnapshotIsAuthoritative = true
-                    diskState = .deferred
-                }
-            }
-            // The recovery callback is driven by `retryDeferredLoad`; `load`
-            // itself returns the recovered value synchronously to its caller.
-            return cachedSnapshot
-
+        case .loaded(let snapshot):
+            durable = snapshot
         case .missing:
-            cachedSnapshot = applyingPendingRemovalsLocked(pendingSnapshot ?? [:])
-            diskState = .loaded
-            if pendingSnapshot != nil || hasPendingRemovalsLocked {
-                if persistSnapshotAndClearRemovalsLocked(cachedSnapshot) {
-                    pendingSnapshot = nil
-                    pendingSnapshotIsAuthoritative = false
-                } else {
-                    pendingSnapshot = cachedSnapshot
-                    pendingSnapshotIsAuthoritative = true
-                    diskState = .deferred
-                }
-            }
-            return cachedSnapshot
-
+            durable = nil
+        case .corrupt(let error):
+            SecureLogger.error("Failed to decode encrypted outbox: \(error)", category: .session)
+            durable = nil
         case .deferred(let error):
             diskState = .deferred
             if !wasDeferred {
                 SecureLogger.warning("Outbox unavailable; deferring load until protected data is available: \(String(describing: error))", category: .session)
             }
             return pendingSnapshot ?? [:]
-
-        case .corrupt(let error):
-            diskState = .loaded
-            cachedSnapshot = applyingPendingRemovalsLocked(pendingSnapshot ?? [:])
-            SecureLogger.error("Failed to decode encrypted outbox: \(error)", category: .session)
-            if pendingSnapshot != nil || hasPendingRemovalsLocked {
-                if persistSnapshotAndClearRemovalsLocked(cachedSnapshot) {
-                    pendingSnapshot = nil
-                    pendingSnapshotIsAuthoritative = false
-                } else {
-                    pendingSnapshot = cachedSnapshot
-                    pendingSnapshotIsAuthoritative = true
-                    diskState = .deferred
-                }
-            }
-            return cachedSnapshot
         }
+
+        let base: Snapshot
+        if let durable, !pendingSnapshotIsAuthoritative {
+            base = Self.merge(durable, pendingSnapshot ?? [:])
+        } else {
+            base = pendingSnapshot ?? [:]
+        }
+        cachedSnapshot = applyingPendingRemovalsLocked(base)
+        diskState = .loaded
+        _ = commitOrDeferPersistLocked(cachedSnapshot, skipIfClean: true)
+        // The recovery callback is driven by `retryDeferredLoad`; `load`
+        // itself returns the recovered value synchronously to its caller.
+        return cachedSnapshot
     }
 
     func save(_ outbox: Snapshot) {
@@ -266,8 +243,7 @@ final class MessageOutboxStore {
 
         lock.lock()
         let recoveryWasPending = recoveryDeliveryPending
-        let unseenClassificationWasPending = unseenRecoveryPendingPersistence
-        let recoveryStateWasPending = recoveryWasPending || unseenClassificationWasPending
+        let recoveryStateWasPending = recoveryWasPending || unseenRecoveryPendingPersistence
         let flattened = applyingPendingRemovalsLocked(outbox.filter { !$0.value.isEmpty })
         if recoveryStateWasPending {
             // `save` is the router's complete current view. Keep it separate
@@ -281,14 +257,10 @@ final class MessageOutboxStore {
                     ? Self.merge(unseenRecoveredSnapshot, recoveryRouterSnapshot)
                     : flattened
             )
-            if !persistSnapshotAndClearRemovalsLocked(cachedSnapshot) {
-                // Retain the latest complete router snapshot. Because its
-                // durable baseline was already loaded, it replaces the older
-                // disk file after protected data returns (preserving removals).
-                pendingSnapshot = cachedSnapshot
-                pendingSnapshotIsAuthoritative = true
-                diskState = .deferred
-            }
+            // On failure, retain the latest complete router snapshot. Because its
+            // durable baseline was already loaded, it replaces the older disk
+            // file after protected data returns (preserving removals).
+            _ = commitOrDeferPersistLocked(cachedSnapshot, skipIfClean: false)
 
         case .unknown, .deferred:
             let wasDeferred = diskState == .deferred
@@ -297,129 +269,25 @@ final class MessageOutboxStore {
             // no recovery state is merely an ordinary post-load write retry.
             let isRecoveryAttempt = recoveryStateWasPending ||
                 (wasDeferred && !pendingSnapshotIsAuthoritative)
-            switch readSnapshotLocked() {
-            case .loaded(let durable):
-                // `save` before a successful `load` is not authoritative over
-                // an unreadable snapshot. Union by message ID so neither the
-                // durable queue nor work accepted during the locked wake is
-                // lost.
-                let newlyUnseen = recoveryStateWasPending
-                    ? unseenRecoveredSnapshot
-                    : (isRecoveryAttempt
-                        ? applyingPendingRemovalsLocked(Self.excludingKnownMessages(from: durable, known: flattened))
-                        : [:])
-                if isRecoveryAttempt && !recoveryStateWasPending {
-                    unseenRecoveredSnapshot = newlyUnseen
-                    recoveryRouterSnapshot = flattened
-                    unseenRecoveryPendingPersistence = true
-                }
-                let preservesUnseenRecovery = recoveryStateWasPending || unseenRecoveryPendingPersistence
-                let merged = preservesUnseenRecovery
+            let deferFallback = applyingPendingRemovalsLocked(
+                recoveryStateWasPending
                     ? Self.merge(unseenRecoveredSnapshot, recoveryRouterSnapshot)
-                    : (pendingSnapshotIsAuthoritative ? flattened : Self.merge(durable, flattened))
-                cachedSnapshot = applyingPendingRemovalsLocked(merged)
-                diskState = .loaded
-                if persistSnapshotAndClearRemovalsLocked(cachedSnapshot) {
-                    pendingSnapshot = nil
-                    pendingSnapshotIsAuthoritative = false
-                    if isRecoveryAttempt && !recoveryWasPending {
-                        recovered = RecoveredSnapshot(
-                            snapshot: cachedSnapshot,
-                            generation: lifecycleGeneration,
-                            unseenDurable: newlyUnseen
-                        )
-                    }
-                } else {
-                    pendingSnapshot = cachedSnapshot
-                    pendingSnapshotIsAuthoritative = true
-                    diskState = .deferred
-                }
-
-            case .missing:
-                if isRecoveryAttempt && !recoveryStateWasPending {
-                    unseenRecoveredSnapshot = [:]
-                    recoveryRouterSnapshot = flattened
-                    unseenRecoveryPendingPersistence = true
-                }
-                let preservesUnseenRecovery = recoveryStateWasPending || unseenRecoveryPendingPersistence
-                let merged = applyingPendingRemovalsLocked(
-                    preservesUnseenRecovery
-                        ? Self.merge(unseenRecoveredSnapshot, recoveryRouterSnapshot)
-                        : flattened
-                )
-                cachedSnapshot = merged
-                diskState = .loaded
-                if persistSnapshotAndClearRemovalsLocked(merged) {
-                    pendingSnapshot = nil
-                    pendingSnapshotIsAuthoritative = false
-                    if isRecoveryAttempt && !recoveryWasPending {
-                        recovered = RecoveredSnapshot(
-                            snapshot: merged,
-                            generation: lifecycleGeneration,
-                            unseenDurable: unseenRecoveredSnapshot
-                        )
-                    }
-                } else {
-                    pendingSnapshot = merged
-                    pendingSnapshotIsAuthoritative = true
-                    diskState = .deferred
-                }
-
-            case .deferred:
-                // `save` receives MessageRouter's complete current in-memory
-                // snapshot. Replace prior locked-wake state so delivery acks
-                // and expiry removals become tombstones for that state; only
-                // the still-unknown durable snapshot is unioned on recovery.
-                pendingSnapshot = applyingPendingRemovalsLocked(
-                    recoveryStateWasPending
-                        ? Self.merge(unseenRecoveredSnapshot, recoveryRouterSnapshot)
-                        : flattened
-                )
-                diskState = .deferred
-
-            case .corrupt(let error):
-                SecureLogger.error("Failed to decode encrypted outbox: \(error)", category: .session)
-                if isRecoveryAttempt && !recoveryStateWasPending {
-                    unseenRecoveredSnapshot = [:]
-                    recoveryRouterSnapshot = flattened
-                    unseenRecoveryPendingPersistence = true
-                }
-                let preservesUnseenRecovery = recoveryStateWasPending || unseenRecoveryPendingPersistence
-                let merged = applyingPendingRemovalsLocked(
-                    preservesUnseenRecovery
-                        ? Self.merge(unseenRecoveredSnapshot, recoveryRouterSnapshot)
-                        : flattened
-                )
-                cachedSnapshot = merged
-                diskState = .loaded
-                if persistSnapshotAndClearRemovalsLocked(merged) {
-                    pendingSnapshot = nil
-                    pendingSnapshotIsAuthoritative = false
-                    if isRecoveryAttempt && !recoveryWasPending {
-                        recovered = RecoveredSnapshot(
-                            snapshot: merged,
-                            generation: lifecycleGeneration,
-                            unseenDurable: unseenRecoveredSnapshot
-                        )
-                    }
-                } else {
-                    pendingSnapshot = merged
-                    pendingSnapshotIsAuthoritative = true
-                    diskState = .deferred
-                }
-            }
+                    : flattened
+            )
+            recovered = resolveDiskReadLocked(
+                known: flattened,
+                isRecoveryAttempt: isRecoveryAttempt,
+                recoveryWasPending: recoveryWasPending,
+                recoveryStateWasPending: recoveryStateWasPending,
+                skipPersistIfClean: false,
+                deferFallbackSnapshot: deferFallback,
+                corruptLogContext: "Failed to decode encrypted outbox"
+            )
         }
-        if let recovered {
-            unseenRecoveryPendingPersistence = false
-            recoveryDeliveryPending = true
-            unseenRecoveredSnapshot = recovered.unseenDurable
-        }
+        finalizeRecoveryStateLocked(recovered)
         lock.unlock()
 
-        if let recovered {
-            beforeRecoveryNotification()
-            notifyRecovered(recovered.snapshot, generation: recovered.generation)
-        }
+        deliverRecoveryIfNeeded(recovered)
     }
 
     /// Installs the router-side merge hook used when a cold, locked launch
@@ -477,128 +345,125 @@ final class MessageOutboxStore {
     /// both durable messages and any messages queued during the locked wake.
     @discardableResult
     func retryDeferredLoad() -> Snapshot? {
-        var recovered: RecoveredSnapshot?
         lock.lock()
         guard diskState == .deferred else {
             lock.unlock()
             return nil
         }
         let recoveryWasPending = recoveryDeliveryPending
-        let unseenClassificationWasPending = unseenRecoveryPendingPersistence
-        let recoveryStateWasPending = recoveryWasPending || unseenClassificationWasPending
+        let recoveryStateWasPending = recoveryWasPending || unseenRecoveryPendingPersistence
         // `pendingSnapshotIsAuthoritative` alone means a normal write failed
         // after the router had already loaded its baseline. It must retry, but
         // must not masquerade as cold-load recovery or schedule a callback.
         let isRecoveryAttempt = recoveryStateWasPending || !pendingSnapshotIsAuthoritative
-        switch readSnapshotLocked() {
-        case .loaded(let durable):
-            let known = recoveryStateWasPending ? recoveryRouterSnapshot : (pendingSnapshot ?? [:])
-            let newlyUnseen = recoveryStateWasPending
-                ? unseenRecoveredSnapshot
-                : (isRecoveryAttempt
-                    ? applyingPendingRemovalsLocked(Self.excludingKnownMessages(from: durable, known: known))
-                    : [:])
-            if isRecoveryAttempt && !recoveryStateWasPending {
-                unseenRecoveredSnapshot = newlyUnseen
-                recoveryRouterSnapshot = known
-                unseenRecoveryPendingPersistence = true
-            }
-            let preservesUnseenRecovery = recoveryStateWasPending || unseenRecoveryPendingPersistence
-            let merged = applyingPendingRemovalsLocked(preservesUnseenRecovery
-                ? Self.merge(unseenRecoveredSnapshot, recoveryRouterSnapshot)
-                : (pendingSnapshotIsAuthoritative ? known : Self.merge(durable, known)))
-            cachedSnapshot = merged
-            diskState = .loaded
-            if (pendingSnapshot == nil && !hasPendingRemovalsLocked) ||
-                persistSnapshotAndClearRemovalsLocked(merged) {
-                pendingSnapshot = nil
-                pendingSnapshotIsAuthoritative = false
-                if isRecoveryAttempt && !recoveryWasPending {
-                    recovered = RecoveredSnapshot(
-                        snapshot: merged,
-                        generation: lifecycleGeneration,
-                        unseenDurable: newlyUnseen
-                    )
-                }
-            } else {
-                pendingSnapshot = merged
-                pendingSnapshotIsAuthoritative = true
-                diskState = .deferred
-            }
-        case .missing:
-            let known = recoveryStateWasPending ? recoveryRouterSnapshot : (pendingSnapshot ?? [:])
-            if isRecoveryAttempt && !recoveryStateWasPending {
-                unseenRecoveredSnapshot = [:]
-                recoveryRouterSnapshot = known
-                unseenRecoveryPendingPersistence = true
-            }
-            let preservesUnseenRecovery = recoveryStateWasPending || unseenRecoveryPendingPersistence
-            let merged = applyingPendingRemovalsLocked(preservesUnseenRecovery
-                ? Self.merge(unseenRecoveredSnapshot, recoveryRouterSnapshot)
-                : known)
-            cachedSnapshot = merged
-            diskState = .loaded
-            if (pendingSnapshot == nil && !hasPendingRemovalsLocked) ||
-                persistSnapshotAndClearRemovalsLocked(merged) {
-                pendingSnapshot = nil
-                pendingSnapshotIsAuthoritative = false
-                if isRecoveryAttempt && !recoveryWasPending {
-                    recovered = RecoveredSnapshot(
-                        snapshot: merged,
-                        generation: lifecycleGeneration,
-                        unseenDurable: unseenRecoveredSnapshot
-                    )
-                }
-            } else {
-                pendingSnapshot = merged
-                pendingSnapshotIsAuthoritative = true
-                diskState = .deferred
-            }
-        case .deferred:
-            break
-        case .corrupt(let error):
-            SecureLogger.error("Failed to decode encrypted outbox after protected-data recovery: \(error)", category: .session)
-            let known = recoveryStateWasPending ? recoveryRouterSnapshot : (pendingSnapshot ?? [:])
-            if isRecoveryAttempt && !recoveryStateWasPending {
-                unseenRecoveredSnapshot = [:]
-                recoveryRouterSnapshot = known
-                unseenRecoveryPendingPersistence = true
-            }
-            let preservesUnseenRecovery = recoveryStateWasPending || unseenRecoveryPendingPersistence
-            let merged = applyingPendingRemovalsLocked(preservesUnseenRecovery
-                ? Self.merge(unseenRecoveredSnapshot, recoveryRouterSnapshot)
-                : known)
-            cachedSnapshot = merged
-            diskState = .loaded
-            if (pendingSnapshot == nil && !hasPendingRemovalsLocked) ||
-                persistSnapshotAndClearRemovalsLocked(merged) {
-                pendingSnapshot = nil
-                pendingSnapshotIsAuthoritative = false
-                if isRecoveryAttempt && !recoveryWasPending {
-                    recovered = RecoveredSnapshot(
-                        snapshot: merged,
-                        generation: lifecycleGeneration,
-                        unseenDurable: unseenRecoveredSnapshot
-                    )
-                }
-            } else {
-                pendingSnapshot = merged
-                pendingSnapshotIsAuthoritative = true
-                diskState = .deferred
-            }
-        }
-        if let recovered {
-            unseenRecoveryPendingPersistence = false
-            recoveryDeliveryPending = true
-            unseenRecoveredSnapshot = recovered.unseenDurable
-        }
+        let known = recoveryStateWasPending ? recoveryRouterSnapshot : (pendingSnapshot ?? [:])
+        let recovered = resolveDiskReadLocked(
+            known: known,
+            isRecoveryAttempt: isRecoveryAttempt,
+            recoveryWasPending: recoveryWasPending,
+            recoveryStateWasPending: recoveryStateWasPending,
+            skipPersistIfClean: true,
+            deferFallbackSnapshot: nil,
+            corruptLogContext: "Failed to decode encrypted outbox after protected-data recovery"
+        )
+        finalizeRecoveryStateLocked(recovered)
         lock.unlock()
 
-        if let recovered {
-            beforeRecoveryNotification()
-            notifyRecovered(recovered.snapshot, generation: recovered.generation)
-        }
+        deliverRecoveryIfNeeded(recovered)
         return recovered?.snapshot
+    }
+
+    /// Must be called with `lock` held. Resolves a disk read during deferred
+    /// recovery or initial save, merging any unseen durable messages and
+    /// committing or re-deferring the persisted snapshot.
+    private func resolveDiskReadLocked(
+        known: Snapshot,
+        isRecoveryAttempt: Bool,
+        recoveryWasPending: Bool,
+        recoveryStateWasPending: Bool,
+        skipPersistIfClean: Bool,
+        deferFallbackSnapshot: Snapshot?,
+        corruptLogContext: String
+    ) -> RecoveredSnapshot? {
+        let durable: Snapshot?
+        switch readSnapshotLocked() {
+        case .loaded(let snapshot):
+            durable = snapshot
+        case .missing:
+            durable = nil
+        case .corrupt(let error):
+            SecureLogger.error("\(corruptLogContext): \(error)", category: .session)
+            durable = nil
+        case .deferred:
+            if let deferFallbackSnapshot {
+                pendingSnapshot = deferFallbackSnapshot
+                diskState = .deferred
+            }
+            return nil
+        }
+
+        if isRecoveryAttempt && !recoveryStateWasPending {
+            unseenRecoveredSnapshot = durable.map {
+                applyingPendingRemovalsLocked(Self.excludingKnownMessages(from: $0, known: known))
+            } ?? [:]
+            recoveryRouterSnapshot = known
+            unseenRecoveryPendingPersistence = true
+        }
+        let preservesUnseenRecovery = recoveryStateWasPending || unseenRecoveryPendingPersistence
+        let rawMerged: Snapshot
+        if preservesUnseenRecovery {
+            rawMerged = Self.merge(unseenRecoveredSnapshot, recoveryRouterSnapshot)
+        } else if let durable, !pendingSnapshotIsAuthoritative {
+            rawMerged = Self.merge(durable, known)
+        } else {
+            rawMerged = known
+        }
+
+        let merged = applyingPendingRemovalsLocked(rawMerged)
+        cachedSnapshot = merged
+        diskState = .loaded
+        guard commitOrDeferPersistLocked(merged, skipIfClean: skipPersistIfClean) else {
+            return nil
+        }
+        guard isRecoveryAttempt && !recoveryWasPending else {
+            return nil
+        }
+        return RecoveredSnapshot(
+            snapshot: merged,
+            generation: lifecycleGeneration,
+            unseenDurable: unseenRecoveredSnapshot
+        )
+    }
+
+    /// Must be called with `lock` held. Persists `snapshot` (unless `skipIfClean`
+    /// and nothing is dirty) or defers it as authoritative pending state on error.
+    private func commitOrDeferPersistLocked(_ snapshot: Snapshot, skipIfClean: Bool) -> Bool {
+        if skipIfClean && pendingSnapshot == nil && !hasPendingRemovalsLocked {
+            return true
+        }
+        if persistSnapshotAndClearRemovalsLocked(snapshot) {
+            pendingSnapshot = nil
+            pendingSnapshotIsAuthoritative = false
+            return true
+        }
+        pendingSnapshot = snapshot
+        pendingSnapshotIsAuthoritative = true
+        diskState = .deferred
+        return false
+    }
+
+    /// Must be called with `lock` held.
+    private func finalizeRecoveryStateLocked(_ recovered: RecoveredSnapshot?) {
+        guard let recovered else { return }
+        unseenRecoveryPendingPersistence = false
+        recoveryDeliveryPending = true
+        unseenRecoveredSnapshot = recovered.unseenDurable
+    }
+
+    private func deliverRecoveryIfNeeded(_ recovered: RecoveredSnapshot?) {
+        guard let recovered else { return }
+        beforeRecoveryNotification()
+        notifyRecovered(recovered.snapshot, generation: recovered.generation)
     }
 
     /// Panic wipe: drop the queued mail and the key that could ever read it.
@@ -617,9 +482,7 @@ final class MessageOutboxStore {
         unreportedRecoveredSnapshot = nil
         lifecycleGeneration &+= 1
         cachedEncryptionKey = nil
-        if let fileURL {
-            try? FileManager.default.removeItem(at: fileURL)
-        }
+        fileStore.removeIgnoringErrors()
         keychain.delete(key: Self.keychainKey, service: Self.keychainService)
         lock.unlock()
     }
@@ -724,7 +587,7 @@ final class MessageOutboxStore {
             for (peerID, queue) in decoded where !queue.isEmpty {
                 outbox[PeerID(str: peerID)] = queue
             }
-            Self.migrateFileProtectionIfNeeded(at: fileURL)
+            fileStore.migrateProtectionIfNeeded(logContext: "outbox")
             return .loaded(outbox)
         } catch {
             return .corrupt(error)
@@ -764,15 +627,7 @@ final class MessageOutboxStore {
             let keyed = Dictionary(uniqueKeysWithValues: snapshot.map { ($0.key.id, $0.value) })
             let plaintext = try JSONEncoder().encode(keyed)
             let sealed = try ChaChaPoly.seal(plaintext, using: key).combined
-            try FileManager.default.createDirectory(
-                at: fileURL.deletingLastPathComponent(),
-                withIntermediateDirectories: true
-            )
-            var options: Data.WritingOptions = [.atomic]
-            #if os(iOS)
-            options.insert(.completeFileProtectionUntilFirstUserAuthentication)
-            #endif
-            try writeData(sealed, fileURL, options)
+            try fileStore.writeRaw(sealed, write: writeData)
             return true
         } catch {
             SecureLogger.error("Failed to persist outbox: \(error)", category: .session)
@@ -835,7 +690,7 @@ final class MessageOutboxStore {
         return unseen
     }
 
-    private static func merge(_ durable: Snapshot, _ pending: Snapshot) -> Snapshot {
+    static func merge(_ durable: Snapshot, _ pending: Snapshot) -> Snapshot {
         var merged = durable
         for (peerID, pendingQueue) in pending {
             var queue = merged[peerID] ?? []
@@ -887,30 +742,5 @@ final class MessageOutboxStore {
         recoveryRouterSnapshot = [:]
         unreportedRecoveredSnapshot = nil
         return latest
-    }
-
-    private static func migrateFileProtectionIfNeeded(at fileURL: URL) {
-        #if os(iOS)
-        do {
-            try FileManager.default.setAttributes(
-                [.protectionKey: FileProtectionType.completeUntilFirstUserAuthentication],
-                ofItemAtPath: fileURL.path
-            )
-        } catch {
-            SecureLogger.warning("Failed to migrate outbox file protection: \(error)", category: .session)
-        }
-        #endif
-    }
-
-    private static func defaultFileURL() -> URL? {
-        guard let base = try? FileManager.default.url(
-            for: .applicationSupportDirectory,
-            in: .userDomainMask,
-            appropriateFor: nil,
-            create: true
-        ) else { return nil }
-        return base
-            .appendingPathComponent("courier", isDirectory: true)
-            .appendingPathComponent("outbox.sealed")
     }
 }

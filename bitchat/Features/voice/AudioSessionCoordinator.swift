@@ -70,8 +70,9 @@ final class AudioSessionCoordinator: @unchecked Sendable {
         case playAndRecord
     }
 
-    /// Opaque handle for one client's hold on the session. Release exactly
-    /// once when done (extra releases are ignored).
+    /// Opaque handle for one client's hold on the session. Release explicitly
+    /// when done, or simply drop the token — `deinit` automatically releases
+    /// any remaining hold on the coordinator (extra releases are ignored).
     ///
     /// `@unchecked` because the stored callbacks are `@MainActor`-isolated
     /// closures (non-Sendable as stored types). Lifecycle state is protected
@@ -101,6 +102,7 @@ final class AudioSessionCoordinator: @unchecked Sendable {
             case released
         }
 
+        private weak var coordinator: AudioSessionCoordinator?
         fileprivate let onInterrupted: @MainActor () -> Void
         fileprivate let onCategoryEscalated: (@MainActor () -> Void)?
         private let stateLock = NSLock()
@@ -111,11 +113,19 @@ final class AudioSessionCoordinator: @unchecked Sendable {
         private var terminalEventPendingHandoff = false
 
         fileprivate init(
+            coordinator: AudioSessionCoordinator,
             onInterrupted: @escaping @MainActor () -> Void,
             onCategoryEscalated: (@MainActor () -> Void)?
         ) {
+            self.coordinator = coordinator
             self.onInterrupted = onInterrupted
             self.onCategoryEscalated = onCategoryEscalated
+        }
+
+        deinit {
+            if let coordinator, markReleased() {
+                coordinator.releaseByID(ObjectIdentifier(self))
+            }
         }
 
         /// Records an event at the same linearization point at which the
@@ -212,8 +222,12 @@ final class AudioSessionCoordinator: @unchecked Sendable {
     /// activation calls), and hosts the blocking session IPC off main.
     private let queue = DispatchQueue(label: "chat.bitchat.audio-session", qos: .userInitiated)
 
+    private struct WeakHolder {
+        weak var token: Token?
+    }
+
     // Queue-confined state.
-    private var holders: [ObjectIdentifier: Token] = [:]
+    private var holders: [ObjectIdentifier: WeakHolder] = [:]
     private var currentCategory: Category?
     private var sessionActive = false
     /// Written once in init, read in deinit — never touched concurrently.
@@ -257,7 +271,11 @@ final class AudioSessionCoordinator: @unchecked Sendable {
         onInterrupted: @escaping @MainActor () -> Void,
         onCategoryEscalated: (@MainActor () -> Void)? = nil
     ) async throws -> Token {
-        let token = Token(onInterrupted: onInterrupted, onCategoryEscalated: onCategoryEscalated)
+        let token = Token(
+            coordinator: self,
+            onInterrupted: onInterrupted,
+            onCategoryEscalated: onCategoryEscalated
+        )
         let reconfigured: [Token.CallbackTicket] = try await withCheckedThrowingContinuation { continuation in
             queue.async {
                 do {
@@ -294,8 +312,12 @@ final class AudioSessionCoordinator: @unchecked Sendable {
     /// caller.
     func release(_ token: Token) {
         guard token.markReleased() else { return }
+        releaseByID(ObjectIdentifier(token))
+    }
+
+    fileprivate func releaseByID(_ id: ObjectIdentifier) {
         queue.async {
-            self.releaseOnQueue(token)
+            self.releaseOnQueue(id: id)
         }
     }
 
@@ -329,14 +351,14 @@ final class AudioSessionCoordinator: @unchecked Sendable {
         }
 
         let reconfigured = categoryChanged
-            ? holders.values.compactMap { $0.record(.categoryEscalated) }
+            ? holders.values.compactMap { $0.token?.record(.categoryEscalated) }
             : []
-        holders[ObjectIdentifier(token)] = token
+        holders[ObjectIdentifier(token)] = WeakHolder(token: token)
         return reconfigured
     }
 
-    private func releaseOnQueue(_ token: Token) {
-        guard holders.removeValue(forKey: ObjectIdentifier(token)) != nil else { return }
+    private func releaseOnQueue(id: ObjectIdentifier) {
+        guard holders.removeValue(forKey: id) != nil else { return }
         guard holders.isEmpty else { return }
         currentCategory = nil
         guard sessionActive else { return }
@@ -376,7 +398,7 @@ final class AudioSessionCoordinator: @unchecked Sendable {
     func handleInterruptionBegan() async {
         let tickets = await onQueue { () -> [Token.CallbackTicket] in
             self.sessionActive = false
-            return self.holders.values.compactMap { $0.record(.interrupted) }
+            return self.holders.values.compactMap { $0.token?.record(.interrupted) }
         }
         await deliver(tickets)
     }
@@ -386,7 +408,7 @@ final class AudioSessionCoordinator: @unchecked Sendable {
     /// them; invalidate a holder whose acquire has not returned yet.
     func handleRouteDeviceUnavailable() async {
         let tickets = await onQueue {
-            self.holders.values.compactMap { $0.record(.interrupted) }
+            self.holders.values.compactMap { $0.token?.record(.interrupted) }
         }
         await deliver(tickets)
     }

@@ -6,6 +6,7 @@
 // For more information, see <https://unlicense.org>
 //
 
+import BitFoundation
 import CryptoKit
 import Foundation
 
@@ -149,40 +150,33 @@ enum BoardWire: Equatable {
     case tombstone(BoardTombstonePacket)
 
     func encode() -> Data {
-        var out = Data()
-        func putTLV(_ t: BoardTLVType, _ v: Data) {
-            out.append(t.rawValue)
-            let len = UInt16(v.count)
-            out.append(UInt8((len >> 8) & 0xFF))
-            out.append(UInt8(len & 0xFF))
-            out.append(v)
-        }
+        var writer = TLVWriter(lengthWidth: .twoBytes)
         switch self {
         case .post(let post):
-            putTLV(.kind, Data([BoardWireKind.post.rawValue]))
-            putTLV(.postID, post.postID)
-            putTLV(.geohash, Data(post.geohash.utf8))
-            putTLV(.content, Data(post.content.utf8))
-            putTLV(.authorSigningKey, post.authorSigningKey)
-            putTLV(.authorNickname, Data(post.authorNickname.utf8))
-            putTLV(.createdAt, BoardWireEncoding.uint64Data(post.createdAt))
-            putTLV(.expiresAt, BoardWireEncoding.uint64Data(post.expiresAt))
-            putTLV(.flags, Data([post.flags]))
-            putTLV(.signature, post.signature)
+            writer.append(BoardTLVType.kind.rawValue, byte: BoardWireKind.post.rawValue)
+            writer.append(BoardTLVType.postID.rawValue, post.postID)
+            writer.append(BoardTLVType.geohash.rawValue, Data(post.geohash.utf8))
+            writer.append(BoardTLVType.content.rawValue, Data(post.content.utf8))
+            writer.append(BoardTLVType.authorSigningKey.rawValue, post.authorSigningKey)
+            writer.append(BoardTLVType.authorNickname.rawValue, Data(post.authorNickname.utf8))
+            writer.append(BoardTLVType.createdAt.rawValue, bigEndian: post.createdAt)
+            writer.append(BoardTLVType.expiresAt.rawValue, bigEndian: post.expiresAt)
+            writer.append(BoardTLVType.flags.rawValue, byte: post.flags)
+            writer.append(BoardTLVType.signature.rawValue, post.signature)
         case .tombstone(let tombstone):
-            putTLV(.kind, Data([BoardWireKind.tombstone.rawValue]))
-            putTLV(.postID, tombstone.postID)
-            putTLV(.authorSigningKey, tombstone.authorSigningKey)
-            putTLV(.deletedAt, BoardWireEncoding.uint64Data(tombstone.deletedAt))
-            putTLV(.signature, tombstone.signature)
+            writer.append(BoardTLVType.kind.rawValue, byte: BoardWireKind.tombstone.rawValue)
+            writer.append(BoardTLVType.postID.rawValue, tombstone.postID)
+            writer.append(BoardTLVType.authorSigningKey.rawValue, tombstone.authorSigningKey)
+            writer.append(BoardTLVType.deletedAt.rawValue, bigEndian: tombstone.deletedAt)
+            writer.append(BoardTLVType.signature.rawValue, tombstone.signature)
         }
-        return out
+        return writer.data
     }
 
     /// Structural decode; the caller must still verify the signature before
     /// ingesting (`verifySignature()`).
     static func decode(from data: Data) -> BoardWire? {
-        var off = data.startIndex
+        var reader = TLVReader(data, lengthWidth: .twoBytes)
         var kind: BoardWireKind?
         var postID: Data?
         var geohash: String?
@@ -197,46 +191,49 @@ enum BoardWire: Equatable {
         var signature: Data?
         var deletedAt: UInt64?
 
-        while off + 3 <= data.endIndex {
-            let t = data[off]; off += 1
-            let len = (Int(data[off]) << 8) | Int(data[off + 1]); off += 2
-            guard off + len <= data.endIndex else { return nil }
-            let v = data.subdata(in: off..<(off + len)); off += len
-            switch BoardTLVType(rawValue: t) {
-            case .kind:
-                guard v.count == 1 else { return nil }
-                kind = BoardWireKind(rawValue: v[v.startIndex])
-            case .postID:
-                guard v.count == BoardWireConstants.postIDLength else { return nil }
-                postID = v
-            case .geohash:
-                guard v.count <= BoardWireConstants.geohashMaxLength else { return nil }
-                geohash = String(data: v, encoding: .utf8)
-            case .content:
-                guard v.count <= BoardWireConstants.contentMaxBytes else { return nil }
-                contentBytes = v.count
-                content = String(data: v, encoding: .utf8)
-            case .authorSigningKey:
-                guard v.count == BoardWireConstants.signingKeyLength else { return nil }
-                authorSigningKey = v
-            case .authorNickname:
-                guard v.count <= BoardWireConstants.nicknameMaxBytes else { return nil }
-                nicknameBytes = v.count
-                authorNickname = String(data: v, encoding: .utf8)
-            case .createdAt:
-                createdAt = BoardWireEncoding.uint64(from: v)
-            case .expiresAt:
-                expiresAt = BoardWireEncoding.uint64(from: v)
-            case .flags:
-                guard v.count == 1 else { return nil }
-                flags = v[v.startIndex]
-            case .signature:
-                guard v.count == BoardWireConstants.signatureLength else { return nil }
-                signature = v
-            case .deletedAt:
-                deletedAt = BoardWireEncoding.uint64(from: v)
-            case nil:
-                continue // forward compatible; ignore unknown TLVs
+        loop: while true {
+            switch reader.next(allowTrailingHeaderRemainder: true) {
+            case .end:
+                break loop
+            case .malformed:
+                return nil
+            case .entry(let t, let v):
+                switch BoardTLVType(rawValue: t) {
+                case .kind:
+                    guard v.count == 1 else { return nil }
+                    kind = BoardWireKind(rawValue: v[v.startIndex])
+                case .postID:
+                    guard v.count == BoardWireConstants.postIDLength else { return nil }
+                    postID = Data(v)
+                case .geohash:
+                    guard v.count <= BoardWireConstants.geohashMaxLength else { return nil }
+                    geohash = String(data: v, encoding: .utf8)
+                case .content:
+                    guard v.count <= BoardWireConstants.contentMaxBytes else { return nil }
+                    contentBytes = v.count
+                    content = String(data: v, encoding: .utf8)
+                case .authorSigningKey:
+                    guard v.count == BoardWireConstants.signingKeyLength else { return nil }
+                    authorSigningKey = Data(v)
+                case .authorNickname:
+                    guard v.count <= BoardWireConstants.nicknameMaxBytes else { return nil }
+                    nicknameBytes = v.count
+                    authorNickname = String(data: v, encoding: .utf8)
+                case .createdAt:
+                    createdAt = v.readBigEndian()
+                case .expiresAt:
+                    expiresAt = v.readBigEndian()
+                case .flags:
+                    guard v.count == 1 else { return nil }
+                    flags = v[v.startIndex]
+                case .signature:
+                    guard v.count == BoardWireConstants.signatureLength else { return nil }
+                    signature = Data(v)
+                case .deletedAt:
+                    deletedAt = v.readBigEndian()
+                case nil:
+                    continue // forward compatible; ignore unknown TLVs
+                }
             }
         }
 
@@ -287,15 +284,11 @@ enum BoardWire: Equatable {
     /// Cheap TLV peek for relay policy: is this payload an urgent post?
     /// Avoids a full decode on the hot relay path.
     static func urgentFlag(in data: Data) -> Bool {
-        var off = data.startIndex
-        while off + 3 <= data.endIndex {
-            let t = data[off]; off += 1
-            let len = (Int(data[off]) << 8) | Int(data[off + 1]); off += 2
-            guard off + len <= data.endIndex else { return false }
-            if t == BoardTLVType.flags.rawValue, len == 1 {
-                return data[off] & BoardPostPacket.urgentFlag != 0
+        var reader = TLVReader(data, lengthWidth: .twoBytes)
+        while case .entry(let t, let v) = reader.next(allowTrailingHeaderRemainder: true) {
+            if t == BoardTLVType.flags.rawValue, v.count == 1 {
+                return v[v.startIndex] & BoardPostPacket.urgentFlag != 0
             }
-            off += len
         }
         return false
     }
@@ -315,28 +308,12 @@ enum BoardWireEncoding {
     }
 
     static func appendLengthPrefixed(_ value: Data, to out: inout Data) {
-        let len = UInt16(min(value.count, Int(UInt16.max)))
-        out.append(UInt8((len >> 8) & 0xFF))
-        out.append(UInt8(len & 0xFF))
+        out.appendBigEndian(UInt16(min(value.count, Int(UInt16.max))))
         out.append(value.prefix(Int(UInt16.max)))
     }
 
     static func appendUInt64(_ value: UInt64, to out: inout Data) {
-        var be = value.bigEndian
-        withUnsafeBytes(of: &be) { out.append(contentsOf: $0) }
-    }
-
-    static func uint64Data(_ value: UInt64) -> Data {
-        var out = Data()
-        appendUInt64(value, to: &out)
-        return out
-    }
-
-    static func uint64(from data: Data) -> UInt64? {
-        guard data.count == 8 else { return nil }
-        var value: UInt64 = 0
-        for byte in data { value = (value << 8) | UInt64(byte) }
-        return value
+        out.appendBigEndian(value)
     }
 
     static func verify(signature: Data, over message: Data, publicKey: Data) -> Bool {

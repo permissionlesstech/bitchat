@@ -11,6 +11,26 @@ import Foundation
 import CryptoKit
 import BitFoundation
 
+enum NoiseSessionState: Equatable {
+    case uninitialized
+    case handshaking
+    case established
+}
+
+enum NoiseSessionError: Error, Equatable {
+    case invalidState
+    case notEstablished
+    case sessionNotFound
+    case alreadyEstablished
+    case peerIdentityMismatch
+}
+
+/// The manager owns the exact attempt's one bounded recovery. Packet handling
+/// must not launch its historical second, immediate restart for this failure.
+struct NoiseManagedHandshakeFailure: Error {
+    let underlying: Error
+}
+
 class NoiseSession {
     let peerID: PeerID
     let role: NoiseRole
@@ -101,19 +121,7 @@ class NoiseSession {
             
             // Check if handshake is complete
             if handshake.isHandshakeComplete() {
-                let (send, receive, _) = try handshake.getTransportCiphers(useExtractedNonce: true)
-                sendCipher = send
-                receiveCipher = receive
-
-                // Store remote static key
-                remoteStaticPublicKey = handshake.getRemoteStaticPublicKey()
-
-                state = .established
-                handshakeState = nil // Clear handshake state
-
-                SecureLogger.debug("NoiseSession[\(peerID)]: Handshake complete (no response needed), transitioning to established")
-                SecureLogger.info(.handshakeCompleted(peerID: peerID.id))
-
+                try completeHandshake(handshake)
                 return nil
             } else {
                 // Generate response
@@ -122,23 +130,23 @@ class NoiseSession {
                 
                 // Check if handshake is complete after writing
                 if handshake.isHandshakeComplete() {
-                    let (send, receive, _) = try handshake.getTransportCiphers(useExtractedNonce: true)
-                    sendCipher = send
-                    receiveCipher = receive
-
-                    // Store remote static key
-                    remoteStaticPublicKey = handshake.getRemoteStaticPublicKey()
-
-                    state = .established
-                    handshakeState = nil // Clear handshake state
-
-                    SecureLogger.debug("NoiseSession[\(peerID)]: Handshake complete after writing response, transitioning to established")
-                    SecureLogger.info(.handshakeCompleted(peerID: peerID.id))
+                    try completeHandshake(handshake)
                 }
                 
                 return response
             }
         }
+    }
+
+    private func completeHandshake(_ handshake: NoiseHandshakeState) throws {
+        let (send, receive, _) = try handshake.getTransportCiphers(useExtractedNonce: true)
+        sendCipher = send
+        receiveCipher = receive
+        remoteStaticPublicKey = handshake.getRemoteStaticPublicKey()
+        state = .established
+        handshakeState = nil
+        SecureLogger.debug("NoiseSession[\(peerID)]: Handshake complete, transitioning to established")
+        SecureLogger.info(.handshakeCompleted(peerID: peerID.id))
     }
     
     // MARK: - Transport
