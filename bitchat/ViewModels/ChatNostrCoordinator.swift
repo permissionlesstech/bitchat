@@ -11,7 +11,6 @@ import Foundation
 /// favorites/ack glue the slimmed coordinator still owns.
 @MainActor
 protocol ChatNostrContext: GeohashSubscriptionContext, NostrInboundPipelineContext, GeoPresenceContext {
-    var selectedPrivateChatPeer: PeerID? { get }
     var nostrKeyMapping: [PeerID: String] { get }
     func startPrivateChat(with peerID: PeerID)
     func visibleGeohashPeople() -> [GeoPerson]

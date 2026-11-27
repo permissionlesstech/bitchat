@@ -25,7 +25,6 @@ import BitFoundation
 @MainActor
 private final class MockChatLifecycleContext: ChatLifecycleContext {
     // Chat & receipt state
-    var messages: [BitchatMessage] = []
     var privateChats: [PeerID: [BitchatMessage]] = [:]
 
     func privateMessages(for peerID: PeerID) -> [BitchatMessage] {

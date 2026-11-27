@@ -66,12 +66,14 @@ struct MeshSightingsTrackerTests {
     @Test
     func clearResetsEverything() {
         let defaults = makeDefaults()
+        defaults.set(noon.timeIntervalSince1970, forKey: "meshSightings.lastSeenAt")
         let tracker = MeshSightingsTracker(defaults: defaults, now: { self.noon })
         tracker.recordSightings([PeerID(str: "aaaa111122223333")])
 
         tracker.clear()
 
         #expect(tracker.todayCount == 0)
+        #expect(defaults.object(forKey: "meshSightings.lastSeenAt") == nil)
 
         let reloaded = MeshSightingsTracker(defaults: defaults, now: { self.noon })
         #expect(reloaded.todayCount == 0)

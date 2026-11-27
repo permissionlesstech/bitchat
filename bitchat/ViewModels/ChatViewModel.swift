@@ -1682,9 +1682,10 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, SynchronousMessage
         GossipMessageArchive.wipeDefault()
 
         // Ambient-liveliness bookkeeping: sampled nearby-chat previews, the
-        // daily sightings tally, and the echoes-dismissed watermark
+        // daily sightings tally, and legacy persisted activity keys
         GeohashChatActivityTracker.shared.clear()
         MeshSightingsTracker.shared.clear()
+        UserDefaults.standard.removeObject(forKey: "chat.bitchat.storeAndForwardMetrics")
         MeshEchoSettings.reset()
         NotificationPrivacySettings.reset()
         ComposerDraftStore.reset()

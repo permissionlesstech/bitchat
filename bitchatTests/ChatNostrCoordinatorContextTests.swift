@@ -76,7 +76,6 @@ private final class MockChatNostrContext: ChatNostrContext {
     func parseMentions(from content: String) -> [String] { [] }
 
     // Inbound private (geohash DM) payloads
-    var selectedPrivateChatPeer: PeerID?
     var nostrKeyMapping: [PeerID: String] = [:]
     func registerNostrKeyMapping(_ pubkey: String, for peerID: PeerID) { nostrKeyMapping[peerID] = pubkey }
     private(set) var handledPrivateMessages: [(payload: NoisePayload, senderPubkey: String, convKey: PeerID, timestamp: Date)] = []
@@ -212,19 +211,9 @@ private final class MockChatNostrContext: ChatNostrContext {
 
     // Routing & acknowledgements
     private(set) var routedFavoriteNotifications: [(peerID: PeerID, isFavorite: Bool)] = []
-    private(set) var geoDeliveryAcks: [(messageID: String, recipientHex: String)] = []
-    private(set) var geoReadReceipts: [(messageID: String, recipientHex: String)] = []
 
     func routeFavoriteNotification(to peerID: PeerID, isFavorite: Bool) {
         routedFavoriteNotifications.append((peerID, isFavorite))
-    }
-
-    func sendGeohashDeliveryAck(for messageID: String, toRecipientHex recipientHex: String, from identity: NostrIdentity) {
-        geoDeliveryAcks.append((messageID, recipientHex))
-    }
-
-    func sendGeohashReadReceipt(_ messageID: String, toRecipientHex recipientHex: String, from identity: NostrIdentity) {
-        geoReadReceipts.append((messageID, recipientHex))
     }
 
     // Favorites & notifications
