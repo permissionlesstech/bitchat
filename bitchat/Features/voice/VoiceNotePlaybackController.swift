@@ -71,15 +71,6 @@ final class VoiceNotePlaybackController: NSObject, ObservableObject, AVAudioPlay
     deinit {
         timer?.invalidate()
         player?.stop()
-        // A per-row @StateObject can be discarded mid-playback (navigating
-        // away). Leaking the token here would hold the session forever —
-        // never deactivating it, and pinning any escalated category for the
-        // app's lifetime. `release` is fire-and-forget onto the coordinator's
-        // queue, so it is deinit-safe: only the Sendable token crosses.
-        if let token = sessionToken {
-            sessionToken = nil
-            (sessionCoordinatorOverride ?? .shared).release(token)
-        }
     }
 
     func replaceURL(_ url: URL) {

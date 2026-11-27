@@ -275,13 +275,17 @@ struct NoticesView: View {
             )
         }
 
+        static let relativeFormatter: RelativeDateTimeFormatter = {
+            let f = RelativeDateTimeFormatter()
+            f.unitsStyle = .abbreviated
+            return f
+        }()
+
         static func fades(_ expiresAt: Date) -> String {
-            let formatter = RelativeDateTimeFormatter()
-            formatter.unitsStyle = .abbreviated
-            return String(
+            String(
                 format: String(localized: "notices.fades", defaultValue: "fades %@", comment: "Shown on notices with an expiry; placeholder is a localized relative time like 'in 23h'"),
                 locale: .current,
-                formatter.localizedString(for: expiresAt, relativeTo: Date())
+                relativeFormatter.localizedString(for: expiresAt, relativeTo: Date())
             )
         }
 
@@ -808,17 +812,11 @@ private struct NoticesList: View {
             // The whole "3 hr ago" phrase must come from the formatter —
             // gluing an English "ago" onto a localized duration ships the
             // wrong word order to most locales ("hace 3 h", "vor 3 Std").
-            return relativeFormatter.localizedString(for: date, relativeTo: now)
+            return NoticesView.Strings.relativeFormatter.localizedString(for: date, relativeTo: now)
         }
         let sameYear = Calendar.current.isDate(date, equalTo: now, toGranularity: .year)
         return (sameYear ? absDateFormatter : absDateYearFormatter).string(from: date)
     }
-
-    private static let relativeFormatter: RelativeDateTimeFormatter = {
-        let f = RelativeDateTimeFormatter()
-        f.unitsStyle = .abbreviated
-        return f
-    }()
 
     private static let absDateFormatter: DateFormatter = {
         let f = DateFormatter()

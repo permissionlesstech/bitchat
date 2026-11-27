@@ -142,12 +142,7 @@ struct FingerprintView: View {
                             .cornerRadius(8)
                             .contextMenu {
                                 Button(Strings.copy) {
-                                    #if os(iOS)
-                                    UIPasteboard.general.string = fingerprint
-                                    #else
-                                    NSPasteboard.general.clearContents()
-                                    NSPasteboard.general.setString(fingerprint, forType: .string)
-                                    #endif
+                                    ClipboardHelper.copy(fingerprint)
                                 }
                             }
                     } else {
@@ -176,12 +171,7 @@ struct FingerprintView: View {
                         .cornerRadius(8)
                         .contextMenu {
                             Button(Strings.copy) {
-                                #if os(iOS)
-                                UIPasteboard.general.string = fingerprintState.myFingerprint
-                                #else
-                                NSPasteboard.general.clearContents()
-                                NSPasteboard.general.setString(fingerprintState.myFingerprint, forType: .string)
-                                #endif
+                                ClipboardHelper.copy(fingerprintState.myFingerprint)
                             }
                         }
                 }

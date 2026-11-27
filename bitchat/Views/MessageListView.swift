@@ -884,13 +884,7 @@ private struct MessageRowView: View, Equatable {
                     }
                 }
                 Button("content.message.copy") {
-                    #if os(iOS)
-                    UIPasteboard.general.string = message.content
-                    #else
-                    let pb = NSPasteboard.general
-                    pb.clearContents()
-                    pb.setString(message.content, forType: .string)
-                    #endif
+                    ClipboardHelper.copy(message.content)
                 }
                 if isResendableFailedMessage(message) {
                     Button("content.actions.resend") {

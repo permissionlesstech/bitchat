@@ -5,38 +5,49 @@ import BitFoundation
 
 final class NotificationServiceTests: XCTestCase {
     func test_requestAuthorization_skipsWhenRunningTests() {
-        let authorizer = RecordingNotificationAuthorizer()
+        var requestCallCount = 0
+        var deps = NotificationService.Dependencies.noop
+        deps.requestAuthorization = { _, completion in
+            requestCallCount += 1
+            completion(true, nil)
+        }
         let service = NotificationService(
             isRunningTestsProvider: { true },
-            authorizer: authorizer,
-            requestDeliverer: RecordingNotificationRequestDeliverer()
+            dependencies: deps
         )
 
         service.requestAuthorization()
 
-        XCTAssertEqual(authorizer.requestCallCount, 0)
+        XCTAssertEqual(requestCallCount, 0)
     }
 
     func test_requestAuthorization_requestsAlertSoundAndBadgePermissions() {
-        let authorizer = RecordingNotificationAuthorizer()
+        var requestCallCount = 0
+        var lastOptions: UNAuthorizationOptions?
+        var deps = NotificationService.Dependencies.noop
+        deps.requestAuthorization = { options, completion in
+            requestCallCount += 1
+            lastOptions = options
+            completion(true, nil)
+        }
         let service = NotificationService(
             isRunningTestsProvider: { false },
-            authorizer: authorizer,
-            requestDeliverer: RecordingNotificationRequestDeliverer()
+            dependencies: deps
         )
 
         service.requestAuthorization()
 
-        XCTAssertEqual(authorizer.requestCallCount, 1)
-        XCTAssertEqual(authorizer.lastOptions, [.alert, .sound, .badge])
+        XCTAssertEqual(requestCallCount, 1)
+        XCTAssertEqual(lastOptions, [.alert, .sound, .badge])
     }
 
     func test_sendLocalNotification_buildsImmediateRequestWithUserInfo() {
-        let deliverer = RecordingNotificationRequestDeliverer()
+        var requests: [UNNotificationRequest] = []
+        var deps = NotificationService.Dependencies.noop
+        deps.deliver = { requests.append($0) }
         let service = NotificationService(
             isRunningTestsProvider: { false },
-            authorizer: RecordingNotificationAuthorizer(),
-            requestDeliverer: deliverer
+            dependencies: deps
         )
 
         service.sendLocalNotification(
@@ -47,7 +58,7 @@ final class NotificationServiceTests: XCTestCase {
             interruptionLevel: .timeSensitive
         )
 
-        let request = deliverer.requests.singleValue
+        let request = requests.singleValue
         XCTAssertEqual(request?.identifier, "custom-id")
         XCTAssertEqual(request?.content.title, "Hello")
         XCTAssertEqual(request?.content.body, "World")
@@ -59,18 +70,19 @@ final class NotificationServiceTests: XCTestCase {
     /// Previews shown: the opt-in behavior. Stated explicitly rather than
     /// inherited from the shared preference, which now defaults to hidden.
     func test_sendPrivateMessageNotification_populatesPeerMetadata() {
-        let deliverer = RecordingNotificationRequestDeliverer()
+        var requests: [UNNotificationRequest] = []
+        var deps = NotificationService.Dependencies.noop
+        deps.deliver = { requests.append($0) }
         let service = NotificationService(
             isRunningTestsProvider: { false },
-            authorizer: RecordingNotificationAuthorizer(),
-            requestDeliverer: deliverer,
+            dependencies: deps,
             hidePreviewsProvider: { false }
         )
         let peerID = PeerID(str: "deadbeefdeadbeef")
 
         service.sendPrivateMessageNotification(from: "Alice", message: "hi", peerID: peerID)
 
-        let request = deliverer.requests.singleValue
+        let request = requests.singleValue
         XCTAssertEqual(request?.content.title, "🔒 DM from Alice")
         XCTAssertEqual(request?.content.body, "hi")
         XCTAssertEqual(request?.content.userInfo["peerID"] as? String, peerID.id)
@@ -80,18 +92,19 @@ final class NotificationServiceTests: XCTestCase {
     /// Previews hidden: the default. The routing payload has to survive
     /// redaction, or tapping the alert would not open the conversation.
     func test_sendPrivateMessageNotification_withPreviewsHidden_keepsRoutingButDropsContent() {
-        let deliverer = RecordingNotificationRequestDeliverer()
+        var requests: [UNNotificationRequest] = []
+        var deps = NotificationService.Dependencies.noop
+        deps.deliver = { requests.append($0) }
         let service = NotificationService(
             isRunningTestsProvider: { false },
-            authorizer: RecordingNotificationAuthorizer(),
-            requestDeliverer: deliverer,
+            dependencies: deps,
             hidePreviewsProvider: { true }
         )
         let peerID = PeerID(str: "deadbeefdeadbeef")
 
         service.sendPrivateMessageNotification(from: "Alice", message: "hi", peerID: peerID)
 
-        let request = deliverer.requests.singleValue
+        let request = requests.singleValue
         XCTAssertFalse(request?.content.title.contains("Alice") ?? true)
         XCTAssertFalse(request?.content.body.contains("hi") ?? true)
         XCTAssertFalse(request?.content.title.isEmpty ?? true)
@@ -99,87 +112,57 @@ final class NotificationServiceTests: XCTestCase {
     }
 
     func test_wrapperNotifications_setExpectedIdentifiersAndDeepLinks() {
-        let deliverer = RecordingNotificationRequestDeliverer()
+        var requests: [UNNotificationRequest] = []
+        var deps = NotificationService.Dependencies.noop
+        deps.deliver = { requests.append($0) }
         let service = NotificationService(
             isRunningTestsProvider: { false },
-            authorizer: RecordingNotificationAuthorizer(),
-            requestDeliverer: deliverer
+            dependencies: deps
         )
 
         service.sendGeohashActivityNotification(geohash: "87yv", bodyPreview: "Someone is here")
         service.sendNetworkAvailableNotification(peerCount: 2)
 
-        XCTAssertEqual(deliverer.requests.count, 2)
-        XCTAssertEqual(deliverer.requests[0].content.userInfo["deeplink"] as? String, "bitchat://geohash/87yv")
-        XCTAssertTrue(deliverer.requests[0].identifier.hasPrefix("geo-activity-87yv-"))
-        XCTAssertEqual(deliverer.requests[1].identifier, "network-available")
-        XCTAssertEqual(deliverer.requests[1].content.interruptionLevel, .timeSensitive)
-        XCTAssertEqual(deliverer.requests[1].content.body, "2 people around")
+        XCTAssertEqual(requests.count, 2)
+        XCTAssertEqual(requests[0].content.userInfo["deeplink"] as? String, "bitchat://geohash/87yv")
+        XCTAssertTrue(requests[0].identifier.hasPrefix("geo-activity-87yv-"))
+        XCTAssertEqual(requests[1].identifier, "network-available")
+        XCTAssertEqual(requests[1].content.interruptionLevel, .timeSensitive)
+        XCTAssertEqual(requests[1].content.body, "2 people around")
     }
 
     func test_clearAllNotificationsForPanic_clearsPendingAndDelivered() {
-        let clearer = RecordingNotificationClearer()
+        var removePendingCalls = 0
+        var removeDeliveredCalls = 0
+        var deps = NotificationService.Dependencies.noop
+        deps.removeAllPending = { removePendingCalls += 1 }
+        deps.removeAllDelivered = { removeDeliveredCalls += 1 }
         let service = NotificationService(
             isRunningTestsProvider: { false },
-            authorizer: RecordingNotificationAuthorizer(),
-            requestDeliverer: RecordingNotificationRequestDeliverer(),
-            notificationClearer: clearer
+            dependencies: deps
         )
 
         service.clearAllNotificationsForPanic()
 
-        XCTAssertEqual(clearer.removePendingCalls, 1)
-        XCTAssertEqual(clearer.removeDeliveredCalls, 1)
+        XCTAssertEqual(removePendingCalls, 1)
+        XCTAssertEqual(removeDeliveredCalls, 1)
     }
 
     func test_clearAllNotificationsForPanic_skipsWhenRunningTests() {
-        let clearer = RecordingNotificationClearer()
+        var removePendingCalls = 0
+        var removeDeliveredCalls = 0
+        var deps = NotificationService.Dependencies.noop
+        deps.removeAllPending = { removePendingCalls += 1 }
+        deps.removeAllDelivered = { removeDeliveredCalls += 1 }
         let service = NotificationService(
             isRunningTestsProvider: { true },
-            authorizer: RecordingNotificationAuthorizer(),
-            requestDeliverer: RecordingNotificationRequestDeliverer(),
-            notificationClearer: clearer
+            dependencies: deps
         )
 
         service.clearAllNotificationsForPanic()
 
-        XCTAssertEqual(clearer.removePendingCalls, 0)
-        XCTAssertEqual(clearer.removeDeliveredCalls, 0)
-    }
-}
-
-private final class RecordingNotificationClearer: NotificationClearing {
-    private(set) var removePendingCalls = 0
-    private(set) var removeDeliveredCalls = 0
-
-    func removeAllPendingNotificationRequests() {
-        removePendingCalls += 1
-    }
-
-    func removeAllDeliveredNotifications() {
-        removeDeliveredCalls += 1
-    }
-}
-
-private final class RecordingNotificationAuthorizer: NotificationAuthorizing {
-    private(set) var requestCallCount = 0
-    private(set) var lastOptions: UNAuthorizationOptions?
-
-    func requestAuthorization(
-        options: UNAuthorizationOptions,
-        completionHandler: @escaping (Bool, Error?) -> Void
-    ) {
-        requestCallCount += 1
-        lastOptions = options
-        completionHandler(true, nil)
-    }
-}
-
-private final class RecordingNotificationRequestDeliverer: NotificationRequestDelivering {
-    private(set) var requests: [UNNotificationRequest] = []
-
-    func add(_ request: UNNotificationRequest) {
-        requests.append(request)
+        XCTAssertEqual(removePendingCalls, 0)
+        XCTAssertEqual(removeDeliveredCalls, 0)
     }
 }
 
