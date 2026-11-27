@@ -86,7 +86,9 @@ enum Bech32 {
 
         let payloadCount = values.count - 6
         let bytes = convertBits(from: 5, to: 8, pad: false, data: values[0..<payloadCount])
-        let hrp = String(decoding: hrpSlice, as: UTF8.self)
+        guard let hrp = String(bytes: hrpSlice, encoding: .ascii) else {
+            throw Bech32Error.invalidCharacter
+        }
         return (hrp: hrp, data: Data(bytes))
     }
 
