@@ -23,11 +23,7 @@ class NoiseSession {
     // Keys
     private let localStaticKey: Curve25519.KeyAgreement.PrivateKey
     private var remoteStaticPublicKey: Curve25519.KeyAgreement.PublicKey?
-    
-    // Handshake messages for retransmission
-    private var sentHandshakeMessages: [Data] = []
-    private var handshakeHash: Data?
-    
+
     // Thread safety
     private let sessionQueue = DispatchQueue(label: "chat.bitchat.noise.session", attributes: .concurrent)
     
@@ -70,7 +66,6 @@ class NoiseSession {
                     throw NoiseSessionError.invalidState
                 }
                 let message = try handshake.writeMessage()
-                sentHandshakeMessages.append(message)
                 return message
             } else {
                 // Responder doesn't send first message in XX pattern
@@ -106,16 +101,12 @@ class NoiseSession {
             
             // Check if handshake is complete
             if handshake.isHandshakeComplete() {
-                // Get transport ciphers and handshake hash (hash captured before split clears state)
-                let (send, receive, hash) = try handshake.getTransportCiphers(useExtractedNonce: true)
+                let (send, receive, _) = try handshake.getTransportCiphers(useExtractedNonce: true)
                 sendCipher = send
                 receiveCipher = receive
 
                 // Store remote static key
                 remoteStaticPublicKey = handshake.getRemoteStaticPublicKey()
-
-                // Store handshake hash for channel binding
-                handshakeHash = hash
 
                 state = .established
                 handshakeState = nil // Clear handshake state
@@ -127,21 +118,16 @@ class NoiseSession {
             } else {
                 // Generate response
                 let response = try handshake.writeMessage()
-                sentHandshakeMessages.append(response)
                 SecureLogger.debug("NoiseSession[\(peerID)]: Generated handshake response of size \(response.count)")
                 
                 // Check if handshake is complete after writing
                 if handshake.isHandshakeComplete() {
-                    // Get transport ciphers and handshake hash (hash captured before split clears state)
-                    let (send, receive, hash) = try handshake.getTransportCiphers(useExtractedNonce: true)
+                    let (send, receive, _) = try handshake.getTransportCiphers(useExtractedNonce: true)
                     sendCipher = send
                     receiveCipher = receive
 
                     // Store remote static key
                     remoteStaticPublicKey = handshake.getRemoteStaticPublicKey()
-
-                    // Store handshake hash for channel binding
-                    handshakeHash = hash
 
                     state = .established
                     handshakeState = nil // Clear handshake state
@@ -211,20 +197,7 @@ class NoiseSession {
             receiveCipher?.clearSensitiveData()
             sendCipher = nil
             receiveCipher = nil
-            
-            // Clear sent handshake messages
-            for i in 0..<sentHandshakeMessages.count {
-                var message = sentHandshakeMessages[i]
-                keychain.secureClear(&message)
-            }
-            sentHandshakeMessages.removeAll()
-            
-            // Clear handshake hash
-            if var hash = handshakeHash {
-                keychain.secureClear(&hash)
-            }
-            handshakeHash = nil
-            
+
             if wasEstablished {
                 SecureLogger.info(.sessionExpired(peerID: peerID.id))
             }

@@ -270,7 +270,6 @@ final class NostrRelayManager: ObservableObject {
         var pendingRelays: Set<String>
     }
     private var messageQueue: [PendingSend] = []
-    private let messageQueueLock = NSLock()
     /// Non-queued sends whose callers require relay durability. A WebSocket
     /// write only proves bytes left this process; NIP-01 `OK` is the relay's
     /// accept/reject acknowledgment.
@@ -418,7 +417,7 @@ final class NostrRelayManager: ObservableObject {
                             continue
                         }
                         await self.deliverVerifiedInboundEvent(subscriptionID: subId, event: event, from: relayUrl)
-                    case .eose, .ok, .notice:
+                    case .eose, .ok:
                         await self.handleParsedMessage(parsed, from: relayUrl)
                     }
                 }
@@ -510,10 +509,8 @@ final class NostrRelayManager: ObservableObject {
         Self.pendingGiftWrapIDs.removeAll()
         confirmedSends.removeAll()
 
-        messageQueueLock.lock()
         messageQueue.removeAll()
         pendingSendDropCount = 0
-        messageQueueLock.unlock()
 
         updateConnectionStatus()
     }
@@ -697,13 +694,11 @@ final class NostrRelayManager: ObservableObject {
     }
 
     private func enqueuePendingSend(_ event: NostrEvent, pendingRelays: Set<String>) {
-        messageQueueLock.lock()
         messageQueue.append(PendingSend(event: event, pendingRelays: pendingRelays))
         let overflow = messageQueue.count - TransportConfig.nostrPendingSendQueueCap
         if overflow > 0 {
             messageQueue.removeFirst(overflow)
         }
-        messageQueueLock.unlock()
         guard overflow > 0 else { return }
         // Dropped events are ephemeral (presence/geo), so no status surfacing
         // is needed — but the drops should be visible. Sampled so a sustained
@@ -720,8 +715,6 @@ final class NostrRelayManager: ObservableObject {
 
     /// Try to flush any queued messages for relays that are now connected.
     private func flushMessageQueue(for relayUrl: String? = nil) {
-        messageQueueLock.lock()
-        defer { messageQueueLock.unlock() }
         guard !messageQueue.isEmpty else { return }
         if let target = relayUrl {
             // Flush only for a specific relay
@@ -867,7 +860,6 @@ final class NostrRelayManager: ObservableObject {
             subscriptions.removeValue(forKey: url)
             pendingSubscriptions.removeValue(forKey: url)
         }
-        messageQueueLock.lock()
         for index in (0..<messageQueue.count).reversed() {
             var item = messageQueue[index]
             item.pendingRelays.subtract(urls)
@@ -877,7 +869,6 @@ final class NostrRelayManager: ObservableObject {
                 messageQueue[index] = item
             }
         }
-        messageQueueLock.unlock()
         // A relay queued while Tor bootstraps would otherwise reconnect when
         // the queue drains, overriding the explicit removal.
         pendingTorConnectionURLs.subtract(urls)
@@ -940,8 +931,6 @@ final class NostrRelayManager: ObservableObject {
     }
 
     private func hasPendingMessages(for relayUrl: String) -> Bool {
-        messageQueueLock.lock()
-        defer { messageQueueLock.unlock() }
         return messageQueue.contains { $0.pendingRelays.contains(relayUrl) }
     }
 
@@ -1436,8 +1425,6 @@ final class NostrRelayManager: ObservableObject {
                     SecureLogger.error("📮 Rejected id=\(eventId.prefix(16))… relay=\(relayUrl) reason=\(reason)", category: .session)
                 }
             }
-        case .notice:
-            break
         }
     }
     
@@ -1682,10 +1669,9 @@ final class NostrRelayManager: ObservableObject {
         }
     }
 
+    #if DEBUG
     var debugPendingMessageQueueCount: Int {
-        messageQueueLock.lock()
-        defer { messageQueueLock.unlock() }
-        return messageQueue.count
+        messageQueue.count
     }
 
     func debugPendingSubscriptionCount(for relayUrl: String) -> Int {
@@ -1720,6 +1706,7 @@ final class NostrRelayManager: ObservableObject {
     func debugFlushMessageQueue() {
         flushMessageQueue(for: nil)
     }
+    #endif
     
     /// Reset all relay connections
     func resetAllConnections() {
@@ -1929,7 +1916,6 @@ private enum ParsedInbound {
     case event(subId: String, event: NostrEvent)
     case ok(eventId: String, success: Bool, reason: String)
     case eose(subscriptionId: String)
-    case notice(String)
     
     init?(_ message: URLSessionWebSocketTask.Message) {
         guard let data = message.dataWithinInboundLimit,
@@ -1961,12 +1947,6 @@ private enum ParsedInbound {
                let success = array[2] as? Bool {
                 let reason = array.count >= 4 ? (array[3] as? String ?? "no reason given") : "no reason given"
                 self = .ok(eventId: eventId, success: success, reason: reason)
-                return
-            }
-            return nil
-        case "NOTICE":
-            if array.count >= 2, let msg = array[1] as? String {
-                self = .notice(msg)
                 return
             }
             return nil
@@ -2037,12 +2017,7 @@ struct NostrFilter: Encodable {
     init() {
         // Default initializer
     }
-    
-    // Custom encoding to handle tag filters properly
-    enum CodingKeys: String, CodingKey {
-        case ids, authors, kinds, since, until, limit
-    }
-    
+
     func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: DynamicCodingKey.self)
         
@@ -2076,16 +2051,6 @@ struct NostrFilter: Encodable {
     static func geohashEphemeral(_ geohash: String, since: Date? = nil, limit: Int = 1000) -> NostrFilter {
         var filter = NostrFilter()
         filter.kinds = [20000, 20001]
-        filter.since = since?.timeIntervalSince1970.toInt()
-        filter.tagFilters = ["g": [geohash]]
-        filter.limit = limit
-        return filter
-    }
-
-    // For location notes: persistent text notes (kind 1) tagged with geohash
-    static func geohashNotes(_ geohash: String, since: Date? = nil, limit: Int = 200) -> NostrFilter {
-        var filter = NostrFilter()
-        filter.kinds = [1]
         filter.since = since?.timeIntervalSince1970.toInt()
         filter.tagFilters = ["g": [geohash]]
         filter.limit = limit

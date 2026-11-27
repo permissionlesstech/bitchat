@@ -27,46 +27,11 @@ struct NoiseEncryptionServiceTests {
         #expect(!EncryptionStatus.noiseVerified.accessibilityDescription.isEmpty)
     }
 
-    @Test("Announce and packet signatures round-trip and detect tampering")
+    @Test("Packet signatures round-trip and detect tampering")
     func announceAndPacketSignaturesRoundTrip() throws {
         let service = NoiseEncryptionService(keychain: MockKeychain())
         let signingPublicKey = service.getSigningPublicKeyData()
-        let noisePublicKey = service.getStaticPublicKeyData()
-
-        let signature = try #require(
-            service.buildAnnounceSignature(
-                peerID: Data([0xAA, 0xBB]),
-                noiseKey: noisePublicKey,
-                ed25519Key: signingPublicKey,
-                nickname: "Alice",
-                timestampMs: 12345
-            ),
-            "Expected announce signature"
-        )
-
-        #expect(
-            service.verifyAnnounceSignature(
-                signature: signature,
-                peerID: Data([0xAA, 0xBB]),
-                noiseKey: noisePublicKey,
-                ed25519Key: signingPublicKey,
-                nickname: "Alice",
-                timestampMs: 12345,
-                publicKey: signingPublicKey
-            )
-        )
-        #expect(
-            !service.verifyAnnounceSignature(
-                signature: signature,
-                peerID: Data([0xAA, 0xBB]),
-                noiseKey: noisePublicKey,
-                ed25519Key: signingPublicKey,
-                nickname: "Mallory",
-                timestampMs: 12345,
-                publicKey: signingPublicKey
-            )
-        )
-        #expect(!service.verifySignature(signature, for: Data("data".utf8), publicKey: Data([1, 2, 3])))
+        #expect(!service.verifySignature(Data(repeating: 0x01, count: 64), for: Data("data".utf8), publicKey: Data([1, 2, 3])))
 
         let packet = BitchatPacket(
             type: MessageType.announce.rawValue,

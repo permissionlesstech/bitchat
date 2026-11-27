@@ -166,11 +166,7 @@ public extension SecureLogger {
         let sanitized = context().sanitized()
         let errorDesc = error.localizedDescription.sanitized()
         
-        #if DEBUG
         os_log("%{public}@ Error in %{public}@: %{public}@", log: category, type: .error, location, sanitized, errorDesc)
-        #else
-        os_log("%{private}@ Error in %{private}@: %{private}@", log: category, type: .error, location, sanitized, errorDesc)
-        #endif
         #endif
     }
 }

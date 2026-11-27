@@ -33,7 +33,8 @@ struct BitchatPeerTests {
         peer.favoriteStatus = makeRelationship(isFavorite: false, theyFavoritedUs: true)
 
         #expect(peer.displayName == String(peerID.id.prefix(8)))
-        #expect(peer.statusIcon == "🌙")
+        #expect(peer.theyFavoritedUs)
+        #expect(!peer.isFavorite)
     }
 
     @Test("Mutual favorite without a stored Nostr key is offline, not nostr-available")
@@ -67,7 +68,7 @@ struct BitchatPeerTests {
         var peer = BitchatPeer(peerID: peerID, noisePublicKey: noiseKey, nickname: "Peer", isConnected: false, isReachable: false)
         peer.favoriteStatus = makeRelationship(isFavorite: true, theyFavoritedUs: true)
 
-        #expect(peer.statusIcon == "🌐")
+        #expect(peer.connectionState == .nostrAvailable)
         #expect(peer.isFavorite)
         #expect(peer.isMutualFavorite)
         #expect(peer.theyFavoritedUs)

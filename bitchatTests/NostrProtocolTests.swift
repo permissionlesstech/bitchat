@@ -455,7 +455,7 @@ struct NostrProtocolTests {
 
     @Test func geohashNotesSingleFilter_encodesExpectedTagShape() throws {
         let since = Date(timeIntervalSince1970: 1_234_567)
-        let filter = NostrFilter.geohashNotes("u4pruyd", since: since, limit: 42)
+        let filter = NostrFilter.geohashNotes(["u4pruyd"], since: since, limit: 42)
         let data = try JSONEncoder().encode(filter)
         let object = try #require(try JSONSerialization.jsonObject(with: data) as? [String: Any])
 

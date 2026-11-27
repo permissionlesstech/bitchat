@@ -19,7 +19,6 @@ struct NostrProtocol {
 
     /// Nostr event kinds
     enum EventKind: Int {
-        case metadata = 0
         case textNote = 1
         // BitChat's proprietary private-envelope layers. These reuse the
         // NIP-17/NIP-59 kind numbers (14/13/1059) for historical reasons, but
@@ -244,7 +243,8 @@ struct NostrProtocol {
     }
     #endif
 
-    /// Create a geohash-scoped ephemeral public message (kind 20000)
+    #if DEBUG
+    /// Create a geohash-scoped ephemeral public message (kind 20000) without PoW mining (test fixture helper).
     static func createEphemeralGeohashEvent(
         content: String,
         geohash: String,
@@ -262,6 +262,7 @@ struct NostrProtocol {
         let schnorrKey = try senderIdentity.schnorrSigningKey()
         return try event.sign(with: schnorrKey)
     }
+    #endif
 
     /// Create a kind-20000 geohash message carrying a NIP-13 proof-of-work
     /// nonce tag (see `NostrPoW`). Mining runs off the calling actor and is

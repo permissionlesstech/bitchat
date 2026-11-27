@@ -200,7 +200,7 @@ extension ChatViewModel: ChatPeerIdentityContext {
     }
 
     func bridgedNostrPublicKey(for noiseKey: Data) -> String? {
-        idBridge.getNostrPublicKey(for: noiseKey)
+        nil
     }
 
     // `favoriteRelationship(forNoiseKey:)` is shared with
