@@ -630,6 +630,43 @@ struct ChatLiveVoiceCoordinatorTests {
         #expect(FileManager.default.fileExists(atPath: finalized.path))
     }
 
+    @Test func asyncStartupSweepDoesNotDeleteActiveCaptureStartedImmediatelyAfterInit() async throws {
+        let (store, incoming, cleanup) = try makeTempStore()
+        defer { cleanup() }
+
+        let stale = incoming.appendingPathComponent("voice_live_0000000000000000_peer_dm.aac")
+        try Data([0x01]).write(to: stale)
+
+        let context = MockChatLiveVoiceContext()
+        let coordinator = ChatLiveVoiceCoordinator(
+            context: context,
+            fileStore: store,
+            sweepsOnInit: true,
+            asyncStartupSweep: true
+        )
+
+        // Immediately start a live burst before the detached startup sweep runs.
+        let burstID = makeBurstID(0x88)
+        let frame = Data(repeating: 0x0E, count: 60)
+        send(try #require(VoiceBurstPacket(burstID: burstID, seq: 1, kind: .frames([frame]))), to: coordinator, from: peer)
+
+        let liveCapture = incoming.appendingPathComponent(
+            "voice_live_\(burstID.hexEncodedString())_\(peer.id)_dm.aac"
+        )
+
+        let swept = await TestHelpers.waitUntil(
+            { !FileManager.default.fileExists(atPath: stale.path) },
+            timeout: TestConstants.settleTimeout
+        )
+        #expect(swept)
+        #expect(FileManager.default.fileExists(atPath: liveCapture.path))
+
+        // Finalizing the burst must still promote its capture file cleanly.
+        send(try #require(VoiceBurstPacket(burstID: burstID, seq: 2, kind: .end(totalDataPackets: 1, durationMs: 64))), to: coordinator, from: peer)
+        let fallbackURL = incoming.appendingPathComponent(fallbackName(burstID: burstID, peerID: peer))
+        #expect(try Data(contentsOf: fallbackURL) == ADTSFramer.frame(frame))
+    }
+
     @Test func finalizedFallbackSurvivesNextStartupSweep() throws {
         let (store, incoming, cleanup) = try makeTempStore()
         defer { cleanup() }

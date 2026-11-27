@@ -1,6 +1,7 @@
 import BitFoundation
 import Combine
 import Foundation
+import SwiftUI
 import XCTest
 @testable import bitchat
 
@@ -275,5 +276,217 @@ final class PanicWipeCoverageTests: XCTestCase {
         XCTAssertFalse(counter.revealed)
         XCTAssertEqual(counter.noteCount, 0)
         XCTAssertGreaterThanOrEqual(released, 0)
+    }
+
+    func test_secureIdentityStateManager_postPanicStateSurvivesReinitAfterKeychainWipe() {
+        let keychain = PreviewKeychainManager()
+        let manager = SecureIdentityStateManager(keychain)
+
+        // Pre-panic block
+        manager.setBlocked("aaaa1111aaaa1111aaaa1111aaaa1111aaaa1111aaaa1111aaaa1111aaaa1111", isBlocked: true)
+
+        // Simulate panic wipe sequence from ChatViewModel.panicClearAllData():
+        // keychain.deleteAllKeychainData() followed by identityManager.clearAllIdentityData().
+        XCTAssertTrue(keychain.deleteAllKeychainData())
+        manager.clearAllIdentityData()
+
+        // Record post-panic block & verification on the same live manager instance.
+        let postPanicBlocked = "bbbb2222bbbb2222bbbb2222bbbb2222bbbb2222bbbb2222bbbb2222bbbb2222"
+        let postPanicVerified = "cccc3333cccc3333cccc3333cccc3333cccc3333cccc3333cccc3333cccc3333"
+        manager.setBlocked(postPanicBlocked, isBlocked: true)
+        manager.setVerified(fingerprint: postPanicVerified, verified: true)
+
+        // Simulate next cold launch with a fresh manager reading the same keychain.
+        let relaunched = SecureIdentityStateManager(keychain)
+        XCTAssertTrue(relaunched.isBlocked(fingerprint: postPanicBlocked))
+        XCTAssertTrue(relaunched.isVerified(fingerprint: postPanicVerified))
+        XCTAssertFalse(relaunched.isBlocked(fingerprint: "aaaa1111aaaa1111aaaa1111aaaa1111aaaa1111aaaa1111aaaa1111aaaa1111"))
+    }
+
+    func test_publicMessagePipeline_resetDropsBufferedMessages() {
+        final class RecordingDelegate: PublicMessagePipelineDelegate {
+            var committed: [BitchatMessage] = []
+            func pipeline(_: PublicMessagePipeline, normalizeContent content: String) -> String { content }
+            func pipeline(_: PublicMessagePipeline, contentTimestampForKey _: String) -> Date? { nil }
+            func pipeline(_: PublicMessagePipeline, recordContentKey _: String, timestamp _: Date) {}
+            func pipeline(_: PublicMessagePipeline, commit message: BitchatMessage, to _: ConversationID) -> Bool {
+                committed.append(message)
+                return true
+            }
+            func pipelinePrewarmMessage(_: PublicMessagePipeline, message _: BitchatMessage) {}
+        }
+
+        let pipeline = PublicMessagePipeline(baseFlushInterval: 60)
+        let delegate = RecordingDelegate()
+        pipeline.delegate = delegate
+
+        let message = BitchatMessage(
+            id: "pre-panic-public",
+            sender: "alice",
+            content: "buffered before wipe",
+            timestamp: Date(),
+            isRelay: false
+        )
+        pipeline.enqueue(message, to: .mesh)
+        XCTAssertTrue(pipeline.containsMessage(withID: "pre-panic-public"))
+
+        pipeline.reset()
+        pipeline.flushIfNeeded()
+
+        XCTAssertFalse(pipeline.containsMessage(withID: "pre-panic-public"))
+        XCTAssertTrue(delegate.committed.isEmpty)
+    }
+
+    func test_nostrTransport_senderPeerIDProvider_tracksRotatedIdentityAfterPanic() {
+        var currentPeerID = PeerID(str: "0123456789abcdef")
+        let transport = NostrTransport(
+            keychain: PreviewKeychainManager(),
+            idBridge: NostrIdentityBridge(keychain: PreviewKeychainManager())
+        )
+        transport.senderPeerIDProvider = { currentPeerID }
+        XCTAssertEqual(transport.senderPeerID, PeerID(str: "0123456789abcdef"))
+
+        currentPeerID = PeerID(str: "fedcba9876543210")
+        XCTAssertEqual(transport.senderPeerID, PeerID(str: "fedcba9876543210"))
+    }
+
+    func test_cashuAndPeerColorCaches_resetForPanicWithoutCrash() {
+        _ = CashuTokenDecoder.decode("cashuAeyJ0b2tlbiI6W3sibWludCI6Imh0dHBzOi8vbWludC5leGFtcGxlLmNvbSIsInByb29mcyI6W3siYW1vdW50IjoxMH1dfV19")
+        CashuTokenDecoder.resetForPanic()
+
+        let before = Color(peerSeed: "panic-peer-seed", isDark: true)
+        Color.clearPeerColorCache()
+        let after = Color(peerSeed: "panic-peer-seed", isDark: true)
+        XCTAssertEqual(before, after)
+    }
+
+    func test_bleService_resetIdentityForPanic_preservesInstalledNoiseCallbacks() {
+        let mesh = SimulatedMesh()
+        let alice = mesh.addNode(nickname: "alice")
+        let bob = mesh.addNode(nickname: "bob")
+        mesh.connect(0, 1)
+        mesh.announceAll()
+
+        let callbackLock = NSLock()
+        var installedAuthPeers: [PeerID] = []
+        var observerAuthPeers: [PeerID] = []
+
+        bob.service.installNoiseSessionCallbacks(
+            onPeerAuthenticated: { peerID, _ in
+                callbackLock.lock()
+                installedAuthPeers.append(peerID)
+                callbackLock.unlock()
+            },
+            onHandshakeRequired: { _ in }
+        )
+        bob.service.addPeerAuthenticatedObserver { peerID, _ in
+            callbackLock.lock()
+            observerAuthPeers.append(peerID)
+            callbackLock.unlock()
+        }
+
+        // Replace bob's NoiseEncryptionService via panic reset.
+        bob.service.suspendForPanicReset()
+        bob.service.resetIdentityForPanic(currentNickname: "anon1234", restartServices: false)
+        bob.service.completePanicReset(restartServices: false)
+        mesh.pump()
+
+        // Re-announce so both nodes discover bob's fresh post-panic identity.
+        mesh.forceAnnounce(from: 1)
+        mesh.forceAnnounce(from: 0)
+        let newBobID = bob.service.myPeerID
+        mesh.settleUntil { alice.service.getConnectedPeers().contains(newBobID) }
+
+        // Initiate a real Noise handshake from alice to bob's post-panic identity.
+        alice.service.sendPrivateMessage(
+            "hello after panic",
+            to: newBobID,
+            recipientNickname: "anon1234",
+            messageID: UUID().uuidString
+        )
+        mesh.settleUntil {
+            callbackLock.lock()
+            defer { callbackLock.unlock() }
+            return installedAuthPeers.contains(alice.service.myPeerID)
+                && observerAuthPeers.contains(alice.service.myPeerID)
+        }
+
+        callbackLock.lock()
+        let installedCount = installedAuthPeers.filter { $0 == alice.service.myPeerID }.count
+        let observerCount = observerAuthPeers.filter { $0 == alice.service.myPeerID }.count
+        callbackLock.unlock()
+
+        XCTAssertGreaterThanOrEqual(installedCount, 1)
+        XCTAssertGreaterThanOrEqual(observerCount, 1)
+    }
+
+    func test_chatOutgoingCoordinator_resetForPanic_cancelsInFlightGeohashSend() async throws {
+        @MainActor
+        final class PanicOutgoingContext: ChatOutgoingContext {
+            var nickname = "alice"
+            var myPeerID = PeerID(str: "0123456789abcdef")
+            var activeChannel: ChannelID = .location(GeohashChannel(level: .neighborhood, geohash: "u4pruy"))
+            var selectedPrivateChatPeer: PeerID?
+            var isTeleported = false
+            var appendedMessages: [BitchatMessage] = []
+            var sentGeohashCount = 0
+            private let identity: NostrIdentity
+
+            init(identity: NostrIdentity) {
+                self.identity = identity
+            }
+
+            func handleCommand(_: String) {}
+            func updatePrivateChatPeerIfNeeded() {}
+            func sendPrivateMessage(_: String, to _: PeerID) {}
+            func parseMentions(from _: String) -> [String] { [] }
+            @discardableResult
+            func appendPublicMessage(_ message: BitchatMessage, to _: ConversationID) -> Bool {
+                appendedMessages.append(message)
+                return true
+            }
+            func addSystemMessage(_: String) {}
+            func normalizedContentKey(_ content: String) -> String { content }
+            func recordContentKey(_: String, timestamp _: Date) {}
+            func recordPublicActivity(forChannelKey _: String) {}
+            func sendMeshMessage(_: String, mentions _: [String], messageID _: String, timestamp _: Date) {}
+            func sendGeohash(context _: ChatViewModel.GeoOutgoingContext) { sentGeohashCount += 1 }
+            func bridgeOutgoingPublicMessage(_: String, senderPeerID _: PeerID, timestamp _: Date) {}
+            func deriveNostrIdentity(forGeohash _: String) throws -> NostrIdentity { identity }
+        }
+
+        let context = PanicOutgoingContext(identity: try NostrIdentity.generate())
+        let coordinator = ChatOutgoingCoordinator(context: context)
+
+        coordinator.sendMessage("pre-panic geo message")
+        let miningTask = coordinator.geohashMiningTask
+        coordinator.resetForPanic()
+        await miningTask?.value
+
+        XCTAssertTrue(context.appendedMessages.isEmpty)
+        XCTAssertEqual(context.sentGeohashCount, 0)
+    }
+
+    func test_nostrIdentityBridge_concurrentColdStartReturnsConsistentIdentity() async throws {
+        let keychain = PreviewKeychainManager()
+        let bridge = NostrIdentityBridge(keychain: keychain)
+
+        let results: [String] = try await withThrowingTaskGroup(of: String.self) { group in
+            for _ in 0..<8 {
+                group.addTask {
+                    guard let id = try bridge.getCurrentNostrIdentity() else {
+                        throw NSError(domain: "Test", code: 1)
+                    }
+                    return id.publicKeyHex
+                }
+            }
+            var pubkeys: [String] = []
+            for try await pubkey in group {
+                pubkeys.append(pubkey)
+            }
+            return pubkeys
+        }
+
+        XCTAssertEqual(Set(results).count, 1)
     }
 }

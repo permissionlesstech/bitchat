@@ -561,6 +561,87 @@ final class GeoRelayDirectoryTests: XCTestCase {
         XCTAssertEqual(directory.debugClosestRelaysCacheCount, 0)
     }
 
+    func test_resetForPanic_cancelsInFlightFetchWithoutWritingCacheOrSchedulingRetry() async {
+        final class Gate: @unchecked Sendable {
+            private let lock = NSLock()
+            private var startedContinuation: CheckedContinuation<Void, Never>?
+            private var releaseContinuation: CheckedContinuation<Bool, Never>?
+            private var didStart = false
+            private var pendingRelease: Bool?
+
+            func awaitStart() async {
+                await withCheckedContinuation { cont in
+                    lock.lock()
+                    if didStart {
+                        lock.unlock()
+                        cont.resume()
+                    } else {
+                        startedContinuation = cont
+                        lock.unlock()
+                    }
+                }
+            }
+
+            func waitForTor() async -> Bool {
+                await withCheckedContinuation { cont in
+                    lock.lock()
+                    didStart = true
+                    let start = startedContinuation
+                    startedContinuation = nil
+                    if let result = pendingRelease {
+                        pendingRelease = nil
+                        lock.unlock()
+                        start?.resume()
+                        cont.resume(returning: result)
+                    } else {
+                        releaseContinuation = cont
+                        lock.unlock()
+                        start?.resume()
+                    }
+                }
+            }
+
+            func release(_ result: Bool) {
+                lock.lock()
+                if let cont = releaseContinuation {
+                    releaseContinuation = nil
+                    lock.unlock()
+                    cont.resume(returning: result)
+                } else {
+                    pendingRelease = result
+                    lock.unlock()
+                }
+            }
+        }
+
+        let gate = Gate()
+        let harness = makeHarness(
+            bundleCSV: """
+            relay url,lat,lon
+            bundle.example,37.77,-122.41
+            """,
+            fetchCSV: """
+            relay url,lat,lon
+            remote.example,37.77,-122.41
+            """,
+            awaitTorReady: { await gate.waitForTor() }
+        )
+        let directory = GeoRelayDirectory(dependencies: harness.dependencies)
+
+        directory.prefetchIfNeeded(force: true)
+        await gate.awaitStart()
+
+        // Panic runs while the remote fetch is awaiting Tor readiness.
+        directory.resetForPanic()
+        gate.release(false)
+        await Task.yield()
+        try? await Task.sleep(nanoseconds: 50_000_000)
+
+        XCTAssertFalse(directory.debugHasRetryTask, "Stale pre-panic fetch must not re-arm retryTask")
+        XCTAssertNil(harness.fileStore.dataByURL[harness.cacheURL])
+        XCTAssertNil(harness.dependencies.userDefaults.object(forKey: "georelay.lastFetchAt"))
+    }
+
     private func makeHarness(
         cacheCSV: String? = nil,
         bundleCSV: String? = nil,

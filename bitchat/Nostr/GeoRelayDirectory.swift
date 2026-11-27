@@ -150,6 +150,7 @@ final class GeoRelayDirectory {
         var observers: [NSObjectProtocol] = []
         var refreshTimer: Timer?
         var retryTask: Task<Void, Never>?
+        var fetchTask: Task<Void, Never>?
         var localLoadTask: Task<Void, Never>?
 
         init(notificationCenter: NotificationCenter) {
@@ -160,6 +161,7 @@ final class GeoRelayDirectory {
             observers.forEach { notificationCenter.removeObserver($0) }
             refreshTimer?.invalidate()
             retryTask?.cancel()
+            fetchTask?.cancel()
             localLoadTask?.cancel()
         }
     }
@@ -175,6 +177,7 @@ final class GeoRelayDirectory {
         case torNotReady
         case invalidData
         case network(String)
+        case cancelled
     }
 
     static let shared = GeoRelayDirectory()
@@ -206,6 +209,10 @@ final class GeoRelayDirectory {
     private var didCompleteLocalLoad = false
     private var retryAttempt: Int = 0
     private var isFetching: Bool = false
+    /// Incremented on panic wipe so any in-flight remote fetch cannot write
+    /// `georelays_cache_v2.csv`, `georelay.lastFetchAt`, or re-arm `retryTask`
+    /// after `resetForPanic()` runs.
+    private var panicGeneration: UInt64 = 0
 
     private init() {
         self.dependencies = .live()
@@ -336,6 +343,7 @@ final class GeoRelayDirectory {
     private func fetchRemote() {
         guard !isFetching else { return }
         isFetching = true
+        let generation = panicGeneration
 
         let request = URLRequest(
             url: dependencies.remoteURL,
@@ -343,20 +351,32 @@ final class GeoRelayDirectory {
             timeoutInterval: 15
         )
         let awaitTorReady = dependencies.awaitTorReady
+        let isNetworkActivationAllowed = dependencies.isNetworkActivationAllowed
         let makeFetchData = dependencies.makeFetchData
         let validationPolicy = dependencies.validationPolicy
         let baselineEntries = Set(entries)
 
-        Task { [weak self] in
+        cleanupState.fetchTask?.cancel()
+        cleanupState.fetchTask = Task { [weak self] in
             guard let self else { return }
 
             let outcome = await Self.fetchRemoteOutcome(
                 request: request,
                 awaitTorReady: awaitTorReady,
+                isNetworkActivationAllowed: isNetworkActivationAllowed,
                 makeFetchData: makeFetchData,
                 validationPolicy: validationPolicy,
                 baselineEntries: baselineEntries
             )
+
+            guard !Task.isCancelled, self.panicGeneration == generation else {
+                if self.panicGeneration == generation {
+                    self.isFetching = false
+                    self.cleanupState.fetchTask = nil
+                }
+                return
+            }
+            self.cleanupState.fetchTask = nil
 
             switch outcome {
             case .success(let parsed, let csv):
@@ -367,6 +387,8 @@ final class GeoRelayDirectory {
                 self.handleFetchFailure(.invalidData)
             case .network(let description):
                 self.handleFetchFailure(.network(description))
+            case .cancelled:
+                self.isFetching = false
             }
         }
     }
@@ -374,21 +396,32 @@ final class GeoRelayDirectory {
     nonisolated private static func fetchRemoteOutcome(
         request: URLRequest,
         awaitTorReady: @escaping @Sendable () async -> Bool,
+        isNetworkActivationAllowed: @escaping @MainActor () -> Bool,
         makeFetchData: @escaping @MainActor @Sendable () -> (@Sendable (URLRequest) async throws -> Data),
         validationPolicy: GeoRelayDirectoryValidationPolicy,
         baselineEntries: Set<Entry>
     ) async -> DetachedFetchOutcome {
-        await Task.detached(priority: .utility) {
-            let ready = await awaitTorReady()
-            guard ready else { return .torNotReady }
+        let ready = await awaitTorReady()
+        guard !Task.isCancelled else { return .cancelled }
+        guard ready else { return .torNotReady }
 
-            // Resolve the URLSession after Tor readiness completes so a proxy
-            // transition or Tor bootstrap while awaiting cannot leave us on a
-            // stale pre-wait session.
-            let fetchData = await makeFetchData()
+        // Re-check activation gate after Tor readiness completes so a panic
+        // wipe or offline transition during the wait cannot fire an outbound
+        // request.
+        let allowed = await isNetworkActivationAllowed()
+        guard !Task.isCancelled, allowed else { return .cancelled }
 
+        // Resolve the URLSession after Tor readiness completes so a proxy
+        // transition or Tor bootstrap while awaiting cannot leave us on a
+        // stale pre-wait session.
+        let fetchData = await makeFetchData()
+        guard !Task.isCancelled else { return .cancelled }
+
+        return await Task.detached(priority: .utility) {
+            guard !Task.isCancelled else { return DetachedFetchOutcome.cancelled }
             do {
                 let data = try await fetchData(request)
+                guard !Task.isCancelled else { return .cancelled }
                 guard let parsed = Self.validatedEntries(
                     from: data,
                     policy: validationPolicy,
@@ -400,6 +433,7 @@ final class GeoRelayDirectory {
 
                 return .success(entries: parsed, csv: data)
             } catch {
+                if Task.isCancelled { return .cancelled }
                 return .network(error.localizedDescription)
             }
         }.value
@@ -751,9 +785,13 @@ final class GeoRelayDirectory {
     /// drop cached geohash lookups from memory, and remove the cached relay CSV
     /// from Application Support.
     func resetForPanic() {
+        panicGeneration &+= 1
         cancelRetry()
+        cleanupState.fetchTask?.cancel()
+        cleanupState.fetchTask = nil
         cleanupState.localLoadTask?.cancel()
         cleanupState.localLoadTask = nil
+        isFetching = false
         retryAttempt = 0
         closestRelaysCache.removeAll(keepingCapacity: false)
         dependencies.userDefaults.removeObject(forKey: lastFetchKey)

@@ -77,6 +77,16 @@ final class PublicMessagePipeline {
     func flushIfNeeded() {
         flushBuffer()
     }
+
+    /// Panic-wipe hook: cancels any scheduled batch flush and drops all
+    /// uncommitted public messages so pre-wipe traffic cannot resurface.
+    func reset() {
+        timer?.invalidate()
+        timer = nil
+        buffer.removeAll(keepingCapacity: false)
+        recentBatchSizes.removeAll(keepingCapacity: false)
+        dynamicFlushInterval = baseFlushInterval
+    }
 }
 
 private extension PublicMessagePipeline {

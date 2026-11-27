@@ -95,6 +95,8 @@ public final class TorManager: ObservableObject {
     private var startedAt: Date? = nil  // Tracks initial startup time for grace period
     private(set) var allowAutoStart: Bool = false
 
+    private let artiExecutor = ArtiLifecycleExecutor()
+
     private struct ReadyWaiter {
         let continuation: CheckedContinuation<Bool, Never>
         let timeoutTask: Task<Void, Never>
@@ -150,7 +152,11 @@ public final class TorManager: ObservableObject {
 
         return await withTaskCancellationHandler {
             await withCheckedContinuation { continuation in
-                Task { @MainActor in
+                Task { @MainActor [weak self] in
+                    guard let self else {
+                        continuation.resume(returning: false)
+                        return
+                    }
                     if cancellationFlag.isSet {
                         continuation.resume(returning: false)
                         return
@@ -174,8 +180,8 @@ public final class TorManager: ObservableObject {
             }
         } onCancel: {
             _ = cancellationFlag.trySet()
-            Task { @MainActor in
-                self.cancelReadyWaiter(id: waiterID)
+            Task { @MainActor [weak self] in
+                self?.cancelReadyWaiter(id: waiterID)
             }
         }
     }
@@ -213,14 +219,6 @@ public final class TorManager: ObservableObject {
         }
     }
 
-    nonisolated private static func ensureFilesystemLayout(at dir: URL) {
-        do {
-            try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-        } catch {
-            // Non-fatal; Arti will surface errors during start if paths are missing
-        }
-    }
-
     // MARK: - Arti Integration
 
     private func startArti(generation: Int) {
@@ -231,28 +229,27 @@ public final class TorManager: ObservableObject {
         }
         let host = socksHost
         let port = socksPort
+        let executor = artiExecutor
 
-        // Run directory creation and Arti FFI startup off the main actor so
-        // launch/foreground recovery never stalls UI rendering.
+        // Run directory creation and Arti FFI startup off the main actor on
+        // the serialized lifecycle executor so launch/foreground recovery never
+        // stalls UI rendering and cannot race shutdown or panic wipe.
         Task.detached(priority: .userInitiated) { [weak self] in
             guard let self else { return }
-            Self.ensureFilesystemLayout(at: dirURL)
-
-            let alreadyRunning = arti_is_running() != 0
-            if alreadyRunning {
-                SecureLogger.info("TorManager: Arti already running", category: .session)
-                await MainActor.run {
-                    guard generation == self.bootstrapGeneration else { return }
-                    self.startBootstrapMonitor(generation: generation)
+            let outcome = await executor.start(
+                dirURL: dirURL,
+                socksPort: UInt16(port),
+                isStillCurrent: {
+                    await MainActor.run {
+                        self.bootstrapGeneration == generation
+                    }
                 }
+            )
+
+            switch outcome {
+            case .superseded:
                 return
-            }
-
-            let result = dirURL.path.withCString { dptr in
-                arti_start(dptr, UInt16(port))
-            }
-
-            if result != 0 {
+            case .failed(let result):
                 SecureLogger.error("TorManager: arti_start failed rc=\(result)", category: .session)
                 await MainActor.run {
                     guard generation == self.bootstrapGeneration else { return }
@@ -260,16 +257,23 @@ public final class TorManager: ObservableObject {
                     self.lastError = NSError(domain: "TorManager", code: Int(result), userInfo: [NSLocalizedDescriptionKey: "Arti start failed"])
                 }
                 return
+            case .alreadyRunning:
+                SecureLogger.info("TorManager: Arti already running", category: .session)
+            case .started:
+                SecureLogger.info("TorManager: arti_start OK (SOCKS \(host):\(port))", category: .session)
             }
 
-            SecureLogger.info("TorManager: arti_start OK (SOCKS \(host):\(port))", category: .session)
-            await MainActor.run {
-                guard generation == self.bootstrapGeneration else { return }
+            let stillCurrent: Bool = await MainActor.run {
+                guard generation == self.bootstrapGeneration else { return false }
                 self.startBootstrapMonitor(generation: generation)
+                return true
             }
+            guard stillCurrent else { return }
 
-            // Probe SOCKS readiness off-main, fenced to this bootstrap generation
-            // so an in-flight probe cannot mark Tor ready after shutdown/restart.
+            // Probe SOCKS readiness off-main for BOTH newly started and
+            // already-running Arti instances (fenced to this bootstrap
+            // generation) so `socksReady` cannot remain stuck at `false`
+            // after dormancy or an overlapping restart.
             let ready = await self.waitForSocksReady(port: port, timeout: 60.0)
             await MainActor.run {
                 guard generation == self.bootstrapGeneration else { return }
@@ -476,16 +480,10 @@ public final class TorManager: ObservableObject {
         bootstrapSummary = ""
         isStarting = false
         shutdownsInFlight += 1
+        let executor = artiExecutor
         Task.detached { [weak self] in
             guard let self = self else { return }
-            _ = arti_stop()
-
-            // Wait for shutdown
-            var waited = 0
-            while arti_is_running() != 0 && waited < 50 {
-                try? await Task.sleep(nanoseconds: 100_000_000)
-                waited += 1
-            }
+            await executor.stop(maxPolls: 50)
 
             await MainActor.run {
                 self.isReady = false
@@ -513,11 +511,11 @@ public final class TorManager: ObservableObject {
     }
 
     /// Panic-wipe hook: removes `Application Support/bitchat/arti` (guard
-    /// nodes, state, consensus cache). If Arti is currently shutting down,
-    /// defers removal until `arti_stop()` finishes so SQLite/state files are
-    /// deleted cleanly before any post-panic restart.
+    /// nodes, state, consensus cache). If Arti is starting, running, or
+    /// shutting down, defers removal until serialized `arti_stop()` finishes so
+    /// SQLite/state files are deleted cleanly before any post-panic restart.
     public func wipeStateDirectoryForPanic() {
-        if shutdownsInFlight > 0 || arti_is_running() != 0 {
+        if shutdownsInFlight > 0 || isStarting || didStart || arti_is_running() != 0 {
             wipeDataDirectoryOnShutdown = true
             if shutdownsInFlight == 0 {
                 shutdownCompletely()
@@ -534,7 +532,7 @@ public final class TorManager: ObservableObject {
 
     nonisolated private func restartArti() async {
         SecureLogger.debug("TorManager: restartArti() starting", category: .session)
-        await MainActor.run {
+        let executor = await MainActor.run { () -> ArtiLifecycleExecutor in
             NotificationCenter.default.post(name: .TorWillRestart, object: nil)
             self.bootstrapGeneration += 1
             self.isReady = false
@@ -544,16 +542,10 @@ public final class TorManager: ObservableObject {
             self.isStarting = true
             self.bootstrapDidStall = false
             self.lastRestartAt = Date()
+            return self.artiExecutor
         }
 
-        _ = arti_stop()
-
-        // Wait for stop off the main actor.
-        var waited = 0
-        while arti_is_running() != 0 && waited < 40 {
-            try? await Task.sleep(nanoseconds: 100_000_000)
-            waited += 1
-        }
+        await executor.stop(maxPolls: 40)
 
         await MainActor.run {
             self.bootstrapMonitorStarted = false
@@ -612,6 +604,42 @@ public final class TorManager: ObservableObject {
         if isReady { return }
         SecureLogger.debug("TorManager: pokeTorOnPathChange() - Arti not ready, initiating recovery", category: .session)
         ensureRunningOnForeground()
+    }
+}
+
+private actor ArtiLifecycleExecutor {
+    enum StartOutcome: Sendable {
+        case started
+        case alreadyRunning
+        case superseded
+        case failed(Int32)
+    }
+
+    func start(
+        dirURL: URL,
+        socksPort: UInt16,
+        isStillCurrent: @Sendable () async -> Bool
+    ) async -> StartOutcome {
+        guard await isStillCurrent() else {
+            return .superseded
+        }
+        if arti_is_running() != 0 {
+            return .alreadyRunning
+        }
+        try? FileManager.default.createDirectory(at: dirURL, withIntermediateDirectories: true)
+        let rc = dirURL.path.withCString { dptr in
+            arti_start(dptr, socksPort)
+        }
+        return rc == 0 ? .started : .failed(rc)
+    }
+
+    func stop(maxPolls: Int) async {
+        _ = arti_stop()
+        var waited = 0
+        while arti_is_running() != 0 && waited < maxPolls {
+            try? await Task.sleep(nanoseconds: 100_000_000)
+            waited += 1
+        }
     }
 }
 

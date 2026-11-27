@@ -83,9 +83,18 @@ final class ChatOutgoingCoordinator {
     /// the message still goes out at the difficulty already reached.
     /// (Read access is internal so tests can await the send's completion.)
     private(set) var geohashMiningTask: Task<Void, Never>?
+    /// Incremented on panic wipe so any in-flight PoW mining task drops its
+    /// pre-wipe event instead of appending or publishing after the wipe.
+    private var panicGeneration: UInt64 = 0
 
     init(context: any ChatOutgoingContext) {
         self.context = context
+    }
+
+    func resetForPanic() {
+        panicGeneration &+= 1
+        geohashMiningTask?.cancel()
+        geohashMiningTask = nil
     }
 
     /// Finish any in-flight geohash PoW mining early (the pending message
@@ -182,10 +191,12 @@ private extension ChatOutgoingCoordinator {
         // NIP-13 target is polled, not aborted), so it still finishes and
         // sends — and it finishes fast, so awaiting it never stacks mining
         // delays or blocks a send beyond `NostrPoW.miningTimeCap`.
+        let generation = panicGeneration
         let previousSend = geohashMiningTask
         previousSend?.cancel()
-        geohashMiningTask = Task { @MainActor [weak context = self.context] in
+        geohashMiningTask = Task { @MainActor [weak self, weak context = self.context] in
             await previousSend?.value
+            guard let self, self.panicGeneration == generation else { return }
 
             let event: NostrEvent
             do {
@@ -197,13 +208,14 @@ private extension ChatOutgoingCoordinator {
                     teleported: teleported
                 )
             } catch {
+                guard self.panicGeneration == generation else { return }
                 SecureLogger.error("❌ Failed to prepare geohash message: \(error)", category: .session)
                 context?.addSystemMessage(
                     String(localized: "system.location.send_failed", comment: "System message when a location channel send fails")
                 )
                 return
             }
-            guard let context else { return }
+            guard self.panicGeneration == generation, let context else { return }
 
             let message = BitchatMessage(
                 id: event.id,

@@ -30,6 +30,11 @@ protocol NotificationCategoryRegistering {
     func setCategories(_ categories: Set<UNNotificationCategory>)
 }
 
+protocol NotificationClearing {
+    func removeAllDeliveredNotifications()
+    func removeAllPendingNotificationRequests()
+}
+
 private final class NotificationCenterAuthorizerAdapter: NotificationAuthorizing {
     private let center: UNUserNotificationCenter
 
@@ -71,6 +76,22 @@ private final class NotificationCenterCategoryRegistrarAdapter: NotificationCate
     }
 }
 
+private final class NotificationCenterClearerAdapter: NotificationClearing {
+    private let center: UNUserNotificationCenter
+
+    init(center: UNUserNotificationCenter) {
+        self.center = center
+    }
+
+    func removeAllDeliveredNotifications() {
+        center.removeAllDeliveredNotifications()
+    }
+
+    func removeAllPendingNotificationRequests() {
+        center.removeAllPendingNotificationRequests()
+    }
+}
+
 private struct NoopNotificationAuthorizer: NotificationAuthorizing {
     func requestAuthorization(
         options: UNAuthorizationOptions,
@@ -86,6 +107,11 @@ private struct NoopNotificationRequestDeliverer: NotificationRequestDelivering {
 
 private struct NoopNotificationCategoryRegistrar: NotificationCategoryRegistering {
     func setCategories(_ categories: Set<UNNotificationCategory>) {}
+}
+
+private struct NoopNotificationClearer: NotificationClearing {
+    func removeAllDeliveredNotifications() {}
+    func removeAllPendingNotificationRequests() {}
 }
 
 final class NotificationService {
@@ -128,6 +154,7 @@ final class NotificationService {
     private let authorizer: NotificationAuthorizing
     private let requestDeliverer: NotificationRequestDelivering
     private let categoryRegistrar: NotificationCategoryRegistering
+    private let notificationClearer: NotificationClearing
 
     /// Returns true if running in test environment (XCTest, Swift Testing, or CI)
     private var isRunningTests: Bool {
@@ -148,11 +175,13 @@ final class NotificationService {
             self.authorizer = NoopNotificationAuthorizer()
             self.requestDeliverer = NoopNotificationRequestDeliverer()
             self.categoryRegistrar = NoopNotificationCategoryRegistrar()
+            self.notificationClearer = NoopNotificationClearer()
         } else {
             let center = UNUserNotificationCenter.current()
             self.authorizer = NotificationCenterAuthorizerAdapter(center: center)
             self.requestDeliverer = NotificationCenterRequestDelivererAdapter(center: center)
             self.categoryRegistrar = NotificationCenterCategoryRegistrarAdapter(center: center)
+            self.notificationClearer = NotificationCenterClearerAdapter(center: center)
         }
     }
 
@@ -161,13 +190,24 @@ final class NotificationService {
         authorizer: NotificationAuthorizing,
         requestDeliverer: NotificationRequestDelivering,
         categoryRegistrar: NotificationCategoryRegistering = NoopNotificationCategoryRegistrar(),
+        notificationClearer: NotificationClearing = NoopNotificationClearer(),
         hidePreviewsProvider: @escaping () -> Bool = { NotificationPrivacySettings.hideMessagePreviews }
     ) {
         self.isRunningTestsProvider = isRunningTestsProvider
         self.authorizer = authorizer
         self.requestDeliverer = requestDeliverer
         self.categoryRegistrar = categoryRegistrar
+        self.notificationClearer = notificationClearer
         self.hidePreviewsProvider = hidePreviewsProvider
+    }
+
+    /// Panic-wipe hook: removes all delivered and pending local notifications
+    /// from Notification Center so sender names, previews, and routing metadata
+    /// cannot linger on a seized device after a wipe.
+    func clearAllNotificationsForPanic() {
+        guard !isRunningTests else { return }
+        notificationClearer.removeAllPendingNotificationRequests()
+        notificationClearer.removeAllDeliveredNotifications()
     }
 
     func requestAuthorization() {

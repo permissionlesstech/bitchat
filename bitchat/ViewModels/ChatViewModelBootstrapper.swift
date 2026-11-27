@@ -29,7 +29,9 @@ struct ChatViewModelServiceBundle {
             identityManager: identityManager
         )
         let nostrTransport = NostrTransport(keychain: keychain, idBridge: idBridge)
-        nostrTransport.senderPeerID = meshService.myPeerID
+        nostrTransport.senderPeerIDProvider = { [weak meshService] in
+            meshService?.myPeerID ?? PeerID(str: "")
+        }
         let messageRouter = MessageRouter(
             transports: [meshService, nostrTransport],
             outboxStore: outboxStore,

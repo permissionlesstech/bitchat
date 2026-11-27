@@ -187,12 +187,12 @@ final class SecureIdentityStateManager: SecureIdentityStateManagerProtocol {
     private var pendingSave = false
 
     // Encryption key
-    private let encryptionKey: SymmetricKey
+    private var encryptionKey: SymmetricKey
     /// True when `encryptionKey` is a throwaway generated this session because the
     /// persisted key could not be read (device locked / access denied). In that
     /// state we must NOT persist (it would overwrite the real cache with data the
     /// next launch can't decrypt) and must NOT delete the existing cache.
-    private let encryptionKeyIsEphemeral: Bool
+    private var encryptionKeyIsEphemeral: Bool
     
     init(_ keychain: KeychainManagerProtocol) {
         self.keychain = keychain
@@ -689,9 +689,20 @@ final class SecureIdentityStateManager: SecureIdentityStateManagerProtocol {
             self.ephemeralSessions.removeAll()
             self.pendingSave = false
 
-            // Delete from keychain
-            let deleted = self.keychain.deleteIdentityKey(forKey: self.cacheKey)
-            SecureLogger.logKeyOperation(.delete, keyType: "identity cache", success: deleted)
+            // Delete the encrypted cache and previous cache encryption key from
+            // keychain, then generate and persist a fresh encryption key so
+            // post-panic blocks, verifications, and pins remain readable across
+            // the next cold launch instead of being sealed under a deleted key.
+            let deletedCache = self.keychain.deleteIdentityKey(forKey: self.cacheKey)
+            SecureLogger.logKeyOperation(.delete, keyType: "identity cache", success: deletedCache)
+            _ = self.keychain.deleteIdentityKey(forKey: self.encryptionKeyName)
+
+            let freshKey = SymmetricKey(size: .bits256)
+            let keyData = freshKey.withUnsafeBytes { Data($0) }
+            let saved = self.keychain.saveIdentityKey(keyData, forKey: self.encryptionKeyName)
+            self.encryptionKey = freshKey
+            self.encryptionKeyIsEphemeral = !saved
+            SecureLogger.logKeyOperation(.generate, keyType: "identity cache encryption key", success: saved)
         }
     }
     

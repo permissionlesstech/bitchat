@@ -120,4 +120,41 @@ struct ImageUtilsTests {
         ImageDownsampler.resetForPanic()
         #expect(ImageDownsampler.cachedImage(for: fileURL, maxPixelSize: 64) == nil)
     }
+
+    @Test
+    func processImageAtURL_acceptsHighResolution24MPPhotoAndDownsamples() throws {
+        // 5712 x 4284 (~24.5 MP) exceeds the incoming BLE 4096 px / 16.7 MP cap
+        // (ImageContainerValidator.maxDimensionPixels), matching modern iPhone
+        // default photos. Outgoing ImageUtils must still accept and downsample it.
+        let dir = makeTemporaryDirectoryURL("image-24mp-\(UUID().uuidString)")
+        let outputDir = makeTemporaryDirectoryURL("image-24mp-out-\(UUID().uuidString)")
+        defer {
+            try? FileManager.default.removeItem(at: dir)
+            try? FileManager.default.removeItem(at: outputDir)
+        }
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+
+        let sourceURL = dir.appendingPathComponent("iphone-24mp.png")
+        try TestImageFixtures.makePNG(width: 5_712, height: 4_284).write(to: sourceURL)
+
+        let downsampledURL = try ImageUtils.processImage(at: sourceURL, maxDimension: 448, outputDirectory: outputDir)
+        let data = try Data(contentsOf: downsampledURL)
+        #expect(data.starts(with: Data([0xFF, 0xD8])))
+        let loaded = try #require(ImageDownsampler.loadDownsampledImage(from: downsampledURL, maxPixelSize: 1024))
+        #expect(max(loaded.size.width, loaded.size.height) <= 448.5)
+    }
+
+    @Test
+    func processImageAtURL_stillRejectsExtremeDecompressionBomb() throws {
+        let dir = makeTemporaryDirectoryURL("image-bomb-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: dir) }
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+
+        let bombURL = dir.appendingPathComponent("bomb.png")
+        try TestImageFixtures.makePNGBomb(width: 20_000, height: 20_000).write(to: bombURL)
+
+        #expect(throws: ImageUtilsError.self) {
+            try ImageUtils.processImage(at: bombURL)
+        }
+    }
 }

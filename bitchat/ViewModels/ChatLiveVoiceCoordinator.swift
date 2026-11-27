@@ -195,6 +195,11 @@ final class ChatLiveVoiceCoordinator {
     private var fileManager: FileManager { fileStore.fileManager }
     private var assemblies: [AssemblyKey: Assembly] = [:]
     private var finishedBursts: [AssemblyKey: FinishedBurst] = [:]
+    /// Live capture filenames created by *this* coordinator instance so an
+    /// asynchronous startup sweep launched during lazy initialization can never
+    /// unlink an in-flight capture that started immediately after `init()`.
+    private var createdCaptureFileNames: Set<String> = []
+    private var startupSweepTask: Task<Void, Never>?
     /// Players still draining after their assembly — the sole strong owner —
     /// was discarded on burst END. Without this hold the player deallocates
     /// mid-tail (or mid session-acquire, killing the whole burst's audio)
@@ -225,8 +230,14 @@ final class ChatLiveVoiceCoordinator {
         if sweepsOnInit {
             if asyncStartupSweep {
                 let store = fileStore
-                Task.detached(priority: .utility) {
-                    Self.sweepStaleLiveCaptures(in: store)
+                startupSweepTask = Task.detached(priority: .utility) { [weak self] in
+                    let candidates = Self.discoverStaleLiveCaptures(in: store)
+                    guard !candidates.isEmpty, !Task.isCancelled else { return }
+                    let excluded: Set<String> = await MainActor.run { [weak self] in
+                        self?.createdCaptureFileNames ?? []
+                    }
+                    guard !Task.isCancelled else { return }
+                    Self.removeLiveCaptures(candidates, excludingFileNames: excluded, in: store)
                 }
             } else {
                 Self.sweepStaleLiveCaptures(in: fileStore)
@@ -310,6 +321,9 @@ final class ChatLiveVoiceCoordinator {
         }
         drainingPlayers.removeAll(keepingCapacity: false)
         finishedBursts.removeAll(keepingCapacity: false)
+        createdCaptureFileNames.removeAll(keepingCapacity: false)
+        startupSweepTask?.cancel()
+        startupSweepTask = nil
         updatePublicTalkerIndicator()
     }
 
@@ -425,6 +439,7 @@ final class ChatLiveVoiceCoordinator {
         } else {
             fileStore.enforceQuota(reservingBytes: TransportConfig.pttMaxBurstBytes)
         }
+        createdCaptureFileNames.insert(fileURL.lastPathComponent)
         fileManager.createFile(
             atPath: fileURL.path,
             contents: nil,
@@ -784,7 +799,7 @@ final class ChatLiveVoiceCoordinator {
     /// only (ConversationStore never persists; the gossip archive replays
     /// `MessageType.message` packets only), so no row from a previous
     /// process can reference the file.
-    nonisolated private static func sweepStaleLiveCaptures(in fileStore: BLEIncomingFileStore) {
+    nonisolated private static func discoverStaleLiveCaptures(in fileStore: BLEIncomingFileStore) -> [URL] {
         let fileManager = fileStore.fileManager
         guard let directory = try? fileStore.incomingDirectory(subdirectory: Self.incomingSubdirectory),
               let contents = try? fileManager.contentsOfDirectory(
@@ -792,9 +807,25 @@ final class ChatLiveVoiceCoordinator {
                   includingPropertiesForKeys: nil,
                   options: [.skipsHiddenFiles]
               )
-        else { return }
-        for url in contents where url.lastPathComponent.hasPrefix(BLEIncomingFileStore.liveCapturePrefix) && url.pathExtension == "aac" {
+        else { return [] }
+        return contents.filter {
+            $0.lastPathComponent.hasPrefix(BLEIncomingFileStore.liveCapturePrefix) && $0.pathExtension == "aac"
+        }
+    }
+
+    nonisolated private static func removeLiveCaptures(
+        _ urls: [URL],
+        excludingFileNames: Set<String>,
+        in fileStore: BLEIncomingFileStore
+    ) {
+        let fileManager = fileStore.fileManager
+        for url in urls where !excludingFileNames.contains(url.lastPathComponent) {
             try? fileManager.removeItem(at: url)
         }
+    }
+
+    nonisolated private static func sweepStaleLiveCaptures(in fileStore: BLEIncomingFileStore) {
+        let candidates = discoverStaleLiveCaptures(in: fileStore)
+        removeLiveCaptures(candidates, excludingFileNames: [], in: fileStore)
     }
 }
