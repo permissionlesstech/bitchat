@@ -8,6 +8,7 @@ struct GroupChatList: View {
 
     let groups: [GroupChatRow]
     let onTapGroup: (PeerID) -> Void
+    var onClearUnread: ((PeerID) -> Void)? = nil
 
     private enum Strings {
         static let header = String(localized: "groups.section.header", comment: "Section header above the private groups list")
@@ -16,6 +17,7 @@ struct GroupChatList: View {
         static let newMessagesTooltip = String(localized: "mesh_peers.tooltip.new_messages", comment: "Tooltip for the unread messages indicator")
         static let openGroupHint = String(localized: "groups.accessibility.open_group_hint", comment: "Accessibility hint on a group row explaining activation opens the group chat")
         static let memberCountFormat = String(localized: "groups.member_count %@", comment: "Member count shown next to a group name; placeholder is the count")
+        static let markRead = String(localized: "conversation.action.mark_read", comment: "Context menu action that clears the unread badge for one conversation")
     }
 
     var body: some View {
@@ -60,6 +62,13 @@ struct GroupChatList: View {
                     .padding(.vertical, 6)
                     .contentShape(Rectangle())
                     .onTapGesture { onTapGroup(group.peerID) }
+                    .contextMenu {
+                        if group.hasUnread, let onClearUnread {
+                            Button(Strings.markRead) {
+                                onClearUnread(group.peerID)
+                            }
+                        }
+                    }
                     .accessibilityElement(children: .ignore)
                     .accessibilityLabel(accessibilityDescription(for: group))
                     .accessibilityAddTraits(.isButton)

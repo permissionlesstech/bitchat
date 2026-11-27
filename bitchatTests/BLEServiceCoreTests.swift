@@ -1010,12 +1010,14 @@ struct BLEServiceCoreTests {
             ttl: 7
         )
         ble._test_handlePacket(retryPacket, fromPeerID: alicePeerID)
+        // Fence the packet handler and its queued authentication transition
+        // before starting the drain assertion's wall-clock bound.
+        await ble._test_drainNoiseMessagePipeline()
         let drained = await TestHelpers.waitUntil(
             { outbound.count(ofType: .noiseEncrypted) >= 3 },
             timeout: TestConstants.longTimeout
         )
         try #require(drained)
-        await ble._test_drainNoiseMessagePipeline()
 
         // Alice completes with message 3, then must be able to decrypt every
         // drained payload — proving nothing left under the old generation.
