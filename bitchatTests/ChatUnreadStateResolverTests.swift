@@ -61,21 +61,9 @@ struct ChatUnreadStateResolverTests {
             nostrPeerID: nil,
             nickname: "Alice"
         )
-        let message = BitchatMessage(
-            sender: "alice",
-            content: "hi",
-            timestamp: Date(timeIntervalSince1970: 1),
-            isRelay: false,
-            originalSender: nil,
-            isPrivate: true,
-            recipientNickname: "me",
-            senderPeerID: geoDM
-        )
-
-        #expect(ChatUnreadStateResolver.hasUnreadMessages(
+        #expect(!ChatUnreadStateResolver.hasUnreadMessages(
             for: context,
-            unreadPrivateMessages: [geoDM],
-            privateChats: [geoDM: [message]]
+            unreadPrivateMessages: [geoDM]
         ))
     }
 
