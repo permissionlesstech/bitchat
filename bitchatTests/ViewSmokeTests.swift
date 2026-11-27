@@ -669,11 +669,11 @@ struct ViewSmokeTests {
     @Test
     func voiceAndMediaViews_renderAndWarmCaches() async throws {
         let audioURL = try makeTemporaryAudioURL()
-        // Probed directly below. Deliberately a separate file from `audioURL`:
-        // `WaveformCache.shared` is process-wide and the mounted
-        // `VoiceNoteView` warms it for `audioURL` at the view's default bin
-        // width concurrently, so asserting an exact bin count for that URL
-        // races with the view's own cache write.
+        // Use a dedicated cache instance and separate audio URL for the direct
+        // probe: `WaveformCache.shared` is process-wide, so `VoiceNoteView`
+        // warms `audioURL` concurrently and parallel suites calling
+        // `panicClearAllData()` invoke `WaveformCache.shared.resetForPanic()`.
+        let waveformCache = WaveformCache()
         let waveformProbeURL = try makeTemporaryAudioURL()
         let imageURL = try makeTemporaryImageURL()
         defer {
@@ -681,7 +681,7 @@ struct ViewSmokeTests {
             try? FileManager.default.removeItem(at: waveformProbeURL)
             try? FileManager.default.removeItem(at: imageURL)
             WaveformCache.shared.purge(url: audioURL)
-            WaveformCache.shared.purge(url: waveformProbeURL)
+            waveformCache.purge(url: waveformProbeURL)
         }
 
         let waveformView = WaveformView(
@@ -715,7 +715,7 @@ struct ViewSmokeTests {
         _ = mount(voiceNoteView)
 
         let bins = await withCheckedContinuation { continuation in
-            WaveformCache.shared.waveform(for: waveformProbeURL, bins: 16) { values in
+            waveformCache.waveform(for: waveformProbeURL, bins: 16) { values in
                 continuation.resume(returning: values)
             }
         }
@@ -730,7 +730,7 @@ struct ViewSmokeTests {
         await VoiceRecorder.shared.cancelRecording(owner: VoiceRecorder.RecordingOwner())
 
         #expect(bins.count == 16)
-        #expect(WaveformCache.shared.cachedWaveform(for: waveformProbeURL)?.count == 16)
+        #expect(waveformCache.cachedWaveform(for: waveformProbeURL)?.count == 16)
         #expect(playback.duration > 0)
         #expect(playback.progress == 0)
     }
