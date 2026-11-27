@@ -243,8 +243,7 @@ struct NostrProtocol {
     }
     #endif
 
-    #if DEBUG
-    /// Create a geohash-scoped ephemeral public message (kind 20000) without PoW mining (test fixture helper).
+    /// Create a geohash-scoped ephemeral public message (kind 20000).
     static func createEphemeralGeohashEvent(
         content: String,
         geohash: String,
@@ -262,49 +261,8 @@ struct NostrProtocol {
         let schnorrKey = try senderIdentity.schnorrSigningKey()
         return try event.sign(with: schnorrKey)
     }
-    #endif
 
-    /// Create a kind-20000 geohash message carrying a NIP-13 proof-of-work
-    /// nonce tag (see `NostrPoW`). Mining runs off the calling actor and is
-    /// bounded by `NostrPoW.miningTimeCap`; when the cap hits (or the
-    /// surrounding task is cancelled) the event ships at the highest
-    /// committed difficulty still met, and if mining is impossible it ships
-    /// unmined — sending is never blocked.
-    static func createMinedEphemeralGeohashEvent(
-        content: String,
-        geohash: String,
-        senderIdentity: NostrIdentity,
-        nickname: String? = nil,
-        teleported: Bool = false,
-        powTargetBits: Int = NostrPoW.targetBits
-    ) async throws -> NostrEvent {
-        var tags = ephemeralGeohashTags(geohash: geohash, nickname: nickname, teleported: teleported)
-        // Fix created_at up front: the mined nonce commits to the full
-        // serialized event, so the signed event must reuse the exact value.
-        let createdAt = Int(Date().timeIntervalSince1970)
-        if let nonceTag = await NostrPoW.mineNonceTag(
-            pubkey: senderIdentity.publicKeyHex,
-            createdAt: createdAt,
-            kind: EventKind.ephemeralEvent.rawValue,
-            tags: tags,
-            content: content,
-            targetBits: powTargetBits
-        ) {
-            tags.append(nonceTag)
-        }
-        let event = NostrEvent(
-            pubkey: senderIdentity.publicKeyHex,
-            createdAt: Date(timeIntervalSince1970: TimeInterval(createdAt)),
-            kind: .ephemeralEvent,
-            tags: tags,
-            content: content
-        )
-        let schnorrKey = try senderIdentity.schnorrSigningKey()
-        return try event.sign(with: schnorrKey)
-    }
-
-    /// Tags for a kind-20000 geohash message (shared by the plain and mined
-    /// variants).
+    /// Tags for a kind-20000 geohash message.
     private static func ephemeralGeohashTags(
         geohash: String,
         nickname: String?,

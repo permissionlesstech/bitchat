@@ -69,6 +69,17 @@ final class UnifiedPeerService: ObservableObject, TransportPeerEventsDelegate {
     func didUpdatePeerSnapshots(_: [TransportPeerSnapshot]) {
         updatePeers()
     }
+
+    /// Panic-wipe hook: synchronously clears all in-memory peer rosters and
+    /// cached SHA-256 fingerprints so pre-wipe peer metadata does not linger
+    /// in RAM after panic completion.
+    func resetForPanic() {
+        peers = []
+        connectedPeerIDs = []
+        favorites = []
+        peerIndex.removeAll(keepingCapacity: false)
+        fingerprintCache.removeAll(keepingCapacity: false)
+    }
     
     // MARK: - Core Update Logic
     

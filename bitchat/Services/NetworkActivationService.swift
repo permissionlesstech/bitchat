@@ -193,20 +193,21 @@ final class NetworkActivationService: ObservableObject {
             .store(in: &cancellables)
     }
 
-    /// Stops all internet-facing work at the synchronous panic boundary.
-    /// `start()` may be called again only after the full wipe commits.
+    /// Stops all internet-facing work at the synchronous panic boundary and
+    /// restores the default Tor-enabled posture so a wiped device never stays
+    /// on clearnet after recovery. `start()` may be called again only after
+    /// the full wipe commits.
     func stopForPanic() {
         cancellables.removeAll()
         started = false
         reachabilityMonitor.stop()
         activationAllowed = false
         torAutoStartDesired = false
+        userTorEnabled = true
+        storage.removeObject(forKey: Self.torPreferenceKey)
         relayController.disconnect()
         torController.setAutoStartAllowed(false)
-        // Keep proxy mode aligned with the user's Tor preference so an
-        // in-flight request cannot silently fall back to clearnet while Arti
-        // shuts down.
-        proxyController.setProxyMode(useTor: userTorEnabled)
+        proxyController.setProxyMode(useTor: true)
         applyTorLifecycle(torDesired: false)
     }
 

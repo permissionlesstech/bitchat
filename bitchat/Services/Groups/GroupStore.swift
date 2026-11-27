@@ -24,6 +24,10 @@ final class GroupStore: ObservableObject {
     private let keychain: KeychainManagerProtocol
     private let fileStore: AppSupportFileStore
     private var keyCache: [Data: Data] = [:]
+    /// True when initial disk or keychain load failed with a transient error
+    /// (such as locked background boot). Prevents `persist()` from overwriting
+    /// durable group metadata on disk with a truncated in-memory roster.
+    private var loadUnavailable = false
 
     /// - Parameter fileURL: Overrides the on-disk location (tests). Ignored
     ///   when `persistsToDisk` is false.
@@ -158,6 +162,7 @@ final class GroupStore: ObservableObject {
     /// (The panic flow also nukes the whole keychain; deleting per-group keys
     /// here keeps the store safe to wipe on its own.)
     func wipe() {
+        loadUnavailable = false
         for group in groups {
             _ = keychain.deleteIdentityKey(forKey: Self.keychainKey(for: group.groupID))
         }
@@ -196,6 +201,10 @@ final class GroupStore: ObservableObject {
     }
 
     private func persist() {
+        guard !loadUnavailable else {
+            SecureLogger.warning("⚠️ Skipping group store save while prior disk/keychain load was unavailable", category: .security)
+            return
+        }
         do {
             try fileStore.saveJSON(groups, isEmpty: groups.isEmpty)
         } catch {
@@ -204,17 +213,41 @@ final class GroupStore: ObservableObject {
     }
 
     private func loadFromDisk() {
-        guard let stored = try? fileStore.loadJSON([BitchatGroup].self) else {
+        let stored: [BitchatGroup]?
+        do {
+            stored = try fileStore.loadJSON([BitchatGroup].self)
+        } catch {
+            loadUnavailable = true
+            SecureLogger.warning("⚠️ Group store disk read unavailable at launch; deferring writes: \(error)", category: .security)
+            return
+        }
+        guard let stored else {
+            loadUnavailable = false
             return
         }
         // Only groups whose key survived in the keychain are usable. Loading
         // bypasses `upsert`, so re-check its invariants here too, and keep one
-        // entry per groupID so a group can never carry two creators.
+        // entry per groupID so a group can never carry two creators. If any
+        // group's keychain read fails transiently (e.g. device locked), mark
+        // `loadUnavailable` so we never overwrite durable metadata.
         var seenGroupIDs = Set<Data>()
-        groups = stored.filter { group in
-            Self.isWellFormed(group)
-                && seenGroupIDs.insert(group.groupID).inserted
-                && key(forGroupID: group.groupID) != nil
+        var loaded: [BitchatGroup] = []
+        for group in stored {
+            guard Self.isWellFormed(group),
+                  seenGroupIDs.insert(group.groupID).inserted else { continue }
+            switch keychain.getIdentityKeyWithResult(forKey: Self.keychainKey(for: group.groupID)) {
+            case .success(let keyData):
+                keyCache[group.groupID] = keyData
+                loaded.append(group)
+            case .itemNotFound:
+                continue
+            case .deviceLocked, .authenticationFailed, .accessDenied, .otherError:
+                loadUnavailable = true
+                SecureLogger.warning("⚠️ Group key keychain read unavailable at launch; deferring writes", category: .security)
+                return
+            }
         }
+        loadUnavailable = false
+        groups = loaded
     }
 }

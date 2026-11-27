@@ -61,28 +61,18 @@ struct MessageRateLimiter {
         self.bucketIdleTTL = bucketIdleTTL
     }
 
-    /// - Parameter powBits: validated NIP-13 difficulty of the event
-    ///   (`NostrPoW.validatedDifficulty`; 0 for mesh or no-PoW events).
-    ///   At or above `NostrPoW.rateLimitBypassBits` the per-sender bucket is
-    ///   skipped entirely — each such message paid for itself with work — but
-    ///   the per-content flood bucket still applies.
-    mutating func allow(senderKey: String, contentKey: String, powBits: Int = 0, now: Date = Date()) -> Bool {
-        let senderAllowed: Bool
-        if powBits >= NostrPoW.rateLimitBypassBits {
-            senderAllowed = true
-        } else {
-            var senderBucket = Self.bucket(
-                for: senderKey,
-                in: &senderBuckets,
-                capacity: senderCapacity,
-                refillPerSec: senderRefill,
-                maxBuckets: maxSenderBuckets,
-                idleTTL: bucketIdleTTL,
-                now: now
-            )
-            senderAllowed = senderBucket.allow(now: now)
-            senderBuckets[senderKey] = senderBucket
-        }
+    mutating func allow(senderKey: String, contentKey: String, now: Date = Date()) -> Bool {
+        var senderBucket = Self.bucket(
+            for: senderKey,
+            in: &senderBuckets,
+            capacity: senderCapacity,
+            refillPerSec: senderRefill,
+            maxBuckets: maxSenderBuckets,
+            idleTTL: bucketIdleTTL,
+            now: now
+        )
+        let senderAllowed = senderBucket.allow(now: now)
+        senderBuckets[senderKey] = senderBucket
 
         // Rejected senders must not mint attacker-keyed content entries.
         guard senderAllowed else { return false }

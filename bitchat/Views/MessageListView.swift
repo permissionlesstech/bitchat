@@ -683,6 +683,7 @@ private extension MessageListContentView {
 
     func handleOpenURL(_ url: URL) {
         guard url.scheme == "bitchat" else { return }
+        guard appEnvironmentModels?.appChromeModel.panicWipeBlocked != true else { return }
         switch url.host {
         case "user":
             let id = url.path.trimmingCharacters(in: CharacterSet(charactersIn: "/"))

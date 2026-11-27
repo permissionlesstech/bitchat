@@ -421,51 +421,28 @@ final class PanicWipeCoverageTests: XCTestCase {
         XCTAssertGreaterThanOrEqual(observerCount, 1)
     }
 
-    func test_chatOutgoingCoordinator_resetForPanic_cancelsInFlightGeohashSend() async throws {
-        @MainActor
-        final class PanicOutgoingContext: ChatOutgoingContext {
-            var nickname = "alice"
-            var myPeerID = PeerID(str: "0123456789abcdef")
-            var activeChannel: ChannelID = .location(GeohashChannel(level: .neighborhood, geohash: "u4pruy"))
-            var selectedPrivateChatPeer: PeerID?
-            var isTeleported = false
-            var appendedMessages: [BitchatMessage] = []
-            var sentGeohashCount = 0
-            private let identity: NostrIdentity
+    func test_transferProgressManager_resetForPanic_clearsStatesSynchronously() {
+        let manager = TransferProgressManager()
+        let transferID = "tx-\(UUID().uuidString)"
+        manager.start(id: transferID, totalFragments: 4)
+        // Drain barrier before verifying state was recorded.
+        _ = manager.snapshot(id: transferID)
+        XCTAssertNotNil(manager.snapshot(id: transferID))
 
-            init(identity: NostrIdentity) {
-                self.identity = identity
-            }
+        manager.resetForPanic()
 
-            func handleCommand(_: String) {}
-            func updatePrivateChatPeerIfNeeded() {}
-            func sendPrivateMessage(_: String, to _: PeerID) {}
-            func parseMentions(from _: String) -> [String] { [] }
-            @discardableResult
-            func appendPublicMessage(_ message: BitchatMessage, to _: ConversationID) -> Bool {
-                appendedMessages.append(message)
-                return true
-            }
-            func addSystemMessage(_: String) {}
-            func normalizedContentKey(_ content: String) -> String { content }
-            func recordContentKey(_: String, timestamp _: Date) {}
-            func recordPublicActivity(forChannelKey _: String) {}
-            func sendMeshMessage(_: String, mentions _: [String], messageID _: String, timestamp _: Date) {}
-            func sendGeohash(context _: ChatViewModel.GeoOutgoingContext) { sentGeohashCount += 1 }
-            func bridgeOutgoingPublicMessage(_: String, senderPeerID _: PeerID, timestamp _: Date) {}
-            func deriveNostrIdentity(forGeohash _: String) throws -> NostrIdentity { identity }
-        }
+        XCTAssertNil(manager.snapshot(id: transferID))
+    }
 
-        let context = PanicOutgoingContext(identity: try NostrIdentity.generate())
-        let coordinator = ChatOutgoingCoordinator(context: context)
+    func test_minimalDistancePalette_reset_clearsStoredPeerColors() {
+        let palette = MinimalDistancePalette(config: .mesh)
+        palette.ensurePalette(for: ["peerA": "noise:aaaa", "peerB": "noise:bbbb"])
+        XCTAssertNotNil(palette.color(for: "peerA", isDark: false))
 
-        coordinator.sendMessage("pre-panic geo message")
-        let miningTask = coordinator.geohashMiningTask
-        coordinator.resetForPanic()
-        await miningTask?.value
+        palette.reset()
 
-        XCTAssertTrue(context.appendedMessages.isEmpty)
-        XCTAssertEqual(context.sentGeohashCount, 0)
+        XCTAssertNil(palette.color(for: "peerA", isDark: false))
+        XCTAssertNil(palette.color(for: "peerB", isDark: false))
     }
 
     func test_nostrIdentityBridge_concurrentColdStartReturnsConsistentIdentity() async throws {

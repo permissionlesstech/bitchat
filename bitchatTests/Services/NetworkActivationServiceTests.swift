@@ -220,6 +220,20 @@ final class NetworkActivationServiceTests: XCTestCase {
         XCTAssertTrue(deactivated)
     }
 
+    func test_stopForPanic_restoresTorPreferenceAndProxyMode() {
+        let context = makeService(permission: .authorized, favorites: [])
+        context.service.start()
+        context.service.setUserTorEnabled(false)
+        XCTAssertFalse(context.service.userTorEnabled)
+        XCTAssertEqual(context.storage.object(forKey: NetworkActivationService.torPreferenceKey) as? Bool, false)
+
+        context.service.stopForPanic()
+
+        XCTAssertTrue(context.service.userTorEnabled)
+        XCTAssertNil(context.storage.object(forKey: NetworkActivationService.torPreferenceKey))
+        XCTAssertEqual(context.proxyController.proxyModes.last, true)
+    }
+
     private func makeService(
         permission: LocationChannelManager.PermissionState,
         favorites: Set<Data>,

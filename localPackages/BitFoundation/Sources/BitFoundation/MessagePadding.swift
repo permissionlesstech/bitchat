@@ -10,18 +10,16 @@ import struct Foundation.Data
 
 /// Provides privacy-preserving message padding to obscure actual content length.
 ///
-/// PKCS#7-style: every pad byte equals the pad length, which is what `unpad`
-/// verifies. The bytes are not random.
+/// PKCS#7-style: every pad byte equals the pad length (1...255), which is what
+/// `unpad` verifies. The bytes are not random.
 ///
-/// Two limits are worth knowing before relying on this for traffic analysis
-/// resistance. Only Noise frames are padded at all (see the outbound packet
-/// policy); everything else travels at its natural length. And because the pad
-/// length has to fit in one byte, `pad` declines any request needing more than
-/// 255 bytes — so a frame far below its target bucket is emitted unpadded
-/// rather than padded to a smaller bucket.
+/// Using a 256-byte bucket stride up to 2048 bytes guarantees that every frame
+/// in 1...2048 bytes requires 0...255 bytes of padding, eliminating the gaps
+/// where single-byte PKCS#7 previously emitted frames unpadded.
 struct MessagePadding {
-    // Standard block sizes for padding
-    static let blockSizes = [256, 512, 1024, 2048]
+    // 256-byte stride keeps required padding strictly within 0...255 bytes
+    // (single-byte PKCS#7 wire format, 100% compatible with existing unpad).
+    static let blockSizes = [256, 512, 768, 1024, 1280, 1536, 1792, 2048]
     
     // Add PKCS#7-style padding to reach target size
     static func pad(_ data: Data, toSize targetSize: Int) -> Data {
@@ -65,12 +63,11 @@ struct MessagePadding {
     
     // Find optimal block size for data
     static func optimalBlockSize(for dataSize: Int) -> Int {
-        // Account for encryption overhead (~16 bytes for AES-GCM tag)
-        let totalSize = dataSize + 16
-        
-        // Find smallest block that fits
+        // Find smallest 256-byte multiple >= dataSize. Because `blockSizes`
+        // uses a 256-byte stride, `blockSize - dataSize` is always in 0...255,
+        // so every frame <= 2048 bytes emits at an exact bucket boundary.
         for blockSize in blockSizes {
-            if totalSize <= blockSize {
+            if dataSize <= blockSize {
                 return blockSize
             }
         }

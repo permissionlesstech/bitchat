@@ -28,6 +28,11 @@ final class FavoritesPersistenceService: ObservableObject {
     private static let storageKey = "chat.bitchat.favorites"
     private static let keychainService = "chat.bitchat.favorites"
     private let keychain: KeychainManagerProtocol
+    /// True when the initial keychain read failed due to a transient error
+    /// (e.g. locked boot) rather than `.itemNotFound`. While true, `saveFavorites()`
+    /// refuses to overwrite the Keychain with an incomplete in-memory map so
+    /// existing favorites are never clobbered.
+    private var loadUnavailable = false
     
     @Published private(set) var favorites: [Data: FavoriteRelationship] = [:] { // Noise pubkey -> relationship
         didSet { rebuildNostrKeyIndex() }
@@ -224,6 +229,7 @@ final class FavoritesPersistenceService: ObservableObject {
     func clearAllFavorites() {
         SecureLogger.warning("🧹 Clearing all favorites (panic mode)", category: .session)
         
+        loadUnavailable = false
         favorites.removeAll()
         
         // Delete from keychain directly
@@ -239,6 +245,10 @@ final class FavoritesPersistenceService: ObservableObject {
     // MARK: - Persistence
     
     private func saveFavorites() {
+        guard !loadUnavailable else {
+            SecureLogger.warning("⚠️ Skipping favorites save while prior keychain read was unavailable", category: .security)
+            return
+        }
         let relationships = Array(favorites.values)
         // Saving favorite relationships to keychain
         
@@ -262,12 +272,21 @@ final class FavoritesPersistenceService: ObservableObject {
     
     private func loadFavorites() {
         // Loading favorites from keychain
-        
-        guard let data = keychain.load(
+        let data: Data
+        switch keychain.loadWithResult(
             key: Self.storageKey,
             service: Self.keychainService
-        ) else { 
-            return 
+        ) {
+        case .success(let loadedData):
+            loadUnavailable = false
+            data = loadedData
+        case .itemNotFound:
+            loadUnavailable = false
+            return
+        case .deviceLocked, .authenticationFailed, .accessDenied, .otherError:
+            loadUnavailable = true
+            SecureLogger.warning("⚠️ Favorites keychain read unavailable at launch; deferring writes to prevent overwrite", category: .security)
+            return
         }
         
         do {

@@ -487,17 +487,38 @@ public final class TorManager: ObservableObject {
         }
     }
 
-    /// Panic-wipe hook: removes `Application Support/bitchat/arti` (guard
-    /// nodes, state, consensus cache). If Arti is starting, running, or
-    /// shutting down, defers removal until serialized `arti_stop()` finishes so
-    /// SQLite/state files are deleted cleanly before any post-panic restart.
+    /// Panic-wipe hook: synchronously stops Arti and removes
+    /// `Application Support/bitchat/arti` (guard nodes, state, consensus cache)
+    /// before returning so panic completion never reports success while Tor
+    /// state files are still on disk.
     public func wipeStateDirectoryForPanic() {
-        if shutdownsInFlight > 0 || isStarting || didStart || arti_is_running() != 0 {
+        bootstrapGeneration += 1
+        startPendingAfterShutdown = false
+        for (_, waiter) in readyWaiters {
+            waiter.timeoutTask.cancel()
+            waiter.continuation.resume(returning: false)
+        }
+        readyWaiters.removeAll()
+        isReady = false
+        socksReady = false
+        bootstrapProgress = 0
+        isStarting = false
+        didStart = false
+        restarting = false
+        bootstrapMonitorStarted = false
+
+        if shutdownsInFlight > 0 || arti_is_running() != 0 {
+            // Keep the deferred flag set as defense-in-depth in case an
+            // in-flight shutdown task completes after we return.
             wipeDataDirectoryOnShutdown = true
-            if shutdownsInFlight == 0 {
-                shutdownCompletely()
+            _ = arti_stop()
+            // Bounded synchronous wait for the Rust runtime to drop file
+            // handles before unlinking the state directory (~200 ms typical).
+            var polls = 0
+            while arti_is_running() != 0 && polls < 100 {
+                usleep(20_000)
+                polls += 1
             }
-            return
         }
         removeDataDirectoryOnDisk()
     }
