@@ -12,7 +12,6 @@ import Foundation
 @MainActor
 protocol ChatPeerListContext: AnyObject {
     // MARK: Connection & chat state
-    var isConnected: Bool { get set }
     /// A single private chat's timeline (store-direct lookup on
     /// `ChatViewModel`; no `privateChats` dictionary build).
     func privateMessages(for peerID: PeerID) -> [BitchatMessage]
@@ -30,7 +29,6 @@ protocol ChatPeerListContext: AnyObject {
     /// Number of mesh peers currently connected or reachable, from the
     /// transport's live peer snapshots.
     func activeMeshPeerCount() -> Int
-    func registerEphemeralSession(peerID: PeerID)
     func updateEncryptionStatusForPeers()
 
     // MARK: Notifications
@@ -111,7 +109,6 @@ final class ChatPeerListCoordinator: @unchecked Sendable {
 private extension ChatPeerListCoordinator {
     @MainActor
     func handlePeerListUpdate(_ peers: [PeerID]) {
-        context.isConnected = !peers.isEmpty
         cleanupStaleUnreadPeerIDs()
 
         let meshPeers = peers.filter { peerID in
@@ -119,10 +116,6 @@ private extension ChatPeerListCoordinator {
         }
 
         handleNetworkAvailability(meshPeers)
-
-        for peerID in peers {
-            context.registerEphemeralSession(peerID: peerID)
-        }
 
         context.updateEncryptionStatusForPeers()
 

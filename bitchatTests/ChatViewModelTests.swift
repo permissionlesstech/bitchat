@@ -918,8 +918,6 @@ struct ChatViewModelPeerTests {
 
         viewModel.didReceiveTransportEvent(.peerConnected(peerID))
 
-        #expect(viewModel.isConnected)
-
         viewModel.didReceiveTransportEvent(.peerDisconnected(peerID))
 
         #expect(!viewModel.sentReadReceipts.contains(incoming.id))
@@ -966,11 +964,6 @@ struct ChatViewModelPeerTests {
         viewModel.didReceiveTransportEvent(.bluetoothStateUpdated(.poweredOff))
         #expect(viewModel.bluetoothState == .poweredOff)
         #expect(viewModel.showBluetoothAlert)
-
-        // Snapshot events belong to TransportPeerEventsDelegate and are
-        // intentionally ignored at this typed sink.
-        viewModel.didReceiveTransportEvent(.peerSnapshotsUpdated([]))
-        #expect(viewModel.bluetoothState == .poweredOff)
     }
 
     @Test @MainActor

@@ -3,30 +3,20 @@ import Testing
 
 struct BLEScanDutyPolicyTests {
     @Test
-    func continuousScanWhenDutyIsDisabledInactiveDisconnectedOrTrafficIsRecent() {
+    func continuousScanWhenInactiveDisconnectedOrTrafficIsRecent() {
         #expect(BLEScanDutyPolicy.plan(
-            dutyEnabled: false,
-            appIsActive: true,
-            connectedCount: 4,
-            hasRecentTraffic: false
-        ) == .continuous)
-
-        #expect(BLEScanDutyPolicy.plan(
-            dutyEnabled: true,
             appIsActive: false,
             connectedCount: 4,
             hasRecentTraffic: false
         ) == .continuous)
 
         #expect(BLEScanDutyPolicy.plan(
-            dutyEnabled: true,
             appIsActive: true,
             connectedCount: 0,
             hasRecentTraffic: false
         ) == .continuous)
 
         #expect(BLEScanDutyPolicy.plan(
-            dutyEnabled: true,
             appIsActive: true,
             connectedCount: 4,
             hasRecentTraffic: true
@@ -36,7 +26,6 @@ struct BLEScanDutyPolicyTests {
     @Test
     func continuousScanForSmallMeshes() {
         #expect(BLEScanDutyPolicy.plan(
-            dutyEnabled: true,
             appIsActive: true,
             connectedCount: 2,
             hasRecentTraffic: false
@@ -46,7 +35,6 @@ struct BLEScanDutyPolicyTests {
     @Test
     func dutyCyclesSparseActiveMeshes() {
         let plan = BLEScanDutyPolicy.plan(
-            dutyEnabled: true,
             appIsActive: true,
             connectedCount: 3,
             hasRecentTraffic: false
@@ -61,7 +49,6 @@ struct BLEScanDutyPolicyTests {
     @Test
     func dutyCyclesDenseActiveMeshesWithDenseDurations() {
         let plan = BLEScanDutyPolicy.plan(
-            dutyEnabled: true,
             appIsActive: true,
             connectedCount: TransportConfig.bleHighDegreeThreshold,
             hasRecentTraffic: false
@@ -76,7 +63,6 @@ struct BLEScanDutyPolicyTests {
     @Test
     func lowPowerModeDutyCyclesEvenWhenDisconnectedOrSparse() {
         let idlePlan = BLEScanDutyPolicy.plan(
-            dutyEnabled: true,
             appIsActive: true,
             connectedCount: 0,
             hasRecentTraffic: false,
@@ -85,7 +71,6 @@ struct BLEScanDutyPolicyTests {
         #expect(idlePlan == .dutyCycle(onDuration: 3.0, offDuration: 15.0))
 
         let densePlan = BLEScanDutyPolicy.plan(
-            dutyEnabled: true,
             appIsActive: true,
             connectedCount: TransportConfig.bleHighDegreeThreshold,
             hasRecentTraffic: false,
@@ -95,7 +80,6 @@ struct BLEScanDutyPolicyTests {
 
         // Active traffic still keeps continuous scanning so conversations stay snappy.
         let activePlan = BLEScanDutyPolicy.plan(
-            dutyEnabled: true,
             appIsActive: true,
             connectedCount: 3,
             hasRecentTraffic: true,

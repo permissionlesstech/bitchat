@@ -195,7 +195,7 @@ final class BLEService: NSObject {
     // Default per-fragment chunk size when link limits are unknown
     private let defaultFragmentSize = TransportConfig.bleDefaultFragmentSize
     private let bleMaxMTU = 512
-    private let maxMessageLength = InputValidator.Limits.maxMessageLength
+    private let maxMessageLength = TransportConfig.maxMessageLength
     private let messageTTL: UInt8 = TransportConfig.messageTTLDefault
     // Flood/battery controls
     private let maxInFlightAssemblies = TransportConfig.bleMaxInFlightAssemblies // cap concurrent fragment assemblies
@@ -262,8 +262,6 @@ final class BLEService: NSObject {
         if FavoritesPersistenceService.shared.isMutualFavorite(depositorNoiseKey) { return .favorite }
         return isVerifiedPeer ? .verified : nil
     }
-    // Local-only store-and-forward counters; nil in unit tests.
-    var sfMetrics: StoreAndForwardMetrics?
 
     // Verified one-time prekey bundles gossiped by other peers, used to seal
     // courier mail forward-secretly. Injectable for tests.
@@ -335,6 +333,7 @@ final class BLEService: NSObject {
     // Application state tracking (thread-safe)
     #if os(iOS)
     var isAppActive: Bool = true  // Assume active initially
+    #if DEBUG
     /// Last `UIApplication.shared.backgroundTimeRemaining` sampled on the
     /// main thread, cached so bleQueue status logs can read it without ever
     /// dispatching to main (see `captureBluetoothStatus` for the invariant).
@@ -344,6 +343,7 @@ final class BLEService: NSObject {
         backgroundTimeLock.lock(); defer { backgroundTimeLock.unlock() }
         return _cachedBackgroundTimeRemaining
     }
+    #endif
     #endif
     
     // MARK: - Core BLE Objects
@@ -435,7 +435,7 @@ final class BLEService: NSObject {
     // Ingress link tracking for duplicate and last-hop suppression
     // (lock-backed: recorded on bleQueue the moment a frame decodes, read
     // by engine relay/routing decisions)
-    private let ingressLinks = BLEIngressLinkStore()
+    private var ingressLinks = BLEIngressLinkRegistry()
     // Inner message IDs of recently opened courier envelopes. Redundant
     // copies of one message ride different envelopes (each seal uses a fresh
     // ephemeral key, and bridge drops multiply across relays/couriers), so
@@ -559,7 +559,9 @@ final class BLEService: NSObject {
         // wake window that matters.
         if Thread.isMainThread {
             isAppActive = UIApplication.shared.applicationState == .active
+            #if DEBUG
             refreshCachedBackgroundTimeRemaining()
+            #endif
         } else {
             // queue-contract-ok: init-time only — no engine or bleQueue work
             // exists yet that main could be sync-waiting on, so this cannot
@@ -567,7 +569,9 @@ final class BLEService: NSObject {
             // state instead (see scheduleBluetoothStatusSample).
             DispatchQueue.main.sync {
                 isAppActive = UIApplication.shared.applicationState == .active
+                #if DEBUG
                 refreshCachedBackgroundTimeRemaining()
+                #endif
             }
         }
         
@@ -3413,8 +3417,7 @@ extension BLEService {
                 signingPublicKey: nil,
                 isVerifiedNickname: true,
                 lastSeen: Date(),
-                capabilities: capabilities ?? [],
-                capabilitiesWereExplicitlyAdvertised: capabilities != nil
+                capabilities: capabilities ?? []
             ))
         }
     }
@@ -3538,14 +3541,7 @@ extension BLEService {
     }
 
     func _test_drainNoiseMessagePipeline() async {
-        let queue = messageQueue
-        await withCheckedContinuation { continuation in
-            queue.async {
-                queue.async {
-                    continuation.resume()
-                }
-            }
-        }
+        await _test_drainPrivateMediaSendPipeline()
     }
 
     /// Replays the current generation's ready callback. Restore tests use
@@ -3590,12 +3586,6 @@ extension BLEService {
 }
 #endif
 
-
-// MARK: - Advertising Builders & Alias Rotation
-
-extension BLEService {
-    // Advertising payload and alias policy live on BLERadioController.
-}
 
 // MARK: - Private Media Deletion
 
@@ -3814,7 +3804,7 @@ extension BLEService {
         #endif
     }
 
-    #if os(iOS)
+    #if DEBUG && os(iOS)
     /// Main thread only (reads main-actor UIApplication state).
     private func refreshCachedBackgroundTimeRemaining() {
         dispatchPrecondition(condition: .onQueue(.main))
@@ -3825,6 +3815,7 @@ extension BLEService {
     }
     #endif
 
+    #if DEBUG
     private func captureBluetoothStatus(context: String) {
         assert(DispatchQueue.getSpecific(key: bleQueueKey) != nil, "captureBluetoothStatus must run on bleQueue")
 
@@ -3868,6 +3859,7 @@ extension BLEService {
             category: .session
         )
     }
+    #endif
 
     private func routingData(for peerID: PeerID) -> Data? {
         peerID.toShort().routingData
@@ -4747,11 +4739,6 @@ extension BLEService {
         }
     }
 
-    /// Our own Noise static public key (for computing our courier tags).
-    func myNoiseStaticPublicKey() -> Data {
-        noiseService.getStaticPublicKeyData()
-    }
-
     /// Verified reachable peers with known Noise keys — the set a bridge
     /// gateway watches courier drops for.
     func verifiedPeersWithNoiseKeys() -> [(peerID: PeerID, noiseKey: Data)] {
@@ -4876,7 +4863,6 @@ extension BLEService {
             let isKnownOnMesh = peerRegistry.info(for: shortID) != nil
             let senderPeerID = isKnownOnMesh ? shortID : PeerID(hexData: senderStaticKey)
             SecureLogger.debug("📦 Opened courier envelope from \(senderPeerID.id.prefix(8))…", category: .session)
-            sfMetrics?.record(.courierOpened)
             notifyUI { [weak self] in
                 self?.deliverTransportEvent(.noisePayloadReceived(
                     peerID: senderPeerID,
@@ -4916,7 +4902,6 @@ extension BLEService {
         let isVerifiedPeer = depositorInfo?.isVerifiedNickname ?? false
         let store = courierStore
         let policy = courierDepositPolicy
-        let metrics = sfMetrics
         notifyUI { [weak self] in
             guard let self else { return }
             guard let tier = policy(depositorKey, isVerifiedPeer) else {
@@ -4926,7 +4911,6 @@ extension BLEService {
             self.messageQueue.async {
                 if store.deposit(envelope, from: depositorKey, tier: tier) {
                     SecureLogger.debug("📦 Carrying courier envelope deposited by \(peerID.id.prefix(8))… (\(tier.rawValue))", category: .session)
-                    metrics?.record(.courierAccepted)
                 }
             }
         }
@@ -4934,7 +4918,6 @@ extension BLEService {
 
     /// Hand over any carried envelopes addressed to a peer we just heard from.
     private func deliverCourierMail(to peerID: PeerID, noiseKey: Data) {
-        let metrics = sfMetrics
         let accepted = courierStore.handoverEnvelopes(for: noiseKey) { [weak self] envelope in
             guard let self,
                   let payload = envelope.encode(),
@@ -4946,7 +4929,6 @@ extension BLEService {
                   ) else {
                 return false
             }
-            metrics?.record(.courierHandedOver)
             return true
         }
         if accepted > 0 {
@@ -4969,7 +4951,6 @@ extension BLEService {
         for envelope in envelopes {
             guard let payload = envelope.encode() else { continue }
             broadcastPacket(makeCourierPacket(payload, to: peerID))
-            sfMetrics?.record(.courierRemoteHandover)
         }
     }
 
@@ -4979,7 +4960,6 @@ extension BLEService {
     /// mirroring the deposit policy they would apply to us.
     private func sprayCourierMail(to peerID: PeerID, noiseKey: Data, isVerifiedPeer: Bool) {
         let store = courierStore
-        let metrics = sfMetrics
         let sendSpray: () -> Void = { [weak self] in
             guard let self else { return }
             let accepted = store.transferSprayCopies(to: noiseKey) { envelope in
@@ -4992,7 +4972,6 @@ extension BLEService {
                       ) else {
                     return false
                 }
-                metrics?.record(.courierSprayed)
                 return true
             }
             if accepted > 0 {
@@ -5428,7 +5407,9 @@ extension BLEService {
     #if os(iOS)
     @objc private func appDidBecomeActive() {
         isAppActive = true
+        #if DEBUG
         refreshCachedBackgroundTimeRemaining()
+        #endif
         // Restart scanning and refresh link-layer state on bleQueue so
         // BLERadioController state stays strictly bleQueue-confined.
         bleQueue.async { [weak self] in
@@ -5444,7 +5425,9 @@ extension BLEService {
 
     @objc private func appDidEnterBackground() {
         isAppActive = false
+        #if DEBUG
         refreshCachedBackgroundTimeRemaining()
+        #endif
         // Stop foreground duty-cycle timer; background scanning uses OS coalescing.
         bleQueue.async { [weak self] in
             guard let self else { return }
@@ -5821,7 +5804,7 @@ extension BLEService {
         // A partial train is harmlessly abandoned and the envelope stays
         // retryable with a fresh fragment ID on the next encounter.
         if request.requireDirectPeerLink {
-            let admitted = BLEStrictFragmentAdmission.admitAll(plan.fragmentPackets) { fragmentPacket in
+            let admitted = plan.fragmentPackets.allSatisfy { fragmentPacket in
                 guard sendFragment(fragmentPacket) else { return false }
                 if let transferId = transferIdentifier {
                     markFragmentSent(transferId: transferId)
@@ -7187,11 +7170,6 @@ extension BLEService {
                 continue
             }
             do {
-                if let transferId = privateMediaTransferId,
-                   !privateMediaTransferAdmissions.isActive(transferId) {
-                    privateMediaTransferAdmissions.finish(transferId)
-                    continue
-                }
                 let packet = try makeEncryptedNoisePacket(pending.payload, to: peerID)
                 if let transferId = privateMediaTransferId,
                    !privateMediaTransferAdmissions.isActive(transferId) {

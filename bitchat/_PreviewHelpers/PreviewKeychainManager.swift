@@ -64,8 +64,6 @@ final class PreviewKeychainManager: KeychainManagerProtocol {
 
     func secureClear(_ data: inout Data) {}
 
-    func secureClear(_ string: inout String) {}
-
     func verifyIdentityKeyExists() -> Bool {
         guard installAccessAllowed() else { return false }
         lock.lock()

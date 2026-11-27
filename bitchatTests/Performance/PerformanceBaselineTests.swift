@@ -297,12 +297,18 @@ final class PerformanceBaselineTests: XCTestCase {
 
     // MARK: - 5. Message formatting
 
-    /// `MessageFormattingEngine.formatMessage` over 200 messages with
+    /// `ChatMessageFormatter.formatMessageAsText` over 200 messages with
     /// mentions, hashtags, and URLs. Formatting caches per message, so each
     /// measure pass consumes a fresh pre-built batch (cache-miss path, which
     /// is the cost paid when messages first render).
     func testMessageFormatting() {
-        let context = PerfFormattingContext(nickname: "carol")
+        let viewModel = ChatViewModel(
+            keychain: MockKeychain(),
+            idBridge: NostrIdentityBridge(keychain: MockKeychain()),
+            identityManager: MockIdentityManager(MockKeychain()),
+            transport: MockTransport()
+        )
+        viewModel.nickname = "carol"
         let batchCount = 16 // > XCTest's default 10 measure iterations
         let batchSize = 200
         let contents: [(String, [String]?)] = [
@@ -336,7 +342,7 @@ final class PerformanceBaselineTests: XCTestCase {
             let start = Date()
             var formattedCharacters = 0
             for message in batch {
-                let formatted = MessageFormattingEngine.formatMessage(message, context: context, colorScheme: .light)
+                let formatted = viewModel.formatMessageAsText(message, colorScheme: .light)
                 formattedCharacters += formatted.characters.count
             }
             samples.append(Date().timeIntervalSince(start))
@@ -679,10 +685,19 @@ private final class PerfNostrContext: ChatNostrContext {
     func checkForMentions(_ message: BitchatMessage) {}
     func sendHapticFeedback(for message: BitchatMessage) {}
     func parseMentions(from content: String) -> [String] {
-        MessageFormattingEngine.extractMentions(from: content)
+        let nsContent = content as NSString
+        let matches = MessageFormattingEngine.Patterns.mention.matches(
+            in: content,
+            options: [],
+            range: NSRange(location: 0, length: nsContent.length)
+        )
+        return matches.compactMap { match in
+            guard match.numberOfRanges > 1 else { return nil }
+            let range = match.range(at: 1)
+            return range.location != NSNotFound ? nsContent.substring(with: range) : nil
+        }
     }
 
-    var selectedPrivateChatPeer: PeerID?
     var nostrKeyMapping: [PeerID: String] = [:]
     func registerNostrKeyMapping(_ pubkey: String, for peerID: PeerID) { nostrKeyMapping[peerID] = pubkey }
     func handlePrivateMessage(_ payload: NoisePayload, senderPubkey: String, convKey: PeerID, id: NostrIdentity, messageTimestamp: Date) {}
@@ -731,11 +746,9 @@ private final class PerfNostrContext: ChatNostrContext {
     func isGeohashOutsideRegionalChannels(_ geohash: String) -> Bool { false }
 
     func routeFavoriteNotification(to peerID: PeerID, isFavorite: Bool) {}
-    func sendGeohashDeliveryAck(for messageID: String, toRecipientHex recipientHex: String, from identity: NostrIdentity) {}
-    func sendGeohashReadReceipt(_ messageID: String, toRecipientHex recipientHex: String, from identity: NostrIdentity) {}
 
     func favoriteRelationship(forNoiseKey noiseKey: Data) -> FavoritesPersistenceService.FavoriteRelationship? { nil }
-    func allFavoriteRelationships() -> [FavoritesPersistenceService.FavoriteRelationship] { [] }
+    func favoriteNoiseKey(forNostrPubkey nostrPubkey: String) -> Data? { nil }
     func notifyGeohashActivity(geohash: String, bodyPreview: String) {}
 }
 
@@ -890,15 +903,4 @@ private final class PerfPipelineFixture {
         self.privateInbox = PrivateInboxModel(conversations: conversations)
         self.publicChat = PublicChatModel(conversations: conversations)
     }
-}
-
-// MARK: - Mock MessageFormattingContext
-
-@MainActor
-private final class PerfFormattingContext: MessageFormattingContext {
-    let nickname: String
-    init(nickname: String) { self.nickname = nickname }
-    func isSelfMessage(_ message: BitchatMessage) -> Bool { false }
-    func senderColor(for message: BitchatMessage, isDark: Bool) -> Color { .blue }
-    func peerURL(for peerID: PeerID) -> URL? { URL(string: "bitchat://peer/\(peerID.id)") }
 }

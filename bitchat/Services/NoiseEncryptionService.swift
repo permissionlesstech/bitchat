@@ -164,7 +164,6 @@ final class NoiseEncryptionService {
     
     // Peer fingerprints (SHA256 hash of static public key)
     private var peerFingerprints: [PeerID: String] = [:]
-    private var fingerprintToPeerID: [String: PeerID] = [:]
     // Thread safety
     private let serviceQueue = DispatchQueue(label: "chat.bitchat.noise.service", attributes: .concurrent)
     
@@ -605,56 +604,6 @@ final class NoiseEncryptionService {
         }
     }
 
-    // MARK: - Announce Signature Helpers
-
-    /// Build the canonical announce binding message bytes and sign with our Ed25519 key
-    /// - Parameters:
-    ///   - peerID: 8-byte routing ID (as in packet header)
-    ///   - noiseKey: 32-byte Curve25519.KeyAgreement public key
-    ///   - ed25519Key: 32-byte Ed25519 public key (self)
-    ///   - nickname: UTF-8 nickname (<=255 bytes)
-    ///   - timestampMs: UInt64 milliseconds since epoch
-    /// - Returns: Ed25519 signature over the canonical bytes, or nil on failure
-    func buildAnnounceSignature(peerID: Data, noiseKey: Data, ed25519Key: Data, nickname: String, timestampMs: UInt64) -> Data? {
-        let message = canonicalAnnounceBytes(peerID: peerID, noiseKey: noiseKey, ed25519Key: ed25519Key, nickname: nickname, timestampMs: timestampMs)
-        return signData(message)
-    }
-
-    /// Verify an announce signature
-    func verifyAnnounceSignature(signature: Data, peerID: Data, noiseKey: Data, ed25519Key: Data, nickname: String, timestampMs: UInt64, publicKey: Data) -> Bool {
-        let message = canonicalAnnounceBytes(peerID: peerID, noiseKey: noiseKey, ed25519Key: ed25519Key, nickname: nickname, timestampMs: timestampMs)
-        return verifySignature(signature, for: message, publicKey: publicKey)
-    }
-
-    /// Build canonical bytes for announce signing.
-    private func canonicalAnnounceBytes(peerID: Data, noiseKey: Data, ed25519Key: Data, nickname: String, timestampMs: UInt64) -> Data {
-        var out = Data()
-        // context
-        let context = Data("bitchat-announce-v1".utf8)
-        out.append(UInt8(min(context.count, 255)))
-        out.append(context.prefix(255))
-        // peerID (expect 8 bytes; pad/truncate to 8 for canonicalization)
-        let peerID8 = peerID.prefix(8)
-        out.append(peerID8)
-        if peerID8.count < 8 { out.append(Data(repeating: 0, count: 8 - peerID8.count)) }
-        // noise static key (expect 32)
-        let noise32 = noiseKey.prefix(32)
-        out.append(noise32)
-        if noise32.count < 32 { out.append(Data(repeating: 0, count: 32 - noise32.count)) }
-        // ed25519 public key (expect 32)
-        let ed32 = ed25519Key.prefix(32)
-        out.append(ed32)
-        if ed32.count < 32 { out.append(Data(repeating: 0, count: 32 - ed32.count)) }
-        // nickname length + bytes
-        let nickData = Data(nickname.utf8)
-        out.append(UInt8(min(nickData.count, 255)))
-        out.append(nickData.prefix(255))
-        // timestamp
-        var ts = timestampMs.bigEndian
-        withUnsafeBytes(of: &ts) { raw in out.append(contentsOf: raw) }
-        return out
-    }
-    
     // MARK: - Packet Signing/Verification
     
     /// Sign a BitchatPacket using the noise private key
@@ -1002,7 +951,6 @@ final class NoiseEncryptionService {
         sessionManager.removeAllSessions()
         serviceQueue.sync(flags: .barrier) {
             peerFingerprints.removeAll()
-            fingerprintToPeerID.removeAll()
         }
         rateLimiter.resetAll()
     }
@@ -1011,9 +959,7 @@ final class NoiseEncryptionService {
     func clearSession(for peerID: PeerID) {
         sessionManager.removeSession(for: peerID)
         serviceQueue.sync(flags: .barrier) {
-            if let fingerprint = peerFingerprints.removeValue(forKey: peerID) {
-                fingerprintToPeerID.removeValue(forKey: fingerprint)
-            }
+            _ = peerFingerprints.removeValue(forKey: peerID)
         }
         SecureLogger.debug("🔓 Cleared Noise session for \(peerID)", category: .session)
     }
@@ -1037,7 +983,6 @@ final class NoiseEncryptionService {
             legacy: [(PeerID, String) -> Void]
         ) = serviceQueue.sync(flags: .barrier) {
             peerFingerprints[peerID] = fingerprint
-            fingerprintToPeerID[fingerprint] = peerID
             return (onPeerAuthenticatedWithGenerationHandlers, onPeerAuthenticatedHandlers)
         }
         
@@ -1099,82 +1044,6 @@ final class NoiseEncryptionService {
     
     deinit {
         stopRekeyTimer()
-    }
-}
-
-// MARK: - Protocol Message Types for Noise
-
-/// Message types for the Noise encryption protocol layer.
-/// These types wrap the underlying BitChat protocol messages with encryption metadata.
-enum NoiseMessageType: UInt8 {
-    case handshakeInitiation = 0x10
-    case handshakeResponse = 0x11
-    case handshakeFinal = 0x12
-    case encryptedMessage = 0x13
-    case sessionRenegotiation = 0x14
-}
-
-// MARK: - Noise Message Wrapper
-
-/// Container for encrypted messages in the Noise protocol.
-/// Provides versioning and type information for proper message handling.
-/// The actual message content is encrypted in the payload field.
-struct NoiseMessage: Codable {
-    let type: UInt8
-    let sessionID: String  // Random ID for this handshake session
-    let payload: Data
-    
-    init(type: NoiseMessageType, sessionID: String, payload: Data) {
-        self.type = type.rawValue
-        self.sessionID = sessionID
-        self.payload = payload
-    }
-    
-    func encode() -> Data? {
-        do {
-            let encoded = try JSONEncoder().encode(self)
-            return encoded
-        } catch {
-            return nil
-        }
-    }
-    
-    static func decode(from data: Data) -> NoiseMessage? {
-        return try? JSONDecoder().decode(NoiseMessage.self, from: data)
-    }
-    
-    static func decodeWithError(from data: Data) -> NoiseMessage? {
-        do {
-            let decoded = try JSONDecoder().decode(NoiseMessage.self, from: data)
-            return decoded
-        } catch {
-            return nil
-        }
-    }
-    
-    // MARK: - Binary Encoding
-    
-    func toBinaryData() -> Data {
-        var data = Data()
-        data.appendUInt8(type)
-        data.appendUUID(sessionID)
-        data.appendData(payload)
-        return data
-    }
-    
-    static func fromBinaryData(_ data: Data) -> NoiseMessage? {
-        // Create defensive copy
-        let dataCopy = Data(data)
-        
-        var offset = 0
-        
-        guard let type = dataCopy.readUInt8(at: &offset),
-              let sessionID = dataCopy.readUUID(at: &offset),
-              let payload = dataCopy.readData(at: &offset) else { return nil }
-        
-        guard let messageType = NoiseMessageType(rawValue: type) else { return nil }
-        
-        return NoiseMessage(type: messageType, sessionID: sessionID, payload: payload)
     }
 }
 

@@ -27,46 +27,11 @@ struct NoiseEncryptionServiceTests {
         #expect(!EncryptionStatus.noiseVerified.accessibilityDescription.isEmpty)
     }
 
-    @Test("Announce and packet signatures round-trip and detect tampering")
+    @Test("Packet signatures round-trip and detect tampering")
     func announceAndPacketSignaturesRoundTrip() throws {
         let service = NoiseEncryptionService(keychain: MockKeychain())
         let signingPublicKey = service.getSigningPublicKeyData()
-        let noisePublicKey = service.getStaticPublicKeyData()
-
-        let signature = try #require(
-            service.buildAnnounceSignature(
-                peerID: Data([0xAA, 0xBB]),
-                noiseKey: noisePublicKey,
-                ed25519Key: signingPublicKey,
-                nickname: "Alice",
-                timestampMs: 12345
-            ),
-            "Expected announce signature"
-        )
-
-        #expect(
-            service.verifyAnnounceSignature(
-                signature: signature,
-                peerID: Data([0xAA, 0xBB]),
-                noiseKey: noisePublicKey,
-                ed25519Key: signingPublicKey,
-                nickname: "Alice",
-                timestampMs: 12345,
-                publicKey: signingPublicKey
-            )
-        )
-        #expect(
-            !service.verifyAnnounceSignature(
-                signature: signature,
-                peerID: Data([0xAA, 0xBB]),
-                noiseKey: noisePublicKey,
-                ed25519Key: signingPublicKey,
-                nickname: "Mallory",
-                timestampMs: 12345,
-                publicKey: signingPublicKey
-            )
-        )
-        #expect(!service.verifySignature(signature, for: Data("data".utf8), publicKey: Data([1, 2, 3])))
+        #expect(!service.verifySignature(Data(repeating: 0x01, count: 64), for: Data("data".utf8), publicKey: Data([1, 2, 3])))
 
         let packet = BitchatPacket(
             type: MessageType.announce.rawValue,
@@ -1466,30 +1431,6 @@ struct NoiseEncryptionServiceTests {
             establishedGenerationIsReady: { _ in true }
         )
         #expect(decrypted.plaintext == plaintext)
-    }
-
-    @Test("NoiseMessage JSON and binary encoding round-trip")
-    func noiseMessageRoundTrips() throws {
-        let message = NoiseMessage(
-            type: .encryptedMessage,
-            sessionID: UUID().uuidString,
-            payload: Data([1, 2, 3, 4])
-        )
-
-        let encoded = try #require(message.encode(), "Expected JSON encoding")
-        let decoded = try #require(NoiseMessage.decode(from: encoded), "Expected JSON decode")
-        #expect(decoded.type == message.type)
-        #expect(decoded.sessionID == message.sessionID)
-        #expect(decoded.payload == message.payload)
-
-        #expect(NoiseMessage.decodeWithError(from: Data("bad".utf8)) == nil)
-
-        let binary = message.toBinaryData()
-        let roundTripped = try #require(NoiseMessage.fromBinaryData(binary), "Expected binary decode")
-        #expect(roundTripped.type == message.type)
-        #expect(roundTripped.sessionID == message.sessionID)
-        #expect(roundTripped.payload == message.payload)
-        #expect(NoiseMessage.fromBinaryData(Data()) == nil)
     }
 
     private func establishSessions(

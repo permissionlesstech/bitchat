@@ -74,7 +74,6 @@ struct ProtocolContractTests {
         #expect(DeliveryStatus.read(by: "Bob", at: Date()).displayText == "Read by Bob")
         #expect(DeliveryStatus.failed(reason: "oops").displayText == "Failed: oops")
         #expect(DeliveryStatus.partiallyDelivered(reached: 1, total: 3).displayText == "Delivered to 1/3")
-        #expect(delegate.isFavorite(fingerprint: "fp") == false)
 
         delegate.didUpdateMessageDeliveryStatus("msg-1", status: .sent)
         delegate.didReceiveNoisePayload(from: peerID, type: .privateMessage, payload: Data(), timestamp: Date())

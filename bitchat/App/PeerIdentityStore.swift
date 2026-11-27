@@ -80,10 +80,6 @@ final class PeerIdentityStore: ObservableObject {
         }
     }
 
-    func encryptionStatus(for peerID: PeerID) -> EncryptionStatus? {
-        encryptionStatuses[peerID]
-    }
-
     func setEncryptionStatus(_ status: EncryptionStatus?, for peerID: PeerID) {
         if encryptionStatuses[peerID] != status {
             if let status {

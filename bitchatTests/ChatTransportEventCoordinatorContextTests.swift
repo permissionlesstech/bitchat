@@ -24,7 +24,6 @@ import BitFoundation
 @MainActor
 private final class MockChatTransportEventContext: ChatTransportEventContext {
     // Connection & chat state
-    var isConnected = false
     var nickname = "me"
     var myPeerID = PeerID(str: "0011223344556677")
     var privateChats: [PeerID: [BitchatMessage]] = [:]
@@ -105,14 +104,10 @@ private final class MockChatTransportEventContext: ChatTransportEventContext {
     var peersByID: [PeerID: BitchatPeer] = [:]
     var noiseSessionKeysByPeerID: [PeerID: Data] = [:]
     private(set) var stablePeerIDCache: [PeerID: PeerID] = [:]
-    private(set) var registeredEphemeralSessions: [PeerID] = []
-    private(set) var removedEphemeralSessions: [PeerID] = []
 
     func isPeerBlocked(_ peerID: PeerID) -> Bool { blockedPeers.contains(peerID) }
     func unifiedPeer(for peerID: PeerID) -> BitchatPeer? { peersByID[peerID] }
     func resolveNickname(for peerID: PeerID) -> String { "anon\(peerID.id.prefix(4))" }
-    func registerEphemeralSession(peerID: PeerID) { registeredEphemeralSessions.append(peerID) }
-    func removeEphemeralSession(peerID: PeerID) { removedEphemeralSessions.append(peerID) }
     func noiseSessionPublicKeyData(for peerID: PeerID) -> Data? { noiseSessionKeysByPeerID[peerID] }
     func cacheStablePeerID(_ stablePeerID: PeerID, for shortPeerID: PeerID) {
         stablePeerIDCache[shortPeerID] = stablePeerID
@@ -340,8 +335,6 @@ struct ChatTransportEventCoordinatorContextTests {
 
         coordinator.didConnectToPeer(peerID)
         await drainMainActorTasks()
-        #expect(context.isConnected)
-        #expect(context.registeredEphemeralSessions == [peerID])
         #expect(context.stablePeerIDCache[peerID] == PeerID(hexData: noiseKey))
         #expect(context.flushedOutboxPeerIDs == [peerID])
         #expect(context.notifyUIChangedCount == 1)
@@ -355,7 +348,6 @@ struct ChatTransportEventCoordinatorContextTests {
         ]
         coordinator.didDisconnectFromPeer(peerID)
         await drainMainActorTasks()
-        #expect(context.removedEphemeralSessions == [peerID])
         #expect(context.unmarkedReadReceiptBatches == [["theirs-1", "theirs-2"]])
         #expect(context.notifyUIChangedCount == 2)
     }
@@ -374,14 +366,11 @@ struct ChatTransportEventCoordinatorContextTests {
 
         coordinator.didConnectToPeerSynchronously(peerID)
 
-        #expect(context.isConnected)
-        #expect(context.registeredEphemeralSessions == [peerID])
         #expect(context.flushedOutboxPeerIDs == [peerID])
         #expect(context.courierRetryPeerIDs == [peerID])
 
         coordinator.didDisconnectFromPeerSynchronously(peerID)
 
-        #expect(context.removedEphemeralSessions == [peerID])
         #expect(context.unmarkedReadReceiptBatches == [[incoming.id]])
         #expect(context.notifyUIChangedCount == 2)
     }

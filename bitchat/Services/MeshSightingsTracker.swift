@@ -21,14 +21,14 @@ final class MeshSightingsTracker: ObservableObject {
         static let dayKey = "meshSightings.dayKey"
         static let salt = "meshSightings.salt"
         static let hashes = "meshSightings.hashes"
-        static let lastSeenAt = "meshSightings.lastSeenAt"
+        /// Legacy timestamp key written by earlier builds; still cleared on panic.
+        static let legacyLastSeenAt = "meshSightings.lastSeenAt"
     }
 
     /// Distinct devices seen within range today (rotating peer IDs may count
     /// a long-lived neighbor more than once across rotations; that is fine
     /// for an ambient stat).
     @Published private(set) var todayCount: Int = 0
-    @Published private(set) var lastSightingAt: Date?
 
     private let defaults: UserDefaults
     private let now: () -> Date
@@ -41,10 +41,6 @@ final class MeshSightingsTracker: ObservableObject {
         self.defaults = defaults
         self.now = now
         restore()
-    }
-
-    func recordSighting(peerID: PeerID) {
-        recordSightings([peerID])
     }
 
     func recordSightings(_ peerIDs: [PeerID]) {
@@ -62,17 +58,13 @@ final class MeshSightingsTracker: ObservableObject {
             }
         }
 
-        if lastSightingAt != seenAt {
-            lastSightingAt = seenAt
-            defaults.set(seenAt, forKey: Keys.lastSeenAt)
-        }
         if insertedAnyHash {
             todayCount = seenHashes.count
             defaults.set(Array(seenHashes), forKey: Keys.hashes)
         }
     }
 
-    /// Re-evaluates the day boundary for the UI. `recordSighting` handles
+    /// Re-evaluates the day boundary for the UI. `recordSightings` handles
     /// rollover when peers are seen, but an idle app open across midnight
     /// would otherwise keep showing yesterday's tally until the next sighting;
     /// the empty-state view calls this on its periodic refresh tick.
@@ -86,18 +78,16 @@ final class MeshSightingsTracker: ObservableObject {
         currentDayKey = ""
         currentSalt = Data()
         todayCount = 0
-        lastSightingAt = nil
         defaults.removeObject(forKey: Keys.dayKey)
         defaults.removeObject(forKey: Keys.salt)
         defaults.removeObject(forKey: Keys.hashes)
-        defaults.removeObject(forKey: Keys.lastSeenAt)
+        defaults.removeObject(forKey: Keys.legacyLastSeenAt)
     }
 
     private func restore() {
         rollOverIfNeeded(at: now())
         seenHashes = Set(defaults.stringArray(forKey: Keys.hashes) ?? [])
         todayCount = seenHashes.count
-        lastSightingAt = defaults.object(forKey: Keys.lastSeenAt) as? Date
     }
 
     /// Resets the tally when the local calendar day changes; the salt rotates
@@ -124,11 +114,9 @@ final class MeshSightingsTracker: ObservableObject {
         defaults.set(today, forKey: Keys.dayKey)
         defaults.set(freshSalt, forKey: Keys.salt)
         defaults.removeObject(forKey: Keys.hashes)
-        defaults.removeObject(forKey: Keys.lastSeenAt)
         seenHashes.removeAll()
         seenPeerIDsToday.removeAll()
         todayCount = 0
-        lastSightingAt = nil
     }
 
     private func saltedHash(_ value: String) -> String {

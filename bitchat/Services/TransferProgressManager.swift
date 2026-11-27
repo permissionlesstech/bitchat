@@ -61,6 +61,7 @@ final class TransferProgressManager {
         }
     }
 
+    #if DEBUG
     func snapshot(id: String) -> (sent: Int, total: Int)? {
         var result: (sent: Int, total: Int)?
         queue.sync {
@@ -68,4 +69,5 @@ final class TransferProgressManager {
         }
         return result
     }
+    #endif
 }

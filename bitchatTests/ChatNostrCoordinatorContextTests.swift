@@ -76,7 +76,6 @@ private final class MockChatNostrContext: ChatNostrContext {
     func parseMentions(from content: String) -> [String] { [] }
 
     // Inbound private (geohash DM) payloads
-    var selectedPrivateChatPeer: PeerID?
     var nostrKeyMapping: [PeerID: String] = [:]
     func registerNostrKeyMapping(_ pubkey: String, for peerID: PeerID) { nostrKeyMapping[peerID] = pubkey }
     private(set) var handledPrivateMessages: [(payload: NoisePayload, senderPubkey: String, convKey: PeerID, timestamp: Date)] = []
@@ -212,19 +211,9 @@ private final class MockChatNostrContext: ChatNostrContext {
 
     // Routing & acknowledgements
     private(set) var routedFavoriteNotifications: [(peerID: PeerID, isFavorite: Bool)] = []
-    private(set) var geoDeliveryAcks: [(messageID: String, recipientHex: String)] = []
-    private(set) var geoReadReceipts: [(messageID: String, recipientHex: String)] = []
 
     func routeFavoriteNotification(to peerID: PeerID, isFavorite: Bool) {
         routedFavoriteNotifications.append((peerID, isFavorite))
-    }
-
-    func sendGeohashDeliveryAck(for messageID: String, toRecipientHex recipientHex: String, from identity: NostrIdentity) {
-        geoDeliveryAcks.append((messageID, recipientHex))
-    }
-
-    func sendGeohashReadReceipt(_ messageID: String, toRecipientHex recipientHex: String, from identity: NostrIdentity) {
-        geoReadReceipts.append((messageID, recipientHex))
     }
 
     // Favorites & notifications
@@ -235,8 +224,20 @@ private final class MockChatNostrContext: ChatNostrContext {
         favoriteRelationshipsByNoiseKey[noiseKey]
     }
 
-    func allFavoriteRelationships() -> [FavoritesPersistenceService.FavoriteRelationship] {
-        Array(favoriteRelationshipsByNoiseKey.values)
+    func favoriteNoiseKey(forNostrPubkey nostrPubkey: String) -> Data? {
+        for relationship in favoriteRelationshipsByNoiseKey.values {
+            if let stored = relationship.peerNostrPublicKey, stored == nostrPubkey {
+                return relationship.peerNoisePublicKey
+            }
+            if let stored = relationship.peerNostrPublicKey,
+               !nostrPubkey.hasPrefix("npub"),
+               let data = Data(hexString: nostrPubkey),
+               let npub = try? Bech32.encode(hrp: "npub", data: data),
+               stored == npub {
+                return relationship.peerNoisePublicKey
+            }
+        }
+        return nil
     }
 
     func notifyGeohashActivity(geohash: String, bodyPreview: String) {
@@ -595,43 +596,6 @@ struct ChatNostrCoordinatorContextTests {
         #expect(context.geoNicknames.isEmpty)
         // Mesh never starts a geohash subscription or refresh timer.
         #expect(context.refreshTimerStartCount == 0)
-    }
-
-    @Test @MainActor
-    func sendDeliveryAckViaNostrEmbedded_sendsReadReceiptOnlyWhenViewingUnread() async throws {
-        let context = MockChatNostrContext()
-        let coordinator = ChatNostrCoordinator(context: context)
-        context.nostrIdentity = try NostrIdentity.generate()
-        let senderPubkey = "feedface00112233"
-        let convKey = PeerID(nostr_: senderPubkey)
-
-        let message = BitchatMessage(
-            id: "mid-1",
-            sender: "alice#1234",
-            content: "hi",
-            timestamp: Date(),
-            isRelay: false,
-            isPrivate: true,
-            recipientNickname: "me",
-            senderPeerID: convKey
-        )
-
-        // Not viewing the chat: delivery ack only.
-        coordinator.sendDeliveryAckViaNostrEmbedded(message, wasReadBefore: false, senderPubkey: senderPubkey, key: nil)
-        #expect(context.geoDeliveryAcks.map(\.messageID) == ["mid-1"])
-        #expect(context.geoDeliveryAcks.first?.recipientHex == senderPubkey)
-        #expect(context.geoReadReceipts.isEmpty)
-
-        // Viewing the chat: delivery ack plus read receipt.
-        context.selectedPrivateChatPeer = convKey
-        coordinator.sendDeliveryAckViaNostrEmbedded(message, wasReadBefore: false, senderPubkey: senderPubkey, key: Data([0x01]))
-        #expect(context.geoDeliveryAcks.count == 2)
-        #expect(context.geoReadReceipts.map(\.messageID) == ["mid-1"])
-
-        // Already read: no further read receipt.
-        coordinator.sendDeliveryAckViaNostrEmbedded(message, wasReadBefore: true, senderPubkey: senderPubkey, key: nil)
-        #expect(context.geoDeliveryAcks.count == 3)
-        #expect(context.geoReadReceipts.count == 1)
     }
 
     @Test @MainActor

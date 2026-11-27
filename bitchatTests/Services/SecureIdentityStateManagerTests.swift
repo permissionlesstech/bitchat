@@ -177,15 +177,22 @@ final class SecureIdentityStateManagerTests: XCTestCase {
         let manager = SecureIdentityStateManager(MockKeychain())
         let fingerprint = String(repeating: "ab", count: 32)
 
-        manager.setFavorite(fingerprint, isFavorite: true)
-        let favoriteSet = await waitUntil { manager.isFavorite(fingerprint: fingerprint) }
-        XCTAssertTrue(favoriteSet)
-
+        manager.updateSocialIdentity(
+            SocialIdentity(
+                fingerprint: fingerprint,
+                localPetname: nil,
+                claimedNickname: "Unknown",
+                trustLevel: .unknown,
+                isFavorite: true,
+                isBlocked: false,
+                notes: nil
+            )
+        )
         manager.setBlocked(fingerprint, isBlocked: true)
         let blockedSet = await waitUntil { manager.isBlocked(fingerprint: fingerprint) }
         XCTAssertTrue(blockedSet)
 
-        XCTAssertFalse(manager.isFavorite(fingerprint: fingerprint))
+        XCTAssertEqual(manager.getSocialIdentity(for: fingerprint)?.isFavorite, false)
         XCTAssertEqual(manager.getSocialIdentity(for: fingerprint)?.claimedNickname, "Unknown")
     }
 
@@ -199,8 +206,17 @@ final class SecureIdentityStateManagerTests: XCTestCase {
         let manager = SecureIdentityStateManager(MockKeychain())
         let fingerprint = String(repeating: "cd", count: 32)
 
-        manager.setFavorite(fingerprint, isFavorite: false)
-        _ = await waitUntil { manager.getSocialIdentity(for: fingerprint) != nil }
+        manager.updateSocialIdentity(
+            SocialIdentity(
+                fingerprint: fingerprint,
+                localPetname: nil,
+                claimedNickname: "Peer",
+                trustLevel: .unknown,
+                isFavorite: false,
+                isBlocked: false,
+                notes: nil
+            )
+        )
         manager.setVerified(fingerprint: fingerprint, verified: true)
 
         let verifiedSet = await waitUntil { manager.isVerified(fingerprint: fingerprint) }
@@ -209,39 +225,10 @@ final class SecureIdentityStateManagerTests: XCTestCase {
         XCTAssertEqual(manager.getSocialIdentity(for: fingerprint)?.trustLevel, .verified)
     }
 
-    func test_forceSave_persistsFavoriteStateAcrossReinit() async {
+    func test_forceSave_persistsSocialIdentityAcrossReinit() async {
         let keychain = MockKeychain()
         let manager = SecureIdentityStateManager(keychain)
         let fingerprint = String(repeating: "ef", count: 32)
-
-        manager.setFavorite(fingerprint, isFavorite: true)
-        let favoriteSet = await waitUntil { manager.isFavorite(fingerprint: fingerprint) }
-        XCTAssertTrue(favoriteSet)
-        manager.forceSave()
-
-        let reloaded = SecureIdentityStateManager(keychain)
-        XCTAssertTrue(reloaded.isFavorite(fingerprint: fingerprint))
-    }
-
-    func test_updateSocialIdentity_reindexesClaimedNickname() async {
-        let manager = SecureIdentityStateManager(MockKeychain())
-        let fingerprint = String(repeating: "34", count: 32)
-
-        manager.updateSocialIdentity(
-            SocialIdentity(
-                fingerprint: fingerprint,
-                localPetname: nil,
-                claimedNickname: "Alice",
-                trustLevel: .unknown,
-                isFavorite: false,
-                isBlocked: false,
-                notes: nil
-            )
-        )
-        let initialIndexed = await waitUntil {
-            manager.debugNicknameIndex["Alice"]?.contains(fingerprint) == true
-        }
-        XCTAssertTrue(initialIndexed)
 
         manager.updateSocialIdentity(
             SocialIdentity(
@@ -254,13 +241,11 @@ final class SecureIdentityStateManagerTests: XCTestCase {
                 notes: "updated"
             )
         )
+        manager.forceSave()
 
-        let reindexed = await waitUntil {
-            manager.debugNicknameIndex["Alice"]?.contains(fingerprint) != true &&
-            manager.debugNicknameIndex["Bob"]?.contains(fingerprint) == true
-        }
-        XCTAssertTrue(reindexed)
-        XCTAssertEqual(manager.getSocialIdentity(for: fingerprint)?.claimedNickname, "Bob")
+        let reloaded = SecureIdentityStateManager(keychain)
+        XCTAssertEqual(reloaded.getSocialIdentity(for: fingerprint)?.claimedNickname, "Bob")
+        XCTAssertEqual(reloaded.getSocialIdentity(for: fingerprint)?.localPetname, "Friend")
     }
 
     func test_upsertCryptographicIdentity_sameClaimedNicknamePreservesExistingSocialIdentity() async {
@@ -294,51 +279,6 @@ final class SecureIdentityStateManagerTests: XCTestCase {
         XCTAssertEqual(manager.getSocialIdentity(for: fingerprint)?.localPetname, "Pal")
         XCTAssertEqual(manager.getSocialIdentity(for: fingerprint)?.notes, "keep me")
         XCTAssertTrue(manager.getSocialIdentity(for: fingerprint)?.isFavorite == true)
-    }
-
-    func test_getFavorites_returnsOnlyFavoritedFingerprints() async {
-        let manager = SecureIdentityStateManager(MockKeychain())
-        let favoriteOne = String(repeating: "45", count: 32)
-        let favoriteTwo = String(repeating: "56", count: 32)
-        let other = String(repeating: "67", count: 32)
-
-        manager.setFavorite(favoriteOne, isFavorite: true)
-        manager.setFavorite(favoriteTwo, isFavorite: true)
-        manager.setFavorite(other, isFavorite: false)
-
-        let favoritesLoaded = await waitUntil {
-            manager.getFavorites() == Set([favoriteOne, favoriteTwo])
-        }
-        XCTAssertTrue(favoritesLoaded)
-    }
-
-    func test_setFavorite_existingIdentityCanBeClearedWithoutChangingNickname() async {
-        let manager = SecureIdentityStateManager(MockKeychain())
-        let fingerprint = String(repeating: "68", count: 32)
-
-        manager.updateSocialIdentity(
-            SocialIdentity(
-                fingerprint: fingerprint,
-                localPetname: nil,
-                claimedNickname: "Alice",
-                trustLevel: .trusted,
-                isFavorite: false,
-                isBlocked: false,
-                notes: nil
-            )
-        )
-        _ = await waitUntil { manager.getSocialIdentity(for: fingerprint) != nil }
-
-        manager.setFavorite(fingerprint, isFavorite: true)
-        _ = await waitUntil { manager.isFavorite(fingerprint: fingerprint) }
-
-        manager.setFavorite(fingerprint, isFavorite: false)
-        let cleared = await waitUntil {
-            !manager.isFavorite(fingerprint: fingerprint) &&
-            manager.getSocialIdentity(for: fingerprint)?.claimedNickname == "Alice" &&
-            manager.getSocialIdentity(for: fingerprint)?.trustLevel == .trusted
-        }
-        XCTAssertTrue(cleared)
     }
 
     func test_setBlocked_createsIdentityAndCanLaterUnblock() async {
@@ -387,45 +327,6 @@ final class SecureIdentityStateManagerTests: XCTestCase {
         XCTAssertTrue(downgraded)
     }
 
-    func test_ephemeralSessionLifecycle_tracksHandshakeProgressAndLastInteraction() async {
-        let manager = SecureIdentityStateManager(MockKeychain())
-        let peerID = PeerID(str: "1234567890abcdef")
-        let fingerprint = String(repeating: "90", count: 32)
-
-        manager.registerEphemeralSession(peerID: peerID, handshakeState: .initiated)
-        let registered = await waitUntil {
-            if case .initiated? = manager.debugEphemeralSession(for: peerID)?.handshakeState {
-                return true
-            }
-            return false
-        }
-        XCTAssertTrue(registered)
-
-        manager.updateHandshakeState(peerID: peerID, state: .inProgress)
-        let progressed = await waitUntil {
-            if case .inProgress? = manager.debugEphemeralSession(for: peerID)?.handshakeState {
-                return true
-            }
-            return false
-        }
-        XCTAssertTrue(progressed)
-
-        manager.updateHandshakeState(peerID: peerID, state: .completed(fingerprint: fingerprint))
-        let completed = await waitUntil {
-            if case .completed(let completedFingerprint)? = manager.debugEphemeralSession(for: peerID)?.handshakeState {
-                return completedFingerprint == fingerprint && manager.debugLastInteraction(for: fingerprint) != nil
-            }
-            return false
-        }
-        XCTAssertTrue(completed)
-
-        manager.removeEphemeralSession(peerID: peerID)
-        let removed = await waitUntil {
-            manager.debugEphemeralSession(for: peerID) == nil
-        }
-        XCTAssertTrue(removed)
-    }
-
     func test_setNostrBlocked_normalizesToLowercaseAndPersists() async {
         let keychain = MockKeychain()
         let manager = SecureIdentityStateManager(keychain)
@@ -465,7 +366,6 @@ final class SecureIdentityStateManagerTests: XCTestCase {
 
         let manager = SecureIdentityStateManager(keychain)
 
-        XCTAssertTrue(manager.getFavorites().isEmpty)
         XCTAssertTrue(manager.getVerifiedFingerprints().isEmpty)
         XCTAssertTrue(manager.getBlockedNostrPubkeys().isEmpty)
         XCTAssertNil(keychain.getIdentityKey(forKey: "bitchat.identityCache.v2"))
@@ -475,18 +375,15 @@ final class SecureIdentityStateManagerTests: XCTestCase {
         let manager = SecureIdentityStateManager(MockKeychain())
         let fingerprint = String(repeating: "12", count: 32)
 
-        manager.setFavorite(fingerprint, isFavorite: true)
         manager.setVerified(fingerprint: fingerprint, verified: true)
         manager.setNostrBlocked("ABCD", isBlocked: true)
         let primed = await waitUntil {
-            manager.isFavorite(fingerprint: fingerprint) &&
             manager.isVerified(fingerprint: fingerprint)
         }
         XCTAssertTrue(primed)
 
         manager.clearAllIdentityData()
         let cleared = await waitUntil {
-            !manager.isFavorite(fingerprint: fingerprint) &&
             !manager.isVerified(fingerprint: fingerprint) &&
             manager.getBlockedNostrPubkeys().isEmpty
         }
@@ -551,14 +448,14 @@ final class SecureIdentityStateManagerTests: XCTestCase {
         let manager = SecureIdentityStateManager(keychain)
         let fingerprint = String(repeating: "de", count: 32)
 
-        manager.setFavorite(fingerprint, isFavorite: true)
-        let primed = await waitUntil { manager.isFavorite(fingerprint: fingerprint) }
+        manager.setVerified(fingerprint: fingerprint, verified: true)
+        let primed = await waitUntil { manager.isVerified(fingerprint: fingerprint) }
         XCTAssertTrue(primed)
 
         manager.forceSave()
 
         let reloaded = SecureIdentityStateManager(keychain)
-        XCTAssertFalse(reloaded.isFavorite(fingerprint: fingerprint))
+        XCTAssertFalse(reloaded.isVerified(fingerprint: fingerprint))
     }
 
     func test_upsertCryptographicIdentity_skipsRedundantKeychainWritesWhenUnchanged() async {
@@ -664,6 +561,38 @@ final class SecureIdentityStateManagerTests: XCTestCase {
         XCTAssertNil(keychain.getIdentityKey(forKey: "bitchat.identityCache.v2"))
     }
 
+    func test_identityCache_decodesLegacyPayloadContainingNicknameIndexAndLastInteractions() throws {
+        let fingerprint = String(repeating: "ab", count: 32)
+        let legacyJSON = """
+        {
+            "socialIdentities": {
+                "\(fingerprint)": {
+                    "fingerprint": "\(fingerprint)",
+                    "localPetname": "Buddy",
+                    "claimedNickname": "Alice",
+                    "trustLevel": "trusted",
+                    "isFavorite": true,
+                    "isBlocked": false,
+                    "notes": null
+                }
+            },
+            "nicknameIndex": {
+                "Alice": ["\(fingerprint)"]
+            },
+            "verifiedFingerprints": ["\(fingerprint)"],
+            "lastInteractions": {
+                "\(fingerprint)": 1700000000
+            },
+            "cryptographicIdentities": {}
+        }
+        """
+
+        let decoded = try JSONDecoder().decode(IdentityCache.self, from: Data(legacyJSON.utf8))
+        XCTAssertEqual(decoded.socialIdentities[fingerprint]?.claimedNickname, "Alice")
+        XCTAssertEqual(decoded.socialIdentities[fingerprint]?.localPetname, "Buddy")
+        XCTAssertTrue(decoded.verifiedFingerprints.contains(fingerprint))
+    }
+
     private func waitUntil(
         timeout: TimeInterval = TestConstants.settleTimeout,
         condition: @escaping () -> Bool
@@ -733,10 +662,6 @@ private final class FailingCacheSaveKeychain: KeychainManagerProtocol {
 
     func secureClear(_ data: inout Data) {
         data = Data()
-    }
-
-    func secureClear(_ string: inout String) {
-        string = ""
     }
 
     func verifyIdentityKeyExists() -> Bool {

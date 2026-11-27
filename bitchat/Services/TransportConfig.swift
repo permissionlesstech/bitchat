@@ -204,11 +204,14 @@ enum TransportConfig {
     static let bleConnectedAnnounceJitterDense: TimeInterval = 8.0
     static let bleConnectedAnnounceJitterSparse: TimeInterval = 4.0
 
+    // BinaryProtocol caps payload length at UInt16.max (65_535). Leave headroom
+    // for headers/padding by limiting user content to 60_000 bytes.
+    static let maxMessageLength: Int = 60_000
+
     // Location
     static let locationDistanceFilterMeters: Double = 1000
     // Live (channel sheet open) distance threshold for meaningful updates
     static let locationDistanceFilterLiveMeters: Double = 10.0
-    static let locationLiveRefreshInterval: TimeInterval = 5.0
 
     // Notifications (geohash)
     static let uiGeoNotifyCooldownSeconds: TimeInterval = 60.0

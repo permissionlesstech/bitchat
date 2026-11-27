@@ -210,9 +210,6 @@ final class MessageDeduplicationService {
     /// Cache for Nostr event ID deduplication
     private let nostrEventCache: LRUDeduplicationCache<Bool>
 
-    /// Cache for Nostr ACK deduplication (messageId:ackType:senderPubkey format)
-    private let nostrAckCache: LRUDeduplicationCache<Bool>
-
     /// Optional cross-launch persistence for the Nostr event cache. BitChat
     /// randomizes private-envelope timestamps, so DM subscriptions look back 24h and
     /// relays redeliver the same events on every launch; without this record
@@ -238,7 +235,6 @@ final class MessageDeduplicationService {
     ) {
         self.contentCache = LRUDeduplicationCache(capacity: contentCapacity)
         self.nostrEventCache = LRUDeduplicationCache(capacity: nostrEventCapacity)
-        self.nostrAckCache = LRUDeduplicationCache(capacity: nostrEventCapacity)
         self.nostrEventStore = nostrEventStore
         self.nostrEventCapacity = nostrEventCapacity
         if let nostrEventStore {
@@ -257,14 +253,19 @@ final class MessageDeduplicationService {
 
     // MARK: - Content Deduplication
 
+    #if DEBUG
     /// Records content with its timestamp for near-duplicate detection.
-    /// - Parameters:
-    ///   - content: The message content
-    ///   - timestamp: When the content was received
     func recordContent(_ content: String, timestamp: Date) {
         let key = ContentNormalizer.normalizedKey(content)
         contentCache.record(key, value: timestamp)
     }
+
+    /// Gets the timestamp for previously seen content.
+    func contentTimestamp(for content: String) -> Date? {
+        let key = ContentNormalizer.normalizedKey(content)
+        return contentCache.value(for: key)
+    }
+    #endif
 
     /// Records a pre-normalized content key with its timestamp.
     /// - Parameters:
@@ -272,14 +273,6 @@ final class MessageDeduplicationService {
     ///   - timestamp: When the content was received
     func recordContentKey(_ key: String, timestamp: Date) {
         contentCache.record(key, value: timestamp)
-    }
-
-    /// Gets the timestamp for previously seen content.
-    /// - Parameter content: The message content
-    /// - Returns: The timestamp when first seen, or nil if not seen
-    func contentTimestamp(for content: String) -> Date? {
-        let key = ContentNormalizer.normalizedKey(content)
-        return contentCache.value(for: key)
     }
 
     /// Gets the timestamp for a pre-normalized content key.
@@ -346,26 +339,6 @@ final class MessageDeduplicationService {
         }
     }
 
-    // MARK: - Nostr ACK Deduplication
-
-    /// Checks if a Nostr ACK has already been processed.
-    /// - Parameter ackKey: The ACK key in format "messageId:ackType:senderPubkey"
-    /// - Returns: true if already processed
-    func hasProcessedNostrAck(_ ackKey: String) -> Bool {
-        nostrAckCache.contains(ackKey)
-    }
-
-    /// Records a Nostr ACK as processed.
-    /// - Parameter ackKey: The ACK key in format "messageId:ackType:senderPubkey"
-    func recordNostrAck(_ ackKey: String) {
-        nostrAckCache.record(ackKey, value: true)
-    }
-
-    /// Creates an ACK key from components.
-    static func ackKey(messageId: String, ackType: String, senderPubkey: String) -> String {
-        "\(messageId):\(ackType):\(senderPubkey)"
-    }
-
     // MARK: - Clear
 
     /// Clears all caches. This is the wipe/panic path: the persisted
@@ -377,17 +350,15 @@ final class MessageDeduplicationService {
         persistScheduled = false
         contentCache.clear()
         nostrEventCache.clear()
-        nostrAckCache.clear()
         pendingPersistIDs.removeAll()
         nostrEventStore?.wipe()
     }
 
-    /// Clears only the in-memory Nostr caches (events and ACKs). Runs on
-    /// every geohash channel switch, so the disk record deliberately
-    /// survives — wiping it here would forfeit cross-launch private-envelope dedup
-    /// each time the user changes channels (flagged by Codex on #1398).
+    /// Clears only the in-memory Nostr event cache. Runs on every geohash
+    /// channel switch, so the disk record deliberately survives — wiping it
+    /// here would forfeit cross-launch private-envelope dedup each time the
+    /// user changes channels (flagged by Codex on #1398).
     func clearNostrCaches() {
         nostrEventCache.clear()
-        nostrAckCache.clear()
     }
 }

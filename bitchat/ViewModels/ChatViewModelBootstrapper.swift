@@ -18,14 +18,12 @@ struct ChatViewModelServiceBundle {
         idBridge: NostrIdentityBridge,
         identityManager: SecureIdentityStateManagerProtocol,
         meshService: Transport,
-        outboxStore: MessageOutboxStore? = nil,
-        sfMetrics: StoreAndForwardMetrics? = nil
+        outboxStore: MessageOutboxStore? = nil
     ) {
         let commandProcessor = CommandProcessor(identityManager: identityManager)
         let privateChatManager = PrivateChatManager(meshService: meshService)
         let unifiedPeerService = UnifiedPeerService(
             meshService: meshService,
-            idBridge: idBridge,
             identityManager: identityManager
         )
         let nostrTransport = NostrTransport(keychain: keychain, idBridge: idBridge)
@@ -34,8 +32,7 @@ struct ChatViewModelServiceBundle {
         }
         let messageRouter = MessageRouter(
             transports: [meshService, nostrTransport],
-            outboxStore: outboxStore,
-            metrics: sfMetrics
+            outboxStore: outboxStore
         )
 
         self.commandProcessor = commandProcessor
@@ -585,8 +582,9 @@ private extension ChatViewModelBootstrapper {
         courier.closeSubscription = {
             NostrRelayManager.shared.unsubscribe(id: Self.courierDropSubscriptionID)
         }
-        courier.myNoiseKey = { [weak bleService] in
-            bleService?.myNoiseStaticPublicKey()
+        let transport = viewModel.meshService
+        courier.myNoiseKey = { [weak transport] in
+            transport?.noiseStaticPublicKeyData()
         }
         courier.localVerifiedPeers = { [weak bleService] in
             bleService?.verifiedPeersWithNoiseKeys() ?? []

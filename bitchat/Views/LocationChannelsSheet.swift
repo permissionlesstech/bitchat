@@ -150,10 +150,10 @@ struct LocationChannelsSheet: View {
                         Button(action: { locationChannelsModel.enableLocationChannels() }) {
                             Text(Strings.requestPermissions)
                                 .bitchatFont(size: 12)
-                                .foregroundColor(standardGreen)
+                                .foregroundColor(palette.primary)
                                 .frame(maxWidth: .infinity)
                                 .padding(.vertical, 6)
-                                .background(standardGreen.opacity(0.12))
+                                .background(palette.primary.opacity(0.12))
                                 .cornerRadius(6)
                         }
                         .buttonStyle(.plain)
@@ -208,7 +208,6 @@ struct LocationChannelsSheet: View {
                 locationChannelsModel.refreshChannels()
             }
         }
-        .onChange(of: locationChannelsModel.availableChannels) { _ in }
         .confirmationDialog(
             Strings.sharePrecisionTitle,
             isPresented: $showSharePrecisionWarning,
@@ -266,7 +265,7 @@ struct LocationChannelsSheet: View {
     private func applyPickedGeohash() {
         guard let geohash = pickedGeohash else { return }
         pickedGeohash = nil
-        guard validateGeohash(geohash) else { return }
+        guard Geohash.isValidGeohash(geohash) else { return }
         customError = nil
         locationChannelsModel.teleport(to: geohash)
         isPresented = false
@@ -308,7 +307,7 @@ struct LocationChannelsSheet: View {
     private var channelListContent: some View {
         ScrollView {
             LazyVStack(spacing: 0) {
-                channelRow(title: Strings.meshTitle(peerListModel.reachableMeshPeerCount), subtitlePrefix: Strings.subtitlePrefix(geohash: "bluetooth", coverage: bluetoothRangeString()), isSelected: isMeshSelected, titleColor: standardBlue, titleBold: peerListModel.reachableMeshPeerCount > 0) {
+                channelRow(title: Strings.meshTitle(peerListModel.reachableMeshPeerCount), subtitlePrefix: Strings.subtitlePrefix(geohash: "bluetooth", coverage: bluetoothRangeString()), isSelected: isMeshSelected, titleColor: palette.accentBlue, titleBold: peerListModel.reachableMeshPeerCount > 0) {
                     locationChannelsModel.select(ChannelID.mesh)
                     isPresented = false
                 }
@@ -318,8 +317,8 @@ struct LocationChannelsSheet: View {
                 if !nearby.isEmpty {
                     ForEach(nearby) { channel in
                         sectionDivider
-                        let coverage = coverageString(forPrecision: channel.geohash.count)
-                        let nameBase = locationName(for: channel.level)
+                        let coverage = GeohashCoverage.string(forPrecision: channel.geohash.count)
+                        let nameBase = locationChannelsModel.locationName(for: channel.level)
                         let namePart = nameBase.map { formattedNamePrefix(for: channel.level) + $0 }
                         let participantCount = peerListModel.participantCount(for: channel.geohash)
                         let subtitlePrefix = Strings.subtitlePrefix(geohash: channel.geohash, coverage: coverage)
@@ -328,7 +327,7 @@ struct LocationChannelsSheet: View {
                             title: Strings.levelTitle(for: channel.level, count: participantCount),
                             subtitlePrefix: subtitlePrefix,
                             subtitleName: namePart,
-                            isSelected: isSelected(channel),
+                            isSelected: locationChannelsModel.isSelected(channel),
                             titleBold: highlight,
                             trailingAccessory: {
                                 Button(action: { locationChannelsModel.toggleBookmark(channel.geohash) }) {
@@ -404,11 +403,9 @@ struct LocationChannelsSheet: View {
 
     private var sectionDivider: some View {
         Rectangle()
-            .fill(dividerColor)
+            .fill(palette.divider)
             .frame(height: 1)
     }
-
-    private var dividerColor: Color { palette.divider }
 
     private var customTeleportSection: some View {
         VStack(alignment: .leading, spacing: 6) {
@@ -439,7 +436,7 @@ struct LocationChannelsSheet: View {
                     .trimmed
                     .lowercased()
                     .replacingOccurrences(of: "#", with: "")
-                let isValid = validateGeohash(normalized)
+                let isValid = Geohash.isValidGeohash(normalized)
                 Button(action: { showGlobePicker = true }) {
                     Image(systemName: "map")
                         .font(.bitchatSystem(size: 16))
@@ -526,9 +523,9 @@ struct LocationChannelsSheet: View {
                 .foregroundColor(palette.secondary)
             LazyVStack(spacing: 0) {
                 ForEach(Array(entries.enumerated()), id: \.offset) { index, gh in
-                    let level = levelForLength(gh.count)
+                    let level = GeohashCoverage.level(forLength: gh.count)
                     let channel = GeohashChannel(level: level, geohash: gh)
-                    let coverage = coverageString(forPrecision: gh.count)
+                    let coverage = GeohashCoverage.string(forPrecision: gh.count)
                     let subtitle = Strings.subtitlePrefix(geohash: gh, coverage: coverage)
                     let name = locationChannelsModel.bookmarkNames[gh]
                     let participantCount = peerListModel.participantCount(for: gh)
@@ -579,10 +576,6 @@ struct LocationChannelsSheet: View {
     }
 
 
-    private func isSelected(_ channel: GeohashChannel) -> Bool {
-        locationChannelsModel.isSelected(channel)
-    }
-
     private var isMeshSelected: Bool {
         if case .mesh = locationChannelsModel.selectedChannel { return true }
         return false
@@ -593,7 +586,6 @@ struct LocationChannelsSheet: View {
         title: String,
         subtitlePrefix: String,
         subtitleName: String? = nil,
-        subtitleNameBold _: Bool = false,
         isSelected: Bool,
         titleColor: Color? = nil,
         titleBold: Bool = false,
@@ -630,7 +622,7 @@ struct LocationChannelsSheet: View {
                 if isSelected {
                     Text(verbatim: "✔︎")
                         .bitchatFont(size: 16)
-                        .foregroundColor(standardGreen)
+                        .foregroundColor(palette.primary)
                 }
                 trailingAccessory()
             }
@@ -662,46 +654,10 @@ struct LocationChannelsSheet: View {
         let suffix = String(s[idx...])
         return (prefix, suffix)
     }
-    private func validateGeohash(_ s: String) -> Bool {
-        let allowed = Set("0123456789bcdefghjkmnpqrstuvwxyz")
-        guard !s.isEmpty, s.count <= 12 else { return false }
-        return s.allSatisfy { allowed.contains($0) }
-    }
-
-    private func levelForLength(_ len: Int) -> GeohashChannelLevel {
-        switch len {
-        case 0...2: return .region
-        case 3...4: return .province
-        case 5: return .city
-        case 6: return .neighborhood
-        case 7: return .block
-        case 8: return .building
-        default: return .block
-        }
-    }
-}
-
-// MARK: - Standardized Colors
-// (The tor and internet-gateway toggles moved to AppInfoView's Settings pane;
-// IRCToggleStyle now lives in Views/Components.)
-extension LocationChannelsSheet {
-    private var standardGreen: Color { palette.primary }
-    private var standardBlue: Color { palette.accentBlue }
-}
-
-// MARK: - Coverage helpers
-extension LocationChannelsSheet {
-    private func coverageString(forPrecision len: Int) -> String {
-        GeohashCoverage.string(forPrecision: len)
-    }
 
     private func bluetoothRangeString() -> String {
         // Approximate Bluetooth LE range for typical mobile devices; environment dependent
         GeohashCoverage.usesMetric() ? "~10–50 m" : "~30–160 ft"
-    }
-
-    private func locationName(for level: GeohashChannelLevel) -> String? {
-        locationChannelsModel.locationName(for: level)
     }
 
     private func formattedNamePrefix(for level: GeohashChannelLevel) -> String {

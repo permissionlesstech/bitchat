@@ -80,7 +80,9 @@ final class RequestSyncManager {
         }
     }
 
+    #if DEBUG
     var debugPendingRequestCount: Int {
         queue.sync { pendingRequests.count }
     }
+    #endif
 }

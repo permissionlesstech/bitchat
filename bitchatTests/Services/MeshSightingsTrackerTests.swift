@@ -28,25 +28,24 @@ struct MeshSightingsTrackerTests {
         let defaults = makeDefaults()
         let tracker = MeshSightingsTracker(defaults: defaults, now: { self.noon })
 
-        tracker.recordSighting(peerID: PeerID(str: "aaaa111122223333"))
-        tracker.recordSighting(peerID: PeerID(str: "aaaa111122223333"))
-        tracker.recordSighting(peerID: PeerID(str: "bbbb444455556666"))
+        tracker.recordSightings([PeerID(str: "aaaa111122223333")])
+        tracker.recordSightings([PeerID(str: "aaaa111122223333")])
+        tracker.recordSightings([PeerID(str: "bbbb444455556666")])
 
         #expect(tracker.todayCount == 2)
-        #expect(tracker.lastSightingAt == noon)
     }
 
     @Test
     func persistsAcrossInstances() {
         let defaults = makeDefaults()
         let first = MeshSightingsTracker(defaults: defaults, now: { self.noon })
-        first.recordSighting(peerID: PeerID(str: "aaaa111122223333"))
+        first.recordSightings([PeerID(str: "aaaa111122223333")])
 
         let second = MeshSightingsTracker(defaults: defaults, now: { self.noon.addingTimeInterval(60) })
         #expect(second.todayCount == 1)
 
         // Same peer again does not double count after a relaunch.
-        second.recordSighting(peerID: PeerID(str: "aaaa111122223333"))
+        second.recordSightings([PeerID(str: "aaaa111122223333")])
         #expect(second.todayCount == 1)
     }
 
@@ -55,11 +54,11 @@ struct MeshSightingsTrackerTests {
         let defaults = makeDefaults()
         var currentNow = noon
         let tracker = MeshSightingsTracker(defaults: defaults, now: { currentNow })
-        tracker.recordSighting(peerID: PeerID(str: "aaaa111122223333"))
+        tracker.recordSightings([PeerID(str: "aaaa111122223333")])
         #expect(tracker.todayCount == 1)
 
         currentNow = noon.addingTimeInterval(2 * 24 * 60 * 60)
-        tracker.recordSighting(peerID: PeerID(str: "bbbb444455556666"))
+        tracker.recordSightings([PeerID(str: "bbbb444455556666")])
 
         #expect(tracker.todayCount == 1)
     }
@@ -67,13 +66,14 @@ struct MeshSightingsTrackerTests {
     @Test
     func clearResetsEverything() {
         let defaults = makeDefaults()
+        defaults.set(noon.timeIntervalSince1970, forKey: "meshSightings.lastSeenAt")
         let tracker = MeshSightingsTracker(defaults: defaults, now: { self.noon })
-        tracker.recordSighting(peerID: PeerID(str: "aaaa111122223333"))
+        tracker.recordSightings([PeerID(str: "aaaa111122223333")])
 
         tracker.clear()
 
         #expect(tracker.todayCount == 0)
-        #expect(tracker.lastSightingAt == nil)
+        #expect(defaults.object(forKey: "meshSightings.lastSeenAt") == nil)
 
         let reloaded = MeshSightingsTracker(defaults: defaults, now: { self.noon })
         #expect(reloaded.todayCount == 0)
@@ -90,7 +90,6 @@ struct MeshSightingsTrackerTests {
 
         tracker.recordSightings([peerA, peerB, peerA])
         #expect(tracker.todayCount == 2)
-        #expect(tracker.lastSightingAt == noon)
 
         tracker.recordSightings([peerA, peerB, peerC])
         #expect(tracker.todayCount == 3)

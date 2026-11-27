@@ -72,7 +72,7 @@ final class TestNetworkHelper {
             guard let self else { return }
             guard packet.ttl > 1 else { return }
             
-            if let message = BitchatMessage(packet.payload) {
+            if let message = BitchatMessage.fromTestPayload(packet.payload) {
                 guard message.senderPeerID != node.peerID else { return }
                 
                 let relayMessage = BitchatMessage(
@@ -88,7 +88,7 @@ final class TestNetworkHelper {
                     mentions: message.mentions
                 )
                 
-                if let relayPayload = relayMessage.toBinaryPayload() {
+                if let relayPayload = relayMessage.toTestPayload() {
                     let relayPacket = BitchatPacket(
                         type: packet.type,
                         senderID: packet.senderID,

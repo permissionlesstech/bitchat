@@ -700,6 +700,7 @@ final class ChatMediaTransferCoordinator {
         let prepareImagePacket = self.prepareImagePacket
         let barrier = imagePreparationBarrier
         Task.detached(priority: .userInitiated) { [weak self, barrier] in
+            defer { cleanup?() }
             do {
                 let prepared = try await runBlockingMediaPreparation {
                     try barrier.performIfCurrent(
@@ -1102,17 +1103,6 @@ final class ChatMediaTransferCoordinator {
         cleanupLocalFile(
             forMessage: message,
             directions: ["outgoing"],
-            searchAllCategories: false
-        )
-    }
-
-    /// Receiver cleanup runs only after any required tombstone commit. Keep it
-    /// scoped to the parsed media category and incoming directory so unrelated
-    /// outgoing or cross-category payloads with the same basename survive.
-    func cleanupIncomingLocalFile(forMessage message: BitchatMessage) {
-        cleanupLocalFile(
-            forMessage: message,
-            directions: ["incoming"],
             searchAllCategories: false
         )
     }

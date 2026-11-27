@@ -42,10 +42,6 @@ final class MockKeychain: KeychainManagerProtocol {
         data = Data()
     }
 
-    func secureClear(_ string: inout String) {
-        string = ""
-    }
-
     func verifyIdentityKeyExists() -> Bool {
         storage["identity_noiseStaticKey"] != nil
     }
@@ -102,7 +98,6 @@ final class TrackingMockKeychain: KeychainManagerProtocol {
     /// Thread-safe counter for secureClear calls
     private let lock = NSLock()
     private var _secureClearDataCallCount = 0
-    private var _secureClearStringCallCount = 0
 
     // BCH-01-009: Configurable error simulation for testing
     var simulatedReadError: KeychainReadResult?
@@ -114,21 +109,14 @@ final class TrackingMockKeychain: KeychainManagerProtocol {
         return _secureClearDataCallCount
     }
 
-    var secureClearStringCallCount: Int {
-        lock.lock()
-        defer { lock.unlock() }
-        return _secureClearStringCallCount
-    }
-
     var totalSecureClearCallCount: Int {
-        return secureClearDataCallCount + secureClearStringCallCount
+        return secureClearDataCallCount
     }
 
     func resetCounts() {
         lock.lock()
         defer { lock.unlock() }
         _secureClearDataCallCount = 0
-        _secureClearStringCallCount = 0
     }
 
     func saveIdentityKey(_ keyData: Data, forKey key: String) -> Bool {
@@ -156,13 +144,6 @@ final class TrackingMockKeychain: KeychainManagerProtocol {
         _secureClearDataCallCount += 1
         lock.unlock()
         data = Data()
-    }
-
-    func secureClear(_ string: inout String) {
-        lock.lock()
-        _secureClearStringCallCount += 1
-        lock.unlock()
-        string = ""
     }
 
     func verifyIdentityKeyExists() -> Bool {

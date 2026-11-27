@@ -25,7 +25,7 @@ struct PacketPayloadCapInteropTests {
         // BLEService.sendMessage, Android MeshCore.sendMessage), so these
         // composer-sized messages are as large as the type legitimately gets.
         let cjk = String(repeating: "漢字仮名交じり文", count: 2_000)
-        let ascii = String(repeating: "x", count: InputValidator.Limits.maxMessageLength)
+        let ascii = String(repeating: "x", count: TransportConfig.maxMessageLength)
         #expect(cjk.count == 16_000)
         for content in [cjk, ascii] {
             let packet = makePacket(type: .message, payload: Data(content.utf8))
@@ -188,7 +188,7 @@ struct PacketPayloadCapInteropTests {
 
     private func maxGroupMessage() throws -> Data {
         try GroupCrypto.sealMessage(
-            content: String(repeating: "g", count: InputValidator.Limits.maxMessageLength),
+            content: String(repeating: "g", count: TransportConfig.maxMessageLength),
             messageID: UUID().uuidString,
             senderNickname: String(repeating: "n", count: 50),
             senderSigningKey: Data(repeating: 0x51, count: 32),

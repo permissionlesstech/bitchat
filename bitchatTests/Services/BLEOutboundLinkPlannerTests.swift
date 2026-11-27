@@ -201,13 +201,6 @@ struct BLEOutboundLinkPlannerTests {
         #expect(relayed.selectedLinks.peripheralIDs == Set(["p1"]))
     }
 
-    @Test
-    func minimumLinkLimitUsesTheSmallestPresentRoleLimit() {
-        #expect(BLEOutboundLinkPlanner.minimumLinkLimit(peripheralWriteLimits: [80, 120], centralNotifyLimits: []) == 80)
-        #expect(BLEOutboundLinkPlanner.minimumLinkLimit(peripheralWriteLimits: [], centralNotifyLimits: [60, 90]) == 60)
-        #expect(BLEOutboundLinkPlanner.minimumLinkLimit(peripheralWriteLimits: [], centralNotifyLimits: []) == nil)
-    }
-
     private func makePacket(
         type: MessageType,
         sender: PeerID = PeerID(str: "8877665544332211"),

@@ -250,6 +250,7 @@ final class CourierStore {
 
     // MARK: - Handover (on encountering a peer)
 
+    #if DEBUG
     /// Remove and return all envelopes addressed to the given peer, matching
     /// the rotating recipient tag across adjacent days. This compatibility
     /// helper accepts every offer; transport callers should use
@@ -262,6 +263,7 @@ final class CourierStore {
         }
         return handedOver
     }
+    #endif
 
     /// Attempts direct handover without retiring the durable carried copy
     /// until the transport accepts it onto the intended peer's physical link.
@@ -355,6 +357,7 @@ final class CourierStore {
 
     // MARK: - Spray-and-wait (on encountering another courier)
 
+    #if DEBUG
     /// Envelopes to re-deposit with a courier we just encountered, each with
     /// half its remaining budget (binary spray). Skips envelopes the courier
     /// deposited, envelopes addressed to them (those ride the handover path),
@@ -367,6 +370,7 @@ final class CourierStore {
         }
         return sprayed
     }
+    #endif
 
     /// Offers binary-spray copies one at a time and commits the reduced local
     /// budget plus `sprayedTo` marker only after the directed transport accepts

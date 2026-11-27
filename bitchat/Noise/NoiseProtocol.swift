@@ -891,12 +891,12 @@ final class NoiseHandshakeState {
     func getRemoteStaticPublicKey() -> Curve25519.KeyAgreement.PublicKey? {
         return remoteStaticPublic
     }
-    
-    func getHandshakeHash() -> Data {
-        return symmetricState.getHandshakeHash()
-    }
 
     #if DEBUG
+    func getHandshakeHash() -> Data {
+        symmetricState.getHandshakeHash()
+    }
+
     func performDHOperationForTesting(_ pattern: NoiseMessagePattern) throws {
         try performDHOperation(pattern)
     }

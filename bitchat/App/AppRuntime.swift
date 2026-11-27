@@ -13,7 +13,6 @@ import AppKit
 @MainActor
 final class AppRuntime: ObservableObject {
     let chatViewModel: ChatViewModel
-    let events = AppEventStream()
     /// Single source of truth for conversation message state and selection
     /// (docs/CONVERSATION-STORE-DESIGN.md). Owned here; the feature models
     /// and `ChatViewModel` observe and mutate it through its intent API.
@@ -173,9 +172,6 @@ final class AppRuntime: ObservableObject {
         GeohashPresenceService.shared.start()
         checkForSharedContent()
         performMediaMaintenance()
-
-        record(.launched)
-        record(.startupCompleted)
     }
 
     /// Drops media that has outlived the retention window, then applies the
@@ -193,8 +189,6 @@ final class AppRuntime: ObservableObject {
     }
 
     func handleOpenURL(_ url: URL) {
-        record(.openedURL(url.absoluteString))
-
         if url.scheme == "bitchat", url.host == "share" {
             checkForSharedContent()
         }
@@ -209,7 +203,6 @@ final class AppRuntime: ObservableObject {
     #if os(macOS)
     func handleMacDidBecomeActiveNotification() {
         guard chatViewModel.networkActivationAllowed else { return }
-        record(.scenePhaseChanged(.active))
         chatViewModel.handleDidBecomeActive()
         checkForSharedContent()
     }
@@ -219,7 +212,6 @@ final class AppRuntime: ObservableObject {
     func handleScenePhaseChange(_ newPhase: ScenePhase) {
         switch newPhase {
         case .background:
-            record(.scenePhaseChanged(.background))
             TorManager.shared.setAppForeground(false)
             TorManager.shared.goDormantOnBackground()
             LocationStateManager.shared.endLiveRefresh()
@@ -229,7 +221,6 @@ final class AppRuntime: ObservableObject {
 
         case .active:
             guard chatViewModel.networkActivationAllowed else { return }
-            record(.scenePhaseChanged(.active))
             chatViewModel.meshService.startServices()
             TorManager.shared.setAppForeground(true)
             let shouldRefreshNostrConnections = didHandleInitialActive && didEnterBackground
@@ -258,7 +249,7 @@ final class AppRuntime: ObservableObject {
             checkForSharedContent()
 
         case .inactive:
-            record(.scenePhaseChanged(.inactive))
+            break
 
         @unknown default:
             break
@@ -267,7 +258,6 @@ final class AppRuntime: ObservableObject {
     #endif
 
     func applicationWillTerminate() {
-        record(.terminationRequested)
         chatViewModel.applicationWillTerminate()
     }
 
@@ -283,12 +273,10 @@ final class AppRuntime: ObservableObject {
         }
 
         if identifier.hasPrefix("private-"), let peerID = PeerID(str: userInfo["peerID"] as? String) {
-            record(.notificationOpened(peerID: peerID))
             chatViewModel.startPrivateChat(with: peerID)
         }
 
         if let deepLink = userInfo["deeplink"] as? String, let url = URL(string: deepLink) {
-            record(.deepLinkOpened(deepLink))
             openExternalURL(url)
         }
     }
@@ -339,7 +327,6 @@ private extension AppRuntime {
             .sink { [weak self] _ in
                 guard self?.chatViewModel.networkActivationAllowed == true
                 else { return }
-                self?.record(.torLifecycleChanged(.willRestart))
                 self?.chatViewModel.handleTorWillRestart()
             }
             .store(in: &cancellables)
@@ -349,7 +336,6 @@ private extension AppRuntime {
             .sink { [weak self] _ in
                 guard self?.chatViewModel.networkActivationAllowed == true
                 else { return }
-                self?.record(.torLifecycleChanged(.didBecomeReady))
                 self?.chatViewModel.handleTorDidBecomeReady()
             }
             .store(in: &cancellables)
@@ -359,7 +345,6 @@ private extension AppRuntime {
             .sink { [weak self] _ in
                 guard self?.chatViewModel.networkActivationAllowed == true
                 else { return }
-                self?.record(.torLifecycleChanged(.willStart))
                 self?.chatViewModel.handleTorWillStart()
             }
             .store(in: &cancellables)
@@ -369,18 +354,16 @@ private extension AppRuntime {
             .sink { [weak self] _ in
                 guard self?.chatViewModel.networkActivationAllowed == true
                 else { return }
-                self?.record(.torLifecycleChanged(.bootstrapDidStall))
                 self?.chatViewModel.handleTorBootstrapDidStall()
             }
             .store(in: &cancellables)
 
         NotificationCenter.default.publisher(for: .TorUserPreferenceChanged)
             .receive(on: DispatchQueue.main)
-            .sink { [weak self] notification in
+            .sink { [weak self] _ in
                 guard self?.chatViewModel.networkActivationAllowed == true
                 else { return }
-                self?.record(.torLifecycleChanged(.preferenceChanged))
-                self?.chatViewModel.handleTorPreferenceChanged(notification)
+                self?.chatViewModel.handleTorPreferenceChanged()
             }
             .store(in: &cancellables)
 
@@ -395,14 +378,7 @@ private extension AppRuntime {
     }
 
     func checkForSharedContent() {
-        let previousID = sharedContentImportModel.offer?.id
-        guard let payload = sharedContentImportModel.refresh(
-            destination: currentSharedContentDestination
-        ) else { return }
-
-        if previousID != payload.id {
-            record(.sharedContentReadyForReview(payload.kind))
-        }
+        _ = sharedContentImportModel.refresh(destination: currentSharedContentDestination)
     }
 
     var currentSharedContentDestination: SharedContentDestination {
@@ -414,8 +390,6 @@ private extension AppRuntime {
     }
 
     func handleNostrRelayConnectionChanged(_ isConnected: Bool) {
-        record(.nostrRelayConnectionChanged(isConnected))
-
         let becameConnected = isConnected && !lastNostrRelayConnectedState
         lastNostrRelayConnectedState = isConnected
 
@@ -480,12 +454,6 @@ private extension AppRuntime {
         #else
         NSWorkspace.shared.open(url)
         #endif
-    }
-
-    func record(_ event: AppEvent) {
-        Task {
-            await events.emit(event)
-        }
     }
 }
 

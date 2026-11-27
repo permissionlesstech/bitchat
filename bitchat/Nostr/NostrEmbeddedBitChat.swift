@@ -28,7 +28,7 @@ struct NostrEmbeddedBitChat {
         )
 
         guard let data = packet.toBinaryData() else { return nil }
-        return "bitchat1:" + base64URLEncode(data)
+        return "bitchat1:" + Base64URLCoding.encode(data)
     }
 
     /// Build a `bitchat1:` base64url-encoded BitChat packet carrying a delivery/read ack for Nostr DMs.
@@ -51,7 +51,7 @@ struct NostrEmbeddedBitChat {
         )
 
         guard let data = packet.toBinaryData() else { return nil }
-        return "bitchat1:" + base64URLEncode(data)
+        return "bitchat1:" + Base64URLCoding.encode(data)
     }
 
     /// Build a `bitchat1:` ACK (delivered/read) without an embedded recipient peer ID (geohash DMs).
@@ -73,7 +73,7 @@ struct NostrEmbeddedBitChat {
         )
 
         guard let data = packet.toBinaryData() else { return nil }
-        return "bitchat1:" + base64URLEncode(data)
+        return "bitchat1:" + Base64URLCoding.encode(data)
     }
 
     /// Build a `bitchat1:` payload without an embedded recipient peer ID (used for geohash DMs).
@@ -96,7 +96,7 @@ struct NostrEmbeddedBitChat {
         )
 
         guard let data = packet.toBinaryData() else { return nil }
-        return "bitchat1:" + base64URLEncode(data)
+        return "bitchat1:" + Base64URLCoding.encode(data)
     }
 
     /// Sender ID for the recipient-less envelopes above. They go out under a
@@ -123,14 +123,5 @@ struct NostrEmbeddedBitChat {
         }
         // Fallback: return as-is (expecting 16 hex chars) – caller should pass a valid peer ID
         return recipientPeerID
-    }
-
-    /// Base64url encode without padding
-    private static func base64URLEncode(_ data: Data) -> String {
-        let b64 = data.base64EncodedString()
-        return b64
-            .replacingOccurrences(of: "+", with: "-")
-            .replacingOccurrences(of: "/", with: "_")
-            .replacingOccurrences(of: "=", with: "")
     }
 }

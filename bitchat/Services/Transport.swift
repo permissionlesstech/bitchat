@@ -78,7 +78,6 @@ enum TransportEvent: @unchecked Sendable {
     case peerConnected(PeerID)
     case peerDisconnected(PeerID)
     case peerListUpdated([PeerID])
-    case peerSnapshotsUpdated([TransportPeerSnapshot])
     case messageDeliveryStatusUpdated(messageID: String, status: DeliveryStatus)
     case bluetoothStateUpdated(CBManagerState)
 }
@@ -294,8 +293,6 @@ extension BitchatDelegate {
             didDisconnectFromPeer(peerID)
         case .peerListUpdated(let peers):
             didUpdatePeerList(peers)
-        case .peerSnapshotsUpdated:
-            break
         case let .messageDeliveryStatusUpdated(messageID, status):
             didUpdateMessageDeliveryStatus(messageID, status: status)
         case .bluetoothStateUpdated(let state):

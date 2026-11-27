@@ -148,11 +148,6 @@ final class PrivateConversationModel: ObservableObject {
         bind()
     }
 
-    func startConversation(with peerID: PeerID) {
-        chatViewModel.startPrivateChat(with: peerID)
-        refreshSelectedConversation()
-    }
-
     func openConversation(for peerID: PeerID) {
         if peerID.isGeoChat {
             guard let full = chatViewModel.fullNostrHex(forSenderPeerID: peerID) else { return }

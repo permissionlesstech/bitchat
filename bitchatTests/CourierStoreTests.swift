@@ -100,7 +100,7 @@ struct CourierStoreTests {
 
         var attemptedFragments: [Int] = []
         let accepted = store.handoverEnvelopes(for: recipientKey) { _ in
-            BLEStrictFragmentAdmission.admitAll([0, 1, 2]) { fragment in
+            [0, 1, 2].allSatisfy { fragment in
                 attemptedFragments.append(fragment)
                 return fragment != 1
             }

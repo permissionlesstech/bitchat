@@ -101,7 +101,6 @@ final class LocationStateManager: NSObject, CLLocationManagerDelegate, Observabl
 
     private let cl: LocationStateManaging
     private let geocoder: LocationStateGeocoding
-    private var refreshTimer: Timer?
 
     // MARK: - Persistence Keys
 
@@ -288,10 +287,8 @@ final class LocationStateManager: NSObject, CLLocationManagerDelegate, Observabl
         }
     }
 
-    func beginLiveRefresh(interval _: TimeInterval = TransportConfig.locationLiveRefreshInterval) {
+    func beginLiveRefresh() {
         guard permissionState == .authorized else { return }
-        refreshTimer?.invalidate()
-        refreshTimer = nil
         cl.desiredAccuracy = kCLLocationAccuracyNearestTenMeters
         cl.distanceFilter = TransportConfig.locationDistanceFilterLiveMeters
         cl.startUpdatingLocation()
@@ -299,8 +296,6 @@ final class LocationStateManager: NSObject, CLLocationManagerDelegate, Observabl
     }
 
     func endLiveRefresh() {
-        refreshTimer?.invalidate()
-        refreshTimer = nil
         cl.stopUpdatingLocation()
         cl.desiredAccuracy = kCLLocationAccuracyHundredMeters
         cl.distanceFilter = TransportConfig.locationDistanceFilterMeters
@@ -655,13 +650,4 @@ final class LocationStateManager: NSObject, CLLocationManagerDelegate, Observabl
 
 typealias LocationChannelManager = LocationStateManager
 typealias GeohashBookmarksStore = LocationStateManager
-
-// MARK: - Backward Compatibility Extensions
-
-extension LocationStateManager {
-    /// Backward compatibility: toggle bookmark (was GeohashBookmarksStore.toggle)
-    func toggle(_ geohash: String) {
-        toggleBookmark(geohash)
-    }
-}
 #endif

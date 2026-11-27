@@ -12,7 +12,6 @@ import Foundation
 @MainActor
 protocol ChatTransportEventContext: AnyObject {
     // MARK: Connection & chat state
-    var isConnected: Bool { get set }
     var nickname: String { get }
     var myPeerID: PeerID { get }
     /// A single private chat's timeline (store-direct lookup on
@@ -48,8 +47,6 @@ protocol ChatTransportEventContext: AnyObject {
     /// The peer's current entry in the unified peer service, if known.
     func unifiedPeer(for peerID: PeerID) -> BitchatPeer?
     func resolveNickname(for peerID: PeerID) -> String
-    func registerEphemeralSession(peerID: PeerID)
-    func removeEphemeralSession(peerID: PeerID)
     /// Resolves the peer's Noise static key from the active Noise session, if any.
     func noiseSessionPublicKeyData(for peerID: PeerID) -> Data?
     func cacheStablePeerID(_ stablePeerID: PeerID, for shortPeerID: PeerID)
@@ -100,14 +97,6 @@ extension ChatViewModel: ChatTransportEventContext {
 
     func unifiedPeer(for peerID: PeerID) -> BitchatPeer? {
         unifiedPeerService.getPeer(by: peerID)
-    }
-
-    func registerEphemeralSession(peerID: PeerID) {
-        identityManager.registerEphemeralSession(peerID: peerID, handshakeState: .none)
-    }
-
-    func removeEphemeralSession(peerID: PeerID) {
-        identityManager.removeEphemeralSession(peerID: peerID)
     }
 
     func noiseSessionPublicKeyData(for peerID: PeerID) -> Data? {
@@ -270,8 +259,6 @@ final class ChatTransportEventCoordinator {
     func didConnectToPeerSynchronously(_ peerID: PeerID) {
         SecureLogger.debug("🤝 Peer connected: \(peerID)", category: .session)
 
-        context.isConnected = true
-        context.registerEphemeralSession(peerID: peerID)
         context.notifyUIChanged()
 
         if let peer = context.unifiedPeer(for: peerID) {
@@ -292,8 +279,6 @@ final class ChatTransportEventCoordinator {
     @MainActor
     func didDisconnectFromPeerSynchronously(_ peerID: PeerID) {
         SecureLogger.debug("👋 Peer disconnected: \(peerID)", category: .session)
-
-        context.removeEphemeralSession(peerID: peerID)
 
         var stablePeerID = context.cachedStablePeerID(for: peerID)
         if stablePeerID == nil,

@@ -315,21 +315,16 @@ struct ViewSmokeTests {
 
         transport.peerFingerprints[peerID] = fingerprint
         transport.updatePeerSnapshots([makeSnapshot(peerID: peerID, nickname: "Verifier", noiseByte: 0x33)])
-        featureModels.privateConversationModel.startConversation(with: peerID)
+        featureModels.privateConversationModel.openConversation(for: peerID)
         viewModel.verifiedFingerprints.insert(fingerprint)
-
-        let image = try makeCGImage()
 
         let myQR = MyQRView(qrString: "bitchat://verify?name=alice&npub=npub1test")
         let qrCode = QRCodeImage(data: "bitchat://verify?hello=world", size: 96)
-        let imageWrapper = ImageWrapper(image: image)
 
         _ = myQR.body
         _ = qrCode.body
-        _ = imageWrapper.body
         _ = mount(myQR)
         _ = mount(qrCode)
-        _ = mount(imageWrapper)
         _ = mount(
             VerificationSheetView(
                 isPresented: Binding(
@@ -555,7 +550,7 @@ struct ViewSmokeTests {
         _ = mount(installSmokeEnvironment(ContentView(), featureModels: featureModels))
         _ = mount(installSmokeEnvironment(ContentPeopleSheetHarness(draftModel: featureModels.composerDraftModel), featureModels: featureModels))
 
-        featureModels.privateConversationModel.startConversation(with: peerID)
+        featureModels.privateConversationModel.openConversation(for: peerID)
         try? await Task.sleep(nanoseconds: 50_000_000)
 
         _ = mount(installSmokeEnvironment(ContentPeopleSheetHarness(draftModel: featureModels.composerDraftModel), featureModels: featureModels))

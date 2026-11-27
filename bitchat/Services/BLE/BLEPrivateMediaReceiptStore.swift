@@ -260,14 +260,8 @@ final class BLEPrivateMediaReceiptStore: @unchecked Sendable {
             return false
         }
 
-        let victim = capacityVictim(
-            for: .accepted,
-            replacing: messageID,
-            in: records
-        )
         if records[messageID]?.kind != .accepted,
-           records.values.lazy.filter({ $0.kind == .accepted }).count >= capacity,
-           victim == nil {
+           records.values.lazy.filter({ $0.kind == .accepted }).count >= capacity {
             return false
         }
 
@@ -281,10 +275,6 @@ final class BLEPrivateMediaReceiptStore: @unchecked Sendable {
         }
 
         records[messageID] = record
-        if let victim, victim != messageID {
-            records.removeValue(forKey: victim)
-            removeRecord(messageID: victim, from: directory)
-        }
         runtime.records = records
         runtime.cachedReservedPayloadPaths = nil
         return true
@@ -810,11 +800,7 @@ final class BLEPrivateMediaReceiptStore: @unchecked Sendable {
             // the durable per-ID tombstone is pathless and cannot later
             // delete a different payload that reused the basename.
             let removedEveryPayload = journalEntry.relativePaths.allSatisfy {
-                removePayloadRecordedByTombstone(ReceiptRecord(
-                    kind: .tombstone,
-                    relativePath: $0,
-                    recordedAt: journalEntry.recordedAt
-                ))
+                removePayload(atRelativePath: $0)
             }
             guard removedEveryPayload else {
                 continue
@@ -1042,12 +1028,8 @@ final class BLEPrivateMediaReceiptStore: @unchecked Sendable {
     }
 
     @discardableResult
-    private func removePayloadRecordedByTombstone(
-        _ record: ReceiptRecord
-    ) -> Bool {
-        guard record.kind == .tombstone,
-              let relativePath = record.relativePath,
-              let payload = candidatePayload(relativePath: relativePath),
+    private func removePayload(atRelativePath relativePath: String) -> Bool {
+        guard let payload = candidatePayload(relativePath: relativePath),
               fileManager.fileExists(atPath: payload.path) else {
             return true
         }

@@ -167,11 +167,9 @@ private final class MockChatPrivateConversationContext: ChatPrivateConversationC
     }
 
     func deriveNostrIdentity(forGeohash geohash: String) throws -> NostrIdentity { Self.dummyIdentity }
-    func currentNostrIdentity() -> NostrIdentity? { Self.dummyIdentity }
 
     // Routing & acknowledgements
     private(set) var routedPrivateMessages: [(content: String, peerID: PeerID, messageID: String)] = []
-    private(set) var routedReadReceipts: [(messageID: String, peerID: PeerID)] = []
     private(set) var meshReadReceipts: [(messageID: String, peerID: PeerID)] = []
     private(set) var geoPrivateMessages: [(content: String, recipientHex: String, messageID: String)] = []
     private(set) var geoDeliveryAcks: [(messageID: String, recipientHex: String)] = []
@@ -182,12 +180,6 @@ private final class MockChatPrivateConversationContext: ChatPrivateConversationC
 
     func routePrivateMessage(_ content: String, to peerID: PeerID, recipientNickname: String, messageID: String) {
         routedPrivateMessages.append((content, peerID, messageID))
-    }
-
-    var routeReadReceiptResult = true
-    func routeReadReceipt(_ receipt: ReadReceipt, to peerID: PeerID) -> Bool {
-        routedReadReceipts.append((receipt.originalMessageID, peerID))
-        return routeReadReceiptResult
     }
 
     @discardableResult
@@ -706,82 +698,6 @@ struct ChatPrivateConversationCoordinatorContextTests {
         #expect(context.queuedMessageIDsByPeerID[shortPeerID] == nil)
         #expect(context.deliveredMessageIDs == ["cleared-bubble"])
         #expect(context.notifyUIChangedCount == 0)
-    }
-
-    @Test @MainActor
-    func handleViewingThisChat_clearsUnreadAndSendsRoutedReadReceiptOnce() async {
-        let context = MockChatPrivateConversationContext()
-        let coordinator = ChatPrivateConversationCoordinator(context: context)
-        let noiseKey = Data(repeating: 0xAB, count: 32)
-        let stablePeerID = PeerID(hexData: noiseKey)
-        let ephemeralPeerID = PeerID(str: "0102030405060708")
-        context.ephemeralPeerIDsByNoiseKey[noiseKey] = ephemeralPeerID
-        context.unreadPrivateMessages = [stablePeerID, ephemeralPeerID]
-        let message = makeIncomingMessage(id: "read-1", senderPeerID: stablePeerID)
-
-        coordinator.handleViewingThisChat(
-            message,
-            targetPeerID: stablePeerID,
-            key: noiseKey,
-            senderPubkey: "feedface00112233"
-        )
-
-        #expect(context.unreadPrivateMessages.isEmpty)
-        #expect(context.routedReadReceipts.map(\.messageID) == ["read-1"])
-        #expect(context.routedReadReceipts.first?.peerID == stablePeerID)
-        #expect(context.sentReadReceipts == ["read-1"])
-
-        // Already-acked message must not produce a second receipt.
-        coordinator.handleViewingThisChat(
-            message,
-            targetPeerID: stablePeerID,
-            key: noiseKey,
-            senderPubkey: "feedface00112233"
-        )
-        #expect(context.routedReadReceipts.count == 1)
-
-        // Without a Noise key, the receipt goes out via the geohash transport.
-        context.sentReadReceipts = []
-        coordinator.handleViewingThisChat(
-            message,
-            targetPeerID: stablePeerID,
-            key: nil,
-            senderPubkey: "feedface00112233"
-        )
-        #expect(context.geoReadReceipts.map(\.messageID) == ["read-1"])
-        #expect(context.sentReadReceipts == ["read-1"])
-    }
-
-    @Test @MainActor
-    func markAsUnread_tracksTargetAndEphemeralWithoutNotificationWhenStale() async {
-        let context = MockChatPrivateConversationContext()
-        let coordinator = ChatPrivateConversationCoordinator(context: context)
-        let noiseKey = Data(repeating: 0xCD, count: 32)
-        let stablePeerID = PeerID(hexData: noiseKey)
-        let ephemeralPeerID = PeerID(str: "1112131415161718")
-        context.ephemeralPeerIDsByNoiseKey[noiseKey] = ephemeralPeerID
-
-        // isRecentMessage false keeps the flow off the NotificationService singleton.
-        coordinator.markAsUnreadIfNeeded(
-            shouldMarkAsUnread: true,
-            targetPeerID: stablePeerID,
-            key: noiseKey,
-            isRecentMessage: false,
-            senderNickname: "alice",
-            messageContent: "hello"
-        )
-        #expect(context.unreadPrivateMessages == [stablePeerID, ephemeralPeerID])
-
-        context.unreadPrivateMessages = []
-        coordinator.markAsUnreadIfNeeded(
-            shouldMarkAsUnread: false,
-            targetPeerID: stablePeerID,
-            key: noiseKey,
-            isRecentMessage: false,
-            senderNickname: "alice",
-            messageContent: "hello"
-        )
-        #expect(context.unreadPrivateMessages.isEmpty)
     }
 
     @Test @MainActor

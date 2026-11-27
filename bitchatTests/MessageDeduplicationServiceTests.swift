@@ -470,41 +470,6 @@ struct MessageDeduplicationServiceTests {
         #expect(!service.hasProcessedNostrEvent("event4"))
     }
 
-    // MARK: - Nostr ACK Deduplication
-
-    @Test func recordNostrAck_marksAsProcessed() {
-        let service = MessageDeduplicationService(contentCapacity: 100, nostrEventCapacity: 100)
-        let ackKey = MessageDeduplicationService.ackKey(
-            messageId: "msg123",
-            ackType: "delivered",
-            senderPubkey: "pubkey456"
-        )
-
-        #expect(!service.hasProcessedNostrAck(ackKey))
-
-        service.recordNostrAck(ackKey)
-
-        #expect(service.hasProcessedNostrAck(ackKey))
-    }
-
-    @Test func ackKey_format() {
-        let key = MessageDeduplicationService.ackKey(
-            messageId: "msg",
-            ackType: "read",
-            senderPubkey: "pub"
-        )
-        #expect(key == "msg:read:pub")
-    }
-
-    @Test func ackKey_differentComponents() {
-        let key1 = MessageDeduplicationService.ackKey(messageId: "a", ackType: "delivered", senderPubkey: "x")
-        let key2 = MessageDeduplicationService.ackKey(messageId: "a", ackType: "read", senderPubkey: "x")
-        let key3 = MessageDeduplicationService.ackKey(messageId: "b", ackType: "delivered", senderPubkey: "x")
-
-        #expect(key1 != key2) // Different ackType
-        #expect(key1 != key3) // Different messageId
-    }
-
     // MARK: - Clear Operations
 
     @Test func clearAll_clearsEverything() {
@@ -513,13 +478,11 @@ struct MessageDeduplicationServiceTests {
 
         service.recordContent("Hello", timestamp: now)
         service.recordNostrEvent("event1")
-        service.recordNostrAck("ack1")
 
         service.clearAll()
 
         #expect(service.contentTimestamp(for: "Hello") == nil)
         #expect(!service.hasProcessedNostrEvent("event1"))
-        #expect(!service.hasProcessedNostrAck("ack1"))
     }
 
     @Test func clearNostrCaches_preservesContent() {
@@ -528,13 +491,11 @@ struct MessageDeduplicationServiceTests {
 
         service.recordContent("Hello", timestamp: now)
         service.recordNostrEvent("event1")
-        service.recordNostrAck("ack1")
 
         service.clearNostrCaches()
 
         #expect(service.contentTimestamp(for: "Hello") == now) // Preserved
         #expect(!service.hasProcessedNostrEvent("event1")) // Cleared
-        #expect(!service.hasProcessedNostrAck("ack1")) // Cleared
     }
 
     // MARK: - Capacity Tests
@@ -649,19 +610,11 @@ struct MessageDeduplicationServiceTests {
                 }
             }
 
-            // ACK recording tasks
-            for i in 0..<iterations {
-                group.addTask { @MainActor in
-                    service.recordNostrAck("ack_\(i)")
-                }
-            }
-
             // Read tasks
             for i in 0..<iterations {
                 group.addTask { @MainActor in
                     _ = service.contentTimestamp(for: "Content \(i)")
                     _ = service.hasProcessedNostrEvent("event_\(i)")
-                    _ = service.hasProcessedNostrAck("ack_\(i)")
                 }
             }
         }

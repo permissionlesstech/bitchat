@@ -21,14 +21,12 @@ final class UnifiedPeerService: ObservableObject, TransportPeerEventsDelegate {
     @Published private(set) var peers: [BitchatPeer] = []
     @Published private(set) var connectedPeerIDs: Set<PeerID> = []
     @Published private(set) var favorites: [BitchatPeer] = []
-    @Published private(set) var mutualFavorites: [BitchatPeer] = []
     
     // MARK: - Private Properties
     
     private var peerIndex: [PeerID: BitchatPeer] = [:]
     private var fingerprintCache: [PeerID: String] = [:]
     private let meshService: Transport
-    private let idBridge: NostrIdentityBridge
     private let identityManager: SecureIdentityStateManagerProtocol
     weak var messageRouter: MessageRouter?
     private let favoritesService = FavoritesPersistenceService.shared
@@ -38,11 +36,9 @@ final class UnifiedPeerService: ObservableObject, TransportPeerEventsDelegate {
     
     init(
         meshService: Transport,
-        idBridge: NostrIdentityBridge,
         identityManager: SecureIdentityStateManagerProtocol
     ) {
         self.meshService = meshService
-        self.idBridge = idBridge
         self.identityManager = identityManager
         
         // Subscribe to changes from both services
@@ -149,7 +145,6 @@ final class UnifiedPeerService: ObservableObject, TransportPeerEventsDelegate {
         
         // Phase 4: Build subsets and indices
         var favoritesList: [BitchatPeer] = []
-        var mutualsList: [BitchatPeer] = []
         var newIndex: [PeerID: BitchatPeer] = [:]
         newIndex.reserveCapacity(enrichedPeers.count)
         
@@ -158,9 +153,6 @@ final class UnifiedPeerService: ObservableObject, TransportPeerEventsDelegate {
             
             if peer.isFavorite {
                 favoritesList.append(peer)
-            }
-            if peer.isMutualFavorite {
-                mutualsList.append(peer)
             }
         }
         
@@ -177,9 +169,6 @@ final class UnifiedPeerService: ObservableObject, TransportPeerEventsDelegate {
         }
         if !Self.peersVisuallyEqual(self.favorites, favoritesList) {
             self.favorites = favoritesList
-        }
-        if !Self.peersVisuallyEqual(self.mutualFavorites, mutualsList) {
-            self.mutualFavorites = mutualsList
         }
         
         // Log summary (commented out to reduce noise)
@@ -376,17 +365,10 @@ final class UnifiedPeerService: ObservableObject, TransportPeerEventsDelegate {
             // Remove favorite
             favoritesService.removeFavorite(peerNoisePublicKey: peer.noisePublicKey)
         } else {
-            // Get or derive peer's Nostr public key if not already known
-            var peerNostrKey = peer.nostrPublicKey
-            if peerNostrKey == nil {
-                // Try to get from NostrIdentityBridge association
-                peerNostrKey = idBridge.getNostrPublicKey(for: peer.noisePublicKey)
-            }
-            
             // Add favorite
             favoritesService.addFavorite(
                 peerNoisePublicKey: peer.noisePublicKey,
-                peerNostrPublicKey: peerNostrKey,
+                peerNostrPublicKey: peer.nostrPublicKey,
                 peerNickname: finalNickname
             )
         }

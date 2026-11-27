@@ -56,10 +56,6 @@ final class AppChromeModel: ObservableObject {
         bind(privateInboxModel: privateInboxModel)
     }
 
-    var shouldSuppressScreenshotNotification: Bool {
-        isLocationChannelsSheetPresented || isAppInfoPresented
-    }
-
     func setNickname(_ nickname: String) {
         self.nickname = nickname
         if chatViewModel.nickname != nickname {
