@@ -24,7 +24,6 @@ struct ChatViewModelServiceBundle {
         let privateChatManager = PrivateChatManager(meshService: meshService)
         let unifiedPeerService = UnifiedPeerService(
             meshService: meshService,
-            idBridge: idBridge,
             identityManager: identityManager
         )
         let nostrTransport = NostrTransport(keychain: keychain, idBridge: idBridge)

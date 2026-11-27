@@ -167,11 +167,9 @@ private final class MockChatPrivateConversationContext: ChatPrivateConversationC
     }
 
     func deriveNostrIdentity(forGeohash geohash: String) throws -> NostrIdentity { Self.dummyIdentity }
-    func currentNostrIdentity() -> NostrIdentity? { Self.dummyIdentity }
 
     // Routing & acknowledgements
     private(set) var routedPrivateMessages: [(content: String, peerID: PeerID, messageID: String)] = []
-    private(set) var routedReadReceipts: [(messageID: String, peerID: PeerID)] = []
     private(set) var meshReadReceipts: [(messageID: String, peerID: PeerID)] = []
     private(set) var geoPrivateMessages: [(content: String, recipientHex: String, messageID: String)] = []
     private(set) var geoDeliveryAcks: [(messageID: String, recipientHex: String)] = []
@@ -182,12 +180,6 @@ private final class MockChatPrivateConversationContext: ChatPrivateConversationC
 
     func routePrivateMessage(_ content: String, to peerID: PeerID, recipientNickname: String, messageID: String) {
         routedPrivateMessages.append((content, peerID, messageID))
-    }
-
-    var routeReadReceiptResult = true
-    func routeReadReceipt(_ receipt: ReadReceipt, to peerID: PeerID) -> Bool {
-        routedReadReceipts.append((receipt.originalMessageID, peerID))
-        return routeReadReceiptResult
     }
 
     @discardableResult

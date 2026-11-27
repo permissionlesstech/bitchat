@@ -21,6 +21,8 @@ final class MeshSightingsTracker: ObservableObject {
         static let dayKey = "meshSightings.dayKey"
         static let salt = "meshSightings.salt"
         static let hashes = "meshSightings.hashes"
+        /// Legacy timestamp key written by earlier builds; still cleared on panic.
+        static let legacyLastSeenAt = "meshSightings.lastSeenAt"
     }
 
     /// Distinct devices seen within range today (rotating peer IDs may count
@@ -79,6 +81,7 @@ final class MeshSightingsTracker: ObservableObject {
         defaults.removeObject(forKey: Keys.dayKey)
         defaults.removeObject(forKey: Keys.salt)
         defaults.removeObject(forKey: Keys.hashes)
+        defaults.removeObject(forKey: Keys.legacyLastSeenAt)
     }
 
     private func restore() {

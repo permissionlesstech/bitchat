@@ -698,7 +698,6 @@ private final class PerfNostrContext: ChatNostrContext {
         }
     }
 
-    var selectedPrivateChatPeer: PeerID?
     var nostrKeyMapping: [PeerID: String] = [:]
     func registerNostrKeyMapping(_ pubkey: String, for peerID: PeerID) { nostrKeyMapping[peerID] = pubkey }
     func handlePrivateMessage(_ payload: NoisePayload, senderPubkey: String, convKey: PeerID, id: NostrIdentity, messageTimestamp: Date) {}
@@ -747,8 +746,6 @@ private final class PerfNostrContext: ChatNostrContext {
     func isGeohashOutsideRegionalChannels(_ geohash: String) -> Bool { false }
 
     func routeFavoriteNotification(to peerID: PeerID, isFavorite: Bool) {}
-    func sendGeohashDeliveryAck(for messageID: String, toRecipientHex recipientHex: String, from identity: NostrIdentity) {}
-    func sendGeohashReadReceipt(_ messageID: String, toRecipientHex recipientHex: String, from identity: NostrIdentity) {}
 
     func favoriteRelationship(forNoiseKey noiseKey: Data) -> FavoritesPersistenceService.FavoriteRelationship? { nil }
     func favoriteNoiseKey(forNostrPubkey nostrPubkey: String) -> Data? { nil }
