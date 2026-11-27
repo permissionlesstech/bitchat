@@ -67,7 +67,9 @@ extension ContentRootModalPresentationState {
 
 enum MediaPickerMode: Equatable {
     case photoLibrary
+    #if os(iOS)
     case camera
+    #endif
 }
 
 extension View {

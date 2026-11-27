@@ -15,8 +15,6 @@ import Foundation
 /// and must age out with the 24h drop window they guard.
 struct ExpiringIDSet {
     private var cache: BoundedCache<String, Date>
-    var capacity: Int { cache.capacity }
-    var lifetime: TimeInterval { cache.ttl ?? 0 }
 
     var entries: [String: Date] { cache.allValues }
 

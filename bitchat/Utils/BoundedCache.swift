@@ -21,8 +21,8 @@ struct BoundedCache<Key: Hashable, Value> {
         var seq: UInt64
     }
 
-    let capacity: Int
-    let ttl: TimeInterval?
+    private let capacity: Int
+    private let ttl: TimeInterval?
 
     private var storage: [Key: Entry] = [:]
     private var order: [(key: Key, seq: UInt64)] = []
@@ -37,10 +37,6 @@ struct BoundedCache<Key: Hashable, Value> {
 
     var count: Int {
         storage.count
-    }
-
-    var isEmpty: Bool {
-        storage.isEmpty
     }
 
     var allValues: [Key: Value] {
@@ -138,7 +134,29 @@ struct BoundedCache<Key: Hashable, Value> {
         compactIfNeeded()
     }
 
+    /// Exposed for tests verifying that hot-key refreshes keep history bounded.
+    var historyCountForTesting: Int {
+        order.count
+    }
+
     private mutating func compactIfNeeded(force: Bool = false) {
+        while head < order.count {
+            let item = order[head]
+            if let entry = storage[item.key], entry.seq == item.seq {
+                break
+            }
+            head += 1
+        }
+        let activeSpan = order.count - head
+        let compactionThreshold = max(capacity * 2, 64)
+        if activeSpan > compactionThreshold {
+            order = order[head...].filter { item in
+                guard let entry = storage[item.key] else { return false }
+                return entry.seq == item.seq
+            }
+            head = 0
+            return
+        }
         guard head > 0 else { return }
         if force || (head >= 32 && head * 2 >= order.count) {
             order.removeFirst(head)
