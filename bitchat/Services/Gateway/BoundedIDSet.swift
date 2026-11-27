@@ -11,7 +11,6 @@
 /// caches.
 struct BoundedIDSet {
     private var cache: BoundedCache<String, Void>
-    var capacity: Int { cache.capacity }
 
     init(capacity: Int) {
         self.cache = BoundedCache(capacity: capacity)

@@ -66,7 +66,6 @@
 
 import Foundation
 import CoreBluetooth
-import BitFoundation
 
 // MARK: - Noise Payload Types
 

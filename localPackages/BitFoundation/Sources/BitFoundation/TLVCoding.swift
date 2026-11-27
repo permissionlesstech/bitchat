@@ -24,7 +24,7 @@ public extension Data {
 
 public extension Collection where Element == UInt8 {
     /// Decodes a fixed-width unsigned integer from exact-width big-endian bytes.
-    func readBigEndian<T: FixedWidthInteger & UnsignedInteger>(_ type: T.Type = T.self) -> T? {
+    func readBigEndian<T: FixedWidthInteger & UnsignedInteger>(_ _: T.Type = T.self) -> T? {
         guard count == MemoryLayout<T>.size else { return nil }
         return reduce(T(0)) { ($0 << 8) | T($1) }
     }
@@ -105,10 +105,6 @@ public struct TLVReader {
         self.data = data
         self.lengthWidth = lengthWidth
         self.cursor = data.index(data.startIndex, offsetBy: min(startOffset, data.count))
-    }
-
-    public var isAtEnd: Bool {
-        cursor >= data.endIndex
     }
 
     /// Reads the next TLV entry.
