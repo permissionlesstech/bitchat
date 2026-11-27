@@ -43,8 +43,8 @@ struct AppInfoView: View {
     private static let selectedPaneStorageKey = "appInfo.selectedPane"
 
     /// Overwrites the remembered pane so the next presentation opens there.
-    /// `selectedPane` is sticky by design; a caller whose control names a
-    /// specific pane (the header gear says "settings") uses this so the
+    /// `selectedPane` is sticky by design; a caller whose control promises a
+    /// specific pane (e.g., the gateway globe opens settings) uses this so the
     /// sheet doesn't land first-time users on the Info default instead.
     static func setSelectedPane(_ pane: Pane) {
         UserDefaults.standard.set(pane.rawValue, forKey: selectedPaneStorageKey)
