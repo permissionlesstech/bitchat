@@ -24,7 +24,8 @@ private func makeSmokeViewModel() -> (viewModel: ChatViewModel, transport: MockT
         keychain: keychain,
         idBridge: idBridge,
         identityManager: identityManager,
-        transport: transport
+        transport: transport,
+        locationManager: makeSmokeLocationManager()
     )
 
     return (viewModel, transport, identityManager)
@@ -73,10 +74,9 @@ private func makeSmokeLocationManager() -> LocationChannelManager {
 
 @MainActor
 private func makeSmokeFeatureModels(for viewModel: ChatViewModel) -> SmokeFeatureModels {
-    let locationManager = makeSmokeLocationManager()
     let conversations = viewModel.conversations
     let publicChatModel = PublicChatModel(conversations: conversations)
-    let locationChannelsModel = LocationChannelsModel(manager: locationManager)
+    let locationChannelsModel = LocationChannelsModel(manager: viewModel.locationManager)
     let privateInboxModel = PrivateInboxModel(conversations: conversations)
     let appChromeModel = AppChromeModel(
         chatViewModel: viewModel,
@@ -859,6 +859,9 @@ struct ViewSmokeTests {
         host.additionalSafeAreaInsets = UIEdgeInsets(top: 0, left: 0, bottom: 330, right: 0)
         host.view.setNeedsLayout()
         host.view.layoutIfNeeded()
+        _ = await TestHelpers.waitUntil {
+            featureModels.publicChatModel.activeChannel == .location(channel)
+        }
         try? await Task.sleep(nanoseconds: 100_000_000)
 
         // Now deliver two system messages (matching the Tor restart screenshot).
@@ -880,9 +883,12 @@ struct ViewSmokeTests {
         try? await Task.sleep(nanoseconds: 80_000_000)
         viewModel.conversations.append(second, to: .geohash("ez"))
         // Let followToBottom + 50ms retry settle.
-        try? await Task.sleep(nanoseconds: 120_000_000)
+        try? await Task.sleep(nanoseconds: 150_000_000)
         host.view.setNeedsLayout()
         host.view.layoutIfNeeded()
+
+        #expect(featureModels.publicChatModel.activeChannel == .location(channel))
+        #expect(featureModels.publicChatModel.messages.count == 2)
 
         func findScrollView(in view: UIView) -> UIScrollView? {
             if let sv = view as? UIScrollView { return sv }
@@ -913,7 +919,7 @@ struct ViewSmokeTests {
             )
             #expect(
                 contentZeroInWindow >= expectedMinTop && contentZeroInWindow <= expectedMaxTop,
-                "\(label): First message top (\(contentZeroInWindow)) outside single-header range [\(expectedMinTop), \(expectedMaxTop)] (adjustedContentInset=\(scrollView.adjustedContentInset), contentInset=\(scrollView.contentInset), contentOffset=\(scrollView.contentOffset))"
+                "\(label): First message top (\(contentZeroInWindow)) outside single-header range [\(expectedMinTop), \(expectedMaxTop)] (adjustedContentInset=\(scrollView.adjustedContentInset), contentInset=\(scrollView.contentInset), contentOffset=\(scrollView.contentOffset), contentSize=\(scrollView.contentSize))"
             )
         }
 
