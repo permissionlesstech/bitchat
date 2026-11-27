@@ -16,16 +16,6 @@ extension ChatViewModel {
     }
 
     @MainActor
-    func subscribeNostrEvent(_ event: NostrEvent) {
-        nostrCoordinator.inbound.subscribeNostrEvent(event)
-    }
-
-    @MainActor
-    func subscribeGiftWrap(_ giftWrap: NostrEvent, id: NostrIdentity) {
-        nostrCoordinator.inbound.subscribeGiftWrap(giftWrap, id: id)
-    }
-
-    @MainActor
     func switchLocationChannel(to channel: ChannelID) {
         nostrCoordinator.subscriptions.switchLocationChannel(to: channel)
     }
