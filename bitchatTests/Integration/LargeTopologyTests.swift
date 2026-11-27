@@ -75,7 +75,7 @@ struct LargeTopologyTests {
         var maxSeenTTL: [String: UInt8] = [:]
         for name in chain.dropFirst() {
             helper.nodes[name]!.packetDeliveryHandler = { packet in
-                if let message = BitchatMessage(packet.payload),
+                if let message = BitchatMessage.fromTestPayload(packet.payload),
                    message.content == "deep chain probe" {
                     maxSeenTTL[name] = max(maxSeenTTL[name] ?? 0, packet.ttl)
                 }

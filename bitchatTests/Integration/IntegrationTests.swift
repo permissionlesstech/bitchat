@@ -480,7 +480,7 @@ struct IntegrationTests {
             // Setup encryption at Alice
             helper.nodes["Alice"]!.packetDeliveryHandler = { packet in
                 if packet.type == 0x01,
-                   let message = BitchatMessage(packet.payload),
+                   let message = BitchatMessage.fromTestPayload(packet.payload),
                    message.isPrivate && packet.recipientID != nil {
                     // Encrypt private messages
                     if let encrypted = try? helper.noiseManagers["Alice"]!.encrypt(packet.payload, for: helper.nodes["Bob"]!.peerID) {
