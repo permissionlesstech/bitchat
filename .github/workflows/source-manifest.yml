@@ -32,17 +32,20 @@ jobs:
       id-token: write      # provenance attestation
       attestations: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
           ref: ${{ github.event.inputs.ref || github.ref }}
           # Full history so the commit the tag names can be recorded exactly.
           fetch-depth: 0
+          persist-credentials: false
 
       - name: Build manifest
         id: build
+        env:
+          REF_NAME: ${{ github.event.inputs.ref || github.ref_name }}
         run: |
           set -euo pipefail
-          ref_name="${{ github.event.inputs.ref || github.ref_name }}"
+          ref_name="$REF_NAME"
           commit="$(git rev-parse HEAD)"
           tree="$(git rev-parse HEAD^{tree})"
 
@@ -56,7 +59,7 @@ jobs:
           {
             echo "# bitchat source manifest"
             echo "#"
-            echo "# ref:    ${ref_name}"
+            printf '# ref:    %s\n' "${ref_name}"
             echo "# commit: ${commit}"
             echo "# tree:   ${tree}"
             echo "# files:  $(wc -l < files.sha256 | tr -d ' ')"
@@ -88,11 +91,11 @@ jobs:
           echo "manifest validates against this checkout"
 
       - name: Attest the manifest
-        uses: actions/attest-build-provenance@v1
+        uses: actions/attest-build-provenance@ef244123eb79f2f7a7e75d99086184180e6d0018 # v1
         with:
           subject-path: SOURCE-MANIFEST.txt
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: source-manifest
           path: SOURCE-MANIFEST.txt
@@ -101,12 +104,13 @@ jobs:
         if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
         env:
           GH_TOKEN: ${{ github.token }}
+          TAG_NAME: ${{ github.ref_name }}
         run: |
           set -euo pipefail
           # A tag may be pushed before its release exists; only attach when
           # there is a release to attach to, and never fail the run over it.
-          if gh release view "${{ github.ref_name }}" >/dev/null 2>&1; then
-            gh release upload "${{ github.ref_name }}" SOURCE-MANIFEST.txt --clobber
+          if gh release view "$TAG_NAME" >/dev/null 2>&1; then
+            gh release upload "$TAG_NAME" SOURCE-MANIFEST.txt --clobber
           else
-            echo "no release for ${{ github.ref_name }} yet; manifest is available as a workflow artifact"
+            printf 'no release for %s yet; manifest is available as a workflow artifact\n' "$TAG_NAME"
           fi

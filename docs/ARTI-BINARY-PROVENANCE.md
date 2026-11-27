@@ -70,7 +70,7 @@ The build script now normalizes static-archive metadata and writes a stable xcfr
 Run this from the repo root to verify the checked-in artifact:
 
 ```sh
-find localPackages/Arti/Frameworks/arti.xcframework -maxdepth 3 -type f -print0 | sort -z | xargs -0 shasum -a 256
+find localPackages/Arti/Frameworks/arti.xcframework -type f -print0 | sort -z | xargs -0 shasum -a 256
 ```
 
 Current hashes:

@@ -70,7 +70,7 @@ check_prerequisites() {
 
     # Check/install targets
     for target in "${TARGETS[@]}"; do
-        if ! rustup target list --toolchain "$RUST_TOOLCHAIN" --installed | grep -q "$target"; then
+        if ! rustup target list --toolchain "$RUST_TOOLCHAIN" --installed | grep -qx "$target"; then
             log_info "Installing target: $target"
             rustup target add --toolchain "$RUST_TOOLCHAIN" "$target"
         fi
@@ -122,8 +122,8 @@ build_target() {
 
     setup_rustflags "$target"
 
-    # Build release
-    rustup run "$RUST_TOOLCHAIN" cargo build --release --target "$target" -p "$CRATE_NAME"
+    # Build release with locked Cargo.lock for reproducible dependency resolution
+    rustup run "$RUST_TOOLCHAIN" cargo build --release --locked --target "$target" -p "$CRATE_NAME"
 
     # Check output
     local lib_path="target/$target/release/$LIB_NAME"
@@ -192,14 +192,16 @@ create_xcframework() {
     mv "$normalized_macos" "$macos_lib"
 
     local header_dir="$OUTPUT_DIR/include"
-    local cmd="xcodebuild -create-xcframework"
-    cmd="$cmd -library $SCRIPT_DIR/target/aarch64-apple-ios/release/$LIB_NAME -headers $header_dir"
-    cmd="$cmd -library $simulator_lib -headers $header_dir"
-    cmd="$cmd -library $macos_lib -headers $header_dir"
-    cmd="$cmd -output $xcframework_path"
+    local xcframework_args=(
+        -create-xcframework
+        -library "$SCRIPT_DIR/target/aarch64-apple-ios/release/$LIB_NAME" -headers "$header_dir"
+        -library "$simulator_lib" -headers "$header_dir"
+        -library "$macos_lib" -headers "$header_dir"
+        -output "$xcframework_path"
+    )
 
-    log_info "Running: $cmd"
-    eval "$cmd"
+    log_info "Running: xcodebuild ${xcframework_args[*]}"
+    xcodebuild "${xcframework_args[@]}"
 
     if [[ -d "$xcframework_path" ]]; then
         cat > "$xcframework_path/Info.plist" << 'EOF'
