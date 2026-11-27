@@ -205,12 +205,7 @@ final class BridgeService: ObservableObject {
 
     // MARK: State
 
-    /// Loop rule 1: event IDs seen in `fromBridge` mesh broadcasts.
-    private var meshBroadcastEventIDs: BoundedIDSet
-    /// Loop rule 2: event IDs this device published (own or deposited).
-    private var publishedEventIDs: BoundedIDSet
-    /// Loop rule 3: event IDs this device already rebroadcast.
-    private var rebroadcastEventIDs: BoundedIDSet
+    private let relayEngine: CarrierRelayEngine
     /// Timeline message IDs already injected (either arrival path).
     private var injectedMessageIDs: BoundedIDSet
     /// Signed relay/carrier events already accepted. Kept separate from the
@@ -228,15 +223,10 @@ final class BridgeService: ObservableObject {
 
     /// Cells the rendezvous subscription covers (own + neighbor ring).
     private(set) var subscribedCells: Set<String> = []
-    private(set) var queuedUplinks: [QueuedUplink] = []
-    private var uplinkDepositTimes: [PeerID: [Date]] = [:]
-    private var downlinkSendTimes: [Date] = []
     private var inboundEventTimes: [Date] = []
     private var inboundEventTimesBySigner: [String: [Date]] = [:]
     private var signatureVerificationTokens = Double(Limits.signatureVerificationAttemptsPerMinute)
     private var signatureVerificationLastRefillAt: Date?
-    private var pendingDownlinks: [(event: NostrEvent, cell: String)] = []
-    private var downlinkDrainScheduled = false
     private var presenceTimerArmed = false
     private var lastPresenceAt = Date.distantPast
 
@@ -248,6 +238,12 @@ final class BridgeService: ObservableObject {
     private let verifyEventSignature: (NostrEvent) -> Bool
     private static let enabledKey = "bridge.userEnabled"
 
+    var queuedUplinks: [QueuedUplink] {
+        relayEngine.queuedUplinks.map {
+            QueuedUplink(depositor: $0.depositor, cell: $0.scope, event: $0.event)
+        }
+    }
+
     init(
         defaults: UserDefaults = .standard,
         now: @escaping () -> Date = Date.init,
@@ -257,9 +253,18 @@ final class BridgeService: ObservableObject {
         self.now = now
         self.verifyEventSignature = verifyEventSignature
         self.isEnabled = defaults.bool(forKey: Self.enabledKey)
-        self.meshBroadcastEventIDs = BoundedIDSet(capacity: Limits.maxTrackedEventIDs)
-        self.publishedEventIDs = BoundedIDSet(capacity: Limits.maxTrackedEventIDs)
-        self.rebroadcastEventIDs = BoundedIDSet(capacity: Limits.maxTrackedEventIDs)
+        self.relayEngine = CarrierRelayEngine(
+            config: .init(
+                maxQueuedUplinks: Limits.maxQueuedUplinks,
+                maxQueuedUplinksPerDepositor: Limits.maxQueuedUplinksPerDepositor,
+                uplinkEventsPerMinutePerDepositor: Limits.uplinkEventsPerMinutePerDepositor,
+                downlinkEventsPerMinute: Limits.downlinkEventsPerMinute,
+                maxPendingDownlinks: Limits.maxPendingDownlinks,
+                maxEventAgeSeconds: Limits.maxEventAgeSeconds,
+                maxTrackedEventIDs: Limits.maxTrackedEventIDs
+            ),
+            now: now
+        )
         self.injectedMessageIDs = BoundedIDSet(capacity: Limits.maxTrackedEventIDs)
         self.receivedEventIDs = BoundedIDSet(capacity: Limits.maxTrackedEventIDs)
         self.observedRadioMessageIDs = BoundedIDSet(capacity: Limits.maxTrackedEventIDs)
@@ -272,9 +277,7 @@ final class BridgeService: ObservableObject {
         isEnabled = enabled
         defaults.set(enabled, forKey: Self.enabledKey)
         if !enabled {
-            queuedUplinks.removeAll()
-            pendingDownlinks.removeAll()
-            uplinkDepositTimes.removeAll()
+            relayEngine.clearQueuesOnDisable()
             inboundEventTimes.removeAll()
             inboundEventTimesBySigner.removeAll()
             participants.removeAll()
@@ -294,16 +297,13 @@ final class BridgeService: ObservableObject {
             closeSubscription?()
         }
         isEnabled = false
+        nearbyOnly = false
         defaults.removeObject(forKey: Self.enabledKey)
         activeCell = nil
         subscribedCells = []
-        queuedUplinks.removeAll(keepingCapacity: false)
-        pendingDownlinks.removeAll(keepingCapacity: false)
-        downlinkDrainScheduled = false
+        relayEngine.resetForPanic()
         presenceTimerArmed = false
         lastPresenceAt = .distantPast
-        uplinkDepositTimes.removeAll(keepingCapacity: false)
-        downlinkSendTimes.removeAll(keepingCapacity: false)
         inboundEventTimes.removeAll(keepingCapacity: false)
         inboundEventTimesBySigner.removeAll(keepingCapacity: false)
         signatureVerificationTokens = Double(Limits.signatureVerificationAttemptsPerMinute)
@@ -311,12 +311,11 @@ final class BridgeService: ObservableObject {
         participants.removeAll(keepingCapacity: false)
         bridgedPeerCount = 0
         bridgedParticipants = []
-        meshBroadcastEventIDs = BoundedIDSet(capacity: Limits.maxTrackedEventIDs)
-        publishedEventIDs = BoundedIDSet(capacity: Limits.maxTrackedEventIDs)
-        rebroadcastEventIDs = BoundedIDSet(capacity: Limits.maxTrackedEventIDs)
         injectedMessageIDs = BoundedIDSet(capacity: Limits.maxTrackedEventIDs)
         receivedEventIDs = BoundedIDSet(capacity: Limits.maxTrackedEventIDs)
         observedRadioMessageIDs = BoundedIDSet(capacity: Limits.maxTrackedEventIDs)
+        injectedRadioAliases.removeAll(keepingCapacity: false)
+        injectedRadioAliasOrder.removeAll(keepingCapacity: false)
         onEnabledChanged?(false)
     }
 
@@ -401,7 +400,7 @@ final class BridgeService: ObservableObject {
             SecureLogger.error("🌉 Bridge: failed to compose rendezvous event", category: .session)
             return
         }
-        publishedEventIDs.insert(event.id)
+        relayEngine.publishedEventIDs.insert(event.id)
         injectedMessageIDs.insert(event.id) // our own timeline already has it
         if relaysConnected?() ?? false {
             publishToRelays?(event, cell)
@@ -424,7 +423,7 @@ final class BridgeService: ObservableObject {
         lastPresenceAt = now()
         guard let identity = try? deriveIdentity?(cell),
               let event = try? NostrProtocol.createBridgePresenceEvent(cell: cell, senderIdentity: identity) else { return }
-        publishedEventIDs.insert(event.id)
+        relayEngine.publishedEventIDs.insert(event.id)
         publishToRelays?(event, cell)
     }
 
@@ -478,9 +477,9 @@ final class BridgeService: ObservableObject {
         // deterministically, so even after a relaunch wipes the cache our
         // own relay-backfilled events are recognized (field bug: own
         // pre-restart messages re-rendered as bridged).
-        guard !publishedEventIDs.contains(event.id) else { return }
+        guard !relayEngine.publishedEventIDs.contains(event.id) else { return }
         if isOwnRendezvousEvent(event, cell: cell) {
-            publishedEventIDs.insert(event.id) // never downlink it either
+            relayEngine.publishedEventIDs.insert(event.id) // never downlink it either
             return
         }
         guard signatureAlreadyVerified || (allowSignatureVerificationAttempt() && verifyEventSignature(event)) else { return }
@@ -506,14 +505,19 @@ final class BridgeService: ObservableObject {
             // with every online bridger serving, the holdoff lets gateways
             // hear each other's broadcasts and skip duplicates.
             if !isLocalRadioCopy,
-               !meshBroadcastEventIDs.contains(event.id),
-               !rebroadcastEventIDs.contains(event.id),
-               !pendingDownlinks.contains(where: { $0.event.id == event.id }) {
-                pendingDownlinks.append((event, cell))
-                if pendingDownlinks.count > Limits.maxPendingDownlinks {
-                    pendingDownlinks.removeFirst(pendingDownlinks.count - Limits.maxPendingDownlinks)
-                }
-                scheduleDownlinkDrainIfNeeded(jitter: true)
+               !relayEngine.meshBroadcastEventIDs.contains(event.id),
+               !relayEngine.rebroadcastEventIDs.contains(event.id),
+               !relayEngine.hasPendingDownlink(event.id) {
+                relayEngine.enqueuePendingDownlink(event: event, scope: cell)
+                // Multi-gateway suppression window: enough spread for another
+                // gateway's broadcast to land and mark the event mesh-carried.
+                relayEngine.scheduleDownlinkDrainIfNeeded(
+                    jitterDelay: Double.random(in: 0.2...1.5),
+                    scheduleTimer: scheduleTimer,
+                    onFire: { [weak self] in
+                        self?.drainPendingDownlinks()
+                    }
+                )
             }
         }
     }
@@ -539,8 +543,8 @@ final class BridgeService: ObservableObject {
         // A relay event can already be waiting inside the multi-gateway jitter
         // window. Remove it now so it cannot consume BLE airtime after the
         // authenticated radio packet proved this island already has a copy.
-        pendingDownlinks.removeAll { item in
-            guard case .message(let message)? = classify(item.event, cell: item.cell) else { return false }
+        relayEngine.removePendingDownlinks { item in
+            guard case .message(let message)? = classify(item.event, cell: item.scope) else { return false }
             return message.radioMessageIDHint == messageID
         }
     }
@@ -572,12 +576,10 @@ final class BridgeService: ObservableObject {
             SecureLogger.debug("🌉 Bridge: rejected deposit from \(depositor.id.prefix(8))… (failed validation)", category: .security)
             return
         }
-        guard !meshBroadcastEventIDs.contains(event.id),
-              !publishedEventIDs.contains(event.id),
-              !queuedUplinks.contains(where: { $0.event.id == event.id }) else {
+        guard !relayEngine.isUplinkDuplicate(event.id) else {
             return
         }
-        guard allowUplinkDeposit(from: depositor) else {
+        guard relayEngine.allowUplinkDeposit(from: depositor) else {
             SecureLogger.debug("🌉 Bridge: rate-limited deposit from \(depositor.id.prefix(8))…", category: .session)
             return
         }
@@ -588,7 +590,7 @@ final class BridgeService: ObservableObject {
         if relaysConnected?() ?? false {
             publish(event, cell: carrier.geohash)
         } else {
-            enqueueUplink(QueuedUplink(depositor: depositor, cell: carrier.geohash, event: event))
+            relayEngine.enqueueUplink(depositor: depositor, scope: carrier.geohash, event: event)
         }
         // No local injection: the depositor's radio broadcast already carried
         // the message to this island, including us.
@@ -596,45 +598,16 @@ final class BridgeService: ObservableObject {
 
     /// Publish everything queued while relays were unreachable.
     func flushQueuedUplinks() {
-        guard isEnabled, relaysConnected?() ?? false, !queuedUplinks.isEmpty else { return }
-        let queued = queuedUplinks
-        queuedUplinks.removeAll()
-        for item in queued where !publishedEventIDs.contains(item.event.id) {
-            publish(item.event, cell: item.cell)
+        guard isEnabled, relaysConnected?() ?? false else { return }
+        relayEngine.flushQueuedUplinks { event, cell in
+            publish(event, cell: cell)
         }
     }
 
     private func publish(_ event: NostrEvent, cell: String) {
-        publishedEventIDs.insert(event.id)
+        relayEngine.publishedEventIDs.insert(event.id)
         publishToRelays?(event, cell)
         SecureLogger.info("🌉 Bridge: published carried event \(event.id.prefix(8))… for cell \(cell)", category: .session)
-    }
-
-    @discardableResult
-    private func enqueueUplink(_ item: QueuedUplink) -> Bool {
-        let fromDepositor = queuedUplinks.filter { $0.depositor == item.depositor }.count
-        guard fromDepositor < Limits.maxQueuedUplinksPerDepositor else { return false }
-        if queuedUplinks.count >= Limits.maxQueuedUplinks {
-            queuedUplinks.removeFirst(queuedUplinks.count - Limits.maxQueuedUplinks + 1)
-        }
-        queuedUplinks.append(item)
-        return true
-    }
-
-    private func allowUplinkDeposit(from depositor: PeerID) -> Bool {
-        let cutoff = now().addingTimeInterval(-60)
-        var times = uplinkDepositTimes[depositor, default: []]
-        times.removeAll { $0 < cutoff }
-        guard times.count < Limits.uplinkEventsPerMinutePerDepositor else {
-            uplinkDepositTimes[depositor] = times
-            return false
-        }
-        times.append(now())
-        uplinkDepositTimes[depositor] = times
-        if uplinkDepositTimes.count > Limits.maxTrackedEventIDs {
-            uplinkDepositTimes = uplinkDepositTimes.filter { $0.value.contains { $0 >= cutoff } }
-        }
-        return true
     }
 
     /// Bounds relay/carrier work independently of the downlink airtime budget.
@@ -686,59 +659,33 @@ final class BridgeService: ObservableObject {
     // MARK: - Downlink (gateway role: internet -> mesh)
 
     private func drainPendingDownlinks() {
-        let cutoff = now().addingTimeInterval(-60)
-        downlinkSendTimes.removeAll { $0 < cutoff }
-        while !pendingDownlinks.isEmpty,
-              downlinkSendTimes.count < Limits.downlinkEventsPerMinute {
-            let (event, cell) = pendingDownlinks.removeFirst()
-            guard isFresh(event) else { continue }
-            // Suppression recheck at send time: another gateway may have
-            // broadcast this event, or the authenticated radio copy may have
-            // arrived, during our jitter holdoff.
-            guard !meshBroadcastEventIDs.contains(event.id),
-                  !rebroadcastEventIDs.contains(event.id) else { continue }
-            if case .message(let message)? = classify(event, cell: cell),
-               let radioMessageID = message.radioMessageIDHint,
-               radioCopyAlreadyPresent(radioMessageID) {
-                continue
+        relayEngine.drainPendingDownlinks(
+            direction: .fromBridge,
+            shouldSend: { [weak self] event, cell in
+                guard let self else { return false }
+                // Suppression recheck at send time: another gateway may have
+                // broadcast this event, or the authenticated radio copy may have
+                // arrived, during our jitter holdoff.
+                guard !self.relayEngine.meshBroadcastEventIDs.contains(event.id),
+                      !self.relayEngine.rebroadcastEventIDs.contains(event.id) else {
+                    return false
+                }
+                if case .message(let message)? = self.classify(event, cell: cell),
+                   let radioMessageID = message.radioMessageIDHint,
+                   self.radioCopyAlreadyPresent(radioMessageID) {
+                    return false
+                }
+                return true
+            },
+            send: { [weak self] payload, event in
+                self?.broadcastToMesh?(payload)
+                SecureLogger.debug("🌉 Bridge: downlinked remote event \(event.id.prefix(8))… onto the mesh", category: .session)
+            },
+            scheduleTimer: scheduleTimer,
+            onScheduledDrain: { [weak self] in
+                self?.drainPendingDownlinks()
             }
-            guard let carrier = NostrCarrierPacket(direction: .fromBridge, geohash: cell, event: event),
-                  let payload = carrier.encode() else { continue }
-            broadcastToMesh?(payload)
-            SecureLogger.debug("🌉 Bridge: downlinked remote event \(event.id.prefix(8))… onto the mesh", category: .session)
-            // Mark-after-send (loop rule 3): a queue-overflow drop stays
-            // retryable on relay redelivery.
-            rebroadcastEventIDs.insert(event.id)
-            downlinkSendTimes.append(now())
-        }
-        scheduleDownlinkDrainIfNeeded()
-    }
-
-    private func scheduleDownlinkDrainIfNeeded(jitter: Bool = false) {
-        guard !pendingDownlinks.isEmpty, !downlinkDrainScheduled else { return }
-        let delay: TimeInterval
-        if jitter {
-            // Multi-gateway suppression window: enough spread for another
-            // gateway's broadcast to land and mark the event mesh-carried.
-            delay = Double.random(in: 0.2...1.5)
-        } else {
-            let oldest = downlinkSendTimes.min() ?? now()
-            delay = max(0.05, 60 - now().timeIntervalSince(oldest))
-        }
-        downlinkDrainScheduled = true
-        let fire: @MainActor () -> Void = { [weak self] in
-            guard let self else { return }
-            self.downlinkDrainScheduled = false
-            self.drainPendingDownlinks()
-        }
-        if let scheduleTimer {
-            scheduleTimer(delay, fire)
-        } else {
-            Task { @MainActor in
-                try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
-                fire()
-            }
-        }
+        )
     }
 
     // MARK: - Downlink (receiver role: carried event arrives over radio)
@@ -748,7 +695,7 @@ final class BridgeService: ObservableObject {
         // radio, and two phones side by side should not disagree about what
         // the channel said. Publishing/subscribing remain opt-in.
         guard let event = structurallyValidEvent(from: carrier),
-              !publishedEventIDs.contains(event.id),
+              !relayEngine.publishedEventIDs.contains(event.id),
               !isOwnRendezvousEvent(event, cell: carrier.geohash),
               allowSignatureVerificationAttempt(),
               verifyEventSignature(event) else {
@@ -757,7 +704,7 @@ final class BridgeService: ObservableObject {
         // Mark after verification (a forged copy must not poison the cache),
         // even when the relay copy won the injection race: pending gateway
         // downlinks consult this cache and must stand down.
-        let firstMeshArrival = meshBroadcastEventIDs.insert(event.id)
+        let firstMeshArrival = relayEngine.meshBroadcastEventIDs.insert(event.id)
         guard firstMeshArrival,
               receivedEventIDs.insert(event.id),
               allowInboundEvent(from: event.pubkey) else { return }
@@ -868,7 +815,7 @@ final class BridgeService: ObservableObject {
 
     /// Classifies a structurally acceptable rendezvous event; nil rejects.
     private func classify(_ event: NostrEvent, cell: String) -> RendezvousKind? {
-        guard isFresh(event),
+        guard relayEngine.isFresh(event),
               event.tags.contains(where: { $0.count >= 2 && $0[0] == "r" && $0[1] == cell }),
               GatewayService.isValidGeohash(cell) else {
             return nil
@@ -923,10 +870,6 @@ final class BridgeService: ObservableObject {
             return nil
         }
         return event
-    }
-
-    private func isFresh(_ event: NostrEvent) -> Bool {
-        abs(now().timeIntervalSince1970 - TimeInterval(event.created_at)) <= Limits.maxEventAgeSeconds
     }
 
     /// True when the event was signed by this device's own derived

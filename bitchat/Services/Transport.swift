@@ -228,6 +228,23 @@ extension BitchatMessage {
 }
 
 extension Transport {
+    // Inert defaults for transports that only handle a subset of the mesh
+    // surface (e.g. NostrTransport for offline private messaging).
+    func currentPeerSnapshots() -> [TransportPeerSnapshot] { [] }
+    var myNickname: String { "" }
+    func setNickname(_ nickname: String) {}
+    func startServices() {}
+    func stopServices() {}
+    func emergencyDisconnectAll() {}
+    func isPeerConnected(_ peerID: PeerID) -> Bool { false }
+    func peerNickname(peerID: PeerID) -> String? { nil }
+    func getPeerNicknames() -> [PeerID: String] { [:] }
+    func getFingerprint(for peerID: PeerID) -> String? { nil }
+    func getNoiseSessionState(for peerID: PeerID) -> LazyHandshakeState { .none }
+    func triggerHandshake(with peerID: PeerID) {}
+    func sendMessage(_ content: String, mentions: [String]) {}
+    func sendBroadcastAnnounce() {}
+
     // Reachability implies prompt delivery for transports that hand packets
     // straight to the radio; queue-backed transports override this.
     func canDeliverPromptly(to peerID: PeerID) -> Bool { isPeerReachable(peerID) }

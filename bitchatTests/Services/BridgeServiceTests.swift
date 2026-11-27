@@ -897,4 +897,36 @@ struct BridgeServiceTests {
 
         #expect(fixture.broadcasts.isEmpty)
     }
+
+    @Test func resetForPanicClearsNearbyOnlyAndRadioAliases() throws {
+        let fixture = Fixture(enabled: true)
+        fixture.service.refreshRendezvous()
+        fixture.service.nearbyOnly = true
+
+        let radioHint = MeshMessageIdentity.stableID(
+            senderIDHex: "0011223344556677",
+            timestampMs: 1_700_000_000_000,
+            content: "bridged message"
+        )
+        let event = try makeRemoteEvent(
+            content: "bridged message",
+            meshSenderID: "0011223344556677",
+            meshTimestampMs: 1_700_000_000_000
+        )
+        fixture.service.handleRendezvousEvent(event)
+        #expect(fixture.injected.count == 1)
+
+        var removedIDs: [String] = []
+        fixture.service.removeInjectedInbound = { removedIDs.append($0) }
+
+        fixture.service.resetForPanic()
+
+        #expect(!fixture.service.isEnabled)
+        #expect(!fixture.service.nearbyOnly)
+
+        // Radio alias table was cleared by panic wipe, so a post-panic radio
+        // message with the old hint must not try to remove pre-panic rows.
+        fixture.service.handleAuthenticatedRadioMessage(messageID: radioHint)
+        #expect(removedIDs.isEmpty)
+    }
 }
