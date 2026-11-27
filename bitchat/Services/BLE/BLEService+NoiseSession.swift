@@ -451,6 +451,10 @@ extension BLEService {
             }
             return
         }
+        // Sessions and pending Noise queues are keyed by the short 16-hex
+        // routing ID; callers (e.g. couriered DMs, offline-favorite threads)
+        // may pass the full 64-hex noise key.
+        let peerID = peerID.toShort()
         guard noiseService.hasEstablishedSession(with: peerID) else {
             pendingNoiseSessionQueues.appendTypedPayload(typedPayload, for: peerID)
             SecureLogger.debug("📥 Queued \(logLabel) for \(peerID.id.prefix(8))… pending handshake", category: .session)
