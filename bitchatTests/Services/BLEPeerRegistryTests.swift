@@ -154,6 +154,47 @@ struct BLEPeerRegistryTests {
         #expect(registry.capabilitiesWereExplicitlyAdvertised(for: modernPeer))
     }
 
+    @Test("upsertVerifiedAnnounce ignores older announce timestamp to prevent nickname rollback")
+    func upsertVerifiedAnnounceIgnoresOlderAnnounceTimestamp() throws {
+        var registry = BLEPeerRegistry()
+        let peerID = PeerID(str: "1122334455667788")
+        let noiseKey = Data(repeating: 0xAA, count: 32)
+        let signingKey = Data(repeating: 0xBB, count: 32)
+        let t1 = Date(timeIntervalSince1970: 1_000)
+        let t2 = Date(timeIntervalSince1970: 1_010)
+
+        let newerRaw = registry.upsertVerifiedAnnounce(
+            peerID: peerID,
+            nickname: "new-nick",
+            noisePublicKey: noiseKey,
+            signingPublicKey: signingKey,
+            isConnected: true,
+            now: t1,
+            capabilities: [.bridge],
+            bridgeGeohash: "u4pru",
+            announceTimestamp: 2_000
+        )
+        let newer = try #require(newerRaw)
+        #expect(!newer.wasStaleAnnounce)
+
+        let staleRaw = registry.upsertVerifiedAnnounce(
+            peerID: peerID,
+            nickname: "old-nick",
+            noisePublicKey: noiseKey,
+            signingPublicKey: signingKey,
+            isConnected: true,
+            now: t2,
+            capabilities: [],
+            bridgeGeohash: nil,
+            announceTimestamp: 1_500
+        )
+        let stale = try #require(staleRaw)
+        #expect(stale.wasStaleAnnounce)
+        #expect(registry.nickname(for: peerID, connectedOnly: true) == "new-nick")
+        #expect(registry.capabilities(for: peerID) == [.bridge])
+        #expect(registry.advertisedBridgeGeohash() == "u4pru")
+    }
+
     @Test("reachability keeps recent verified offline peers only when mesh is attached")
     func reachabilityRequiresMeshAttachmentForOfflinePeers() {
         let offlinePeer = PeerID(str: "1122334455667788")

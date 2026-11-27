@@ -15,12 +15,15 @@ struct BLEPeerInfo: Equatable {
     var capabilitiesWereExplicitlyAdvertised: Bool = false
     /// Rendezvous cell from the peer's announce when it advertises `.bridge`.
     var bridgeGeohash: String?
+    /// Sender timestamp (ms) of the latest accepted announce for this peer.
+    var lastAnnounceTimestamp: UInt64? = nil
 }
 
 struct BLEPeerAnnounceUpdate: Equatable {
     let isNewPeer: Bool
     let wasDisconnected: Bool
     let previousNickname: String?
+    var wasStaleAnnounce: Bool = false
 }
 
 struct BLEPeerLinkPresence: Equatable {
@@ -219,7 +222,8 @@ struct BLEPeerRegistry {
         isConnected: Bool,
         now: Date,
         capabilities: PeerCapabilities? = nil,
-        bridgeGeohash: String? = nil
+        bridgeGeohash: String? = nil,
+        announceTimestamp: UInt64? = nil
     ) -> BLEPeerAnnounceUpdate? {
         let existing = peers[peerID]
 
@@ -227,6 +231,22 @@ struct BLEPeerRegistry {
            let announcedSigningKey = signingPublicKey,
            pinnedSigningKey != announcedSigningKey {
             return nil
+        }
+
+        if let existing,
+           let existingTs = existing.lastAnnounceTimestamp,
+           let incomingTs = announceTimestamp,
+           incomingTs < existingTs {
+            var kept = existing
+            kept.isConnected = existing.isConnected || isConnected
+            kept.lastSeen = max(existing.lastSeen, now)
+            peers[peerID] = kept
+            return BLEPeerAnnounceUpdate(
+                isNewPeer: false,
+                wasDisconnected: !existing.isConnected && isConnected,
+                previousNickname: existing.nickname,
+                wasStaleAnnounce: true
+            )
         }
 
         let update = BLEPeerAnnounceUpdate(
@@ -246,7 +266,8 @@ struct BLEPeerRegistry {
             lastSeen: now,
             capabilities: capabilities ?? [],
             capabilitiesWereExplicitlyAdvertised: capabilities != nil,
-            bridgeGeohash: bridgeGeohash
+            bridgeGeohash: bridgeGeohash,
+            lastAnnounceTimestamp: announceTimestamp ?? existing?.lastAnnounceTimestamp
         )
 
         return update

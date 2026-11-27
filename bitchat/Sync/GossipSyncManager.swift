@@ -309,6 +309,9 @@ final class GossipSyncManager {
                 return
             }
             let sender = PeerID(hexData: packet.senderID)
+            if let existing = latestAnnouncementByPeer[sender], packet.timestamp < existing.packet.timestamp {
+                return
+            }
             let idBytes = PacketIdUtil.computeId(packet)
             latestAnnouncementByPeer[sender] = StoredEntry(packet: packet, hash64: GCSFilter.hash64(idBytes))
         case .message:

@@ -10,6 +10,8 @@ final class MeshTopologyTracker {
     private var claims: [RoutingID: Set<RoutingID>] = [:]
     // Last time we received an update from a node
     private var lastSeen: [RoutingID: Date] = [:]
+    // Sender timestamp (ms) of the latest accepted announce per node
+    private var lastAnnounceTimestamps: [RoutingID: UInt64] = [:]
     // Highest protocol version observed from each node's decoded packets.
     // Nodes absent from this map are assumed v1-only and are never used as
     // hops (or targets) for version-gated routes.
@@ -35,19 +37,33 @@ final class MeshTopologyTracker {
         queue.sync(flags: .barrier) {
             self.claims.removeAll()
             self.lastSeen.removeAll()
+            self.lastAnnounceTimestamps.removeAll()
             self.observedVersions.removeAll()
         }
     }
 
     /// Update the topology with a node's self-reported neighbor list
-    func updateNeighbors(for sourceData: Data?, neighbors: [Data], at now: Date = Date()) {
+    func updateNeighbors(
+        for sourceData: Data?,
+        neighbors: [Data],
+        announceTimestamp: UInt64? = nil,
+        at now: Date = Date()
+    ) {
         guard let source = sanitize(sourceData) else { return }
         // Sanitize neighbors and exclude self-loops
         let validNeighbors = Set(neighbors.compactMap { sanitize($0) }).subtracting([source])
 
         queue.sync(flags: .barrier) {
+            if let incomingTs = announceTimestamp,
+               let existingTs = self.lastAnnounceTimestamps[source],
+               incomingTs < existingTs {
+                return
+            }
             self.claims[source] = validNeighbors
             self.lastSeen[source] = now
+            if let incomingTs = announceTimestamp {
+                self.lastAnnounceTimestamps[source] = incomingTs
+            }
         }
     }
 
@@ -73,6 +89,7 @@ final class MeshTopologyTracker {
         queue.sync(flags: .barrier) {
             self.claims.removeValue(forKey: peer)
             self.lastSeen.removeValue(forKey: peer)
+            self.lastAnnounceTimestamps.removeValue(forKey: peer)
             self.observedVersions.removeValue(forKey: peer)
         }
     }
@@ -85,6 +102,7 @@ final class MeshTopologyTracker {
             for (peer, _) in stale {
                 self.claims.removeValue(forKey: peer)
                 self.lastSeen.removeValue(forKey: peer)
+                self.lastAnnounceTimestamps.removeValue(forKey: peer)
             }
             self.observedVersions = self.observedVersions.filter { $0.value.seenAt >= deadline }
         }
