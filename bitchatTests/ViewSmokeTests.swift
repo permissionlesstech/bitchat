@@ -147,15 +147,9 @@ private struct ContentPeopleSheetHarness: View {
     @State private var isAtBottomPrivate = true
     @StateObject private var voiceRecordingVM = VoiceRecordingViewModel()
     @FocusState private var isTextFieldFocused: Bool
-    #if os(iOS)
-    @State private var showImagePicker = false
-    @State private var imagePickerSourceType: UIImagePickerController.SourceType = .photoLibrary
-    #else
-    @State private var showMacImagePicker = false
-    #endif
+    @State private var mediaPickerMode: MediaPickerMode?
 
     var body: some View {
-        #if os(iOS)
         ContentPeopleSheetView(
             showSidebar: $showSidebar,
             draftModel: draftModel,
@@ -168,25 +162,8 @@ private struct ContentPeopleSheetHarness: View {
             voiceRecordingVM: voiceRecordingVM,
             headerHeight: 44,
             onSendMessage: {},
-            showImagePicker: $showImagePicker,
-            imagePickerSourceType: $imagePickerSourceType
+            mediaPickerMode: $mediaPickerMode
         )
-        #else
-        ContentPeopleSheetView(
-            showSidebar: $showSidebar,
-            draftModel: draftModel,
-            selectedMessageSender: $selectedMessageSender,
-            selectedMessageSenderID: $selectedMessageSenderID,
-            imagePreviewURL: $imagePreviewURL,
-            windowCountPrivate: $windowCountPrivate,
-            isAtBottomPrivate: $isAtBottomPrivate,
-            isTextFieldFocused: $isTextFieldFocused,
-            voiceRecordingVM: voiceRecordingVM,
-            headerHeight: 44,
-            onSendMessage: {},
-            showMacImagePicker: $showMacImagePicker
-        )
-        #endif
     }
 }
 

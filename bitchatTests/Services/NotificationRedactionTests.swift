@@ -14,31 +14,19 @@ import UserNotifications
 /// global store made whichever ran second depend on the other's cleanup — which
 /// passed locally and failed in CI.
 struct NotificationRedactionTests {
-    private final class RecordingDeliverer: NotificationRequestDelivering {
+    private final class RecordingDeliverer {
         var requests: [UNNotificationRequest] = []
-
-        func add(_ request: UNNotificationRequest) {
-            requests.append(request)
-        }
-    }
-
-    private struct StubAuthorizer: NotificationAuthorizing {
-        func requestAuthorization(
-            options: UNAuthorizationOptions,
-            completionHandler: @escaping (Bool, Error?) -> Void
-        ) {
-            completionHandler(true, nil)
-        }
     }
 
     private func makeService(
         hidePreviews: Bool
     ) -> (NotificationService, RecordingDeliverer) {
         let deliverer = RecordingDeliverer()
+        var deps = NotificationService.Dependencies.noop
+        deps.deliver = { deliverer.requests.append($0) }
         let service = NotificationService(
             isRunningTestsProvider: { false },
-            authorizer: StubAuthorizer(),
-            requestDeliverer: deliverer,
+            dependencies: deps,
             hidePreviewsProvider: { hidePreviews }
         )
         return (service, deliverer)

@@ -132,6 +132,83 @@ struct DeliveryStatusView: View {
     }
 }
 
+/// Leading inline badges shared by text and media message rows.
+struct MessageLeadingBadges: View {
+    let isPrivate: Bool
+    let showsVerifiedSeal: Bool
+    var isBridged: Bool = false
+
+    var body: some View {
+        if isPrivate {
+            Image(systemName: "lock.fill")
+                .font(.bitchatSystem(size: 8))
+                .foregroundColor(Color.orange.opacity(0.75))
+                .padding(.trailing, 4)
+                .accessibilityHidden(true)
+        }
+        if showsVerifiedSeal {
+            Image(systemName: "checkmark.seal.fill")
+                .font(.bitchatSystem(size: 8))
+                .foregroundColor(Color.green.opacity(0.85))
+                .padding(.trailing, 4)
+                .accessibilityLabel(
+                    String(localized: "content.accessibility.verified_sender", defaultValue: "Verified sender", comment: "Accessibility label for the seal next to a verified peer's name on a private message")
+                )
+        }
+        if isBridged {
+            Image(systemName: "network")
+                .font(.bitchatSystem(size: 8))
+                .foregroundColor(Color.cyan.opacity(0.75))
+                .padding(.trailing, 4)
+                .accessibilityLabel(
+                    String(localized: "content.accessibility.bridged_message", defaultValue: "Arrived across a mesh bridge", comment: "Accessibility label for the glyph marking a message that arrived across a mesh bridge")
+                )
+        }
+    }
+}
+
+/// Tappable delivery-status glyph for outgoing private messages.
+struct MessageDeliveryStatusButton: View {
+    let status: DeliveryStatus
+    @Binding var showDetail: Bool
+
+    var body: some View {
+        Button {
+            showDetail.toggle()
+        } label: {
+            DeliveryStatusView(status: status)
+                .padding(.leading, 4)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityHint(
+            String(localized: "content.accessibility.delivery_detail_hint", comment: "Accessibility hint for the delivery status glyph explaining a tap reveals details")
+        )
+    }
+}
+
+/// Expanded delivery-status caption under an outgoing private message.
+/// Failure reasons stay visible without a tap; other statuses reveal on demand.
+struct MessageDeliveryDetailCaption: View {
+    @ThemedPalette private var palette
+    let status: DeliveryStatus
+    let showDetail: Bool
+
+    var body: some View {
+        if case .failed = status {
+            Text(verbatim: status.bitchatDescription)
+                .bitchatFont(size: 11)
+                .foregroundColor(Color.red.opacity(0.9))
+                .fixedSize(horizontal: false, vertical: true)
+        } else if showDetail {
+            Text(verbatim: status.bitchatDescription)
+                .bitchatFont(size: 11)
+                .foregroundColor(palette.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+}
+
 #Preview {
     let statuses: [DeliveryStatus] = [
         .notSentYet,

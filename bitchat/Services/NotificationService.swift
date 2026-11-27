@@ -15,80 +15,35 @@ import UIKit
 import AppKit
 #endif
 
-protocol NotificationAuthorizing {
-    func requestAuthorization(
-        options: UNAuthorizationOptions,
-        completionHandler: @escaping (Bool, Error?) -> Void
-    )
-}
+final class NotificationService {
+    struct Dependencies {
+        var requestAuthorization: (UNAuthorizationOptions, @escaping (Bool, Error?) -> Void) -> Void
+        var deliver: (UNNotificationRequest) -> Void
+        var setCategories: (Set<UNNotificationCategory>) -> Void
 
-protocol NotificationRequestDelivering {
-    func add(_ request: UNNotificationRequest)
-}
+        static let noop = Dependencies(
+            requestAuthorization: { _, completion in completion(false, nil) },
+            deliver: { _ in },
+            setCategories: { _ in }
+        )
 
-protocol NotificationCategoryRegistering {
-    func setCategories(_ categories: Set<UNNotificationCategory>)
-}
-
-private final class NotificationCenterAuthorizerAdapter: NotificationAuthorizing {
-    private let center: UNUserNotificationCenter
-
-    init(center: UNUserNotificationCenter) {
-        self.center = center
-    }
-
-    func requestAuthorization(
-        options: UNAuthorizationOptions,
-        completionHandler: @escaping (Bool, Error?) -> Void
-    ) {
-        center.requestAuthorization(options: options, completionHandler: completionHandler)
-    }
-}
-
-private final class NotificationCenterRequestDelivererAdapter: NotificationRequestDelivering {
-    private let center: UNUserNotificationCenter
-
-    init(center: UNUserNotificationCenter) {
-        self.center = center
-    }
-
-    func add(_ request: UNNotificationRequest) {
-        Task {
-            try? await center.add(request)
+        static func system(center: UNUserNotificationCenter = .current()) -> Dependencies {
+            Dependencies(
+                requestAuthorization: { options, completion in
+                    center.requestAuthorization(options: options, completionHandler: completion)
+                },
+                deliver: { request in
+                    Task {
+                        try? await center.add(request)
+                    }
+                },
+                setCategories: { categories in
+                    center.setNotificationCategories(categories)
+                }
+            )
         }
     }
-}
 
-private final class NotificationCenterCategoryRegistrarAdapter: NotificationCategoryRegistering {
-    private let center: UNUserNotificationCenter
-
-    init(center: UNUserNotificationCenter) {
-        self.center = center
-    }
-
-    func setCategories(_ categories: Set<UNNotificationCategory>) {
-        center.setNotificationCategories(categories)
-    }
-}
-
-private struct NoopNotificationAuthorizer: NotificationAuthorizing {
-    func requestAuthorization(
-        options: UNAuthorizationOptions,
-        completionHandler: @escaping (Bool, Error?) -> Void
-    ) {
-        completionHandler(false, nil)
-    }
-}
-
-private struct NoopNotificationRequestDeliverer: NotificationRequestDelivering {
-    func add(_ request: UNNotificationRequest) {}
-}
-
-private struct NoopNotificationCategoryRegistrar: NotificationCategoryRegistering {
-    func setCategories(_ categories: Set<UNNotificationCategory>) {}
-}
-
-final class NotificationService {
     static let shared = NotificationService()
 
     /// Category for the "bitchatters nearby" notification, carrying the wave quick action.
@@ -125,9 +80,7 @@ final class NotificationService {
     }
 
     private let isRunningTestsProvider: () -> Bool
-    private let authorizer: NotificationAuthorizing
-    private let requestDeliverer: NotificationRequestDelivering
-    private let categoryRegistrar: NotificationCategoryRegistering
+    private let dependencies: Dependencies
 
     /// Returns true if running in test environment (XCTest, Swift Testing, or CI)
     private var isRunningTests: Bool {
@@ -136,44 +89,24 @@ final class NotificationService {
 
     private init() {
         self.hidePreviewsProvider = { NotificationPrivacySettings.hideMessagePreviews }
-        self.isRunningTestsProvider = {
-            let env = ProcessInfo.processInfo.environment
-            return NSClassFromString("XCTestCase") != nil ||
-                   env["XCTestConfigurationFilePath"] != nil ||
-                   env["XCTestBundlePath"] != nil ||
-                   env["GITHUB_ACTIONS"] != nil ||
-                   env["CI"] != nil
-        }
-        if isRunningTestsProvider() {
-            self.authorizer = NoopNotificationAuthorizer()
-            self.requestDeliverer = NoopNotificationRequestDeliverer()
-            self.categoryRegistrar = NoopNotificationCategoryRegistrar()
-        } else {
-            let center = UNUserNotificationCenter.current()
-            self.authorizer = NotificationCenterAuthorizerAdapter(center: center)
-            self.requestDeliverer = NotificationCenterRequestDelivererAdapter(center: center)
-            self.categoryRegistrar = NotificationCenterCategoryRegistrarAdapter(center: center)
-        }
+        self.isRunningTestsProvider = { TestEnvironment.isRunningTests }
+        self.dependencies = TestEnvironment.isRunningTests ? .noop : .system()
     }
 
     internal init(
-        isRunningTestsProvider: @escaping () -> Bool,
-        authorizer: NotificationAuthorizing,
-        requestDeliverer: NotificationRequestDelivering,
-        categoryRegistrar: NotificationCategoryRegistering = NoopNotificationCategoryRegistrar(),
+        isRunningTestsProvider: @escaping () -> Bool = { TestEnvironment.isRunningTests },
+        dependencies: Dependencies = .noop,
         hidePreviewsProvider: @escaping () -> Bool = { NotificationPrivacySettings.hideMessagePreviews }
     ) {
         self.isRunningTestsProvider = isRunningTestsProvider
-        self.authorizer = authorizer
-        self.requestDeliverer = requestDeliverer
-        self.categoryRegistrar = categoryRegistrar
+        self.dependencies = dependencies
         self.hidePreviewsProvider = hidePreviewsProvider
     }
 
     func requestAuthorization() {
         guard !isRunningTests else { return }
         registerCategories()
-        authorizer.requestAuthorization(options: [.alert, .sound, .badge]) { _, _ in }
+        dependencies.requestAuthorization([.alert, .sound, .badge]) { _, _ in }
     }
 
     private func registerCategories() {
@@ -188,7 +121,7 @@ final class NotificationService {
             intentIdentifiers: [],
             options: []
         )
-        categoryRegistrar.setCategories([nearby])
+        dependencies.setCategories([nearby])
     }
     
     func sendLocalNotification(
@@ -219,7 +152,7 @@ final class NotificationService {
             trigger: nil // Deliver immediately
         )
 
-        requestDeliverer.add(request)
+        dependencies.deliver(request)
     }
     
     func sendMentionNotification(from sender: String, message: String) {

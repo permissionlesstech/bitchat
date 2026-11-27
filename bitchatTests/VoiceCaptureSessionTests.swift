@@ -170,14 +170,13 @@ struct VoiceCaptureSessionTests {
         }
     }
 
-    @Test func droppingCaptureLeaseReturnsItsCoordinatorToken() async throws {
+    @Test func droppingSessionTokenReleasesItsCoordinatorHold() async throws {
         let rawSession = CaptureLeaseSession()
         let coordinator = AudioSessionCoordinator(session: rawSession)
-        let token = try await coordinator.acquire(.capture) {}
-        var lease: PTTCaptureSessionLease? = PTTCaptureSessionLease(coordinator: coordinator)
-        lease?.install(token)
+        var token: AudioSessionCoordinator.Token? = try await coordinator.acquire(.capture) {}
+        #expect(token != nil)
 
-        lease = nil
+        token = nil
         await coordinator.drain()
 
         #expect(rawSession.activationCalls == [true, false])

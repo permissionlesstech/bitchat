@@ -13,6 +13,7 @@ import SwiftUI
 /// outranks tor: without the radio the app's core promise (mesh) is dead,
 /// while a tor stall only pauses internet features.
 enum ConnectivityIssue: Equatable {
+    case panicWipeBlocked
     case bluetoothOff
     case bluetoothDenied
     case bluetoothUnsupported
@@ -35,17 +36,30 @@ enum ConnectivityIssue: Equatable {
 }
 
 /// Persistent one-line banner under the header while connectivity is
-/// degraded. The Bluetooth alert is a one-shot modal — once dismissed, the
-/// app used to look completely normal (empty timeline, radar sweeping)
-/// while the radio was off. Tor stalls were only ever announced inside
-/// geohash timelines. This banner is the always-visible truth; it renders
-/// nothing when everything is fine.
+/// degraded or a panic wipe did not fully commit.
 struct ConnectivityStatusBanner: View {
     let issue: ConnectivityIssue
     @ThemedPalette private var palette
 
+    private var iconName: String {
+        switch issue {
+        case .panicWipeBlocked:
+            return "exclamationmark.triangle.fill"
+        case .torBlocked:
+            return "network.slash"
+        case .bluetoothOff, .bluetoothDenied, .bluetoothUnsupported:
+            return "antenna.radiowaves.left.and.right.slash"
+        }
+    }
+
     private var message: String {
         switch issue {
+        case .panicWipeBlocked:
+            return String(
+                localized: "content.banner.panic_blocked",
+                defaultValue: "wipe incomplete — some data may remain. quit and reopen bitchat to retry.",
+                comment: "Banner shown when a panic wipe did not fully commit; relaunching the app retries the wipe"
+            )
         case .bluetoothOff:
             return String(
                 localized: "content.banner.bluetooth_off",
@@ -75,13 +89,13 @@ struct ConnectivityStatusBanner: View {
 
     /// Bluetooth problems deep-link to where the fix actually lives —
     /// powered-off goes to the radio controls, denied to the privacy
-    /// permission pane. The tor stall has no in-app remedy (the network is
-    /// blocking it), so that banner is inert.
+    /// permission pane. The tor stall and incomplete wipe have no settings
+    /// remedy, so those banners are inert.
     private var settingsDestination: SystemSettings? {
         switch issue {
         case .bluetoothOff: return .bluetoothPower
         case .bluetoothDenied: return .bluetooth
-        case .bluetoothUnsupported, .torBlocked: return nil
+        case .panicWipeBlocked, .bluetoothUnsupported, .torBlocked: return nil
         }
     }
 
@@ -100,7 +114,7 @@ struct ConnectivityStatusBanner: View {
 
     private var label: some View {
         HStack(alignment: .firstTextBaseline, spacing: 6) {
-            Image(systemName: issue == .torBlocked ? "network.slash" : "antenna.radiowaves.left.and.right.slash")
+            Image(systemName: iconName)
                 .bitchatFont(size: 11, weight: .semibold)
             Text(message)
                 .bitchatFont(size: 11)
