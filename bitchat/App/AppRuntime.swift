@@ -108,7 +108,7 @@ final class AppRuntime: ObservableObject {
         let resolvedSharedContentStore: SharedContentStore?
         if let sharedContentStore {
             resolvedSharedContentStore = sharedContentStore
-        } else if let sharedDefaults = UserDefaults(suiteName: BitchatApp.groupID) {
+        } else if let sharedDefaults = BitchatApp.sharedUserDefaults() {
             resolvedSharedContentStore = SharedContentStore(defaults: sharedDefaults)
         } else {
             resolvedSharedContentStore = nil
