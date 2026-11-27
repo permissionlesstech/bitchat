@@ -248,6 +248,8 @@ private struct ContentPeopleListView: View {
 
     @Binding var showSidebar: Bool
     @Binding var showVerifySheet: Bool
+    @State private var showAddFriendSheet = false
+    @State private var showCreateGroupSheet = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -258,6 +260,24 @@ private struct ContentPeopleListView: View {
                         .foregroundColor(palette.primary)
                     Spacer()
                     if case .mesh = locationChannelsModel.selectedChannel {
+                        Button(action: { showAddFriendSheet = true }) {
+                            Image(systemName: "person.badge.plus")
+                                .font(.bitchatSystem(size: 14))
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel(
+                            String(localized: "chats.accessibility.add_friend", defaultValue: "Invite or add friend", comment: "Accessibility label for add friend button")
+                        )
+
+                        Button(action: { showCreateGroupSheet = true }) {
+                            Image(systemName: "person.3.fill")
+                                .font(.bitchatSystem(size: 13))
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel(
+                            String(localized: "chats.accessibility.new_group", defaultValue: "New group", comment: "Accessibility label for new group button")
+                        )
+
                         Button(action: { showVerifySheet = true }) {
                             Image(systemName: "qrcode")
                                 .font(.bitchatSystem(size: 14))
@@ -386,6 +406,19 @@ private struct ContentPeopleListView: View {
                     .environmentObject(verificationModel)
             }
         }
+        .sheet(isPresented: $showAddFriendSheet) {
+            AddFriendSheet { _ in
+                showSidebar = true
+            }
+            .environmentObject(appChromeModel)
+        }
+        .sheet(isPresented: $showCreateGroupSheet) {
+            CreateGroupSheet(
+                onRequestAddFriend: { showAddFriendSheet = true },
+                onGroupCreated: { showSidebar = true }
+            )
+            .environmentObject(peerListModel)
+        }
     }
 }
 
@@ -398,6 +431,7 @@ private extension ContentPeopleListView {
 
 private struct ContentPrivateChatSheetView: View {
     @EnvironmentObject private var privateConversationModel: PrivateConversationModel
+    @EnvironmentObject private var peerListModel: PeerListModel
 
     @Binding var showSidebar: Bool
     let draftModel: ComposerDraftModel
@@ -410,6 +444,7 @@ private struct ContentPrivateChatSheetView: View {
     @ObservedObject var voiceRecordingVM: VoiceRecordingViewModel
     @Environment(\.appTheme) private var theme
     @ThemedPalette private var palette
+    @State private var showGroupInfoSheet = false
 
     let headerHeight: CGFloat
     let onSendMessage: () -> Void
@@ -440,7 +475,37 @@ private struct ContentPrivateChatSheetView: View {
                     HStack(spacing: 8) {
                         ContentPrivateHeaderInfoButton(
                             headerState: headerState,
-                            headerHeight: headerHeight
+                            headerHeight: headerHeight,
+                            onShowGroupInfo: { showGroupInfoSheet = true }
+                        )
+
+                        let activeTimer = privateConversationModel.disappearingTimer(for: headerState.conversationPeerID)
+                        Menu {
+                            ForEach(DisappearingTimer.allCases) { option in
+                                Button {
+                                    privateConversationModel.setDisappearingTimer(
+                                        option,
+                                        for: headerState.conversationPeerID
+                                    )
+                                } label: {
+                                    HStack {
+                                        Text(option.displayName)
+                                        if activeTimer == option {
+                                            Image(systemName: "checkmark")
+                                        }
+                                    }
+                                }
+                            }
+                        } label: {
+                            Image(systemName: activeTimer.iconName)
+                                .font(.bitchatSystem(size: 14))
+                                .foregroundColor(activeTimer == .off ? palette.secondary : Color.orange)
+                                .frame(width: 32, height: 32)
+                                .contentShape(Rectangle().inset(by: -6))
+                        }
+                        .menuStyle(.borderlessButton)
+                        .accessibilityLabel(
+                            String(localized: "chat.timer.label", defaultValue: "Disappearing messages", comment: "Accessibility label for disappearing messages menu")
                         )
 
                         if headerState.supportsFavoriteToggle {
@@ -516,6 +581,13 @@ private struct ContentPrivateChatSheetView: View {
         }
         .themedSheetBackground()
         .foregroundColor(palette.primary)
+        .sheet(isPresented: $showGroupInfoSheet) {
+            if let peerID = privateConversationModel.selectedPeerID, peerID.isGroup {
+                GroupInfoSheet(groupPeerID: peerID)
+                    .environmentObject(privateConversationModel)
+                    .environmentObject(peerListModel)
+            }
+        }
     }
 
     private var swipeToLeaveGesture: some Gesture {
@@ -609,11 +681,14 @@ private struct ContentPrivateHeaderInfoButton: View {
 
     let headerState: PrivateConversationHeaderState
     let headerHeight: CGFloat
+    var onShowGroupInfo: () -> Void = {}
 
     var body: some View {
         Button(action: {
-            // A group has no single fingerprint to show.
-            guard !headerState.isGroupConversation else { return }
+            if headerState.isGroupConversation {
+                onShowGroupInfo()
+                return
+            }
             appChromeModel.showFingerprint(for: headerState.headerPeerID)
         }) {
             HStack(spacing: 6) {

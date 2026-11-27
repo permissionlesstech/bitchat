@@ -7,7 +7,7 @@ import SwiftUI
 struct AppInfoView: View {
     @Environment(\.dismiss) var dismiss
     @ThemedPalette private var palette
-    @AppStorage(AppTheme.storageKey) private var appThemeRawValue = AppTheme.matrix.rawValue
+    @AppStorage(AppTheme.storageKey) private var appThemeRawValue = AppTheme.liquidGlass.rawValue
     @EnvironmentObject private var locationChannelsModel: LocationChannelsModel
     @ObservedObject private var bridgeService = BridgeService.shared
 
@@ -17,8 +17,12 @@ struct AppInfoView: View {
     /// Wipes all local data. Nil (previews, missing wiring) hides the danger
     /// zone entirely.
     var onPanicWipe: (@MainActor () -> Void)?
+    /// Clears persisted encrypted chat history when switching to Stealth Mode or disabling history.
+    var onClearPersistedHistory: (@MainActor () -> Void)?
 
     @State private var showTopology = false
+    @State private var privacyMode = PrivacyModeSettings.mode
+    @State private var persistPrivateHistory = PrivacyModeSettings.persistPrivateHistory
     @State private var liveVoiceEnabled = PTTSettings.liveVoiceEnabled
     @State private var locationNotesEnabled = LocationNotesSettings.enabled
     @State private var hideMessagePreviews = NotificationPrivacySettings.hideMessagePreviews
@@ -50,7 +54,7 @@ struct AppInfoView: View {
     }
 
     private var selectedTheme: AppTheme {
-        AppTheme(rawValue: appThemeRawValue) ?? .matrix
+        AppTheme(rawValue: appThemeRawValue) ?? .liquidGlass
     }
 
     private var textColor: Color { palette.primary }
@@ -351,6 +355,43 @@ struct AppInfoView: View {
     @ViewBuilder
     private var settingsContent: some View {
         VStack(alignment: .leading, spacing: 24) {
+            // Privacy Mode — Everyday (instant, persisted encrypted chats) vs Stealth (Tor + RAM-only + hidden previews)
+            VStack(alignment: .leading, spacing: 12) {
+                SectionHeader(verbatim: String(localized: "app_info.settings.privacy_mode.title", defaultValue: "PRIVACY MODE", comment: "Section header for Everyday vs Stealth privacy mode"))
+
+                settingsCard {
+                    Picker(
+                        String(localized: "app_info.settings.privacy_mode.picker", defaultValue: "Privacy Mode", comment: "Picker label for Everyday vs Stealth mode"),
+                        selection: Binding(
+                            get: { privacyMode },
+                            set: { newMode in
+                                privacyMode = newMode
+                                PrivacyModeSettings.applyMode(
+                                    newMode,
+                                    onClearPersistedHistory: onClearPersistedHistory
+                                )
+                                persistPrivateHistory = PrivacyModeSettings.persistPrivateHistory
+                                hideMessagePreviews = NotificationPrivacySettings.hideMessagePreviews
+                            }
+                        )
+                    ) {
+                        Text(String(localized: "app_info.settings.privacy_mode.everyday", defaultValue: "Everyday", comment: "Everyday mode option")).tag(PrivacyMode.everyday)
+                        Text(String(localized: "app_info.settings.privacy_mode.stealth", defaultValue: "Stealth (Tor)", comment: "Stealth mode option")).tag(PrivacyMode.stealth)
+                    }
+                    .pickerStyle(.segmented)
+                    .labelsHidden()
+
+                    Text(
+                        privacyMode == .everyday
+                            ? String(localized: "app_info.settings.privacy_mode.everyday_desc", defaultValue: "Instant internet relay connections and encrypted local history for DMs and groups. End-to-end encryption is always on.", comment: "Description of Everyday mode")
+                            : String(localized: "app_info.settings.privacy_mode.stealth_desc", defaultValue: "Routes internet traffic through Tor, keeps chats in RAM only, hides lock-screen previews, and arms triple-tap panic wipe on the logo.", comment: "Description of Stealth mode")
+                    )
+                    .bitchatFont(size: 11)
+                    .foregroundColor(secondaryTextColor)
+                    .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+
             // Appearance — single row: label left, theme chips right
             HStack(spacing: 12) {
                 SectionHeader(Strings.appearanceTitle)
@@ -545,6 +586,24 @@ struct AppInfoView: View {
             // without being unlocked.
             VStack(alignment: .leading, spacing: 12) {
                 SectionHeader(verbatim: Strings.Settings.privacyTitle)
+
+                settingsCard {
+                    settingToggle(
+                        title: Text(String(localized: "app_info.settings.history.title", defaultValue: "save encrypted chat history", comment: "Title of the setting that enables encrypted local persistence for private DMs and groups")),
+                        subtitle: Text(String(localized: "app_info.settings.history.subtitle", defaultValue: "keeps your private DMs and group chats across restarts, sealed with a device Keychain key. public channels are never saved. automatically off in Stealth Mode.", comment: "Subtitle explaining encrypted local chat history")),
+                        isOn: Binding(
+                            get: { persistPrivateHistory && privacyMode == .everyday },
+                            set: { newValue in
+                                persistPrivateHistory = newValue
+                                PrivacyModeSettings.setPersistPrivateHistory(newValue)
+                                if !newValue {
+                                    onClearPersistedHistory?()
+                                }
+                            }
+                        )
+                    )
+                    .disabled(privacyMode == .stealth)
+                }
 
                 settingsCard {
                     settingToggle(

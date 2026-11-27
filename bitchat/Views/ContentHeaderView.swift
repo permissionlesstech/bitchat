@@ -16,6 +16,8 @@ struct ContentHeaderView: View {
     let headerHeight: CGFloat
     let headerPeerIconSize: CGFloat
     let headerPeerCountFontSize: CGFloat
+    var onBack: (() -> Void)? = nil
+    var placeTitle: String? = nil
 
     /// Courier envelopes this device is carrying for offline third parties.
     @State private var carriedMailCount = 0
@@ -40,71 +42,81 @@ struct ContentHeaderView: View {
 
     var body: some View {
         HStack(spacing: 0) {
-            Text(verbatim: "bitchat/")
-                .bitchatFont(size: 18, weight: .medium)
-                .lineLimit(1)
-                .foregroundColor(palette.primary)
-                // When icons crowd the header, squeeze the nickname first
-                // (priority 0) and the logo only as a last resort; the icon
-                // cluster at priority 3 never gives up width.
+            if let onBack {
+                Button(action: onBack) {
+                    HStack(spacing: 4) {
+                        Image(systemName: "chevron.left")
+                            .font(.system(size: 13, weight: .semibold))
+                        Text(placeTitle ?? String(localized: "tab.places", defaultValue: "Places", comment: "Back label to Places directory"))
+                            .bitchatFont(size: 16, weight: .semibold)
+                            .lineLimit(1)
+                    }
+                    .foregroundColor(palette.primary)
+                    .padding(.trailing, 8)
+                    .frame(maxHeight: .infinity)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
                 .layoutPriority(2)
-                .onTapGesture(count: 3) {
-                    // Confirm before destroying: the same logo is the single-tap
-                    // App Info entry point and sits beside the nickname field, so
-                    // a fumbled tap must never be able to wipe the device. The
-                    // dialog matches the Settings-pane panic button; under duress
-                    // it costs one extra tap.
-                    appChromeModel.requestPanicWipe()
-                }
-                .onTapGesture(count: 1) {
-                    appChromeModel.presentAppInfo()
-                }
-                // The confirmation dialog itself is hosted on ContentView
-                // (next to the failed-wipe banner), not on this Text: a host
-                // that can be covered or removed could take the pending
-                // dialog down with it.
-                // This is the primary entry point to App Info, but it reads as
-                // static text; surface the tap. (The triple-tap panic wipe
-                // stays undiscoverable on purpose — it's destructive.)
-                .accessibilityAddTraits(.isButton)
-                .accessibilityHint(
-                    String(localized: "content.accessibility.app_info_hint", comment: "Accessibility hint on the bitchat/ logo explaining a tap opens app info")
-                )
-                .accessibilityAction {
-                    appChromeModel.presentAppInfo()
-                }
-
-            HStack(spacing: 0) {
-                Text(verbatim: "@")
-                    .bitchatFont(size: 14)
-                    .foregroundColor(palette.secondary)
-                    // Keep the sigil whole while the field beside it shrinks.
-                    .fixedSize()
-
-                TextField(
-                    "content.input.nickname_placeholder",
-                    text: Binding(
-                        get: { appChromeModel.nickname },
-                        set: { appChromeModel.setNickname($0) }
+            } else {
+                Text(verbatim: "bitchat/")
+                    .bitchatFont(size: 18, weight: .medium)
+                    .lineLimit(1)
+                    .foregroundColor(palette.primary)
+                    // When icons crowd the header, squeeze the nickname first
+                    // (priority 0) and the logo only as a last resort; the icon
+                    // cluster at priority 3 never gives up width.
+                    .layoutPriority(2)
+                    .onTapGesture(count: 3) {
+                        guard PrivacyModeSettings.isTripleTapPanicEnabled() else {
+                            appChromeModel.presentAppInfo()
+                            return
+                        }
+                        appChromeModel.requestPanicWipe()
+                    }
+                    .onTapGesture(count: 1) {
+                        appChromeModel.presentAppInfo()
+                    }
+                    .accessibilityAddTraits(.isButton)
+                    .accessibilityHint(
+                        String(localized: "content.accessibility.app_info_hint", comment: "Accessibility hint on the bitchat/ logo explaining a tap opens app info")
                     )
-                )
-                .textFieldStyle(.plain)
-                .bitchatFont(size: 14)
-                .frame(maxWidth: 80)
-                .foregroundColor(palette.primary)
-                .focused(isNicknameFieldFocused)
-                .autocorrectionDisabled(true)
-                #if os(iOS)
-                .textInputAutocapitalization(.never)
-                #endif
-                .modifier(FocusEffectDisabledModifier())
-                .onChange(of: isNicknameFieldFocused.wrappedValue) { isFocused in
-                    if !isFocused {
+                    .accessibilityAction {
+                        appChromeModel.presentAppInfo()
+                    }
+
+                HStack(spacing: 0) {
+                    Text(verbatim: "@")
+                        .bitchatFont(size: 14)
+                        .foregroundColor(palette.secondary)
+                        // Keep the sigil whole while the field beside it shrinks.
+                        .fixedSize()
+
+                    TextField(
+                        "content.input.nickname_placeholder",
+                        text: Binding(
+                            get: { appChromeModel.nickname },
+                            set: { appChromeModel.setNickname($0) }
+                        )
+                    )
+                    .textFieldStyle(.plain)
+                    .bitchatFont(size: 14)
+                    .frame(maxWidth: 80)
+                    .foregroundColor(palette.primary)
+                    .focused(isNicknameFieldFocused)
+                    .autocorrectionDisabled(true)
+                    #if os(iOS)
+                    .textInputAutocapitalization(.never)
+                    #endif
+                    .modifier(FocusEffectDisabledModifier())
+                    .onChange(of: isNicknameFieldFocused.wrappedValue) { isFocused in
+                        if !isFocused {
+                            appChromeModel.validateAndSaveNickname()
+                        }
+                    }
+                    .onSubmit {
                         appChromeModel.validateAndSaveNickname()
                     }
-                }
-                .onSubmit {
-                    appChromeModel.validateAndSaveNickname()
                 }
             }
 
@@ -309,6 +321,16 @@ struct ContentHeaderView: View {
                     : (headerPeersReachable
                         ? String(localized: "content.accessibility.peers_connected", comment: "Accessibility value when peers are reachable")
                         : String(localized: "content.accessibility.peers_none", comment: "Accessibility value when no peers are reachable"))
+                )
+                Button(action: { appChromeModel.presentAppInfo(pane: .settings) }) {
+                    Image(systemName: "gearshape")
+                        .font(.bitchatSystem(size: 13))
+                        .foregroundColor(palette.secondary)
+                        .headerTapTarget()
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(
+                    String(localized: "chats.accessibility.settings", defaultValue: "Settings", comment: "Accessibility label for the settings gear button")
                 )
             }
             .layoutPriority(3)

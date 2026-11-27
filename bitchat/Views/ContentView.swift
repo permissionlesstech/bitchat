@@ -159,10 +159,18 @@ struct FocusEffectDisabledModifier: ViewModifier {
     }
 }
 
+enum AppRootTab: Hashable {
+    case chats
+    case nearby
+    case places
+}
+
 struct ContentView: View {
     @EnvironmentObject private var appChromeModel: AppChromeModel
     @EnvironmentObject private var privateConversationModel: PrivateConversationModel
+    @EnvironmentObject private var privateInboxModel: PrivateInboxModel
     @EnvironmentObject private var locationChannelsModel: LocationChannelsModel
+    @EnvironmentObject private var peerListModel: PeerListModel
     @EnvironmentObject private var sharedContentImportModel: SharedContentImportModel
     @Environment(\.appEnvironmentModels) private var appEnvironmentModels
 
@@ -171,6 +179,10 @@ struct ContentView: View {
     @Environment(\.colorScheme) var colorScheme
     @Environment(\.appTheme) private var appTheme
     @Environment(\.scenePhase) private var scenePhase
+    @State private var selectedTab: AppRootTab = .chats
+    @State private var activePlaceChannel: GeohashChannel? = nil
+    @State private var showAddFriendSheet = false
+    @State private var showCreateGroupSheet = false
     @State private var showSidebar = false
     @State private var selectedMessageSender: String?
     @State private var selectedMessageSenderID: PeerID?
@@ -281,7 +293,7 @@ struct ContentView: View {
     }
 
     var body: some View {
-        mainContent
+        tabRootView
             .onAppear { [appEnvironmentModels, voiceRecordingVM] in
                 let uiModel = appEnvironmentModels?.conversationUIModel
                 let draftModel = appEnvironmentModels?.composerDraftModel
@@ -336,6 +348,17 @@ struct ContentView: View {
         }
         .onChange(of: locationChannelsModel.selectedChannel) { newChannel in
             sharedContentImportModel.updateDestination(sharedContentDestination)
+            switch newChannel {
+            case .mesh:
+                if selectedTab == .places && activePlaceChannel != nil {
+                    activePlaceChannel = nil
+                }
+            case .location(let channel):
+                activePlaceChannel = channel
+                if selectedTab != .places {
+                    selectedTab = .places
+                }
+            }
             // Private drafts are keyed by peer; only public channel switches
             // need a draft swap while no DM is open.
             if selectedPrivatePeerID == nil {
@@ -344,6 +367,20 @@ struct ContentView: View {
                     fingerprint: nil,
                     channel: newChannel
                 ))
+            }
+        }
+        .onChange(of: selectedTab) { newTab in
+            switch newTab {
+            case .nearby:
+                if case .location = locationChannelsModel.selectedChannel {
+                    locationChannelsModel.select(.mesh)
+                }
+            case .places:
+                if let place = activePlaceChannel {
+                    locationChannelsModel.select(.location(place))
+                }
+            case .chats:
+                break
             }
         }
         .onChange(of: scenePhase) { phase in
@@ -398,9 +435,23 @@ struct ContentView: View {
         .sheet(isPresented: $appChromeModel.isAppInfoPresented) {
             AppInfoView(
                 topologyProvider: { appChromeModel.meshTopologyDisplayModel() },
-                onPanicWipe: { appChromeModel.panicClearAllData() }
+                onPanicWipe: { appChromeModel.panicClearAllData() },
+                onClearPersistedHistory: { appChromeModel.clearPersistedPrivateHistory() }
             )
             .environmentObject(locationChannelsModel)
+        }
+        .sheet(isPresented: $showAddFriendSheet) {
+            AddFriendSheet { _ in
+                selectedTab = .chats
+            }
+            .environmentObject(appChromeModel)
+        }
+        .sheet(isPresented: $showCreateGroupSheet) {
+            CreateGroupSheet(
+                onRequestAddFriend: { showAddFriendSheet = true },
+                onGroupCreated: { selectedTab = .chats }
+            )
+            .environmentObject(peerListModel)
         }
         .sheet(isPresented: Binding(
             get: { appChromeModel.showingFingerprintFor != nil && !showSidebar && selectedPrivatePeerID == nil },
@@ -469,6 +520,60 @@ struct ContentView: View {
         }
     }
 
+    private var unreadChatsCount: Int {
+        privateInboxModel.unreadPeerIDs.count
+    }
+
+    private var tabRootView: some View {
+        TabView(selection: $selectedTab) {
+            ChatsInboxView(
+                onOpenAddFriend: { showAddFriendSheet = true },
+                onOpenCreateGroup: { showCreateGroupSheet = true },
+                onSwitchToNearby: { selectedTab = .nearby },
+                onSwitchToPlaces: {
+                    activePlaceChannel = nil
+                    selectedTab = .places
+                }
+            )
+            .tabItem {
+                Label(
+                    String(localized: "tab.chats", defaultValue: "Chats", comment: "Tab bar label for Chats inbox"),
+                    systemImage: "bubble.left.and.bubble.right.fill"
+                )
+            }
+            .badge(unreadChatsCount)
+            .tag(AppRootTab.chats)
+
+            mainContent(onBack: nil, placeTitle: nil)
+                .tabItem {
+                    Label(
+                        String(localized: "tab.nearby", defaultValue: "Nearby", comment: "Tab bar label for Nearby Bluetooth mesh"),
+                        systemImage: "antenna.radiowaves.left.and.right"
+                    )
+                }
+                .badge(peerListModel.reachableMeshPeerCount)
+                .tag(AppRootTab.nearby)
+
+            PlacesTabView(activeLocationChannel: $activePlaceChannel) { channel in
+                let placeName = locationChannelsModel.locationName(for: channel.level)
+                    ?? locationChannelsModel.bookmarkNames[channel.geohash]
+                    ?? "#\(channel.geohash)"
+                mainContent(
+                    onBack: { activePlaceChannel = nil },
+                    placeTitle: placeName
+                )
+            }
+            .tabItem {
+                Label(
+                    String(localized: "tab.places", defaultValue: "Places", comment: "Tab bar label for Places location channels"),
+                    systemImage: "globe.americas.fill"
+                )
+            }
+            .tag(AppRootTab.places)
+        }
+        .tint(palette.accent)
+    }
+
     /// Matrix: classic opaque bars with dividers. Glass on iOS 17+/macOS 14+:
     /// full-bleed message list scrolling underneath floating chrome overlays
     /// with explicit scroll content margins, avoiding SwiftUI `.safeAreaInset`
@@ -476,12 +581,12 @@ struct ContentView: View {
     /// Older OS versions without `.contentMargins` keep single-level
     /// `.safeAreaInset` so programmatic `scrollTo` targets still clear the bar.
     @ViewBuilder
-    private var mainContent: some View {
+    private func mainContent(onBack: (() -> Void)?, placeTitle: String?) -> some View {
         if usesGlassLayout {
             if #available(iOS 17.0, macOS 14.0, *) {
                 publicMessageList
                     .overlay(alignment: .top) {
-                        headerView
+                        headerView(onBack: onBack, placeTitle: placeTitle)
                             .background(ChromeHeightReader(edge: .top))
                     }
                     .overlay(alignment: .bottom) {
@@ -503,7 +608,7 @@ struct ContentView: View {
             } else {
                 publicMessageList
                     .safeAreaInset(edge: .top, spacing: 0) {
-                        headerView
+                        headerView(onBack: onBack, placeTitle: placeTitle)
                     }
                     .safeAreaInset(edge: .bottom, spacing: 0) {
                         if selectedPrivatePeerID == nil {
@@ -513,7 +618,7 @@ struct ContentView: View {
             }
         } else {
             VStack(spacing: 0) {
-                headerView
+                headerView(onBack: onBack, placeTitle: placeTitle)
 
                 Divider()
 
@@ -530,14 +635,16 @@ struct ContentView: View {
         }
     }
 
-    private var headerView: some View {
+    private func headerView(onBack: (() -> Void)?, placeTitle: String?) -> some View {
         VStack(spacing: 0) {
             ContentHeaderView(
                 showSidebar: $showSidebar,
                 isNicknameFieldFocused: $isNicknameFieldFocused,
                 headerHeight: headerHeight,
                 headerPeerIconSize: headerPeerIconSize,
-                headerPeerCountFontSize: headerPeerCountFontSize
+                headerPeerCountFontSize: headerPeerCountFontSize,
+                onBack: onBack,
+                placeTitle: placeTitle
             )
 
             // Failed-wipe outranks connectivity: "your data may still be

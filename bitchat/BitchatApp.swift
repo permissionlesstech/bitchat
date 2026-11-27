@@ -47,7 +47,7 @@ struct BitchatApp: App {
     }
 
     @StateObject private var runtime: AppRuntime
-    @AppStorage(AppTheme.storageKey) private var appThemeRawValue = AppTheme.matrix.rawValue
+    @AppStorage(AppTheme.storageKey) private var appThemeRawValue = AppTheme.liquidGlass.rawValue
     #if os(iOS)
     @Environment(\.scenePhase) var scenePhase
     @UIApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
@@ -63,7 +63,7 @@ struct BitchatApp: App {
     var body: some Scene {
         WindowGroup {
             ContentView()
-                .environment(\.appTheme, AppTheme(rawValue: appThemeRawValue) ?? .matrix)
+                .environment(\.appTheme, AppTheme(rawValue: appThemeRawValue) ?? .liquidGlass)
                 .installAppEnvironment(runtime.environmentModels)
                 .onAppear {
                     appDelegate.runtime = runtime

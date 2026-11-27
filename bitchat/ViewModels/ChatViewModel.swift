@@ -353,6 +353,10 @@ final class ChatViewModel: ObservableObject, SynchronousMessageTransportEventDel
     private var isPanicResetting = false
     /// Private group membership: keys in the keychain, metadata on disk.
     let groupStore: GroupStore
+    /// Encrypted local persistence for private DMs and group chats, plus
+    /// per-chat disappearing message timers.
+    let encryptedHistoryStore: EncryptedHistoryStore
+    private var historyPersistTask: Task<Void, Never>?
     private let nicknameKey = "bitchat.nickname"
     // Location channel state (macOS supports manual geohash selection)
     var activeChannel: ChannelID {
@@ -1243,6 +1247,7 @@ final class ChatViewModel: ObservableObject, SynchronousMessageTransportEventDel
         locationManager: LocationChannelManager = .shared,
         readReceiptsDefaults: UserDefaults? = nil,
         outboxStore: MessageOutboxStore? = nil,
+        encryptedHistoryStore: EncryptedHistoryStore? = nil,
         panicMediaWipe: (() throws -> Void)? = nil,
         panicRecoveryOperations: PanicRecoveryOperations? = nil,
         panicNetworkLifecycle: PanicNetworkLifecycle = .noop
@@ -1263,6 +1268,10 @@ final class ChatViewModel: ObservableObject, SynchronousMessageTransportEventDel
             ?? .ephemeral(wipeMedia: panicMediaWipe ?? {})
         self.panicNetworkLifecycle = panicNetworkLifecycle
         self.groupStore = GroupStore(keychain: keychain)
+        self.encryptedHistoryStore = encryptedHistoryStore ?? EncryptedHistoryStore(
+            keychain: keychain,
+            persistsToDisk: !TestEnvironment.isRunningTests
+        )
         self.idBridge = idBridge
         self.identityManager = identityManager
         self.conversations = conversations
@@ -1292,6 +1301,9 @@ final class ChatViewModel: ObservableObject, SynchronousMessageTransportEventDel
                 guard let self else { return }
                 if self.changeAffectsActivePublicConversation(change) {
                     self.visibleMessagesCache = nil
+                }
+                if self.changeAffectsDirectConversation(change) {
+                    self.schedulePersistPrivateHistory()
                 }
             }
             .store(in: &cancellables)
@@ -1325,7 +1337,105 @@ final class ChatViewModel: ObservableObject, SynchronousMessageTransportEventDel
         _ = peerListCoordinator
 
         if networkActivationAllowed {
+            restorePersistedPrivateHistoryIfEnabled()
             ChatViewModelBootstrapper(viewModel: self).configure()
+        }
+    }
+
+    // MARK: - Encrypted Local History & Disappearing Timers
+
+    func disappearingTimer(for peerID: PeerID) -> DisappearingTimer {
+        encryptedHistoryStore.timer(for: peerID)
+    }
+
+    func setDisappearingTimer(_ timer: DisappearingTimer, for peerID: PeerID) {
+        encryptedHistoryStore.setTimer(timer, for: peerID)
+        pruneExpiredPrivateMessages(for: peerID)
+        flushPersistedPrivateHistorySynchronously()
+    }
+
+    func pruneAllExpiredPrivateMessages(now: Date = Date()) {
+        var didRemove = false
+        for (id, _) in conversations.conversationsByID {
+            guard case .direct(let handle) = id else { continue }
+            let peerID = handle.routingPeerID
+            let timer = encryptedHistoryStore.timer(for: peerID)
+            guard let duration = timer.duration, duration > 0 else { continue }
+            let cutoff = now.addingTimeInterval(-duration)
+            let beforeCount = conversations.conversationsByID[id]?.messages.count ?? 0
+            conversations.removeMessages(from: id) { $0.timestamp < cutoff }
+            let afterCount = conversations.conversationsByID[id]?.messages.count ?? 0
+            if afterCount < beforeCount {
+                didRemove = true
+            }
+        }
+        if didRemove {
+            schedulePersistPrivateHistory()
+        }
+    }
+
+    func flushPersistedPrivateHistorySynchronously() {
+        historyPersistTask?.cancel()
+        historyPersistTask = nil
+        guard !isPanicResetting else { return }
+        encryptedHistoryStore.save(from: conversations, nostrKeyMapping: nostrKeyMapping)
+    }
+
+    func clearPersistedPrivateHistory() {
+        historyPersistTask?.cancel()
+        historyPersistTask = nil
+        encryptedHistoryStore.clearPersistedHistory()
+    }
+
+    private func pruneExpiredPrivateMessages(for peerID: PeerID, now: Date = Date()) {
+        let timer = encryptedHistoryStore.timer(for: peerID)
+        guard let duration = timer.duration, duration > 0 else { return }
+        let cutoff = now.addingTimeInterval(-duration)
+        conversations.removeMessages(from: .directPeer(peerID)) { $0.timestamp < cutoff }
+    }
+
+    private func restorePersistedPrivateHistoryIfEnabled() {
+        guard let snapshot = encryptedHistoryStore.load() else { return }
+        for (rawPeerID, nostrKey) in snapshot.nostrKeyMapping {
+            nostrKeyMapping[PeerID(str: rawPeerID)] = nostrKey
+        }
+        let unreadSet = Set(snapshot.unreadPeerIDs)
+        for (rawPeerID, messages) in snapshot.messagesByPeerID where !messages.isEmpty {
+            let peerID = PeerID(str: rawPeerID)
+            let convID = ConversationID.directPeer(peerID)
+            _ = conversations.appendBatch(messages, to: convID)
+            if unreadSet.contains(rawPeerID) {
+                conversations.markUnread(convID)
+            }
+        }
+    }
+
+    private func schedulePersistPrivateHistory() {
+        guard !isPanicResetting, PrivacyModeSettings.persistPrivateHistory else { return }
+        historyPersistTask?.cancel()
+        historyPersistTask = Task { @MainActor [weak self] in
+            try? await Task.sleep(nanoseconds: 600_000_000)
+            guard !Task.isCancelled, let self, !self.isPanicResetting else { return }
+            self.encryptedHistoryStore.save(from: self.conversations, nostrKeyMapping: self.nostrKeyMapping)
+            self.historyPersistTask = nil
+        }
+    }
+
+    private func changeAffectsDirectConversation(_ change: ConversationChange) -> Bool {
+        switch change {
+        case .appended(let id, _),
+             .updated(let id, _),
+             .statusChanged(let id, _, _),
+             .messageRemoved(let id, _),
+             .cleared(let id),
+             .removed(let id),
+             .unreadChanged(let id, _):
+            if case .direct = id { return true }
+            return false
+        case .migrated(let from, let to):
+            if case .direct = from { return true }
+            if case .direct = to { return true }
+            return false
         }
     }
 
@@ -1369,6 +1479,67 @@ final class ChatViewModel: ObservableObject, SynchronousMessageTransportEventDel
     @MainActor
     func isFavorite(peerID: PeerID) -> Bool {
         peerIdentityCoordinator.isFavorite(peerID: peerID)
+    }
+
+    // MARK: - Friend Invites
+
+    @MainActor
+    func buildMyFriendInvite() -> FriendInvite? {
+        let noisePubKey = meshService.noiseStaticPublicKeyData()
+        let signingPubKey = meshService.noiseSigningPublicKeyData()
+        guard noisePubKey.count == 32,
+              signingPubKey.count == 32,
+              let npub = try? idBridge.getCurrentNostrIdentity()?.npub else {
+            return nil
+        }
+        return FriendInvite(
+            nickname: nickname,
+            noisePublicKey: noisePubKey,
+            signingPublicKey: signingPubKey,
+            nostrNpub: npub
+        )
+    }
+
+    @MainActor
+    func acceptFriendInvite(_ invite: FriendInvite) -> Result<PeerID, FriendInviteError> {
+        let myNoiseKey = meshService.noiseStaticPublicKeyData()
+        guard myNoiseKey.count == 32 else {
+            return .failure(.missingOwnIdentity)
+        }
+        if myNoiseKey == invite.noisePublicKey {
+            return .failure(.cannotInviteSelf)
+        }
+
+        let fingerprint = invite.noiseFingerprint
+        identityManager.upsertCryptographicIdentity(
+            fingerprint: fingerprint,
+            noisePublicKey: invite.noisePublicKey,
+            signingPublicKey: invite.signingPublicKey,
+            claimedNickname: invite.nickname
+        )
+
+        // Accepting someone's personal invite link establishes mutual Nostr
+        // reachability immediately and notifies them with our npub.
+        FavoritesPersistenceService.shared.addFavorite(
+            peerNoisePublicKey: invite.noisePublicKey,
+            peerNostrPublicKey: invite.nostrNpub,
+            peerNickname: invite.nickname
+        )
+        FavoritesPersistenceService.shared.updatePeerFavoritedUs(
+            peerNoisePublicKey: invite.noisePublicKey,
+            favorited: true,
+            peerNickname: invite.nickname,
+            peerNostrPublicKey: invite.nostrNpub
+        )
+
+        if let (hrp, data) = try? Bech32.decode(invite.nostrNpub), hrp == "npub" {
+            registerNostrKeyMapping(data.hexEncodedString(), for: invite.stablePeerID)
+        }
+
+        sendFavoriteNotificationViaNostr(noisePublicKey: invite.noisePublicKey, isFavorite: true)
+        unifiedPeerService.refreshPeers()
+        startPrivateChat(with: invite.stablePeerID)
+        return .success(invite.stablePeerID)
     }
 
     // MARK: - Public Key and Identity Management
@@ -1732,8 +1903,12 @@ final class ChatViewModel: ObservableObject, SynchronousMessageTransportEventDel
         FavoritesPersistenceService.shared.clearAllFavorites()
 
         // Drop courier mail carried for third parties (memory and disk),
-        // our own queued outbox, the carried public history, and the
-        // counters describing all of it
+        // our own queued outbox, encrypted private history, the carried
+        // public history, and the counters describing all of it
+        historyPersistTask?.cancel()
+        historyPersistTask = nil
+        encryptedHistoryStore.wipe()
+        PrivacyModeSettings.reset()
         CourierStore.shared.wipe()
         BridgeCourierService.shared.wipe()
         BridgeService.shared.resetForPanic()

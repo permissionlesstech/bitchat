@@ -35,7 +35,7 @@ final class NetworkActivationService: ObservableObject {
     static let shared = NetworkActivationService()
 
     @Published private(set) var activationAllowed: Bool = false
-    @Published private(set) var userTorEnabled: Bool = true
+    @Published private(set) var userTorEnabled: Bool = false
     /// Coarse, debounced network reachability. `false` only when the OS reports
     /// no usable interface at all. Surfaced for UI ("offline" vs "connecting").
     @Published private(set) var isNetworkReachable: Bool = true
@@ -121,18 +121,19 @@ final class NetworkActivationService: ObservableObject {
     nonisolated static func persistedTorPreference(
         in defaults: UserDefaults = .standard
     ) -> Bool {
-        defaults.object(forKey: torPreferenceKey) as? Bool ?? true
+        if let stored = defaults.object(forKey: torPreferenceKey) as? Bool {
+            return stored
+        }
+        // Everyday Mode defaults to direct connections for instant startup;
+        // Stealth Mode enables Tor routing.
+        return PrivacyModeSettings.currentMode(in: defaults) == .stealth
     }
 
     func start() {
         guard !started else { return }
         started = true
 
-        if let stored = storage.object(forKey: Self.torPreferenceKey) as? Bool {
-            userTorEnabled = stored
-        } else {
-            userTorEnabled = true
-        }
+        userTorEnabled = Self.persistedTorPreference(in: storage)
 
         // Begin (idempotent) reachability monitoring and seed initial state.
         reachabilityMonitor.start()

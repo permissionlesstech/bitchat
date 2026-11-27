@@ -317,6 +317,63 @@ final class NostrTransport: Transport, @unchecked Sendable {
     func sendDeliveryAck(for messageID: String, to peerID: PeerID) {
         enqueueAck(.deliveredDirect(messageID: messageID, peerID: peerID))
     }
+
+    func sendGroupInvite(_ payload: Data, to peerID: PeerID) {
+        sendGroupState(type: .groupInvite, payload: payload, to: peerID)
+    }
+
+    func sendGroupKeyUpdate(_ payload: Data, to peerID: PeerID) {
+        sendGroupState(type: .groupKeyUpdate, payload: payload, to: peerID)
+    }
+
+    func sendGroupMessage(_ payload: Data, to peerID: PeerID) {
+        let generation = dependencies.ackPacer.currentGeneration()
+        Task { @MainActor in
+            guard dependencies.ackPacer.currentGeneration() == generation else { return }
+            guard let recipientNpub = resolveRecipientNpub(for: peerID),
+                  let recipientHex = npubToHex(recipientNpub),
+                  let senderIdentity = try? dependencies.currentIdentity() else { return }
+            guard let embedded = NostrEmbeddedBitChat.encodeGroupMessageForNostr(
+                payload: payload,
+                recipientPeerID: peerID,
+                senderPeerID: senderPeerID
+            ) else {
+                SecureLogger.error("NostrTransport: failed to embed group message packet", category: .session)
+                return
+            }
+            sendWrappedMessage(
+                content: embedded,
+                recipientHex: recipientHex,
+                senderIdentity: senderIdentity,
+                expectedGeneration: generation
+            )
+        }
+    }
+
+    private func sendGroupState(type: NoisePayloadType, payload: Data, to peerID: PeerID) {
+        let generation = dependencies.ackPacer.currentGeneration()
+        Task { @MainActor in
+            guard dependencies.ackPacer.currentGeneration() == generation else { return }
+            guard let recipientNpub = resolveRecipientNpub(for: peerID),
+                  let recipientHex = npubToHex(recipientNpub),
+                  let senderIdentity = try? dependencies.currentIdentity() else { return }
+            guard let embedded = NostrEmbeddedBitChat.encodeGroupStateForNostr(
+                type: type,
+                payload: payload,
+                recipientPeerID: peerID,
+                senderPeerID: senderPeerID
+            ) else {
+                SecureLogger.error("NostrTransport: failed to embed group state packet", category: .session)
+                return
+            }
+            sendWrappedMessage(
+                content: embedded,
+                recipientHex: recipientHex,
+                senderIdentity: senderIdentity,
+                expectedGeneration: generation
+            )
+        }
+    }
 }
 
 // MARK: - Geohash Helpers

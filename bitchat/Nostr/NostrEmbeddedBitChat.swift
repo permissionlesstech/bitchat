@@ -99,6 +99,54 @@ struct NostrEmbeddedBitChat {
         return "bitchat1:" + Base64URLCoding.encode(data)
     }
 
+    /// Build a `bitchat1:` base64url-encoded BitChat packet carrying a signed group
+    /// invite or key-rotation state payload over Nostr DMs.
+    static func encodeGroupStateForNostr(
+        type: NoisePayloadType,
+        payload rawPayload: Data,
+        recipientPeerID: PeerID,
+        senderPeerID: PeerID
+    ) -> String? {
+        guard type == .groupInvite || type == .groupKeyUpdate else { return nil }
+
+        var payload = Data([type.rawValue])
+        payload.append(rawPayload)
+
+        let recipientID = normalizeRecipientPeerID(recipientPeerID)
+        let packet = BitchatPacket(
+            type: MessageType.noiseEncrypted.rawValue,
+            senderID: Data(hexString: senderPeerID.id) ?? Data(),
+            recipientID: Data(hexString: recipientID.id),
+            timestamp: UInt64(Date().timeIntervalSince1970 * 1000),
+            payload: payload,
+            signature: nil,
+            ttl: 7
+        )
+        guard let data = packet.toBinaryData() else { return nil }
+        return "bitchat1:" + Base64URLCoding.encode(data)
+    }
+
+    /// Build a `bitchat1:` base64url-encoded BitChat packet carrying an already-sealed
+    /// ChaCha20-Poly1305 group message envelope (`MessageType.groupMessage`) over Nostr.
+    static func encodeGroupMessageForNostr(
+        payload: Data,
+        recipientPeerID: PeerID,
+        senderPeerID: PeerID
+    ) -> String? {
+        let recipientID = normalizeRecipientPeerID(recipientPeerID)
+        let packet = BitchatPacket(
+            type: MessageType.groupMessage.rawValue,
+            senderID: Data(hexString: senderPeerID.id) ?? Data(),
+            recipientID: Data(hexString: recipientID.id),
+            timestamp: UInt64(Date().timeIntervalSince1970 * 1000),
+            payload: payload,
+            signature: nil,
+            ttl: 7
+        )
+        guard let data = packet.toBinaryData() else { return nil }
+        return "bitchat1:" + Base64URLCoding.encode(data)
+    }
+
     /// Sender ID for the recipient-less envelopes above. They go out under a
     /// per-geohash identity (and as the acks for inbound account DMs), where
     /// no receiver reads this field: iOS and Android both key these

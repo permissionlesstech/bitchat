@@ -2,20 +2,22 @@ import Foundation
 import Testing
 @testable import bitchat
 
-/// The geo-relay directory refresh runs off the main actor and has to decide
-/// whether waiting for Tor is meaningful. It previously waited unconditionally,
-/// so with Tor switched off — and `TorManager` therefore shut down — every
-/// refresh spent the full bootstrap timeout and the directory froze on its
-/// cached copy.
+/// Verifies off-main Tor preference reads used by background tasks like geo-relay
+/// directory refresh. Everyday Mode defaults to direct (Tor off) for instant
+/// cold start; Stealth Mode and explicit `true` enable Tor.
 struct TorPreferenceReadTests {
     private func makeDefaults() -> UserDefaults {
         UserDefaults(suiteName: "bitchat.tests.tor.\(UUID().uuidString)")!
     }
 
-    @Test func defaultsToOnWhenNothingHasBeenStored() {
-        // Fail safe: an unwritten preference must not read as "Tor off", which
-        // would let a fetch go direct.
-        #expect(NetworkActivationService.persistedTorPreference(in: makeDefaults()))
+    @Test func defaultsToOffInEverydayModeWhenNothingHasBeenStored() {
+        #expect(!NetworkActivationService.persistedTorPreference(in: makeDefaults()))
+    }
+
+    @Test func defaultsToOnInStealthModeWhenExplicitTorPreferenceIsUnset() {
+        let defaults = makeDefaults()
+        defaults.set(PrivacyMode.stealth.rawValue, forKey: PrivacyModeSettings.modeKey)
+        #expect(NetworkActivationService.persistedTorPreference(in: defaults))
     }
 
     @Test func reflectsTheStoredPreference() {
@@ -28,11 +30,12 @@ struct TorPreferenceReadTests {
         #expect(NetworkActivationService.persistedTorPreference(in: defaults))
     }
 
-    @Test func nonBooleanStoredValueReadsAsOn() {
+    @Test func nonBooleanStoredValueFallsBackToPrivacyModeDefault() {
         let defaults = makeDefaults()
         defaults.set("nonsense", forKey: NetworkActivationService.torPreferenceKey)
+        #expect(!NetworkActivationService.persistedTorPreference(in: defaults))
 
-        // Same fail-safe direction: anything unrecognized means keep using Tor.
+        defaults.set(PrivacyMode.stealth.rawValue, forKey: PrivacyModeSettings.modeKey)
         #expect(NetworkActivationService.persistedTorPreference(in: defaults))
     }
 }

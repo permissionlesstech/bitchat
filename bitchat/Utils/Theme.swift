@@ -127,7 +127,7 @@ struct ThemePalette {
 }
 
 private struct AppThemeKey: EnvironmentKey {
-    static let defaultValue: AppTheme = .matrix
+    static let defaultValue: AppTheme = .liquidGlass
 }
 
 extension EnvironmentValues {

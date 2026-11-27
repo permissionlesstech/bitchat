@@ -7,15 +7,14 @@ final class NetworkActivationServiceTests: XCTestCase {
     private let torPreferenceKey = "networkActivationService.userTorEnabled"
 
     func test_start_leavesNetworkDisabledWithoutPermissionOrFavorites() {
-        let context = makeService(permission: .denied, favorites: [])
+        let context = makeService(permission: .denied, favorites: [], torEnabled: true)
 
         context.service.start()
 
         XCTAssertFalse(context.service.activationAllowed)
         XCTAssertEqual(context.torController.autoStartAllowedValues, [false])
-        // Proxy mode tracks userTorEnabled (default true) even while the
-        // network gate is closed so callers fail closed on the SOCKS port
-        // instead of falling back to clearnet.
+        // Proxy mode tracks userTorEnabled even while the network gate is
+        // closed so Tor-mode callers fail closed on the SOCKS port.
         XCTAssertEqual(context.proxyController.proxyModes, [true])
         XCTAssertEqual(context.torController.startIfNeededCallCount, 0)
         XCTAssertEqual(context.torController.shutdownCompletelyCallCount, 1)
@@ -23,8 +22,21 @@ final class NetworkActivationServiceTests: XCTestCase {
         XCTAssertEqual(context.relayController.disconnectCallCount, 1)
     }
 
+    func test_start_defaultsToEverydayDirectModeWhenUnset() {
+        let context = makeService(permission: .authorized, favorites: [], torEnabled: nil)
+
+        context.service.start()
+
+        XCTAssertTrue(context.service.activationAllowed)
+        XCTAssertFalse(context.service.userTorEnabled)
+        XCTAssertEqual(context.torController.autoStartAllowedValues, [false])
+        XCTAssertEqual(context.proxyController.proxyModes, [false])
+        XCTAssertEqual(context.torController.startIfNeededCallCount, 0)
+        XCTAssertEqual(context.relayController.connectCallCount, 1)
+    }
+
     func test_start_enablesTorAndRelaysWhenAuthorized() {
-        let context = makeService(permission: .authorized, favorites: [])
+        let context = makeService(permission: .authorized, favorites: [], torEnabled: true)
 
         context.service.start()
 
@@ -37,8 +49,7 @@ final class NetworkActivationServiceTests: XCTestCase {
     }
 
     func test_start_respectsStoredTorPreferenceForDirectMode() {
-        let context = makeService(permission: .authorized, favorites: [])
-        context.storage.set(false, forKey: torPreferenceKey)
+        let context = makeService(permission: .authorized, favorites: [], torEnabled: false)
 
         context.service.start()
 
@@ -52,7 +63,7 @@ final class NetworkActivationServiceTests: XCTestCase {
     }
 
     func test_setUserTorEnabled_postsNotificationAndReconnectsOnTransportSwitch() {
-        let context = makeService(permission: .authorized, favorites: [])
+        let context = makeService(permission: .authorized, favorites: [], torEnabled: true)
         let notified = expectation(description: "Tor preference notification")
         let token = context.notificationCenter.addObserver(
             forName: .TorUserPreferenceChanged,
@@ -78,7 +89,7 @@ final class NetworkActivationServiceTests: XCTestCase {
     }
 
     func test_mutualFavoritesPublisher_reactivatesNetwork() async {
-        let context = makeService(permission: .denied, favorites: [])
+        let context = makeService(permission: .denied, favorites: [], torEnabled: true)
 
         context.service.start()
         XCTAssertFalse(context.service.activationAllowed)
@@ -95,7 +106,7 @@ final class NetworkActivationServiceTests: XCTestCase {
     }
 
     func test_stopForPanic_synchronouslyStopsAndIgnoresPublisherUpdates() async {
-        let context = makeService(permission: .authorized, favorites: [])
+        let context = makeService(permission: .authorized, favorites: [], torEnabled: true)
 
         context.service.start()
         context.service.stopForPanic()
@@ -139,7 +150,8 @@ final class NetworkActivationServiceTests: XCTestCase {
         let context = makeService(
             permission: .denied,
             favorites: [],
-            selectedChannelSubject: channelSubject
+            selectedChannelSubject: channelSubject,
+            torEnabled: true
         )
 
         context.service.start()
@@ -172,7 +184,8 @@ final class NetworkActivationServiceTests: XCTestCase {
         let context = makeService(
             permission: .denied,
             favorites: [],
-            selectedChannel: .location(GeohashChannel(level: .city, geohash: "u4pruy"))
+            selectedChannel: .location(GeohashChannel(level: .city, geohash: "u4pruy")),
+            torEnabled: true
         )
 
         context.service.start()
@@ -224,11 +237,15 @@ final class NetworkActivationServiceTests: XCTestCase {
         permission: LocationChannelManager.PermissionState,
         favorites: Set<Data>,
         selectedChannel: ChannelID = .mesh,
-        selectedChannelSubject: CurrentValueSubject<ChannelID, Never>? = nil
+        selectedChannelSubject: CurrentValueSubject<ChannelID, Never>? = nil,
+        torEnabled: Bool? = nil
     ) -> NetworkActivationTestContext {
         let suiteName = "NetworkActivationServiceTests-\(UUID().uuidString)"
         let storage = UserDefaults(suiteName: suiteName)!
         storage.removePersistentDomain(forName: suiteName)
+        if let torEnabled {
+            storage.set(torEnabled, forKey: torPreferenceKey)
+        }
 
         let permissionSubject = CurrentValueSubject<LocationChannelManager.PermissionState, Never>(permission)
         let favoritesSubject = CurrentValueSubject<Set<Data>, Never>(favorites)

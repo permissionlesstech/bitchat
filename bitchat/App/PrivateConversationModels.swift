@@ -178,6 +178,47 @@ final class PrivateConversationModel: ObservableObject {
         chatViewModel.markPrivateMessagesAsRead(from: peerID)
     }
 
+    func disappearingTimer(for peerID: PeerID) -> DisappearingTimer {
+        chatViewModel.disappearingTimer(for: peerID)
+    }
+
+    func setDisappearingTimer(_ timer: DisappearingTimer, for peerID: PeerID) {
+        chatViewModel.setDisappearingTimer(timer, for: peerID)
+        objectWillChange.send()
+    }
+
+    func clearPersistedHistory() {
+        chatViewModel.clearPersistedPrivateHistory()
+    }
+
+    // MARK: - Group Management
+
+    func group(for peerID: PeerID) -> BitchatGroup? {
+        chatViewModel.groupStore.group(for: peerID)
+    }
+
+    var myNoiseFingerprint: String {
+        chatViewModel.myNoiseFingerprint()
+    }
+
+    func inviteMember(peerID: PeerID, into groupPeerID: PeerID) -> CommandResult {
+        let result = chatViewModel.groupCoordinator.inviteMember(peerID: peerID, into: groupPeerID)
+        refreshSelectedConversation()
+        return result
+    }
+
+    func removeMember(fingerprint: String, from groupPeerID: PeerID) -> CommandResult {
+        let result = chatViewModel.groupCoordinator.removeMember(fingerprint: fingerprint, from: groupPeerID)
+        refreshSelectedConversation()
+        return result
+    }
+
+    func leaveGroup(peerID: PeerID) -> CommandResult {
+        let result = chatViewModel.groupCoordinator.leaveGroup(peerID: peerID)
+        refreshSelectedConversation()
+        return result
+    }
+
     private func bind() {
         conversations.$selectedPrivatePeerID
             .receive(on: DispatchQueue.main)

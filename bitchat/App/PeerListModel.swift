@@ -53,12 +53,50 @@ struct RecentChatRow: Identifiable, Equatable {
     var id: String { peerID.id }
 }
 
+/// Unified row for the Inbox-first Chats tab: combines private groups,
+/// mutual friends, and any active DM threads in recency order.
+struct InboxChatRow: Identifiable, Equatable {
+    enum Reachability: Equatable {
+        case meshConnected
+        case meshReachable
+        case nostr
+        case offline
+        case group
+    }
+
+    let peerID: PeerID
+    let displayName: String
+    let subtitle: String
+    let lastActivity: Date?
+    let hasUnread: Bool
+    let isGroup: Bool
+    let memberCount: Int
+    let isFavorite: Bool
+    let reachability: Reachability
+    let disappearingTimer: DisappearingTimer
+
+    var id: String { peerID.id }
+}
+
+/// Eligible contact that can be added to a private encrypted group
+/// (connected over BLE mesh or reachable via Nostr with a pinned signing key).
+struct GroupInviteCandidate: Identifiable, Equatable {
+    let peerID: PeerID
+    let fingerprint: String
+    let displayName: String
+    let isMeshConnected: Bool
+    let isNostrReachable: Bool
+
+    var id: String { fingerprint }
+}
+
 @MainActor
 final class PeerListModel: ObservableObject {
     @Published private(set) var meshRows: [MeshPeerRow] = []
     @Published private(set) var geohashPeople: [GeohashPersonRow] = []
     @Published private(set) var groupRows: [GroupChatRow] = []
     @Published private(set) var recentChatRows: [RecentChatRow] = []
+    @Published private(set) var inboxRows: [InboxChatRow] = []
     @Published private(set) var reachableMeshPeerCount = 0
     @Published private(set) var connectedMeshPeerCount = 0
     @Published private(set) var visibleGeohashPeerCount = 0
@@ -130,6 +168,68 @@ final class PeerListModel: ObservableObject {
         )
     }
 
+    /// Contacts that have a cryptographic signing key and are reachable over
+    /// BLE mesh or Nostr, excluding any fingerprints already in `excludingFingerprints`.
+    func groupInviteCandidates(excludingFingerprints: Set<String> = []) -> [GroupInviteCandidate] {
+        let myFingerprint = chatViewModel.myNoiseFingerprint()
+        var byFingerprint: [String: GroupInviteCandidate] = [:]
+
+        // 1. Live/known mesh peers
+        for peer in allPeers where peer.peerID != chatViewModel.meshService.myPeerID {
+            guard !chatViewModel.isPeerBlocked(peer.peerID),
+                  let identity = chatViewModel.cryptoIdentity(for: peer.peerID),
+                  identity.fingerprint != myFingerprint,
+                  !excludingFingerprints.contains(identity.fingerprint) else { continue }
+            let meshConnected = chatViewModel.isPeerConnected(peer.peerID)
+            let nostrReachable = chatViewModel.nostrReachablePeerID(forFingerprint: identity.fingerprint) != nil
+            guard meshConnected || nostrReachable else { continue }
+            byFingerprint[identity.fingerprint] = GroupInviteCandidate(
+                peerID: peer.peerID,
+                fingerprint: identity.fingerprint,
+                displayName: peer.displayName,
+                isMeshConnected: meshConnected,
+                isNostrReachable: nostrReachable
+            )
+        }
+
+        // 2. Nostr favorites with pinned signing keys (e.g. added via Friend Invite)
+        for (noiseKey, rel) in FavoritesPersistenceService.shared.favorites {
+            guard rel.peerNostrPublicKey != nil else { continue }
+            let peerID = PeerID(hexData: noiseKey)
+            guard !chatViewModel.isPeerBlocked(peerID),
+                  let identity = chatViewModel.cryptoIdentity(for: peerID),
+                  identity.fingerprint != myFingerprint,
+                  !excludingFingerprints.contains(identity.fingerprint) else { continue }
+            let meshConnected = chatViewModel.connectedPeerID(forFingerprint: identity.fingerprint) != nil
+            if let existing = byFingerprint[identity.fingerprint] {
+                byFingerprint[identity.fingerprint] = GroupInviteCandidate(
+                    peerID: existing.peerID,
+                    fingerprint: identity.fingerprint,
+                    displayName: existing.displayName,
+                    isMeshConnected: existing.isMeshConnected || meshConnected,
+                    isNostrReachable: true
+                )
+            } else {
+                byFingerprint[identity.fingerprint] = GroupInviteCandidate(
+                    peerID: peerID,
+                    fingerprint: identity.fingerprint,
+                    displayName: rel.peerNickname,
+                    isMeshConnected: meshConnected,
+                    isNostrReachable: true
+                )
+            }
+        }
+
+        return byFingerprint.values.sorted {
+            if $0.isMeshConnected != $1.isMeshConnected { return $0.isMeshConnected }
+            return $0.displayName.localizedCaseInsensitiveCompare($1.displayName) == .orderedAscending
+        }
+    }
+
+    func createGroup(named name: String, memberPeerIDs: [PeerID]) -> CommandResult {
+        chatViewModel.groupCoordinator.createGroup(named: name, initialMemberPeerIDs: memberPeerIDs)
+    }
+
     private func bind() {
         // No equality guard: `BitchatPeer.==` compares only peer IDs, so a
         // rename or a connection, favorite or petname change looks unchanged,
@@ -177,6 +277,20 @@ final class PeerListModel: ObservableObject {
             .store(in: &cancellables)
 
         chatViewModel.groupStore.$groups
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in
+                self?.setNeedsRefresh()
+            }
+            .store(in: &cancellables)
+
+        chatViewModel.encryptedHistoryStore.$timers
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in
+                self?.setNeedsRefresh()
+            }
+            .store(in: &cancellables)
+
+        NotificationCenter.default.publisher(for: .favoriteStatusChanged)
             .receive(on: DispatchQueue.main)
             .sink { [weak self] _ in
                 self?.setNeedsRefresh()
@@ -295,6 +409,7 @@ final class PeerListModel: ObservableObject {
         let geohashPeople = buildGeohashPeople()
         let groupRows = buildGroupRows()
         let recentChatRows = buildRecentChatRows(meshRows: meshRows, geohashPeople: geohashPeople)
+        let inboxRows = buildInboxRows(meshRows: meshRows, groupRows: groupRows)
 
         // Assign only what changed: every @Published write re-renders every
         // view observing this model (root, header, the open sheet).
@@ -305,6 +420,144 @@ final class PeerListModel: ObservableObject {
         if visibleGeohashPeerCount != geohashPeople.count { visibleGeohashPeerCount = geohashPeople.count }
         if self.groupRows != groupRows { self.groupRows = groupRows }
         if self.recentChatRows != recentChatRows { self.recentChatRows = recentChatRows }
+        if self.inboxRows != inboxRows { self.inboxRows = inboxRows }
+    }
+
+    private func buildInboxRows(meshRows: [MeshPeerRow], groupRows: [GroupChatRow]) -> [InboxChatRow] {
+        var rowsByKey: [String: InboxChatRow] = [:]
+
+        // 1. Groups
+        for group in groupRows {
+            let lastMsg = conversations.conversationsByID[.directPeer(group.peerID)]?.messages.last
+            let preview = lastMsg.map { "\($0.sender): \($0.content)" }
+                ?? String(
+                    format: String(localized: "inbox.group.members", defaultValue: "%lld members · hybrid E2E", comment: "Subtitle for a group with no messages yet"),
+                    locale: .current,
+                    group.memberCount
+                )
+            rowsByKey[group.peerID.id] = InboxChatRow(
+                peerID: group.peerID,
+                displayName: group.name,
+                subtitle: preview,
+                lastActivity: lastMsg?.timestamp,
+                hasUnread: group.hasUnread,
+                isGroup: true,
+                memberCount: group.memberCount,
+                isFavorite: false,
+                reachability: .group,
+                disappearingTimer: chatViewModel.disappearingTimer(for: group.peerID)
+            )
+        }
+
+        // Index mesh rows by fingerprint & peerID for status lookup.
+        var meshByFingerprint: [String: MeshPeerRow] = [:]
+        var meshByPeerID: [PeerID: MeshPeerRow] = [:]
+        for row in meshRows where !row.isMe {
+            meshByPeerID[row.peerID] = row
+            if let fp = chatViewModel.getFingerprint(for: row.peerID) {
+                meshByFingerprint[fp] = row
+            }
+        }
+
+        // Helper to resolve latest DM message across ephemeral + stable peer IDs
+        func latestDirectMessage(for peerID: PeerID, fingerprint: String?) -> BitchatMessage? {
+            var latest = conversations.conversationsByID[.directPeer(peerID)]?.messages.last
+            if let fingerprint {
+                for (id, conv) in conversations.conversationsByID {
+                    guard case .direct(let handle) = id,
+                          let msg = conv.messages.last,
+                          chatViewModel.getFingerprint(for: handle.routingPeerID) == fingerprint else { continue }
+                    if latest == nil || msg.timestamp > latest!.timestamp {
+                        latest = msg
+                    }
+                }
+            }
+            return latest
+        }
+
+        // 2. Mutual favorites / invited friends (always shown in Inbox even before first message)
+        for (noiseKey, rel) in FavoritesPersistenceService.shared.favorites where rel.isFavorite {
+            let peerID = PeerID(hexData: noiseKey)
+            guard !chatViewModel.isPeerBlocked(peerID) else { continue }
+            let fingerprint = noiseKey.sha256Fingerprint()
+            let meshRow = meshByFingerprint[fingerprint]
+            let targetPeerID = meshRow?.peerID ?? peerID
+            let lastMsg = latestDirectMessage(for: targetPeerID, fingerprint: fingerprint)
+            let reachability: InboxChatRow.Reachability = {
+                if meshRow?.isConnected == true { return .meshConnected }
+                if meshRow?.isReachable == true { return .meshReachable }
+                if rel.peerNostrPublicKey != nil { return .nostr }
+                return .offline
+            }()
+            let fallbackSubtitle: String = {
+                switch reachability {
+                case .meshConnected:
+                    return String(localized: "inbox.status.nearby_ble", defaultValue: "Nearby over Bluetooth", comment: "Subtitle for a friend reachable over Bluetooth")
+                case .meshReachable:
+                    return String(localized: "inbox.status.mesh_relayed", defaultValue: "Reachable on mesh", comment: "Subtitle for a friend reachable via multi-hop mesh")
+                case .nostr:
+                    return String(localized: "inbox.status.nostr_ready", defaultValue: "Encrypted over Nostr · tap to chat", comment: "Subtitle for a friend ready over Nostr")
+                case .offline, .group:
+                    return String(localized: "inbox.status.offline", defaultValue: "Offline · messages queue automatically", comment: "Subtitle for an offline friend")
+                }
+            }()
+            let row = InboxChatRow(
+                peerID: targetPeerID,
+                displayName: meshRow?.displayName ?? rel.peerNickname,
+                subtitle: lastMsg?.content ?? fallbackSubtitle,
+                lastActivity: lastMsg?.timestamp ?? rel.lastUpdated,
+                hasUnread: chatViewModel.hasUnreadMessages(for: targetPeerID),
+                isGroup: false,
+                memberCount: 0,
+                isFavorite: true,
+                reachability: reachability,
+                disappearingTimer: chatViewModel.disappearingTimer(for: targetPeerID)
+            )
+            rowsByKey[fingerprint] = row
+        }
+
+        // 3. Any other direct conversations that have messages (e.g. mesh passerby or GeoDM)
+        for (id, conversation) in conversations.conversationsByID {
+            guard case .direct(let handle) = id else { continue }
+            let peerID = handle.routingPeerID
+            guard !peerID.isGroup,
+                  let lastMsg = conversation.messages.last,
+                  !chatViewModel.isPeerBlocked(peerID) else { continue }
+            let fingerprint = chatViewModel.getFingerprint(for: peerID)
+            let key = fingerprint ?? peerID.id
+            if let existing = rowsByKey[key] {
+                if let existingDate = existing.lastActivity, existingDate >= lastMsg.timestamp {
+                    continue
+                }
+            }
+            let meshRow = meshByPeerID[peerID] ?? fingerprint.flatMap { meshByFingerprint[$0] }
+            let reachability: InboxChatRow.Reachability = {
+                if meshRow?.isConnected == true { return .meshConnected }
+                if meshRow?.isReachable == true { return .meshReachable }
+                if peerID.isGeoDM { return .nostr }
+                return .offline
+            }()
+            rowsByKey[key] = InboxChatRow(
+                peerID: meshRow?.peerID ?? peerID,
+                displayName: meshRow?.displayName ?? displayName(for: peerID),
+                subtitle: lastMsg.content,
+                lastActivity: lastMsg.timestamp,
+                hasUnread: chatViewModel.hasUnreadMessages(for: peerID),
+                isGroup: false,
+                memberCount: 0,
+                isFavorite: meshRow?.isFavorite ?? false,
+                reachability: reachability,
+                disappearingTimer: chatViewModel.disappearingTimer(for: peerID)
+            )
+        }
+
+        return rowsByKey.values.sorted { lhs, rhs in
+            if lhs.hasUnread != rhs.hasUnread { return lhs.hasUnread }
+            let lDate = lhs.lastActivity ?? .distantPast
+            let rDate = rhs.lastActivity ?? .distantPast
+            if lDate != rDate { return lDate > rDate }
+            return lhs.displayName.localizedCaseInsensitiveCompare(rhs.displayName) == .orderedAscending
+        }
     }
 
     /// Direct conversations with people absent from the rosters above:

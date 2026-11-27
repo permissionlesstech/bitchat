@@ -44,6 +44,9 @@ final class MessageRouter {
     }
 
     private let transports: [Transport]
+    var nostrTransport: NostrTransport? {
+        transports.compactMap { $0 as? NostrTransport }.first
+    }
     private let now: () -> Date
     private let courierDirectory: CourierDirectory
     private let outboxStore: MessageOutboxStore?

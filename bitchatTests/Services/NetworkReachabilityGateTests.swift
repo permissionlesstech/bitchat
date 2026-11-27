@@ -171,6 +171,7 @@ final class NetworkReachabilityGateTests: XCTestCase {
         let suiteName = "NetworkReachabilityGateTests-\(UUID().uuidString)"
         let storage = UserDefaults(suiteName: suiteName)!
         storage.removePersistentDomain(forName: suiteName)
+        storage.set(true, forKey: NetworkActivationService.torPreferenceKey)
 
         let permissionSubject = CurrentValueSubject<LocationChannelManager.PermissionState, Never>(permission)
         let favoritesSubject = CurrentValueSubject<Set<Data>, Never>([])

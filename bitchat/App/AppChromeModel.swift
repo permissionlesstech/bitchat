@@ -124,6 +124,29 @@ final class AppChromeModel: ObservableObject {
         showScreenshotPrivacyWarning = true
     }
 
+    func clearPersistedPrivateHistory() {
+        chatViewModel.clearPersistedPrivateHistory()
+    }
+
+    func flushPersistedPrivateHistory() {
+        chatViewModel.flushPersistedPrivateHistorySynchronously()
+    }
+
+    func buildMyFriendInvite() -> FriendInvite? {
+        chatViewModel.buildMyFriendInvite()
+    }
+
+    func acceptFriendInvite(from rawText: String) -> Result<PeerID, FriendInviteError> {
+        guard let invite = FriendInvite.parse(from: rawText) else {
+            return .failure(.invalidLink)
+        }
+        return chatViewModel.acceptFriendInvite(invite)
+    }
+
+    func acceptFriendInvite(_ invite: FriendInvite) -> Result<PeerID, FriendInviteError> {
+        chatViewModel.acceptFriendInvite(invite)
+    }
+
     func setPanicPreparation(_ preparation: (@MainActor () -> Void)?) {
         prepareForPanic = preparation
     }
