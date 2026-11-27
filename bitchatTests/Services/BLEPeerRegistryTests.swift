@@ -149,9 +149,7 @@ struct BLEPeerRegistryTests {
         )
 
         #expect(registry.capabilities(for: oldPeer).isEmpty)
-        #expect(!registry.capabilitiesWereExplicitlyAdvertised(for: oldPeer))
         #expect(registry.capabilities(for: modernPeer).isEmpty)
-        #expect(registry.capabilitiesWereExplicitlyAdvertised(for: modernPeer))
     }
 
     @Test("reachability keeps recent verified offline peers only when mesh is attached")

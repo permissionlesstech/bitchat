@@ -50,7 +50,6 @@ final class BLERadioController {
     // Adaptive scanning duty-cycle
     private var scanDutyTimer: DispatchSourceTimer?
     private var dutyResumeWorkItem: DispatchWorkItem?
-    private var dutyEnabled: Bool = true
     private var dutyOnDuration: TimeInterval = TransportConfig.bleDutyOnDuration
     private var dutyOffDuration: TimeInterval = TransportConfig.bleDutyOffDuration
     private var dutyActive: Bool = false
@@ -140,7 +139,6 @@ final class BLERadioController {
             now: Date()
         )
         let scanPlan = BLEScanDutyPolicy.plan(
-            dutyEnabled: dutyEnabled,
             appIsActive: delegate?.radioIsAppActive() ?? true,
             connectedCount: connectedCount,
             hasRecentTraffic: hasRecentTraffic,

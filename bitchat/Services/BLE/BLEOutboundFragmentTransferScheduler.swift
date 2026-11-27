@@ -39,21 +39,6 @@ struct BLEOutboundFragmentTransferRequest {
     }
 }
 
-/// Transactional admission for strict fragment trains. Durable callers may
-/// commit only when every fragment was accepted; the first rejection stops
-/// the train and reports failure so the original remains retryable.
-enum BLEStrictFragmentAdmission {
-    static func admitAll<Fragment>(
-        _ fragments: [Fragment],
-        accepting: (Fragment) -> Bool
-    ) -> Bool {
-        for fragment in fragments where !accepting(fragment) {
-            return false
-        }
-        return true
-    }
-}
-
 struct BLEOutboundFragmentTransferScheduler {
     enum QueuePosition {
         case front

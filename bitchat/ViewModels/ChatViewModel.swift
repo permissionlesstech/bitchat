@@ -2151,9 +2151,6 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, SynchronousMessage
             // where a peer's `.vouch` capability actually arrives.
             vouchCoordinator.peersUpdated(peers)
 
-        case .peerSnapshotsUpdated:
-            break
-
         case let .messageDeliveryStatusUpdated(messageID, status):
             deliveryCoordinator.didUpdateMessageDeliveryStatus(
                 messageID,

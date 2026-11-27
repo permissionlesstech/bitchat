@@ -145,7 +145,6 @@ protocol MeshBridgingTransport: AnyObject {
     func openBridgedCourierEnvelope(_ envelope: CourierEnvelope) -> Bool
     @discardableResult
     func deliverBridgedEnvelope(_ envelope: CourierEnvelope, to peerID: PeerID) -> Bool
-    func myNoiseStaticPublicKey() -> Data
     func verifiedPeersWithNoiseKeys() -> [(peerID: PeerID, noiseKey: Data)]
     /// Fired (off-main) when a signature-verified announce is processed.
     var onVerifiedPeerAnnounce: ((_ peerID: PeerID) -> Void)? { get set }

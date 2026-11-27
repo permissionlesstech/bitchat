@@ -583,8 +583,9 @@ private extension ChatViewModelBootstrapper {
         courier.closeSubscription = {
             NostrRelayManager.shared.unsubscribe(id: Self.courierDropSubscriptionID)
         }
-        courier.myNoiseKey = { [weak bleService] in
-            bleService?.myNoiseStaticPublicKey()
+        let transport = viewModel.meshService
+        courier.myNoiseKey = { [weak transport] in
+            transport?.noiseStaticPublicKeyData()
         }
         courier.localVerifiedPeers = { [weak bleService] in
             bleService?.verifiedPeersWithNoiseKeys() ?? []

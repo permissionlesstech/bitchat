@@ -831,7 +831,7 @@ final class GossipSyncManager {
             self.archiveDirty = true
             // Persist now rather than waiting for maintenance: a relaunch in
             // the gap would restore the purged messages from disk.
-            self.persistArchiveIfDirty()
+            self.archiveDirty = false
             self.archive?.wipe()
         }
     }
