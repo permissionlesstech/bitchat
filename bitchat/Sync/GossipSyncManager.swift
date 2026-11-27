@@ -305,7 +305,7 @@ final class GossipSyncManager {
             guard isPacketFresh(packet, nowMs: nowMs) else { return }
             guard isAnnouncementFresh(packet, nowMs: nowMs) else {
                 let sender = PeerID(hexData: packet.senderID)
-                removeState(for: sender)
+                expireStalePresence(for: sender)
                 return
             }
             let sender = PeerID(hexData: packet.senderID)
@@ -788,14 +788,23 @@ final class GossipSyncManager {
         }
         guard !stalePeerIDs.isEmpty else { return }
         for peerKey in stalePeerIDs {
-            removeState(for: peerKey)
+            expireStalePresence(for: peerKey)
         }
     }
 
-    // Explicit removal hook for LEAVE/stale peer
+    // Explicit removal hook for LEAVE or identity rotation
     func removeAnnouncementForPeer(_ peerID: PeerID) {
         queue.async { [weak self] in
             self?.removeState(for: peerID)
+        }
+    }
+
+    /// Passive reachability timeout: expire live presence and transient
+    /// fragments without wiping 6-hour public messages or 15-minute
+    /// group/file history, which age out on their own TTLs.
+    func expireStaleAnnouncementForPeer(_ peerID: PeerID) {
+        queue.async { [weak self] in
+            self?.expireStalePresence(for: peerID)
         }
     }
 
@@ -834,6 +843,11 @@ final class GossipSyncManager {
             self.persistArchiveIfDirty()
             self.archive?.wipe()
         }
+    }
+
+    private func expireStalePresence(for peerID: PeerID) {
+        _ = latestAnnouncementByPeer.removeValue(forKey: peerID)
+        fragments.remove { PeerID(hexData: $0.senderID) == peerID }
     }
 
     private func removeState(for peerID: PeerID) {

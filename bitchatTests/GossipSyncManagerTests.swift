@@ -84,10 +84,16 @@ struct GossipSyncManagerTests {
         #expect(manager._hasAnnouncement(for: PeerID(str: peerHex)))
         #expect(manager._messageCount(for: PeerID(str: peerHex)) == 1)
         
-        // Run cleanup past the timeout
+        // Run cleanup past the stale peer timeout: presence expires, but
+        // carried public messages survive until maxMessageAgeSeconds (6h).
         let future = Date().addingTimeInterval(config.stalePeerTimeoutSeconds + 1)
         manager._performMaintenanceSynchronously(now: future)
         #expect(manager._hasAnnouncement(for: PeerID(str: peerHex)) == false)
+        #expect(manager._messageCount(for: PeerID(str: peerHex)) == 1)
+
+        // Explicit LEAVE removal still drops carried messages for the peer.
+        manager.removeAnnouncementForPeer(PeerID(str: peerHex))
+        manager._performMaintenanceSynchronously(now: future)
         #expect(manager._messageCount(for: PeerID(str: peerHex)) == 0)
     }
 
@@ -169,7 +175,8 @@ struct GossipSyncManagerTests {
         manager._performMaintenanceSynchronously()
 
         #expect(manager._hasAnnouncement(for: PeerID(str: peerHex)) == false)
-        #expect(manager._messageCount(for: PeerID(str: peerHex)) == 0)
+        // A stale announce must not wipe fresh public messages within maxMessageAgeSeconds.
+        #expect(manager._messageCount(for: PeerID(str: peerHex)) == 1)
     }
 
     @Test func maintenanceEmitsTypedSyncRequests() throws {

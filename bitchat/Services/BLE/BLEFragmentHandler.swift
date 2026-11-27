@@ -31,9 +31,10 @@ final class BLEFragmentHandler {
         self.environment = environment
     }
 
-    func handle(_ packet: BitchatPacket, from peerID: PeerID) {
+    @discardableResult
+    func handle(_ packet: BitchatPacket, from peerID: PeerID) -> Bool {
         let env = environment
-        guard let header = BLEFragmentHeader(packet: packet) else { return }
+        guard let header = BLEFragmentHeader(packet: packet) else { return false }
 
         // Sync replay legitimately hands us our own fragments back (the RSR
         // ttl=0 restore path): after a relaunch the fragment store starts
@@ -45,9 +46,12 @@ final class BLEFragmentHandler {
             if header.isBroadcastFragment {
                 env.trackPacketSeen(packet)
             }
-            return
+            return true
         }
 
+        // Keep broadcast sync tracking and mesh relay independent of local
+        // first-wins storage rejection so an injected conflicting fragment
+        // cannot suppress honest downstream copies or REQUEST_SYNC recovery.
         if header.isBroadcastFragment {
             env.trackPacketSeen(packet)
         }
@@ -56,29 +60,35 @@ final class BLEFragmentHandler {
 
         logFragmentAssemblyResult(assemblyResult)
 
-        guard case let .complete(completedHeader, reassembled, _) = assemblyResult else { return }
+        switch assemblyResult {
+        case .oversized, .mismatched, .stored:
+            return true
+        case let .complete(completedHeader, reassembled, _):
+            // Decode the original packet bytes we reassembled, so flags/compression are preserved
+            if var originalPacket = BinaryProtocol.decode(reassembled) {
 
-        // Decode the original packet bytes we reassembled, so flags/compression are preserved
-        if var originalPacket = BinaryProtocol.decode(reassembled) {
-
-            // Reassembled packet validation. Both platforms' fragmenters copy
-            // the inner type into every fragment, and the assembly was sized
-            // for that claim, so a packet of any other type is forged.
-            let innerSender = PeerID(hexData: originalPacket.senderID)
-            if originalPacket.type != completedHeader.originalType {
-                SecureLogger.warning(
-                    "🚫 Reassembled packet id=\(completedHeader.idLogString) is type \(originalPacket.type), fragments claimed \(completedHeader.originalType)",
-                    category: .security
-                )
-            } else if !env.isAcceptedIngressPayload(originalPacket, innerSender) {
-                // Cleanup below
+                // Reassembled packet validation. Both platforms' fragmenters copy
+                // the inner type into every fragment, and the assembly was sized
+                // for that claim, so a packet of any other type is forged.
+                let innerSender = PeerID(hexData: originalPacket.senderID)
+                if originalPacket.type != completedHeader.originalType {
+                    SecureLogger.warning(
+                        "🚫 Reassembled packet id=\(completedHeader.idLogString) is type \(originalPacket.type), fragments claimed \(completedHeader.originalType)",
+                        category: .security
+                    )
+                    return false
+                } else if !env.isAcceptedIngressPayload(originalPacket, innerSender) {
+                    return false
+                } else {
+                    SecureLogger.debug("✅ Reassembled packet id=\(completedHeader.idLogString) type=\(originalPacket.type) bytes=\(reassembled.count)", category: .session)
+                    originalPacket.ttl = 0
+                    env.processReassembledPacket(originalPacket, peerID)
+                    return true
+                }
             } else {
-                SecureLogger.debug("✅ Reassembled packet id=\(completedHeader.idLogString) type=\(originalPacket.type) bytes=\(reassembled.count)", category: .session)
-                originalPacket.ttl = 0
-                env.processReassembledPacket(originalPacket, peerID)
+                SecureLogger.error("❌ Failed to decode reassembled packet (type=\(completedHeader.originalType), total=\(completedHeader.total))", category: .session)
+                return false
             }
-        } else {
-            SecureLogger.error("❌ Failed to decode reassembled packet (type=\(completedHeader.originalType), total=\(completedHeader.total))", category: .session)
         }
     }
 
@@ -102,6 +112,12 @@ final class BLEFragmentHandler {
             logStartedIfNeeded(header: header, started: started)
             SecureLogger.warning(
                 "🚫 Fragment assembly exceeds size limit (\(projectedSize) bytes > \(limit)), evicting. Type=\(header.originalType) Index=\(header.index)/\(header.total)",
+                category: .security
+            )
+
+        case let .mismatched(header, expectedTotal, expectedOriginalType):
+            SecureLogger.warning(
+                "🚫 Dropping mismatched fragment for id=\(header.idLogString): got total=\(header.total) type=\(header.originalType), expected total=\(expectedTotal) type=\(expectedOriginalType)",
                 category: .security
             )
         }

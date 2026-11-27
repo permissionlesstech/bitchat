@@ -437,4 +437,62 @@ struct BLEFragmentAssemblyBufferTests {
             ttl: 3
         )
     }
+
+    @Test
+    func mismatchedTotalOrOriginalTypeIsRejectedWithoutEvictingAssembly() throws {
+        var buffer = BLEFragmentAssemblyBuffer()
+        let original = makePacket(payload: makePayload(count: 256))
+        let fragmentID = Data(repeating: 0x0B, count: 8)
+        let packets = try makeFragments(for: original, chunkSize: 128, fragmentID: fragmentID)
+        let headers = try packets.map { try #require(BLEFragmentHeader(packet: $0)) }
+        #expect(headers.count >= 2)
+
+        // Start a legitimate multi-fragment assembly with fragment 0.
+        if case let .stored(_, started) = buffer.append(headers[0], maxInFlightAssemblies: 8) {
+            #expect(started)
+        } else {
+            Issue.record("Expected first fragment to start assembly")
+        }
+
+        // Spoofed fragment with total = 1 must NOT trigger premature completion or evict.
+        let spoofedTotal = try #require(BLEFragmentHeader(packet: makeFragmentPacket(
+            fragmentID: fragmentID,
+            index: 0,
+            total: 1,
+            originalType: original.type,
+            fragmentData: Data([0xFF])
+        )))
+        if case let .mismatched(_, expectedTotal, expectedType) = buffer.append(spoofedTotal, maxInFlightAssemblies: 8) {
+            #expect(expectedTotal == headers.count)
+            #expect(expectedType == original.type)
+        } else {
+            Issue.record("Expected mismatched total fragment to be rejected")
+        }
+
+        // Spoofed fragment claiming a different originalType must NOT downgrade limit or evict.
+        let spoofedType = try #require(BLEFragmentHeader(packet: makeFragmentPacket(
+            fragmentID: fragmentID,
+            index: 1,
+            total: headers.count,
+            originalType: MessageType.announce.rawValue,
+            fragmentData: Data([0xEE])
+        )))
+        if case let .mismatched(_, expectedTotal, expectedType) = buffer.append(spoofedType, maxInFlightAssemblies: 8) {
+            #expect(expectedTotal == headers.count)
+            #expect(expectedType == original.type)
+        } else {
+            Issue.record("Expected mismatched originalType fragment to be rejected")
+        }
+
+        // Remaining legitimate fragments still complete the original packet intact.
+        var finalResult: BLEFragmentAssemblyBuffer.AppendResult?
+        for header in headers.dropFirst() {
+            finalResult = buffer.append(header, maxInFlightAssemblies: 8)
+        }
+        if case let .complete(_, reassembled, _) = finalResult {
+            #expect(BinaryProtocol.decode(reassembled)?.payload == original.payload)
+        } else {
+            Issue.record("Expected original assembly to survive mismatched fragments and complete")
+        }
+    }
 }

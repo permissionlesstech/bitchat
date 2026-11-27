@@ -76,16 +76,27 @@ final class GroupStore: ObservableObject {
     }
 
     /// Inserts or replaces a group and its current key. Rejects rosters over
-    /// the hard cap, groups whose creator is missing from the roster, and any
-    /// change to the creator (fingerprint or signing key) of a group already
-    /// held, so no caller can hand a known groupID to a different creator.
+    /// the hard cap, groups whose creator is missing from the roster, new
+    /// groups beyond the store cap, and any change to the creator (fingerprint
+    /// or signing key) of a group already held, so no caller can hand a known
+    /// groupID to a different creator.
     @discardableResult
     func upsert(_ group: BitchatGroup, key: Data) -> Bool {
         guard key.count == BitchatGroup.keyLength,
               Self.isWellFormed(group) else { return false }
-        if let existing = self.group(withID: group.groupID), !existing.hasSameCreator(as: group) {
+        let existingIndex = groups.firstIndex(where: { $0.groupID == group.groupID })
+        if let existingIndex {
+            let existing = groups[existingIndex]
+            if !existing.hasSameCreator(as: group) {
+                SecureLogger.warning(
+                    "Refusing group state: creator \(group.creatorFingerprint.prefix(8))… does not match stored creator \(existing.creatorFingerprint.prefix(8))…",
+                    category: .security
+                )
+                return false
+            }
+        } else if groups.count >= BitchatGroup.maxGroups {
             SecureLogger.warning(
-                "Refusing group state: creator \(group.creatorFingerprint.prefix(8))… does not match stored creator \(existing.creatorFingerprint.prefix(8))…",
+                "Refusing new group \(group.groupID.hexEncodedString().prefix(8))…: group store at cap (\(BitchatGroup.maxGroups))",
                 category: .security
             )
             return false
@@ -95,8 +106,8 @@ final class GroupStore: ObservableObject {
             return false
         }
         keyCache[group.groupID] = key
-        if let index = groups.firstIndex(where: { $0.groupID == group.groupID }) {
-            groups[index] = group
+        if let existingIndex {
+            groups[existingIndex] = group
         } else {
             groups.append(group)
         }
@@ -158,9 +169,14 @@ final class GroupStore: ObservableObject {
     }
 
     /// Structural invariants every stored group satisfies: a well-sized ID,
-    /// a non-empty roster within the cap, and the creator in that roster.
+    /// a non-empty bounded name, a non-empty roster within the cap, and the
+    /// creator in that roster.
     private static func isWellFormed(_ group: BitchatGroup) -> Bool {
-        group.groupID.count == BitchatGroup.groupIDLength
+        let trimmedName = group.name.trimmingCharacters(in: .whitespacesAndNewlines)
+        return group.groupID.count == BitchatGroup.groupIDLength
+            && !trimmedName.isEmpty
+            && trimmedName.count <= BitchatGroup.maxNameLength
+            && group.name.utf8.count <= BitchatGroup.maxNameUTF8Bytes
             && !group.members.isEmpty
             && group.members.count <= BitchatGroup.maxMembers
             && group.creator != nil
