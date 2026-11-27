@@ -449,6 +449,11 @@ final class BLEService: NSObject {
     var pendingPeripheralWrites = BLEOutboundWriteBuffer()
     // Debounce duplicate disconnect notifies
     private var disconnectNotifyDebouncer = BLEPeerEventDebouncer()
+    // Track recently verified direct announce messageIDs → owner peerID so a
+    // second unbound link carrying the identical verified announce (duplicate
+    // links to one phone) can still bind safely after dedup without ever
+    // binding on unverified announces. Engine-confined.
+    private var verifiedDirectAnnounceOwners = BoundedCache<String, PeerID>(capacity: 256, ttl: 60)
     // Store-and-forward for directed messages when we have no links
     private var pendingDirectedRelays = BLEDirectedRelaySpool()
     // Debounce for 'reconnected' logs
@@ -780,6 +785,7 @@ final class BLEService: NSObject {
             fragmentAssemblyBuffer.removeAll()
             pendingDirectedRelays.removeAll()
             ingressLinks.removeAll()
+            verifiedDirectAnnounceOwners.removeAll()
             recentTrafficTracker.removeAll()
             scheduledRelays.cancelAll()
             // Proofs and revalidation epochs die with the identity; the
@@ -3637,7 +3643,19 @@ extension BLEService {
     #endif
     
     // MARK: Private Message Handling
-    
+
+    private func reportPrivateMessageEncodingFailure(content: String, messageID: String) {
+        let reason = PrivateMessagePacket.contentFitsOnWire(content)
+            ? String(localized: "content.delivery.reason.send_error", comment: "Failure reason for a generic send error")
+            : String(localized: "content.delivery.reason.too_long", defaultValue: "message too long", comment: "Failure reason when a private message exceeds the wire size limit")
+        notifyUI { [weak self] in
+            self?.deliverTransportEvent(.messageDeliveryStatusUpdated(
+                messageID: messageID,
+                status: .failed(reason: reason)
+            ))
+        }
+    }
+
     private func sendPrivateMessage(_ content: String, to recipientID: PeerID, messageID: String) {
         // Hop like sendMessage: the Transport-facing wrappers call this from
         // the main actor (router sends, favorite notifications), and the send
@@ -3653,12 +3671,19 @@ extension BLEService {
         let recipientID = recipientID.toShort()
         SecureLogger.debug("📨 Sending PM to \(recipientID.id.prefix(8))… id=\(messageID.prefix(8))… chars=\(content.count) bytes=\(content.utf8.count)", category: .session)
 
+        guard PrivateMessagePacket.contentFitsOnWire(content) else {
+            SecureLogger.error("Private message is \(content.utf8.count) UTF-8 bytes; the wire limit is \(PrivateMessagePacket.maxContentUTF8Bytes)", category: .session)
+            reportPrivateMessageEncodingFailure(content: content, messageID: messageID)
+            return
+        }
+
         // Check if we have an established Noise session
         if noiseService.hasEstablishedSession(with: recipientID) {
             // Encrypt and send
             do {
                 guard let messagePayload = BLENoisePayloadFactory.privateMessage(content: content, messageID: messageID) else {
                     SecureLogger.error("Failed to encode private message with TLV")
+                    reportPrivateMessageEncodingFailure(content: content, messageID: messageID)
                     return
                 }
                 
@@ -3783,7 +3808,7 @@ extension BLEService {
                 // Use the same TLV format as normal sends to keep receiver decoding consistent
                 guard let messagePayload = BLENoisePayloadFactory.privateMessage(content: message.content, messageID: message.messageID) else {
                     SecureLogger.error("Failed to encode pending private message TLV")
-                    failedMessages.append(message)
+                    reportPrivateMessageEncodingFailure(content: message.content, messageID: message.messageID)
                     continue
                 }
 
@@ -4269,25 +4294,18 @@ extension BLEService {
             SecureLogger.debug("📦 Decoded packet type: \(packet.type) from sender: \(claimedSenderID.id.prefix(8))… (\(linkDescription))", category: .session)
         }
 
-        if packet.type == MessageType.announce.rawValue,
-           packet.ttl == messageTTL {
-            // Raw announces only bind unbound links: this runs before
-            // signature verification, so a bound link must not be re-bound
-            // by a raw announce (spoofable).
-            let boundPeerID = linkBindings.boundPeer(for: link)
-            if boundPeerID == nil || boundPeerID == claimedSenderID {
-                switch link {
-                case .peripheral(let peripheralUUID):
-                    bindPeripheralLink(peripheralUUID, to: claimedSenderID)
-                case .central(let centralUUID):
-                    linkBindings.bindCentral(centralUUID, to: claimedSenderID)
-                }
-                refreshLocalTopology()
-            }
-        }
-
         let messageID = BLEIngressLinkRegistry.messageID(for: packet)
         guard recordIngressIfNew(messageID: messageID, link: link, peerID: context.receivedFromPeerID) else {
+            // A duplicate copy of an already signature-verified direct announce
+            // arriving on a second unbound link (e.g. dual links to one phone)
+            // may bind that unbound link safely; unverified announces never
+            // enter `verifiedDirectAnnounceOwners` and never bind any link.
+            if packet.type == MessageType.announce.rawValue,
+               packet.ttl == messageTTL,
+               linkBindings.boundPeer(for: link) == nil,
+               verifiedDirectAnnounceOwners.value(for: messageID, now: Date()) == claimedSenderID {
+                bindUnboundLinkAfterVerifiedDirectAnnounce(link, to: claimedSenderID)
+            }
             return
         }
 
@@ -4523,13 +4541,30 @@ extension BLEService {
             return false
         }
 
+        // A verified direct announce proves the sender owns the link it came
+        // in on: bind an unbound link (deferred until after signature/trust
+        // verification so unverified announces can never hijack a peer's
+        // preferred link), heal any stale binding left by a peer-ID rotation,
+        // and consolidate duplicate same-role connections onto that link.
+        if result.isDirectAnnounce {
+            let messageID = BLEIngressLinkRegistry.messageID(for: packet)
+            verifiedDirectAnnounceOwners.set(messageID, value: result.peerID, now: Date())
+            rebindLinkAfterVerifiedDirectAnnounce(packet, to: result.peerID)
+            retireRedundantPeripheralLinks(packet, to: result.peerID)
+        }
+
         // A capability bit in the public announce is only a discovery hint.
         // Start authentication promptly for a directly connected candidate,
-        // but never pin or pre-queue private bytes until encrypted 0x21 state
-        // arrives from the completed Noise session.
+        // but never pin private-media capability or trust prekey bundles until
+        // encrypted 0x21 state arrives from the completed Noise session.
+        let needsPrivateMediaProof = result.announcement.capabilities?.contains(.privateMedia) == true
+            && privateMediaSendPolicy(to: result.peerID) == .awaitingCapabilityProof
+        let needsPrekeySigningProof = result.announcement.capabilities?.contains(.prekeys) == true
+            && identityManager.authenticatedSigningPublicKey(
+                forFingerprint: result.announcement.noisePublicKey.sha256Fingerprint()
+            ) == nil
         if result.isDirectAnnounce,
-           result.announcement.capabilities?.contains(.privateMedia) == true,
-           privateMediaSendPolicy(to: result.peerID) == .awaitingCapabilityProof,
+           (needsPrivateMediaProof || needsPrekeySigningProof),
            !noiseService.hasSession(with: result.peerID) {
             initiateNoiseHandshake(with: result.peerID)
         }
@@ -4537,14 +4572,6 @@ extension BLEService {
         // A verified announce is the moment a signing key becomes bound to this
         // owner's noise key: retry any prekey bundle that raced ahead of it.
         drainPendingPrekeyBundles(for: result.peerID)
-
-        // A verified direct announce proves the sender owns the link it came
-        // in on: heal any stale binding left by a peer-ID rotation, and
-        // consolidate duplicate same-role connections onto that link.
-        if result.isDirectAnnounce {
-            rebindLinkAfterVerifiedDirectAnnounce(packet, to: result.peerID)
-            retireRedundantPeripheralLinks(packet, to: result.peerID)
-        }
 
         // Bridge courier watch: a verified announce may add a peer whose
         // relay-parked drops we should start watching for.
@@ -4595,6 +4622,33 @@ extension BLEService {
     /// retirement — is one engine slot, so no observer can see a
     /// half-applied rotation. Only the physical connection cancels hop to
     /// bleQueue.
+    /// Binds a previously unbound link only after the direct announce it
+    /// carried passed full signature and trust-policy verification. Refuses to
+    /// overwrite `preferredPeripheral` when `peerID` already owns a different
+    /// Noise-authenticated peripheral link. Engine-confined.
+    private func bindUnboundLinkAfterVerifiedDirectAnnounce(_ link: BLEIngressLinkID, to peerID: PeerID) {
+        switch link {
+        case .peripheral(let peripheralUUID):
+            let hasOtherAuthenticatedPeripheral = linkAuth.links(ownedBy: peerID).contains { existingLink in
+                guard case .peripheral(let existingUUID) = existingLink, existingUUID != peripheralUUID else {
+                    return false
+                }
+                return linkBindings.peer(forPeripheralID: existingUUID) == peerID
+            }
+            guard !hasOtherAuthenticatedPeripheral else {
+                SecureLogger.warning(
+                    "🚫 Refusing unbound peripheral bind to \(peerID.id.prefix(8))…: peer already owns a Noise-authenticated peripheral link",
+                    category: .security
+                )
+                return
+            }
+            bindPeripheralLink(peripheralUUID, to: peerID)
+        case .central(let centralUUID):
+            linkBindings.bindCentral(centralUUID, to: peerID)
+        }
+        refreshLocalTopology()
+    }
+
     private func rebindLinkAfterVerifiedDirectAnnounce(_ packet: BitchatPacket, to peerID: PeerID) {
         guard let link = ingressLinks.link(for: packet) else { return }
         let linkUUID: String
@@ -4607,7 +4661,14 @@ extension BLEService {
             linkUUID = centralUUID
             previousPeerID = linkBindings.peer(forCentralUUID: centralUUID)
         }
-        guard let previousPeerID else { return }
+        guard let previousPeerID else {
+            bindUnboundLinkAfterVerifiedDirectAnnounce(link, to: peerID)
+            refreshNoiseSessionForVerifiedDirectLink(
+                link: link,
+                peerID: peerID
+            )
+            return
+        }
         guard previousPeerID != peerID else {
             refreshNoiseSessionForVerifiedDirectLink(
                 link: link,

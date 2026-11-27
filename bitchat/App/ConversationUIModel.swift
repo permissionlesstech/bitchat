@@ -195,8 +195,8 @@ final class ConversationUIModel: ObservableObject {
         #endif
     }
 
-    func sendVoiceNote(at url: URL) {
-        chatViewModel.sendVoiceNote(at: url)
+    func sendVoiceNote(at url: URL, target: VoiceNoteTarget? = nil) {
+        chatViewModel.sendVoiceNote(at: url, target: target)
     }
 
     func resolveLegacyPrivateMediaConsent(requestID: UUID, approved: Bool) {

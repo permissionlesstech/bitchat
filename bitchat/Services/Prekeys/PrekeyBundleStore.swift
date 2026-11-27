@@ -37,6 +37,9 @@ final class PrekeyBundleStore {
         /// messageID → prekey ID, so re-deposits of one message share one prekey.
         var assignments: [String: UInt32]
         var updatedAt: Date
+        /// Noise-authenticated Ed25519 signing key that verified this bundle.
+        /// Nil only for legacy on-disk entries written before signing-key tracking.
+        var signingPublicKey: Data?
     }
 
     enum Limits {
@@ -44,6 +47,9 @@ final class PrekeyBundleStore {
         /// Don't seal to bundles older than this: the owner may have rotated
         /// the unconsumed keys out (see `LocalPrekeyStore.Policy`).
         static let maxBundleAgeForSealingSeconds: TimeInterval = 7 * 24 * 60 * 60
+        /// Reject future-dated bundles beyond normal clock drift so a single
+        /// far-future `generatedAt` cannot freeze out genuine replacements.
+        static let maxFutureClockSkewSeconds: TimeInterval = 5 * 60
     }
 
     static let shared = PrekeyBundleStore()
@@ -77,23 +83,34 @@ final class PrekeyBundleStore {
     // MARK: - Ingest
 
     /// Stores a bundle whose signature the caller has already verified
-    /// against the owner's announce-bound signing key. Returns false when an
-    /// equal-or-newer bundle is already cached (nothing changed).
+    /// against the owner's Noise-authenticated signing key. Returns false when
+    /// `generatedAt` is outside the valid clock window or an equal-or-newer
+    /// bundle under the same signing key is already cached.
     @discardableResult
-    func ingest(_ bundle: PrekeyBundle) -> Bool {
+    func ingest(_ bundle: PrekeyBundle, signingPublicKey: Data? = nil) -> Bool {
         guard bundle.noiseStaticPublicKey.count == PrekeyBundle.keyLength,
               !bundle.prekeys.isEmpty else { return false }
         return queue.sync {
-            if let existing = bundles[bundle.noiseStaticPublicKey],
-               existing.generatedAt >= bundle.generatedAt {
+            guard isWithinValidWindowLocked(bundle.generatedAt) else {
                 return false
             }
             let previous = bundles[bundle.noiseStaticPublicKey]
+            let signingKeyChanged = signingPublicKey != nil && previous?.signingPublicKey != signingPublicKey
+            if let existing = previous,
+               !signingKeyChanged,
+               existing.generatedAt >= bundle.generatedAt {
+                return false
+            }
             let newIDs = Set(bundle.prekeys.map(\.id))
             // Keep consumption state for IDs the fresh bundle still offers
-            // (a top-up keeps the owner's unconsumed keys); drop the rest.
-            let carriedUsed = (previous?.usedIDs ?? []).intersection(newIDs)
-            let carriedAssignments = (previous?.assignments ?? [:]).filter { newIDs.contains($0.value) }
+            // (a top-up keeps the owner's unconsumed keys), unless the
+            // verifying signing key itself changed; drop the rest.
+            let carriedUsed = signingKeyChanged
+                ? Set<UInt32>()
+                : (previous?.usedIDs ?? []).intersection(newIDs)
+            let carriedAssignments = signingKeyChanged
+                ? [String: UInt32]()
+                : (previous?.assignments ?? [:]).filter { newIDs.contains($0.value) }
             bundles[bundle.noiseStaticPublicKey] = StoredBundle(
                 noiseKey: bundle.noiseStaticPublicKey,
                 generatedAt: bundle.generatedAt,
@@ -101,11 +118,24 @@ final class PrekeyBundleStore {
                 prekeyPublicKeys: bundle.prekeys.map(\.publicKey),
                 usedIDs: carriedUsed,
                 assignments: carriedAssignments,
-                updatedAt: now()
+                updatedAt: now(),
+                signingPublicKey: signingPublicKey
             )
             enforceCapLocked()
             persistLocked()
             return true
+        }
+    }
+
+    /// Drops any cached bundle for `noiseKey` unless it was verified under
+    /// `signingPublicKey`. Called when Noise authentication binds or updates a
+    /// peer's Ed25519 signing key so legacy/mismatched bundles are purged.
+    func invalidate(forNoiseKey noiseKey: Data, unlessSignedBy signingPublicKey: Data) {
+        queue.sync {
+            guard let existing = bundles[noiseKey],
+                  existing.signingPublicKey != signingPublicKey else { return }
+            bundles.removeValue(forKey: noiseKey)
+            persistLocked()
         }
     }
 
@@ -162,8 +192,13 @@ final class PrekeyBundleStore {
     // MARK: - Internals (call only on `queue`)
 
     private func isFreshLocked(_ bundle: StoredBundle) -> Bool {
-        let ageSeconds = now().timeIntervalSince1970 - Double(bundle.generatedAt) / 1000
+        isWithinValidWindowLocked(bundle.generatedAt)
+    }
+
+    private func isWithinValidWindowLocked(_ generatedAtMs: UInt64) -> Bool {
+        let ageSeconds = now().timeIntervalSince1970 - Double(generatedAtMs) / 1000
         return ageSeconds <= Limits.maxBundleAgeForSealingSeconds
+            && ageSeconds >= -Limits.maxFutureClockSkewSeconds
     }
 
     private func enforceCapLocked() {

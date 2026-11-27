@@ -1269,6 +1269,62 @@ struct MessageRouterTests {
         router.flushAllOutbox()
         #expect(writeCount == writesAfterEnqueue + 1)
     }
+
+    @Test @MainActor
+    func flushOutboxForShortIDDeliversMessagesQueuedUnderStableNoiseKeyID() {
+        let noiseKey = Data(repeating: 0x5A, count: 32)
+        let stableID = PeerID(hexData: noiseKey)
+        let shortID = PeerID(publicKey: noiseKey)
+        #expect(stableID != shortID)
+        #expect(stableID.toShort() == shortID)
+
+        let transport = MockTransport()
+        let router = MessageRouter(
+            transports: [transport],
+            courierDirectory: CourierDirectory(noiseKey: { _ in nil }, isTrustedCourier: { _ in false })
+        )
+
+        // Queued offline under the 64-hex stable ID (e.g. after disconnect migration).
+        router.sendPrivate("Offline message", to: stableID, recipientNickname: "Bob", messageID: "stable-1")
+        #expect(transport.sentPrivateMessages.isEmpty)
+
+        // Peer returns over BLE under its 16-hex short routing ID.
+        transport.connectedPeers.insert(shortID)
+        transport.securePeers = [shortID]
+        router.flushOutbox(for: shortID)
+
+        #expect(transport.sentPrivateMessages.map(\.messageID) == ["stable-1"])
+        #expect(transport.sentPrivateMessages.first?.peerID == shortID)
+    }
+
+    @Test @MainActor
+    func authRetryDeliversOfflineMessagesQueuedUnderStableNoiseKeyIDInChronologicalOrder() {
+        let clock = MutableTestClock()
+        let noiseKey = Data(repeating: 0x6B, count: 32)
+        let stableID = PeerID(hexData: noiseKey)
+        let shortID = PeerID(publicKey: noiseKey)
+
+        let transport = MockTransport()
+        let router = MessageRouter(
+            transports: [transport],
+            now: { clock.now },
+            courierDirectory: CourierDirectory(noiseKey: { _ in nil }, isTrustedCourier: { _ in false })
+        )
+
+        // Message 1 queued offline under the 64-hex stable ID.
+        router.sendPrivate("First offline", to: stableID, recipientNickname: "Bob", messageID: "m1")
+        clock.now = clock.now.addingTimeInterval(5)
+        // Message 2 queued offline under the 16-hex short ID.
+        router.sendPrivate("Second offline", to: shortID, recipientNickname: "Bob", messageID: "m2")
+        #expect(transport.sentPrivateMessages.isEmpty)
+
+        // Noise authentication completes for the short ID.
+        transport.connectedPeers.insert(shortID)
+        transport.securePeers = [shortID]
+        router.retrySecurePrivateMessagesAfterAuthentication(for: [shortID])
+
+        #expect(transport.sentPrivateMessages.map(\.messageID) == ["m1", "m2"])
+    }
 }
 
 /// Mutable wall clock injected into `MessageRouter` so TTL expiry is testable

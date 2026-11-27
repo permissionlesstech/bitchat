@@ -437,21 +437,27 @@ extension BLEService {
             SecureLogger.debug("🔑 Ignoring prekey bundle whose sender ≠ owner \(owner.id.prefix(8))…", category: .security)
             return false
         }
-        guard let signingKey = announceBoundSigningKey(forNoiseKey: bundle.noiseStaticPublicKey, owner: owner) else {
-            // No binding yet: retain the latest bundle per owner, bounded, and
-            // retry once the verified announce lands (engine-confined on messageQueue).
+        guard let signingKey = authenticatedSigningKey(forNoiseKey: bundle.noiseStaticPublicKey) else {
+            // No Noise-authenticated signing-key binding yet: retain the latest
+            // bundle per owner, bounded, and retry once Noise authentication
+            // binds the signing key (engine-confined on messageQueue). Never
+            // trust a TOFU self-signed announce for prekey bundles: courier
+            // prekey sealing uses Noise X against the prekey alone, so a forged
+            // first-contact announce + bundle would let an attacker decrypt mail
+            // that static-key sealing would have protected.
             if pendingPrekeyBundles[owner] != nil
                 || pendingPrekeyBundles.count < Self.pendingPrekeyBundleCap {
                 pendingPrekeyBundles[owner] = packet
             }
-            SecureLogger.debug("🔑 Deferring prekey bundle without a bound signing key (owner \(owner.id.prefix(8))…)", category: .security)
+            SecureLogger.debug("🔑 Deferring prekey bundle without a Noise-authenticated signing key (owner \(owner.id.prefix(8))…)", category: .security)
             return false
         }
         return ingestVerifiedPrekeyBundle(bundle, packet: packet, owner: owner, signingKey: signingKey)
     }
 
-    /// Verify a bundle's inner + outer signatures against the owner's bound
-    /// signing key and, on success, cache it and let it enter our gossip store.
+    /// Verify a bundle's inner + outer signatures against the owner's
+    /// Noise-authenticated signing key and, on success, cache it and let it
+    /// enter our gossip store.
     @discardableResult
     private func ingestVerifiedPrekeyBundle(_ bundle: PrekeyBundle, packet: BitchatPacket, owner: PeerID, signingKey: Data) -> Bool {
         guard noiseService.verifyPrekeyBundleSignature(bundle, signingPublicKey: signingKey),
@@ -459,39 +465,30 @@ extension BLEService {
             SecureLogger.debug("🔑 Ignoring prekey bundle without verifiable signature (owner \(owner.id.prefix(8))…)", category: .security)
             return false
         }
-        if prekeyBundleStore.ingest(bundle) {
+        if prekeyBundleStore.ingest(bundle, signingPublicKey: signingKey) {
             SecureLogger.debug("🔑 Cached prekey bundle for \(owner.id.prefix(8))… (\(bundle.prekeys.count) prekeys)", category: .security)
         }
         gossipSyncManager?.onPublicPacketSeen(packet)
         return true
     }
 
-    /// Re-attempt any prekey bundle that arrived before this owner's announce
-    /// bound a signing key. Called from handleAnnounce on messageQueue.
+    /// Re-attempt any prekey bundle that arrived before Noise authentication
+    /// bound this owner's signing key. Called from `handleAnnounce` and
+    /// `handleAuthenticatedPeerState` on messageQueue.
     func drainPendingPrekeyBundles(for owner: PeerID) {
-        guard let packet = pendingPrekeyBundles.removeValue(forKey: owner),
+        guard let packet = pendingPrekeyBundles[owner],
               let bundle = PrekeyBundle.decode(packet.payload),
-              let signingKey = announceBoundSigningKey(forNoiseKey: bundle.noiseStaticPublicKey, owner: owner) else { return }
+              let signingKey = authenticatedSigningKey(forNoiseKey: bundle.noiseStaticPublicKey) else { return }
+        pendingPrekeyBundles.removeValue(forKey: owner)
         ingestVerifiedPrekeyBundle(bundle, packet: packet, owner: owner, signingKey: signingKey)
     }
 
-    /// Ed25519 signing key bound to a Noise static key by a verified
-    /// announce: from the live registry when the owner is on the mesh, else
-    /// from identities persisted for offline verification.
-    private func announceBoundSigningKey(forNoiseKey noiseKey: Data, owner: PeerID? = nil) -> Data? {
-        let shortID = owner ?? PeerID(publicKey: noiseKey)
-        if let info = peerRegistry.info(for: shortID),
-           info.noisePublicKey == noiseKey,
-           let signingKey = info.signingPublicKey {
-            return signingKey
-        }
-        for candidate in identityManager.getCryptoIdentitiesByPeerIDPrefix(shortID)
-        where candidate.publicKey == noiseKey {
-            if let signingKey = candidate.signingPublicKey {
-                return signingKey
-            }
-        }
-        return nil
+    /// Ed25519 signing key cryptographically bound to a Noise static key
+    /// through an authenticated Noise session (`AuthenticatedPeerStatePacket`).
+    private func authenticatedSigningKey(forNoiseKey noiseKey: Data) -> Data? {
+        identityManager.authenticatedSigningPublicKey(
+            forFingerprint: noiseKey.sha256Fingerprint()
+        )
     }
 
     // MARK: Gateway carrier (nostrCarrier)

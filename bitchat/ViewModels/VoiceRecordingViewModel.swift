@@ -6,8 +6,17 @@
 // For more information, see <https://unlicense.org>
 //
 
+import BitFoundation
 import BitLogger
 import Foundation
+
+/// Destination captured when a voice-note hold begins so leaving or switching
+/// chats while the recording finalizes can never re-route a private voice note
+/// onto the public mesh (or into a different DM).
+enum VoiceNoteTarget: Equatable {
+    case publicMesh
+    case privateChat(PeerID)
+}
 
 @MainActor
 final class VoiceRecordingViewModel: ObservableObject {
@@ -63,6 +72,8 @@ final class VoiceRecordingViewModel: ObservableObject {
     /// live push-to-talk session when the current DM peer can hear it now.
     var sessionProvider: () -> VoiceCaptureSession = { VoiceNoteCaptureSession() }
     private var activeSession: VoiceCaptureSession?
+    /// Conversation captured at hold-start for the active recording.
+    private var capturedTarget: VoiceNoteTarget?
     /// Monotonic press identity. A slow permission/start/finalize task from an
     /// older hold may still deliver its file, but it must never mutate the UI
     /// state of a newer hold.
@@ -77,13 +88,14 @@ final class VoiceRecordingViewModel: ObservableObject {
         return String(format: "%02d:%02d.%02d", minutes, seconds, centiseconds)
     }
 
-    func start(shouldShow: Bool) {
+    func start(shouldShow: Bool, target: VoiceNoteTarget? = nil) {
         guard shouldShow, state == .idle else { return }
         holdGeneration &+= 1
         let generation = holdGeneration
         let session = sessionProvider()
         SecureLogger.info("PTT: mic hold began (backend: \(session.isLive ? "live" : "classic"))", category: .session)
         activeSession = session
+        capturedTarget = target
         state = .requestingPermission
         Task {
             let granted = await session.requestPermission()
@@ -161,7 +173,7 @@ final class VoiceRecordingViewModel: ObservableObject {
         }
     }
 
-    func finish(completion: ((URL) -> Void)?) {
+    func finish(completion: ((URL, VoiceNoteTarget?) -> Void)?) {
         let previousState = state
 
         switch previousState {
@@ -174,8 +186,10 @@ final class VoiceRecordingViewModel: ObservableObject {
         state = .idle
         isLiveStreaming = false
         let session = activeSession
+        let target = capturedTarget
         let generation = holdGeneration
         activeSession = nil
+        capturedTarget = nil
 
         guard case .recording(let startDate) = previousState, let completion, let session else {
             // A quick press releases before the recorder spins up; that has
@@ -207,7 +221,7 @@ final class VoiceRecordingViewModel: ObservableObject {
                     )
                     return
                 }
-                completion(url)
+                completion(url, target)
             } else {
                 guard generation == holdGeneration, state == .idle else { return }
                 state = .error(
@@ -229,6 +243,7 @@ final class VoiceRecordingViewModel: ObservableObject {
         holdGeneration &+= 1
         let session = activeSession
         activeSession = nil
+        capturedTarget = nil
         state = .idle
         isLiveStreaming = false
         session?.panicCancelSynchronously()

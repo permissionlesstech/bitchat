@@ -1689,6 +1689,41 @@ struct ChatMediaTransferCoordinatorContextTests {
             return false
         })
     }
+
+    @Test @MainActor
+    func sendVoiceNoteWithCapturedPrivateTargetNeverBroadcastsAfterLeavingDM() async throws {
+        let context = MockChatMediaTransferContext()
+        let alice = PeerID(str: "a1b2c3d4e5f60708")
+        // User left Alice's DM before finalize completed: active selection is now
+        // public #mesh (selectedPrivateChatPeer == nil).
+        context.selectedPrivateChatPeer = nil
+        context.canSendMediaInCurrentContext = true
+        context.privateMediaPolicy = .encrypted
+
+        let coordinator = ChatMediaTransferCoordinator(
+            context: context,
+            prepareVoiceNotePacket: { url in
+                BitchatFilePacket(
+                    fileName: url.lastPathComponent,
+                    fileSize: 5,
+                    mimeType: "audio/mp4",
+                    content: Data("voice".utf8)
+                )
+            }
+        )
+        let url = try makeCoordinatorVoiceURL(fileName: "private-note.m4a")
+        defer { try? FileManager.default.removeItem(at: url.deletingLastPathComponent()) }
+
+        coordinator.sendVoiceNote(at: url, target: .privateChat(alice))
+
+        #expect(await TestHelpers.waitUntil(
+            { context.privateFileSends.count == 1 },
+            timeout: TestConstants.longTimeout
+        ))
+        #expect(context.privateFileSends.first?.peerID == alice)
+        #expect(context.broadcastFileSends.isEmpty)
+        #expect(context.appendedPublicMessages.isEmpty)
+    }
 }
 
 private func makeCoordinatorVoiceURL(

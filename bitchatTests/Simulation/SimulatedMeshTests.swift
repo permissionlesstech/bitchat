@@ -19,12 +19,70 @@ struct SimulatedMeshTests {
 
         mesh.announceAll()
 
-        // Raw direct announces bind each directed edge to the sender.
+        // Verified direct announces bind each directed edge to the sender.
         #expect(b.service._test_centralBinding(mesh.linkUUID(from: 0, at: 1)) == a.service.myPeerID)
         #expect(a.service._test_centralBinding(mesh.linkUUID(from: 1, at: 0)) == b.service.myPeerID)
         // Verified announces register connected peers on both sides.
         #expect(a.service.getConnectedPeers().contains(b.service.myPeerID))
         #expect(b.service.getConnectedPeers().contains(a.service.myPeerID))
+    }
+
+    @Test
+    func unverifiedDirectAnnounceNeverBindsUnboundLink() {
+        let mesh = SimulatedMesh()
+        let alice = mesh.addNode(nickname: "alice")
+        let bob = mesh.addNode(nickname: "bob")
+        mesh.connect(0, 1)
+        mesh.announceAll()
+
+        let bobPeerID = bob.service.myPeerID
+        let bobLink = BLEIngressLinkID.central(mesh.linkUUID(from: 1, at: 0))
+        #expect(alice.service._test_linkBinding(bobLink) == bobPeerID)
+
+        // An unannounced attacker opens a fresh unbound link and sends an
+        // unsigned / bad-signature TTL=7 announce claiming Bob's senderID.
+        let attackerLinkUUID = "SIM-ATTACKER-UNBOUND"
+        let attackerLink = BLEIngressLinkID.central(attackerLinkUUID)
+        let unsignedSpoof = BitchatPacket(
+            type: MessageType.announce.rawValue,
+            senderID: Data(hexString: bobPeerID.id) ?? Data(),
+            recipientID: nil,
+            timestamp: UInt64(Date().timeIntervalSince1970 * 1000),
+            payload: Data("not-a-valid-announce".utf8),
+            signature: nil,
+            ttl: TransportConfig.messageTTLDefault
+        )
+        alice.service._test_ingestFrame(unsignedSpoof, link: attackerLink)
+        mesh.pump()
+        #expect(alice.service._test_linkBinding(attackerLink) == nil)
+
+        // Even a well-formed AnnouncementPacket claiming Bob's Noise key but
+        // signed with an attacker's Ed25519 key must be rejected and leave the
+        // attacker's link unbound (cannot hijack Bob's traffic).
+        let attackerNoise = NoiseEncryptionService(keychain: MockKeychain())
+        let forgedAnnouncement = AnnouncementPacket(
+            nickname: "bob",
+            noisePublicKey: bob.service.noiseStaticPublicKeyData(),
+            signingPublicKey: attackerNoise.getSigningPublicKeyData(),
+            directNeighbors: nil
+        )
+        if let encoded = forgedAnnouncement.encode() {
+            let forgedUnsigned = BitchatPacket(
+                type: MessageType.announce.rawValue,
+                senderID: Data(hexString: bobPeerID.id) ?? Data(),
+                recipientID: nil,
+                timestamp: UInt64(Date().timeIntervalSince1970 * 1000) + 1,
+                payload: encoded,
+                signature: nil,
+                ttl: TransportConfig.messageTTLDefault
+            )
+            if let forgedSigned = attackerNoise.signPacket(forgedUnsigned) {
+                alice.service._test_ingestFrame(forgedSigned, link: attackerLink)
+                mesh.pump()
+            }
+        }
+        #expect(alice.service._test_linkBinding(attackerLink) == nil)
+        #expect(alice.service._test_linkBinding(bobLink) == bobPeerID)
     }
 
     @Test

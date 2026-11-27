@@ -138,6 +138,43 @@ struct PrekeyBundleStoreTests {
         let third = PrekeyBundleStore(fileURL: fileURL)
         #expect(!third.hasUsableBundle(for: noiseKey))
     }
+
+    @Test func futureDatedBundleIsRejectedAndCannotBlockGenuineReplacement() {
+        let current = Date(timeIntervalSince1970: 1_700_000_000)
+        let store = PrekeyBundleStore(persistsToDisk: false, now: { current })
+        let noiseKey = Data(repeating: 0xB6, count: 32)
+
+        // Far-future generatedAt beyond clock skew is rejected at ingest.
+        let futureMs = UInt64(
+            (current.timeIntervalSince1970 + PrekeyBundleStore.Limits.maxFutureClockSkewSeconds + 60) * 1000
+        )
+        #expect(!store.ingest(makeBundle(noiseKey: noiseKey, ids: [99], generatedAt: futureMs)))
+        #expect(!store.hasUsableBundle(for: noiseKey))
+
+        // A genuine current bundle still ingests cleanly.
+        let nowMs = UInt64(current.timeIntervalSince1970 * 1000)
+        #expect(store.ingest(makeBundle(noiseKey: noiseKey, ids: [1, 2], generatedAt: nowMs)))
+        #expect(store.assignPrekey(messageID: "m1", recipientNoiseKey: noiseKey)?.id == 1)
+    }
+
+    @Test func invalidatePurgesBundleWhenSigningKeyChanges() {
+        let store = PrekeyBundleStore(persistsToDisk: false)
+        let noiseKey = Data(repeating: 0xB7, count: 32)
+        let oldSigningKey = Data(repeating: 0x11, count: 32)
+        let newSigningKey = Data(repeating: 0x22, count: 32)
+
+        #expect(store.ingest(makeBundle(noiseKey: noiseKey, ids: [1, 2]), signingPublicKey: oldSigningKey))
+        #expect(store.hasUsableBundle(for: noiseKey))
+
+        // Matching signing key preserves the cached bundle.
+        store.invalidate(forNoiseKey: noiseKey, unlessSignedBy: oldSigningKey)
+        #expect(store.hasUsableBundle(for: noiseKey))
+
+        // Mismatched signing key purges the cached bundle.
+        store.invalidate(forNoiseKey: noiseKey, unlessSignedBy: newSigningKey)
+        #expect(!store.hasUsableBundle(for: noiseKey))
+        #expect(store.assignPrekey(messageID: "m1", recipientNoiseKey: noiseKey) == nil)
+    }
 }
 
 /// Envelope v2 wire compatibility: the prekey ID rides an optional TLV that

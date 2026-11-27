@@ -379,6 +379,10 @@ extension BLEService {
         // One bounded echo makes initiator/responder proof ordering converge
         // even when message 3 and the first proof take different mesh links.
         sendAuthenticatedPeerState(to: normalizedPeerID, echo: true)
+        // Purge any prekey bundle cached under a different/legacy signing key
+        // and verify any pending bundle that arrived before Noise auth landed.
+        prekeyBundleStore.invalidate(forNoiseKey: publicKey, unlessSignedBy: state.signingPublicKey)
+        drainPendingPrekeyBundles(for: normalizedPeerID)
         let policy = privateMediaSendPolicy(to: normalizedPeerID)
         sendPendingNoisePayloadsAfterHandshake(for: normalizedPeerID)
         completePrivateMediaPolicyResolution(application.completions, with: policy)
@@ -447,6 +451,10 @@ extension BLEService {
             }
             return
         }
+        // Sessions and pending Noise queues are keyed by the short 16-hex
+        // routing ID; callers (e.g. couriered DMs, offline-favorite threads)
+        // may pass the full 64-hex noise key.
+        let peerID = peerID.toShort()
         guard noiseService.hasEstablishedSession(with: peerID) else {
             pendingNoiseSessionQueues.appendTypedPayload(typedPayload, for: peerID)
             SecureLogger.debug("📥 Queued \(logLabel) for \(peerID.id.prefix(8))… pending handshake", category: .session)
