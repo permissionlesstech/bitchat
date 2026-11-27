@@ -25,7 +25,6 @@ import BitFoundation
 @MainActor
 private final class MockChatPeerListContext: ChatPeerListContext {
     // Connection & chat state
-    var isConnected = false
     var privateChats: [PeerID: [BitchatMessage]] = [:]
 
     func privateMessages(for peerID: PeerID) -> [BitchatMessage] {
@@ -110,7 +109,6 @@ struct ChatPeerListCoordinatorContextTests {
 
         coordinator.didUpdatePeerListSynchronously([peerID])
 
-        #expect(context.isConnected)
         #expect(context.updateEncryptionStatusForPeersCount == 1)
         #expect(context.cleanupOldReadReceiptsCount == 1)
     }
@@ -121,19 +119,16 @@ struct ChatPeerListCoordinatorContextTests {
         let coordinator = ChatPeerListCoordinator(context: context)
         let peerA = PeerID(str: "0011223344556677")
         let peerB = PeerID(str: "8899aabbccddeeff")
-        context.isConnected = true
 
-        // Empty list: disconnected, read-receipt hygiene still runs.
+        // Empty list: read-receipt hygiene and encryption status still run.
         coordinator.didUpdatePeerList([])
         await drainMainActorTasks()
-        #expect(!context.isConnected)
         #expect(context.cleanupOldReadReceiptsCount == 1)
         #expect(context.updateEncryptionStatusForPeersCount == 1)
 
-        // Non-empty list: connected, encryption status & read receipts updated.
+        // Non-empty list: encryption status & read receipts updated.
         coordinator.didUpdatePeerList([peerA, peerB])
         await drainMainActorTasks()
-        #expect(context.isConnected)
         #expect(context.updateEncryptionStatusForPeersCount == 2)
         #expect(context.cleanupOldReadReceiptsCount == 2)
     }

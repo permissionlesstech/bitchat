@@ -24,7 +24,6 @@ import BitFoundation
 @MainActor
 private final class MockChatTransportEventContext: ChatTransportEventContext {
     // Connection & chat state
-    var isConnected = false
     var nickname = "me"
     var myPeerID = PeerID(str: "0011223344556677")
     var privateChats: [PeerID: [BitchatMessage]] = [:]
@@ -336,7 +335,6 @@ struct ChatTransportEventCoordinatorContextTests {
 
         coordinator.didConnectToPeer(peerID)
         await drainMainActorTasks()
-        #expect(context.isConnected)
         #expect(context.stablePeerIDCache[peerID] == PeerID(hexData: noiseKey))
         #expect(context.flushedOutboxPeerIDs == [peerID])
         #expect(context.notifyUIChangedCount == 1)
@@ -368,7 +366,6 @@ struct ChatTransportEventCoordinatorContextTests {
 
         coordinator.didConnectToPeerSynchronously(peerID)
 
-        #expect(context.isConnected)
         #expect(context.flushedOutboxPeerIDs == [peerID])
         #expect(context.courierRetryPeerIDs == [peerID])
 
