@@ -167,6 +167,7 @@ final class MessageDeduplicationService {
     /// that don't opt in) keeps the cache purely in-memory.
     private let nostrEventStore: NostrProcessedEventStore?
     private let nostrEventCapacity: Int
+    private let persistDebounceNanoseconds: UInt64
     private var persistScheduled = false
     private var persistTask: Task<Void, Never>?
     private var pendingPersistIDs: [String] = []
@@ -178,15 +179,19 @@ final class MessageDeduplicationService {
     ///   - nostrEventCapacity: Max entries for Nostr event cache
     ///   - nostrEventStore: Optional disk store preloading and persisting
     ///     processed Nostr event IDs across launches
+    ///   - persistDebounceNanoseconds: Debounce delay before flushing
+    ///     persisted event IDs to `nostrEventStore`
     init(
         contentCapacity: Int = TransportConfig.contentLRUCap,
         nostrEventCapacity: Int = TransportConfig.uiProcessedNostrEventsCap,
-        nostrEventStore: NostrProcessedEventStore? = nil
+        nostrEventStore: NostrProcessedEventStore? = nil,
+        persistDebounceNanoseconds: UInt64 = 2_000_000_000
     ) {
         self.contentCache = LRUDeduplicationCache(capacity: contentCapacity)
         self.nostrEventCache = LRUDeduplicationCache(capacity: nostrEventCapacity)
         self.nostrEventStore = nostrEventStore
         self.nostrEventCapacity = nostrEventCapacity
+        self.persistDebounceNanoseconds = persistDebounceNanoseconds
         if let nostrEventStore {
             let generation = clearAllGeneration
             nostrEventStore.loadAsync { [weak self] eventIDs in
@@ -272,20 +277,29 @@ final class MessageDeduplicationService {
         }
     }
 
+    private func flushPendingNostrEvents(to nostrEventStore: NostrProcessedEventStore) {
+        let newIDs = pendingPersistIDs
+        pendingPersistIDs.removeAll()
+        nostrEventStore.append(newIDs, cap: nostrEventCapacity)
+    }
+
     /// Debounced persistence: bursts of inbound events (reconnect redelivery)
     /// collapse into one append. Append-merge rather than snapshot, so a
     /// transient in-memory clear between flushes can't shrink the disk record.
     private func schedulePersistIfNeeded() {
         guard let nostrEventStore, !persistScheduled else { return }
+        let delay = persistDebounceNanoseconds
+        guard delay > 0 else {
+            flushPendingNostrEvents(to: nostrEventStore)
+            return
+        }
         persistScheduled = true
         persistTask = Task { @MainActor [weak self] in
-            try? await Task.sleep(nanoseconds: 2_000_000_000)
+            try? await Task.sleep(nanoseconds: delay)
             guard let self, !Task.isCancelled else { return }
             self.persistScheduled = false
             self.persistTask = nil
-            let newIDs = self.pendingPersistIDs
-            self.pendingPersistIDs.removeAll()
-            nostrEventStore.append(newIDs, cap: self.nostrEventCapacity)
+            self.flushPendingNostrEvents(to: nostrEventStore)
         }
     }
 
