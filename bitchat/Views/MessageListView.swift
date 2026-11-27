@@ -218,8 +218,6 @@ private struct MessageListContentView: View {
 
     @EnvironmentObject private var conversationUIModel: ConversationUIModel
     @Environment(\.appEnvironmentModels) private var appEnvironmentModels
-    @Environment(\.colorScheme) private var colorScheme
-    @Environment(\.appTheme) private var theme
 
     let privatePeer: PeerID?
     let messages: [BitchatMessage]

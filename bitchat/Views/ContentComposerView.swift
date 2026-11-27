@@ -156,9 +156,12 @@ private extension ContentComposerView {
         static let placeholderPrivateFormat = String(localized: "content.input.placeholder.private", comment: "Composer placeholder inside a private chat, naming the conversation partner")
         static let placeholderLocationFormat = String(localized: "content.input.placeholder.location", comment: "Composer placeholder for a public geohash channel, naming it")
         static let cancel = String(localized: "common.cancel", comment: "Cancel action in the voice recording HUD")
+        #if os(iOS)
         static let attachPhoto = String(localized: "content.accessibility.attach_photo", comment: "Accessibility label for the photo attachment button")
         static let attachPhotoHint = String(localized: "content.accessibility.attach_photo_hint", comment: "Accessibility hint explaining the attachment button opens the photo library")
+        #else
         static let choosePhoto = String(localized: "content.accessibility.choose_photo", comment: "Accessibility label for the macOS photo picker button")
+        #endif
         static let recordVoice = String(localized: "content.accessibility.record_voice_note", comment: "Accessibility label for the voice note button")
         static let recording = String(localized: "content.accessibility.recording", comment: "Accessibility value announced while a voice note is recording")
         static let someoneSpeakingFormat = String(localized: "content.accessibility.someone_speaking", comment: "Accessibility value on the mic button naming who is talking live in the public channel")
