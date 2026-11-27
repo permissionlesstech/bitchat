@@ -8,6 +8,34 @@
 
 import SwiftUI
 
+enum PeerColorContrast {
+    /// Blue and purple hues (210°–306°) have low perceived luminance at standard HSB
+    /// brightness on dark/black backgrounds. Lifting brightness and easing saturation
+    /// keeps every peer color readable (>= 4.5:1 WCAG AA on black) in dark mode while
+    /// preserving ring-dependent separation for overflow palette entries.
+    static func adjustForDarkMode(
+        hue: Double,
+        saturation: Double,
+        brightness: Double,
+        ring: Int = 0
+    ) -> (saturation: Double, brightness: Double) {
+        let normalizedHue = hue - floor(hue)
+        guard normalizedHue >= 0.58 && normalizedHue <= 0.85 else {
+            return (saturation, brightness)
+        }
+        // Smooth bell curve peaking around deep blue/purple (~0.70).
+        let center = 0.70
+        let halfWidth = 0.15
+        let weight = max(0.0, 1.0 - abs(normalizedHue - center) / halfWidth)
+        let ringStep = Double(max(0, ring))
+        let maxSat = max(0.25, 0.50 + (1.0 - weight) * 0.10 - ringStep * 0.12)
+        let minBri = min(1.0, 0.92 + weight * 0.06)
+        let adjustedSaturation = min(saturation, maxSat)
+        let adjustedBrightness = max(brightness, minBri)
+        return (min(1.0, max(0.0, adjustedSaturation)), min(1.0, max(0.0, adjustedBrightness)))
+    }
+}
+
 extension Color {
     private static let maxPeerColorCacheEntries = 512
 
@@ -67,8 +95,13 @@ extension Color {
         let sRange: Double = 0.20
         let bBase: Double = isDark ? 0.75 : 0.45
         let bRange: Double = isDark ? 0.16 : 0.14
-        let saturation = min(1.0, max(0.50, sBase + (sRand - 0.5) * sRange))
-        let brightness = min(1.0, max(0.35, bBase + (bRand - 0.5) * bRange))
+        var saturation = min(1.0, max(0.50, sBase + (sRand - 0.5) * sRange))
+        var brightness = min(1.0, max(0.35, bBase + (bRand - 0.5) * bRange))
+        if isDark {
+            let adjusted = PeerColorContrast.adjustForDarkMode(hue: hue, saturation: saturation, brightness: brightness)
+            saturation = adjusted.saturation
+            brightness = adjusted.brightness
+        }
         let c = Color(hue: hue, saturation: saturation, brightness: brightness)
         Self.peerColorCache.store(c, for: cacheKey, expectedGeneration: lookup.generation)
         self = c
