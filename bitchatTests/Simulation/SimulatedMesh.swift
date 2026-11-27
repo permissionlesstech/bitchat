@@ -36,6 +36,13 @@ final class SimulatedMesh {
     private var pendingDeliveries: [(from: Int, packet: BitchatPacket)] = []
     /// Total (packet, receiving-node) deliveries pumped — the storm bound.
     private(set) var deliveredFrameCount = 0
+    /// Per-`MessageType` delivery counts for deterministic storm bounds that
+    /// are unaffected by unrelated periodic announce/sync frames.
+    private(set) var deliveredFrameCountsByType: [UInt8: Int] = [:]
+
+    func deliveredFrameCount(ofType type: MessageType) -> Int {
+        deliveredFrameCountsByType[type.rawValue, default: 0]
+    }
 
     private(set) var nodes: [Node] = []
     private var neighbors: [Set<Int>] = []
@@ -176,6 +183,7 @@ final class SimulatedMesh {
                 for receiver in neighbors[from] {
                     for link in links(from: from, at: receiver) {
                         deliveredFrameCount += 1
+                        deliveredFrameCountsByType[packet.type, default: 0] += 1
                         nodes[receiver].service._test_ingestFrame(packet, link: link)
                     }
                 }
