@@ -6,108 +6,10 @@
 // For more information, see <https://unlicense.org>
 //
 
-///
-/// # IdentityModels
-///
-/// Defines BitChat's innovative three-layer identity model that balances
-/// privacy, security, and usability in a decentralized mesh network.
-///
-/// ## Overview
-/// BitChat's identity system separates concerns across three distinct layers:
-/// 1. **Network Identity**: the 8-byte peer ID seen on air
-/// 2. **Cryptographic Identity**: Long-term Noise static keys for security
-/// 3. **Social Identity**: assigned names and trust relationships
-///
-/// The layers are separate concerns, but they are not independent: the network
-/// identity is *derived* from the cryptographic one, so it does not provide
-/// unlinkability. Rotating peer IDs would be a change to this model, not a
-/// description of it — see the note below.
-///
-/// ## Three-Layer Architecture
-///
-/// ### Layer 1: Network Identity
-/// - 8-byte peer ID = first 8 bytes of the Noise static key fingerprint
-/// - **Not ephemeral and not rotating.** It is stable across sessions and
-///   reboots, and changes only when the underlying identity is replaced by a
-///   panic wipe. A passive observer can use it to track a device.
-/// - Changes don't affect cryptographic relationships
-/// - Includes handshake state tracking
-///
-/// ### Layer 2: Cryptographic Identity
-/// - Based on Noise Protocol static key pairs
-/// - Fingerprint derived from SHA256 of public key
-/// - Enables end-to-end encryption and authentication
-/// - The root of the peer ID above, and never rotated on a schedule
-///
-/// ### Layer 3: Social Identity
-/// - User-assigned names (petnames) for contacts
-/// - Trust levels from unknown to verified
-/// - Favorite/blocked status
-/// - Personal notes and metadata
-///
-/// ## Privacy Design
-/// The model is designed with privacy-first principles:
-/// - No mandatory persistent storage
-/// - Optional identity caching with explicit consent
-/// - Social mappings stored locally only
-///
-/// It does **not** currently prevent long-term tracking by a passive radio
-/// observer: the peer ID is stable (Layer 1) and signed announcements carry the
-/// static keys and nickname in cleartext.
-///
-/// ## Trust Model
-/// Four levels of trust:
-/// 1. **Unknown**: New or unverified peers
-/// 2. **Casual**: Basic interaction history
-/// 3. **Trusted**: User has explicitly trusted
-/// 4. **Verified**: Cryptographic verification completed
-///
-/// ## Identity Resolution
-/// When a peer's ID changes (a panic wipe on their side, or a future rotation):
-/// 1. Cryptographic handshake reveals their fingerprint
-/// 2. System looks up social identity by fingerprint
-/// 3. UI seamlessly maintains existing relationships
-/// 4. Historical messages remain properly attributed
-///
-/// ## Conflict Resolution
-/// Handles edge cases like:
-/// - Multiple peers claiming same nickname
-/// - Nickname changes and conflicts
-/// - Identity replacement during active chats
-/// - Network partitions and rejoins
-///
-/// ## Usage Example
-/// ```swift
-/// // When peer connects with new ID
-/// let ephemeral = EphemeralIdentity(peerID: "abc123", ...)
-/// // After handshake
-/// let crypto = CryptographicIdentity(fingerprint: "sha256...", ...)
-/// // User assigns name
-/// let social = SocialIdentity(localPetname: "Alice", ...)
-/// ```
-///
-
 import Foundation
 import BitFoundation
 
-// MARK: - Three-Layer Identity Model
-
-/// Represents the network layer of identity — the peer ID seen on air, plus the
-/// handshake state tracked against it.
-///
-/// Named "ephemeral" for historical reasons; the peer ID is in fact stable,
-/// being derived from the Noise static key fingerprint. It does not rotate and
-/// does not prevent tracking.
-struct EphemeralIdentity {
-    var handshakeState: HandshakeState
-}
-
-enum HandshakeState {
-    case none
-    case initiated
-    case inProgress
-    case completed(fingerprint: String)
-}
+// MARK: - Identity Model
 
 /// Represents the cryptographic layer of identity - the stable Noise Protocol static key pair.
 /// This identity outlives any change to a peer's network ID and enables secure communication.
@@ -174,15 +76,8 @@ struct IdentityCache: Codable {
     // Fingerprint -> Social mapping
     var socialIdentities: [String: SocialIdentity] = [:]
 
-    // Nickname -> [Fingerprints] reverse index
-    // Multiple fingerprints can claim same nickname
-    var nicknameIndex: [String: Set<String>] = [:]
-
     // Verified fingerprints (cryptographic proof)
     var verifiedFingerprints: Set<String> = []
-
-    // Last interaction timestamps (privacy: optional)
-    var lastInteractions: [String: Date] = [:]
 
     // Blocked Nostr pubkeys (lowercased hex) for geohash chats
     var blockedNostrPubkeys: Set<String> = []
@@ -233,9 +128,7 @@ struct IdentityCache: Codable {
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         socialIdentities = try container.decodeIfPresent([String: SocialIdentity].self, forKey: .socialIdentities) ?? [:]
-        nicknameIndex = try container.decodeIfPresent([String: Set<String>].self, forKey: .nicknameIndex) ?? [:]
         verifiedFingerprints = try container.decodeIfPresent(Set<String>.self, forKey: .verifiedFingerprints) ?? []
-        lastInteractions = try container.decodeIfPresent([String: Date].self, forKey: .lastInteractions) ?? [:]
         blockedNostrPubkeys = try container.decodeIfPresent(Set<String>.self, forKey: .blockedNostrPubkeys) ?? []
         vouchesByVouchee = try container.decodeIfPresent([String: [VouchRecord]].self, forKey: .vouchesByVouchee)
         vouchBatchSentAt = try container.decodeIfPresent([String: Date].self, forKey: .vouchBatchSentAt)

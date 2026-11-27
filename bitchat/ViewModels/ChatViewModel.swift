@@ -2287,10 +2287,6 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, SynchronousMessage
         composerCoordinator.parseMentions(from: content)
     }
 
-    func isFavorite(fingerprint: String) -> Bool {
-        return identityManager.isFavorite(fingerprint: fingerprint)
-    }
-
     // MARK: - Delivery Tracking
 
     func didUpdateMessageDeliveryStatus(_ messageID: String, status: DeliveryStatus) {

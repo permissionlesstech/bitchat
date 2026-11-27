@@ -40,10 +40,6 @@ final class MockIdentityManager: SecureIdentityStateManagerProtocol {
         }
     }
     
-    func isFavorite(fingerprint: String) -> Bool {
-        false
-    }
-    
     func isBlocked(fingerprint: String) -> Bool {
         blockedFingerprints.contains(fingerprint) || socialIdentities[fingerprint]?.isBlocked == true
     }
@@ -87,14 +83,10 @@ final class MockIdentityManager: SecureIdentityStateManagerProtocol {
         blockedNostrPubkeys
     }
     
-    func registerEphemeralSession(peerID: PeerID, handshakeState: HandshakeState) {}
-
     func clearAllIdentityData() {
         privateMediaCapableFingerprints.removeAll()
         authenticatedSigningKeys.removeAll()
     }
-    
-    func removeEphemeralSession(peerID: PeerID) {}
     
     func setVerified(fingerprint: String, verified: Bool) {}
 

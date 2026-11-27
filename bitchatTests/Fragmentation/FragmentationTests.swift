@@ -217,7 +217,6 @@ extension FragmentationTests {
         func didConnectToPeer(_ peerID: PeerID) {}
         func didDisconnectFromPeer(_ peerID: PeerID) {}
         func didUpdatePeerList(_ peers: [PeerID]) {}
-        func isFavorite(fingerprint: String) -> Bool { false }
         func didUpdateMessageDeliveryStatus(_ messageID: String, status: DeliveryStatus) {}
         func didReceiveNoisePayload(from peerID: PeerID, type: NoisePayloadType, payload: Data, timestamp: Date) {}
         func didUpdateBluetoothState(_ state: CBManagerState) {}

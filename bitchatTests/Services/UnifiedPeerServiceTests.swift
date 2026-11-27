@@ -251,10 +251,6 @@ private final class TestIdentityManager: SecureIdentityStateManagerProtocol {
         socialIdentities[identity.fingerprint] = identity
     }
 
-    func isFavorite(fingerprint: String) -> Bool {
-        favorites.contains(fingerprint)
-    }
-
     func isBlocked(fingerprint: String) -> Bool {
         socialIdentities[fingerprint]?.isBlocked ?? false
     }
@@ -289,8 +285,6 @@ private final class TestIdentityManager: SecureIdentityStateManagerProtocol {
         blockedNostr
     }
 
-    func registerEphemeralSession(peerID: PeerID, handshakeState: HandshakeState) {}
-
     func clearAllIdentityData() {
         socialIdentities.removeAll()
         favorites.removeAll()
@@ -302,8 +296,6 @@ private final class TestIdentityManager: SecureIdentityStateManagerProtocol {
     func hasObservedPrivateMediaCapability(fingerprint: String) -> Bool { false }
     func bindAuthenticatedSigningPublicKey(_ signingPublicKey: Data, fingerprint: String) {}
     func authenticatedSigningPublicKey(forFingerprint fingerprint: String) -> Data? { nil }
-
-    func removeEphemeralSession(peerID: PeerID) {}
 
     func setVerified(fingerprint: String, verified: Bool) {
         if verified {
