@@ -489,4 +489,34 @@ final class PanicWipeCoverageTests: XCTestCase {
 
         XCTAssertEqual(Set(results).count, 1)
     }
+
+    func test_cashuTokenDecoder_resetForPanic_evictsCachedToken() throws {
+        let payload: [String: Any] = [
+            "token": [[
+                "mint": "https://mint.example.com",
+                "proofs": [["amount": 10, "id": "009a1f293253e41e", "secret": "s", "C": "02c"] as [String: Any]]
+            ] as [String: Any]]
+        ]
+        let data = try JSONSerialization.data(withJSONObject: payload)
+        let encoded = data.base64EncodedString()
+            .replacingOccurrences(of: "+", with: "-")
+            .replacingOccurrences(of: "/", with: "_")
+            .replacingOccurrences(of: "=", with: "")
+        let token = "cashuA" + encoded
+
+        let decoded = CashuTokenDecoder.decode(token)
+        XCTAssertEqual(decoded?.amount, 10)
+        XCTAssertTrue(CashuTokenDecoder.hasCachedDecode(for: token))
+
+        CashuTokenDecoder.resetForPanic()
+
+        XCTAssertFalse(CashuTokenDecoder.hasCachedDecode(for: token))
+    }
+
+    func test_cashuTokenDecoder_oversizedInput_isNotCached() {
+        let huge = "cashuA" + String(repeating: "Q", count: CashuTokenDecoder.maxTokenLength + 1)
+
+        XCTAssertNil(CashuTokenDecoder.decode(huge))
+        XCTAssertFalse(CashuTokenDecoder.hasCachedDecode(for: huge))
+    }
 }
