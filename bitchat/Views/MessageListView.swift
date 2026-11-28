@@ -319,7 +319,8 @@ private struct MessageListContentView: View {
                                     privatePeer: privatePeer,
                                     imagePreviewURL: $imagePreviewURL,
                                     showSidebar: $showSidebar,
-                                    onInsertMention: insertMention
+                                    onInsertMention: insertMention,
+                                    onQuote: quoteInComposer
                                 )
                                 .equatable()
                                 .onAppear {
@@ -652,6 +653,18 @@ private extension MessageListContentView {
         isTextFieldFocused.wrappedValue = true
     }
 
+    /// Drops a quoted copy of the message into the composer without wiping
+    /// an existing draft, then focuses the input.
+    func quoteInComposer(_ message: BitchatMessage) {
+        guard let drafts = appEnvironmentModels?.composerDraftModel else { return }
+        drafts.messageText = MessageClipboard.appendQuote(
+            to: drafts.messageText,
+            content: message.content,
+            sender: message.sender
+        )
+        isTextFieldFocused.wrappedValue = true
+    }
+
     func expandWindow(ifNeededFor message: BitchatMessage,
                       allMessages: [BitchatMessage],
                       privatePeer: PeerID?,
@@ -876,6 +889,7 @@ private struct MessageRowView: View, Equatable {
     @Binding var imagePreviewURL: URL?
     @Binding var showSidebar: Bool
     let onInsertMention: (String) -> Void
+    let onQuote: (BitchatMessage) -> Void
 
     init(
         message: BitchatMessage,
@@ -883,7 +897,8 @@ private struct MessageRowView: View, Equatable {
         privatePeer: PeerID?,
         imagePreviewURL: Binding<URL?>,
         showSidebar: Binding<Bool>,
-        onInsertMention: @escaping (String) -> Void
+        onInsertMention: @escaping (String) -> Void,
+        onQuote: @escaping (BitchatMessage) -> Void
     ) {
         self.message = message
         self.messageIdentity = ObjectIdentifier(message)
@@ -892,6 +907,7 @@ private struct MessageRowView: View, Equatable {
         self._imagePreviewURL = imagePreviewURL
         self._showSidebar = showSidebar
         self.onInsertMention = onInsertMention
+        self.onQuote = onQuote
     }
 
     nonisolated static func == (lhs: MessageRowView, rhs: MessageRowView) -> Bool {
@@ -933,7 +949,19 @@ private struct MessageRowView: View, Equatable {
                     }
                 }
                 Button(String(localized: "content.message.copy")) {
-                    ClipboardHelper.copy(message.content)
+                    MessageClipboard.copyPlaintext(message.content)
+                }
+                if !message.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+                   message.sender != "system" {
+                    Button {
+                        onQuote(message)
+                    } label: {
+                        Text(String(
+                            localized: "content.message.quote",
+                            defaultValue: "quote in composer",
+                            comment: "Context menu action that inserts a quoted copy of the message into the composer draft"
+                        ))
+                    }
                 }
                 if isResendableFailedMessage(message) {
                     Button(String(localized: "content.actions.resend")) {

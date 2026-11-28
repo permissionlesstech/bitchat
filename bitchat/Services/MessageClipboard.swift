@@ -1,0 +1,56 @@
+//
+// MessageClipboard.swift
+// bitchat
+//
+// This is free and unencumbered software released into the public domain.
+// For more information, see <https://unlicense.org>
+//
+
+import Foundation
+
+/// Clipboard helpers for message actions. Kept out of the view so unit tests
+/// can assert quote formatting without standing up SwiftUI.
+enum MessageClipboard {
+    /// Plain message body for the pasteboard.
+    static func copyPlaintext(_ content: String) {
+        // Same local-only, expiring pasteboard path as the rest of the app.
+        ClipboardHelper.copy(content)
+    }
+
+    /// Builds a composer-ready quote block (`> line` per line, trailing blank).
+    /// Render mentions as plain names so quoting does not notify peers.
+    static func quoteForComposer(_ content: String, sender: String?) -> String {
+        let body = content.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !body.isEmpty else { return "" }
+        let header: String
+        if let sender, !sender.isEmpty, sender != "system" {
+            header = "> \(sender):\n"
+        } else {
+            header = ""
+        }
+        let quoted = body
+            .split(separator: "\n", omittingEmptySubsequences: false)
+            .map { "> \($0)" }
+            .joined(separator: "\n")
+        let quote = header + quoted + "\n\n"
+        // Use one ASCII space in place of @ to preserve the private packet byte budget.
+        return MessageFormattingEngine.Patterns.mention.stringByReplacingMatches(
+            in: quote,
+            range: NSRange(quote.startIndex..., in: quote),
+            withTemplate: " $1"
+        )
+    }
+
+    /// Appends a quote to an existing composer draft without wiping it.
+    /// Only a trailing newline skips inserting another separator — a trailing
+    /// space must still get a newline so the quote marker starts its own line.
+    static func appendQuote(to draft: String, content: String, sender: String?) -> String {
+        let quote = quoteForComposer(content, sender: sender)
+        guard !quote.isEmpty else { return draft }
+        if draft.isEmpty { return quote }
+        if draft.hasSuffix("\n") {
+            return draft + quote
+        }
+        return draft + "\n" + quote
+    }
+}
