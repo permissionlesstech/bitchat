@@ -35,6 +35,12 @@ protocol ChatGroupContext: AnyObject {
     func cryptoIdentity(for peerID: PeerID) -> (fingerprint: String, signingKey: Data)?
     /// The connected short peer ID whose fingerprint matches, if any.
     func connectedPeerID(forFingerprint fingerprint: String) -> PeerID?
+    /// A Nostr-reachable peer ID (full 64-hex Noise key) whose fingerprint matches, if any.
+    func nostrReachablePeerID(forFingerprint fingerprint: String) -> PeerID?
+    /// Our own 64-hex x-only Nostr public key, if initialized.
+    func myNostrPubkeyHex() -> String?
+    /// Known 64-hex x-only Nostr public key for a peer fingerprint, if any.
+    func nostrPubkeyHex(forFingerprint fingerprint: String) -> String?
     /// Whether the user has blocked the identity with this Noise fingerprint.
     func isFingerprintBlocked(_ fingerprint: String) -> Bool
 
@@ -42,6 +48,10 @@ protocol ChatGroupContext: AnyObject {
     func sendGroupInvitePayload(_ payload: Data, to peerID: PeerID)
     func sendGroupKeyUpdatePayload(_ payload: Data, to peerID: PeerID)
     func broadcastGroupMessagePayload(_ payload: Data)
+    func sendGroupInviteViaNostr(_ payload: Data, to peerID: PeerID)
+    func sendGroupKeyUpdateViaNostr(_ payload: Data, to peerID: PeerID)
+    func sendGroupMessageViaNostr(_ payload: Data, to peerID: PeerID)
+    func sendGroupMessageViaNostr(_ payload: Data, toPubkeyHex pubkeyHex: String)
 
     // MARK: Conversation intents (group chats are direct-keyed)
     @discardableResult
@@ -53,6 +63,16 @@ protocol ChatGroupContext: AnyObject {
     func addSystemMessage(_ content: String)
     func addLocalPrivateSystemMessage(_ content: String, to peerID: PeerID)
     func notifyPrivateMessage(from senderName: String, message: String, peerID: PeerID)
+}
+
+extension ChatGroupContext {
+    func nostrReachablePeerID(forFingerprint fingerprint: String) -> PeerID? { nil }
+    func myNostrPubkeyHex() -> String? { nil }
+    func nostrPubkeyHex(forFingerprint fingerprint: String) -> String? { nil }
+    func sendGroupInviteViaNostr(_ payload: Data, to peerID: PeerID) {}
+    func sendGroupKeyUpdateViaNostr(_ payload: Data, to peerID: PeerID) {}
+    func sendGroupMessageViaNostr(_ payload: Data, to peerID: PeerID) {}
+    func sendGroupMessageViaNostr(_ payload: Data, toPubkeyHex pubkeyHex: String) {}
 }
 
 extension ChatViewModel: ChatGroupContext {
@@ -79,15 +99,24 @@ extension ChatViewModel: ChatGroupContext {
     }
 
     func meshFingerprint(for peerID: PeerID) -> String? {
-        meshService.getFingerprint(for: peerID)
+        if let live = meshService.getFingerprint(for: peerID) {
+            return live
+        }
+        // Full 64-hex Noise key (used by Nostr-delivered group state and offline favorites)
+        if let noiseKey = peerID.noiseKey {
+            return noiseKey.sha256Fingerprint()
+        }
+        return nil
     }
 
     /// The persisted, signature-verified identity behind a short mesh peer
-    /// ID. Cross-checked against the live session fingerprint so a roster
-    /// entry can never be pinned to a signing key from a different identity.
+    /// ID or a full 64-hex Noise key (for Nostr/invited contacts).
     func cryptoIdentity(for peerID: PeerID) -> (fingerprint: String, signingKey: Data)? {
-        guard let fingerprint = meshService.getFingerprint(for: peerID) else { return nil }
-        let candidates = identityManager.getCryptoIdentitiesByPeerIDPrefix(peerID)
+        guard let fingerprint = meshFingerprint(for: peerID) else { return nil }
+        let lookupPeerID = peerID.noiseKey != nil
+            ? PeerID(str: String(fingerprint.prefix(16)))
+            : peerID
+        let candidates = identityManager.getCryptoIdentitiesByPeerIDPrefix(lookupPeerID)
         guard let identity = candidates.first(where: { $0.fingerprint == fingerprint }),
               let signingKey = identity.signingPublicKey else { return nil }
         return (fingerprint, signingKey)
@@ -100,11 +129,44 @@ extension ChatViewModel: ChatGroupContext {
         return meshService.isPeerConnected(shortID) ? shortID : nil
     }
 
+    func nostrReachablePeerID(forFingerprint fingerprint: String) -> PeerID? {
+        for (noiseKey, rel) in FavoritesPersistenceService.shared.favorites {
+            guard rel.peerNostrPublicKey != nil,
+                  noiseKey.sha256Fingerprint() == fingerprint else { continue }
+            return PeerID(hexData: noiseKey)
+        }
+        return nil
+    }
+
+    func myNostrPubkeyHex() -> String? {
+        try? idBridge.getCurrentNostrIdentity()?.publicKeyHex
+    }
+
+    func nostrPubkeyHex(forFingerprint fingerprint: String) -> String? {
+        if fingerprint == myNoiseFingerprint() {
+            return myNostrPubkeyHex()
+        }
+        for (noiseKey, rel) in FavoritesPersistenceService.shared.favorites {
+            guard let rawNostr = rel.peerNostrPublicKey?.trimmingCharacters(in: .whitespacesAndNewlines),
+                  noiseKey.sha256Fingerprint() == fingerprint else { continue }
+            if rawNostr.lowercased().hasPrefix("npub1"),
+               let (hrp, data) = try? Bech32.decode(rawNostr.lowercased()),
+               hrp == "npub",
+               data.count == 32 {
+                return data.hexEncodedString()
+            }
+            if rawNostr.count == 64, Data(hexString: rawNostr)?.count == 32 {
+                return rawNostr.lowercased()
+            }
+        }
+        return nil
+    }
+
     func isFingerprintBlocked(_ fingerprint: String) -> Bool {
         identityManager.isBlocked(fingerprint: fingerprint)
     }
 
-    /// Group state rides the mesh's Noise sessions only.
+    /// Group state rides both the mesh's Noise sessions and Nostr gift-wraps.
     private var groupTransport: MeshGroupMessaging? { meshService as? MeshGroupMessaging }
 
     func sendGroupInvitePayload(_ payload: Data, to peerID: PeerID) {
@@ -117,6 +179,22 @@ extension ChatViewModel: ChatGroupContext {
 
     func broadcastGroupMessagePayload(_ payload: Data) {
         groupTransport?.broadcastGroupMessage(payload)
+    }
+
+    func sendGroupInviteViaNostr(_ payload: Data, to peerID: PeerID) {
+        messageRouter.nostrTransport?.sendGroupInvite(payload, to: peerID)
+    }
+
+    func sendGroupKeyUpdateViaNostr(_ payload: Data, to peerID: PeerID) {
+        messageRouter.nostrTransport?.sendGroupKeyUpdate(payload, to: peerID)
+    }
+
+    func sendGroupMessageViaNostr(_ payload: Data, to peerID: PeerID) {
+        messageRouter.nostrTransport?.sendGroupMessage(payload, to: peerID)
+    }
+
+    func sendGroupMessageViaNostr(_ payload: Data, toPubkeyHex pubkeyHex: String) {
+        messageRouter.nostrTransport?.sendGroupMessage(payload, toPubkeyHex: pubkeyHex)
     }
 
     // MARK: CommandContextProvider group commands (parsed by CommandProcessor)
@@ -172,7 +250,12 @@ final class ChatGroupCoordinator {
             return .error(message: String(localized: "system.group.identity_unavailable", comment: "Error when the local identity is not ready for group operations"))
         }
 
-        let creator = GroupMember(fingerprint: myFingerprint, signingKey: mySigningKey, nickname: context.nickname)
+        let creator = GroupMember(
+            fingerprint: myFingerprint,
+            signingKey: mySigningKey,
+            nickname: context.nickname,
+            nostrPubkeyHex: context.myNostrPubkeyHex()
+        )
         guard let group = context.groupStore.createGroup(named: name, creator: creator) else {
             return .error(message: String(localized: "system.group.create_failed", comment: "Error when group creation fails"))
         }
@@ -203,16 +286,18 @@ final class ChatGroupCoordinator {
                 nickname
             ))
         }
-        guard context.isPeerConnected(peerID) else {
+        guard let identity = context.cryptoIdentity(for: peerID) else {
             return .error(message: String(
-                format: String(localized: "system.group.peer_not_connected", comment: "Error when the invitee is not connected over mesh; placeholder is the nickname"),
+                format: String(localized: "system.group.peer_identity_unknown", comment: "Error when the invitee's verified identity is unavailable; placeholder is the nickname"),
                 locale: .current,
                 nickname
             ))
         }
-        guard let identity = context.cryptoIdentity(for: peerID) else {
+        let meshReachable = context.isPeerConnected(peerID)
+        let nostrPeerID = context.nostrReachablePeerID(forFingerprint: identity.fingerprint)
+        guard meshReachable || nostrPeerID != nil else {
             return .error(message: String(
-                format: String(localized: "system.group.peer_identity_unknown", comment: "Error when the invitee's verified identity is unavailable; placeholder is the nickname"),
+                format: String(localized: "system.group.peer_not_connected", comment: "Error when the invitee is not connected over mesh; placeholder is the nickname"),
                 locale: .current,
                 nickname
             ))
@@ -235,19 +320,25 @@ final class ChatGroupCoordinator {
         let newMember = GroupMember(
             fingerprint: identity.fingerprint,
             signingKey: identity.signingKey,
-            nickname: context.peerNickname(for: peerID) ?? nickname
+            nickname: context.peerNickname(for: peerID) ?? nickname,
+            nostrPubkeyHex: context.nostrPubkeyHex(forFingerprint: identity.fingerprint)
         )
         // Rotate the key (epoch + 1) on every roster change, not just removals.
         // A monotonically increasing epoch per roster gives the receiver a
         // strict ordering: two out-of-order invite states can no longer share
         // an epoch and last-writer-wins a just-added member back out.
-        let members = group.members + [newMember]
+        let members = enrichedRoutingMembers(group.members + [newMember])
         guard let (updated, key) = context.groupStore.rotateKey(groupID: group.groupID, members: members),
               let payload = signedStatePayload(for: updated, key: key) else {
             return .error(message: String(localized: "system.group.invite_failed", comment: "Error when building or signing a group invite fails"))
         }
 
-        context.sendGroupInvitePayload(payload, to: peerID)
+        if meshReachable {
+            context.sendGroupInvitePayload(payload, to: peerID)
+        }
+        if let nostrPeerID {
+            context.sendGroupInviteViaNostr(payload, to: nostrPeerID)
+        }
         distributeState(payload, group: updated, excluding: [identity.fingerprint], type: .keyUpdate)
 
         return .success(message: String(
@@ -384,6 +475,141 @@ final class ChatGroupCoordinator {
         )
         context.appendPrivateMessage(message, to: groupPeerID)
         context.broadcastGroupMessagePayload(payload)
+
+        // Hybrid delivery: also fan out over Nostr to any roster members who
+        // are reachable via local favorites OR via creator-distributed Nostr
+        // routing keys in the group roster (deduped by messageID if they also get BLE).
+        let myFingerprint = context.myNoiseFingerprint()
+        for member in group.members where member.fingerprint != myFingerprint {
+            if let nostrPeerID = context.nostrReachablePeerID(forFingerprint: member.fingerprint) {
+                context.sendGroupMessageViaNostr(payload, to: nostrPeerID)
+            } else if let pubkeyHex = member.nostrPubkeyHex, !pubkeyHex.isEmpty {
+                context.sendGroupMessageViaNostr(payload, toPubkeyHex: pubkeyHex)
+            }
+        }
+    }
+
+    // MARK: - Direct UI Intents
+
+    /// Creates a group and invites initial members in one step for native UI flows.
+    func createGroup(named rawName: String, initialMemberPeerIDs: [PeerID]) -> CommandResult {
+        let createResult = createGroup(named: rawName)
+        guard case .success = createResult, let group = selectedGroup() else {
+            return createResult
+        }
+        for peerID in initialMemberPeerIDs {
+            _ = inviteMember(peerID: peerID, into: group.peerID)
+        }
+        return createResult
+    }
+
+    func inviteMember(peerID: PeerID, into groupPeerID: PeerID) -> CommandResult {
+        guard let group = context.groupStore.group(for: groupPeerID) else {
+            return .error(message: String(localized: "system.group.not_in_group", comment: "Error when a group command requires an open group chat"))
+        }
+        guard group.creatorFingerprint == context.myNoiseFingerprint() else {
+            return .error(message: String(localized: "system.group.creator_only", comment: "Error when a non-creator attempts a creator-only group action"))
+        }
+        let displayName = context.peerNickname(for: peerID) ?? peerID.id
+        guard let identity = context.cryptoIdentity(for: peerID) else {
+            return .error(message: String(
+                format: String(localized: "system.group.peer_identity_unknown", comment: "Error when the invitee's verified identity is unavailable; placeholder is the nickname"),
+                locale: .current,
+                displayName
+            ))
+        }
+        let meshPeerID = context.connectedPeerID(forFingerprint: identity.fingerprint)
+        let nostrPeerID = context.nostrReachablePeerID(forFingerprint: identity.fingerprint)
+        guard meshPeerID != nil || nostrPeerID != nil else {
+            return .error(message: String(
+                format: String(localized: "system.group.peer_not_connected", comment: "Error when the invitee is not connected over mesh; placeholder is the nickname"),
+                locale: .current,
+                displayName
+            ))
+        }
+        guard !group.isMember(fingerprint: identity.fingerprint) else {
+            return .error(message: String(
+                format: String(localized: "system.group.already_member", comment: "Error when the invitee is already a member; placeholder is the nickname"),
+                locale: .current,
+                displayName
+            ))
+        }
+        guard group.members.count < BitchatGroup.maxMembers else {
+            return .error(message: String(
+                format: String(localized: "system.group.full", comment: "Error when the group is at the member cap; placeholder is the cap"),
+                locale: .current,
+                "\(BitchatGroup.maxMembers)"
+            ))
+        }
+
+        let newMember = GroupMember(
+            fingerprint: identity.fingerprint,
+            signingKey: identity.signingKey,
+            nickname: displayName,
+            nostrPubkeyHex: context.nostrPubkeyHex(forFingerprint: identity.fingerprint)
+        )
+        let members = enrichedRoutingMembers(group.members + [newMember])
+        guard let (updated, key) = context.groupStore.rotateKey(groupID: group.groupID, members: members),
+              let payload = signedStatePayload(for: updated, key: key) else {
+            return .error(message: String(localized: "system.group.invite_failed", comment: "Error when building or signing a group invite fails"))
+        }
+
+        if let meshPeerID {
+            context.sendGroupInvitePayload(payload, to: meshPeerID)
+        }
+        if let nostrPeerID {
+            context.sendGroupInviteViaNostr(payload, to: nostrPeerID)
+        }
+        distributeState(payload, group: updated, excluding: [identity.fingerprint], type: .keyUpdate)
+        return .success(message: String(
+            format: String(localized: "system.group.invited", comment: "System message after inviting someone; placeholders are the nickname and the group name"),
+            locale: .current,
+            displayName,
+            updated.name
+        ))
+    }
+
+    func removeMember(fingerprint: String, from groupPeerID: PeerID) -> CommandResult {
+        guard let group = context.groupStore.group(for: groupPeerID) else {
+            return .error(message: String(localized: "system.group.not_in_group", comment: "Error when a group command requires an open group chat"))
+        }
+        guard group.creatorFingerprint == context.myNoiseFingerprint() else {
+            return .error(message: String(localized: "system.group.creator_only", comment: "Error when a non-creator attempts a creator-only group action"))
+        }
+        guard let member = group.members.first(where: { $0.fingerprint == fingerprint }) else {
+            return .error(message: String(localized: "system.group.member_not_found", comment: "Error when the member to remove is not in the roster"))
+        }
+        guard member.fingerprint != group.creatorFingerprint else {
+            return .error(message: String(localized: "system.group.cannot_remove_creator", comment: "Error when the creator tries to remove themselves"))
+        }
+        let remaining = group.members.filter { $0.fingerprint != member.fingerprint }
+        guard let (rotated, newKey) = context.groupStore.rotateKey(groupID: group.groupID, members: remaining),
+              let payload = signedStatePayload(for: rotated, key: newKey) else {
+            return .error(message: String(localized: "system.group.rotate_failed", comment: "Error when rotating the group key fails"))
+        }
+        distributeState(payload, group: rotated, excluding: [], type: .keyUpdate)
+        notifyRemovedMember(member, rotated: rotated)
+        return .success(message: String(
+            format: String(localized: "system.group.removed_member", comment: "System message after removing a member and rotating the key; placeholder is the nickname"),
+            locale: .current,
+            member.nickname
+        ))
+    }
+
+    func leaveGroup(peerID groupPeerID: PeerID) -> CommandResult {
+        guard let group = context.groupStore.group(for: groupPeerID) else {
+            return .error(message: String(localized: "system.group.not_in_group", comment: "Error when a group command requires an open group chat"))
+        }
+        if context.selectedPrivateChatPeer == group.peerID {
+            context.endPrivateChat()
+        }
+        context.removePrivateChat(group.peerID)
+        context.groupStore.removeGroup(withID: group.groupID)
+        return .success(message: String(
+            format: String(localized: "system.group.left", comment: "System message after leaving a group; placeholder is the group name"),
+            locale: .current,
+            group.name
+        ))
     }
 
     // MARK: - Receiving
@@ -485,6 +711,20 @@ private extension ChatGroupCoordinator {
         return trimmed.hasPrefix("@") ? String(trimmed.dropFirst()) : trimmed
     }
 
+    func enrichedRoutingMembers(_ members: [GroupMember]) -> [GroupMember] {
+        let myFingerprint = context.myNoiseFingerprint()
+        return members.map { member in
+            guard member.nostrPubkeyHex == nil else { return member }
+            var copy = member
+            if member.fingerprint == myFingerprint {
+                copy.nostrPubkeyHex = context.myNostrPubkeyHex()
+            } else {
+                copy.nostrPubkeyHex = context.nostrPubkeyHex(forFingerprint: member.fingerprint)
+            }
+            return copy
+        }
+    }
+
     func selectedGroup() -> BitchatGroup? {
         guard let selected = context.selectedPrivateChatPeer, selected.isGroup else { return nil }
         return context.groupStore.group(for: selected)
@@ -496,42 +736,41 @@ private extension ChatGroupCoordinator {
         }?.encode()
     }
 
-    /// Sends the state payload to every connected roster member except us and
-    /// the excluded fingerprints. Offline members catch up the next time the
-    /// creator sends them state (v1 limitation, documented in the PR).
+    /// Sends the state payload to every connected mesh or Nostr-reachable roster
+    /// member except us and the excluded fingerprints.
     func distributeState(_ payload: Data, group: BitchatGroup, excluding excludedFingerprints: Set<String>, type: StateSendType) {
         let myFingerprint = context.myNoiseFingerprint()
         for member in group.members {
             guard member.fingerprint != myFingerprint,
-                  !excludedFingerprints.contains(member.fingerprint),
-                  let peerID = context.connectedPeerID(forFingerprint: member.fingerprint) else { continue }
-            switch type {
-            case .invite:
-                context.sendGroupInvitePayload(payload, to: peerID)
-            case .keyUpdate:
-                context.sendGroupKeyUpdatePayload(payload, to: peerID)
+                  !excludedFingerprints.contains(member.fingerprint) else { continue }
+            if let peerID = context.connectedPeerID(forFingerprint: member.fingerprint) {
+                switch type {
+                case .invite:
+                    context.sendGroupInvitePayload(payload, to: peerID)
+                case .keyUpdate:
+                    context.sendGroupKeyUpdatePayload(payload, to: peerID)
+                }
+            }
+            if let nostrPeerID = context.nostrReachablePeerID(forFingerprint: member.fingerprint) {
+                switch type {
+                case .invite:
+                    context.sendGroupInviteViaNostr(payload, to: nostrPeerID)
+                case .keyUpdate:
+                    context.sendGroupKeyUpdateViaNostr(payload, to: nostrPeerID)
+                }
             }
         }
     }
 
-    /// Tells a just-removed member they're out so their client can deactivate
-    /// the group instead of silently going dark (dropping every message under
-    /// the epoch it no longer has the key for). The notice is a creator-signed
-    /// state whose roster excludes the removee — their `applyGroupState`
-    /// removal branch fires on the missing-self roster and surfaces the
-    /// "removed from group" system message.
-    ///
-    /// It carries a throwaway all-zero key, never the rotated key, so the
-    /// removee cannot decrypt post-removal traffic. State is sent 1:1 over
-    /// authenticated Noise, so no remaining member ever receives this blob
-    /// (and even if one did, its own missing-self check would not match).
-    /// If the removee is offline the notice can't be delivered — same v1
-    /// limitation as any other missed key update, documented in the PR.
     func notifyRemovedMember(_ removed: GroupMember, rotated: BitchatGroup) {
-        guard let peerID = context.connectedPeerID(forFingerprint: removed.fingerprint) else { return }
         let throwawayKey = Data(count: BitchatGroup.keyLength)
         guard let payload = signedStatePayload(for: rotated, key: throwawayKey) else { return }
-        context.sendGroupKeyUpdatePayload(payload, to: peerID)
+        if let peerID = context.connectedPeerID(forFingerprint: removed.fingerprint) {
+            context.sendGroupKeyUpdatePayload(payload, to: peerID)
+        }
+        if let nostrPeerID = context.nostrReachablePeerID(forFingerprint: removed.fingerprint) {
+            context.sendGroupKeyUpdateViaNostr(payload, to: nostrPeerID)
+        }
     }
 
     func applyGroupState(from peerID: PeerID, payload: Data, isInvite: Bool) {

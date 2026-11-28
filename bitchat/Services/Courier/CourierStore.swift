@@ -150,7 +150,14 @@ final class CourierStore {
             protection: .untilFirstUserAuthentication
         )
         self.readData = readData
-        loadFromDisk()
+        if self.fileStore.fileURL != nil {
+            // Restore off the calling thread (cold launch on MainActor) on the
+            // serial store queue. Every read/write serializes on `queue`, so
+            // callers are linearly ordered after restore without blocking init().
+            queue.async { [self] in
+                loadFromDiskLocked()
+            }
+        }
         #if os(iOS)
         protectedDataObserver = NotificationCenter.default.addObserver(
             forName: UIApplication.protectedDataDidBecomeAvailableNotification,
@@ -485,31 +492,29 @@ final class CourierStore {
         }
     }
 
-    private func loadFromDisk() {
+    private func loadFromDiskLocked() {
         guard let fileURL = fileStore.fileURL else { return }
-        queue.sync {
-            guard FileManager.default.fileExists(atPath: fileURL.path) else {
-                diskLoadDeferred = false
-                return
-            }
+        guard FileManager.default.fileExists(atPath: fileURL.path) else {
+            diskLoadDeferred = false
+            return
+        }
+        do {
+            let data = try readData(fileURL)
             do {
-                let data = try readData(fileURL)
-                do {
-                    envelopes = try JSONDecoder().decode([StoredEnvelope].self, from: data)
-                    diskLoadDeferred = false
-                    pruneExpiredLocked(at: now())
-                    publishCountLocked()
-                    fileStore.migrateProtectionIfNeeded(logContext: "courier store")
-                } catch {
-                    // The bytes were readable, so this is corruption/schema
-                    // failure rather than protected-data unavailability.
-                    diskLoadDeferred = false
-                    SecureLogger.error("Failed to decode courier store: \(error)", category: .session)
-                }
+                envelopes = try JSONDecoder().decode([StoredEnvelope].self, from: data)
+                diskLoadDeferred = false
+                pruneExpiredLocked(at: now())
+                publishCountLocked()
+                fileStore.migrateProtectionIfNeeded(logContext: "courier store")
             } catch {
-                diskLoadDeferred = true
-                SecureLogger.warning("Courier store unavailable; deferring load until protected data is available: \(error)", category: .session)
+                // The bytes were readable, so this is corruption/schema
+                // failure rather than protected-data unavailability.
+                diskLoadDeferred = false
+                SecureLogger.error("Failed to decode courier store: \(error)", category: .session)
             }
+        } catch {
+            diskLoadDeferred = true
+            SecureLogger.warning("Courier store unavailable; deferring load until protected data is available: \(error)", category: .session)
         }
     }
 

@@ -777,7 +777,7 @@
 				STRIP_SWIFT_SYMBOLS = YES;
 				SWIFT_COMPILATION_MODE = wholemodule;
 				SWIFT_OPTIMIZATION_LEVEL = "-Osize";
-				SWIFT_REFLECTION_METADATA_LEVEL = none;
+				SWIFT_REFLECTION_METADATA_LEVEL = "without-names";
 				SWIFT_VERSION = "$(SWIFT_VERSION)";
 			};
 			name = Release;

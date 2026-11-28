@@ -106,6 +106,9 @@ struct PrivateConversationHeaderState: Equatable {
     let availability: PrivateConversationAvailability
     let isFavorite: Bool
     let encryptionStatus: EncryptionStatus?
+    var groupMeshReachableCount: Int = 0
+    var groupNostrReachableCount: Int = 0
+    var groupOtherMemberCount: Int = 0
 
     var supportsFavoriteToggle: Bool {
         !conversationPeerID.isGeoDM && !conversationPeerID.isGroup
@@ -178,6 +181,112 @@ final class PrivateConversationModel: ObservableObject {
         chatViewModel.markPrivateMessagesAsRead(from: peerID)
     }
 
+    func disappearingTimer(for peerID: PeerID) -> DisappearingTimer {
+        chatViewModel.disappearingTimer(for: peerID)
+    }
+
+    func setDisappearingTimer(_ timer: DisappearingTimer, for peerID: PeerID) {
+        chatViewModel.setDisappearingTimer(timer, for: peerID)
+        objectWillChange.send()
+    }
+
+    // MARK: - Group Management
+
+    func group(for peerID: PeerID) -> BitchatGroup? {
+        chatViewModel.groupStore.group(for: peerID)
+    }
+
+    var myNoiseFingerprint: String {
+        chatViewModel.myNoiseFingerprint()
+    }
+
+    func inviteMember(peerID: PeerID, into groupPeerID: PeerID) -> CommandResult {
+        let result = chatViewModel.groupCoordinator.inviteMember(peerID: peerID, into: groupPeerID)
+        refreshSelectedConversation()
+        return result
+    }
+
+    func removeMember(fingerprint: String, from groupPeerID: PeerID) -> CommandResult {
+        let result = chatViewModel.groupCoordinator.removeMember(fingerprint: fingerprint, from: groupPeerID)
+        refreshSelectedConversation()
+        return result
+    }
+
+    func leaveGroup(peerID: PeerID) -> CommandResult {
+        let result = chatViewModel.groupCoordinator.leaveGroup(peerID: peerID)
+        refreshSelectedConversation()
+        return result
+    }
+
+    // MARK: - Contact Detail Helpers
+
+    func sharedGroups(for peerID: PeerID) -> [BitchatGroup] {
+        guard let fingerprint = chatViewModel.getFingerprint(for: peerID) else { return [] }
+        return chatViewModel.groupStore.groups.filter { group in
+            group.members.contains(where: { $0.fingerprint == fingerprint })
+        }
+    }
+
+    func isMuted(for peerID: PeerID) -> Bool {
+        chatViewModel.isConversationMuted(for: peerID)
+    }
+
+    func toggleMute(for peerID: PeerID) {
+        let key = autoListenPolicyKey(for: peerID)
+        InboxMutedChats.toggle(key)
+        objectWillChange.send()
+    }
+
+    func autoListenPolicyKey(for peerID: PeerID) -> String {
+        if peerID.isGroup {
+            return peerID.id
+        }
+        return chatViewModel.getFingerprint(for: peerID) ?? peerID.id
+    }
+
+    func autoListenPolicy(for peerID: PeerID) -> PTTAutoListenPolicy {
+        PTTPreferences.shared.chatAutoListenPolicy(for: autoListenPolicyKey(for: peerID))
+    }
+
+    func setAutoListenPolicy(_ policy: PTTAutoListenPolicy, for peerID: PeerID) {
+        PTTPreferences.shared.setChatAutoListenPolicy(policy, for: autoListenPolicyKey(for: peerID))
+        objectWillChange.send()
+    }
+
+    func isBlocked(peerID: PeerID) -> Bool {
+        if peerID.isGeoDM || peerID.isGeoChat,
+           let hex = chatViewModel.fullNostrHex(forSenderPeerID: peerID) {
+            return chatViewModel.isGeohashUserBlocked(pubkeyHexLowercased: hex)
+        }
+        return chatViewModel.isPeerBlocked(peerID)
+    }
+
+    func toggleBlock(for peerID: PeerID, displayName: String) {
+        if isBlocked(peerID: peerID) {
+            if peerID.isGeoDM || peerID.isGeoChat,
+               let hex = chatViewModel.fullNostrHex(forSenderPeerID: peerID) {
+                chatViewModel.unblockGeohashUser(pubkeyHexLowercased: hex, displayName: displayName)
+            } else {
+                chatViewModel.unblockMeshPeer(peerID: peerID, displayName: displayName)
+            }
+        } else {
+            if peerID.isGeoDM || peerID.isGeoChat,
+               let hex = chatViewModel.fullNostrHex(forSenderPeerID: peerID) {
+                chatViewModel.blockGeohashUser(pubkeyHexLowercased: hex, displayName: displayName)
+            } else {
+                chatViewModel.blockMeshPeer(peerID: peerID, displayName: displayName)
+            }
+        }
+        refreshSelectedConversation()
+        objectWillChange.send()
+    }
+
+    func clearHistory(for peerID: PeerID) {
+        conversations.clear(.directPeer(peerID))
+        chatViewModel.flushPersistedPrivateHistorySynchronously()
+        objectWillChange.send()
+    }
+
     private func bind() {
         conversations.$selectedPrivatePeerID
             .receive(on: DispatchQueue.main)
@@ -248,18 +357,40 @@ final class PrivateConversationModel: ObservableObject {
         // the local mesh, and the per-peer encryption badge does not apply.
         if conversationPeerID.isGroup {
             let displayName: String
+            var meshCount = 0
+            var nostrCount = 0
+            var otherCount = 0
             if let group = chatViewModel.groupStore.group(for: conversationPeerID) {
                 displayName = "#\(group.name) (\(group.members.count))"
+                let myFP = chatViewModel.myNoiseFingerprint()
+                for member in group.members where member.fingerprint != myFP {
+                    otherCount += 1
+                    let onMesh = chatViewModel.connectedPeerID(forFingerprint: member.fingerprint) != nil
+                    let onNostr = chatViewModel.nostrReachablePeerID(forFingerprint: member.fingerprint) != nil
+                    if onMesh {
+                        meshCount += 1
+                    } else if onNostr {
+                        nostrCount += 1
+                    }
+                }
             } else {
                 displayName = String(localized: "common.unknown", comment: "Fallback label for unknown peer")
             }
+            let groupAvailability: PrivateConversationAvailability = {
+                if meshCount > 0 { return .bluetoothConnected }
+                if nostrCount > 0 { return .nostrAvailable }
+                return .offline
+            }()
             return PrivateConversationHeaderState(
                 conversationPeerID: conversationPeerID,
                 headerPeerID: conversationPeerID,
                 displayName: displayName,
-                availability: .meshReachable,
+                availability: groupAvailability,
                 isFavorite: false,
-                encryptionStatus: nil
+                encryptionStatus: nil,
+                groupMeshReachableCount: meshCount,
+                groupNostrReachableCount: nostrCount,
+                groupOtherMemberCount: otherCount
             )
         }
 

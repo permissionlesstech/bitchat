@@ -833,7 +833,7 @@ struct ViewSmokeTests {
         viewModel.conversations.appendBatch(meshHistory, to: .mesh)
 
         let rootView = installSmokeEnvironment(
-            ContentView().environment(\.appTheme, .liquidGlass),
+            ContentView(initialTab: .nearby).environment(\.appTheme, .liquidGlass),
             featureModels: featureModels
         )
         let host = UIHostingController(rootView: rootView)
@@ -930,7 +930,7 @@ struct ViewSmokeTests {
         let meshFeatureModels = makeSmokeFeatureModels(for: meshViewModel)
         meshViewModel.bluetoothState = .poweredOff
         let meshHost = UIHostingController(rootView: installSmokeEnvironment(
-            ContentView().environment(\.appTheme, .liquidGlass),
+            ContentView(initialTab: .nearby).environment(\.appTheme, .liquidGlass),
             featureModels: meshFeatureModels
         ))
         window.rootViewController = meshHost

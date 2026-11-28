@@ -63,6 +63,9 @@ final class AppRuntime: ObservableObject {
         idBridge: NostrIdentityBridge = .shared,
         sharedContentStore: SharedContentStore? = nil
     ) {
+        if !TestEnvironment.isRunningTests {
+            PrivacyModeSettings.migrateLegacyInstallIfNeeded()
+        }
         self.idBridge = idBridge
         let conversations = ConversationStore()
         let peerIdentityStore = PeerIdentityStore()
@@ -78,7 +81,13 @@ final class AppRuntime: ObservableObject {
             locationPresenceStore: locationPresenceStore,
             locationManager: locationManager
         )
-        self.publicChatModel = PublicChatModel(conversations: conversations)
+        let chatVMForPublicModel = self.chatViewModel
+        self.publicChatModel = PublicChatModel(
+            conversations: conversations,
+            myPeerIDProvider: { [weak chatVMForPublicModel] in
+                chatVMForPublicModel?.meshService.myPeerID
+            }
+        )
         self.privateInboxModel = PrivateInboxModel(conversations: conversations)
         self.locationChannelsModel = LocationChannelsModel(manager: locationManager)
         self.privateConversationModel = PrivateConversationModel(
@@ -191,6 +200,18 @@ final class AppRuntime: ObservableObject {
     func handleOpenURL(_ url: URL) {
         if url.scheme == "bitchat", url.host == "share" {
             checkForSharedContent()
+            return
+        }
+        if let invite = FriendInvite.parse(url: url) {
+            _ = chatViewModel.acceptFriendInvite(invite)
+            return
+        }
+        if url.scheme?.lowercased() == "bitchat",
+           url.host?.lowercased() == "geohash" {
+            let geohash = url.path.trimmingCharacters(in: CharacterSet(charactersIn: "/")).lowercased()
+            if Geohash.isValidGeohash(geohash) {
+                locationChannelsModel.teleport(to: geohash)
+            }
         }
     }
 
@@ -213,6 +234,7 @@ final class AppRuntime: ObservableObject {
     func handleScenePhaseChange(_ newPhase: ScenePhase) {
         switch newPhase {
         case .background:
+            chatViewModel.flushPersistedPrivateHistorySynchronously()
             chatViewModel.setAppActive(false)
             TorManager.shared.setAppForeground(false)
             TorManager.shared.goDormantOnBackground()
@@ -248,6 +270,7 @@ final class AppRuntime: ObservableObject {
                 }
             }
 
+            chatViewModel.pruneAllExpiredPrivateMessages()
             chatViewModel.handleDidBecomeActive()
             checkForSharedContent()
 
@@ -261,6 +284,7 @@ final class AppRuntime: ObservableObject {
     #endif
 
     func applicationWillTerminate() {
+        chatViewModel.flushPersistedPrivateHistorySynchronously()
         chatViewModel.applicationWillTerminate()
     }
 

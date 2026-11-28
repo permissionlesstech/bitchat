@@ -38,9 +38,22 @@ struct PTTSettingsTests {
     @Test func panicResetRestoresTheOffDefault() {
         let defaults = isolatedDefaults()
         PTTSettings.setLiveVoiceEnabled(true, in: defaults)
+        PTTSettings.setToneCuesEnabled(false, in: defaults)
 
-        // Panic wipe restores the safe default rather than the last choice.
+        // Panic wipe restores the safe defaults rather than the last choice.
         PTTSettings.reset(in: defaults)
         #expect(!PTTSettings.liveVoiceEnabled(in: defaults))
+        #expect(PTTSettings.toneCuesEnabled(in: defaults))
+    }
+
+    @Test func toneCuesDefaultOnAndRoundTrip() {
+        let defaults = isolatedDefaults()
+        #expect(PTTSettings.toneCuesEnabled(in: defaults))
+
+        PTTSettings.setToneCuesEnabled(false, in: defaults)
+        #expect(!PTTSettings.toneCuesEnabled(in: defaults))
+
+        PTTSettings.setToneCuesEnabled(true, in: defaults)
+        #expect(PTTSettings.toneCuesEnabled(in: defaults))
     }
 }

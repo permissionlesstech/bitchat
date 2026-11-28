@@ -9,10 +9,15 @@ import UIKit
 final class ConversationUIModel: ObservableObject {
     @Published private(set) var currentNickname: String
     @Published private(set) var canSendMediaInCurrentContext = true
+    /// Voice push-to-talk is available in Nearby `#mesh`, 1:1 mesh DMs, and
+    /// mesh groups (images remain disabled in groups).
+    @Published private(set) var canSendVoiceInCurrentContext = true
     @Published private(set) var legacyPrivateMediaConsentRequest: LegacyPrivateMediaConsentRequest?
     /// Who is talking live in the public mesh channel right now (floor
     /// courtesy: the composer mic tints "busy" while someone holds the floor).
     @Published private(set) var activeLiveVoiceTalker: String?
+    /// Peer talking live in a direct message right now, if any.
+    @Published private(set) var activeDirectLiveVoiceTalker: LiveVoiceTalker?
 
     private let chatViewModel: ChatViewModel
     private let privateConversationModel: PrivateConversationModel
@@ -40,7 +45,10 @@ final class ConversationUIModel: ObservableObject {
         self.activeChannel = conversations.activeChannel
         self.currentNickname = chatViewModel.nickname
         self.canSendMediaInCurrentContext = chatViewModel.canSendMediaInCurrentContext
+        self.canSendVoiceInCurrentContext = chatViewModel.canSendMediaInCurrentContext
+            || (privateConversationModel.selectedPeerID?.isGroup == true)
         self.activeLiveVoiceTalker = chatViewModel.activePublicVoiceTalker
+        self.activeDirectLiveVoiceTalker = chatViewModel.activeDirectVoiceTalker
         self.legacyPrivateMediaConsentRequest = chatViewModel.legacyPrivateMediaConsentRequest
 
         bind()
@@ -112,6 +120,10 @@ final class ConversationUIModel: ObservableObject {
 
     func formatMessageHeader(_ message: BitchatMessage, colorScheme: ColorScheme, theme: AppTheme? = nil) -> AttributedString {
         chatViewModel.formatMessageHeader(message, colorScheme: colorScheme, theme: theme)
+    }
+
+    func colorForSenderName(_ senderName: String, isDark: Bool) -> Color {
+        chatViewModel.colorForSenderName(senderName, isDark: isDark)
     }
 
     func mediaAttachment(for message: BitchatMessage) -> BitchatMessage.Media? {
@@ -217,6 +229,43 @@ final class ConversationUIModel: ObservableObject {
         chatViewModel.liveVoiceCoordinator.isLiveVoiceMessage(message)
     }
 
+    /// Availability of live push-to-talk for the currently active conversation.
+    func currentLiveVoiceAvailability() -> ChatViewModel.LiveVoiceAvailability {
+        chatViewModel.currentLiveVoiceAvailability()
+    }
+
+    var canStreamLiveVoiceNow: Bool {
+        switch currentLiveVoiceAvailability() {
+        case .liveReadyPublic, .liveReadyDM, .liveReadyGroup:
+            return true
+        case .disabledByUser, .dmHandshaking, .dmOutOfRadioRange, .groupNoReachableMembers, .unsupported:
+            return false
+        }
+    }
+
+    /// Name of the active live talker in whichever conversation is currently
+    /// open (public `#mesh`, the selected DM, or the selected group), or `nil`
+    /// if nobody is talking.
+    func activeTalkerInCurrentContext(selectedPeerID: PeerID?) -> String? {
+        if let selectedPeerID {
+            guard let direct = activeDirectLiveVoiceTalker else { return nil }
+            if selectedPeerID.isGroup {
+                return direct.peerID == selectedPeerID ? direct.nickname : nil
+            }
+            guard direct.peerID.toShort() == selectedPeerID.toShort() else {
+                return nil
+            }
+            return direct.nickname
+        }
+        guard activeChannel == .mesh else { return nil }
+        return activeLiveVoiceTalker
+    }
+
+    /// Stops active live speaker playback immediately without disabling live capture.
+    func muteActiveLiveVoicePlayback() {
+        chatViewModel.liveVoiceCoordinator.muteActivePlayback()
+    }
+
     func cancelMediaSend(messageID: String) {
         chatViewModel.cancelMediaSend(messageID: messageID)
     }
@@ -239,6 +288,12 @@ final class ConversationUIModel: ObservableObject {
             .dropFirst()
             .receive(on: DispatchQueue.main)
             .assign(to: &$activeLiveVoiceTalker)
+
+        chatViewModel.$activeDirectVoiceTalker
+            .removeDuplicates()
+            .dropFirst()
+            .receive(on: DispatchQueue.main)
+            .assign(to: &$activeDirectLiveVoiceTalker)
 
         chatViewModel.$legacyPrivateMediaConsentRequest
             .removeDuplicates()
@@ -280,16 +335,19 @@ final class ConversationUIModel: ObservableObject {
 
     private func refreshComputedState() {
         let canSendMedia: Bool
+        let canSendVoice: Bool
         if let selectedPeerID = privateConversationModel.selectedPeerID {
-            // Media transfer is not wired for groups in v1; keep it off so the
-            // composer can't strand a media placeholder that never sends.
+            // Image transfer is not wired for groups in v1; live voice PTT is.
             canSendMedia = !(selectedPeerID.isGeoDM || selectedPeerID.isGeoChat || selectedPeerID.isGroup)
+            canSendVoice = !(selectedPeerID.isGeoDM || selectedPeerID.isGeoChat)
         } else {
             switch activeChannel {
             case .mesh:
                 canSendMedia = true
+                canSendVoice = true
             case .location:
                 canSendMedia = false
+                canSendVoice = false
             }
         }
         // Every write republishes to every message row, and most triggers
@@ -297,6 +355,9 @@ final class ConversationUIModel: ObservableObject {
         // value as it was.
         if canSendMediaInCurrentContext != canSendMedia {
             canSendMediaInCurrentContext = canSendMedia
+        }
+        if canSendVoiceInCurrentContext != canSendVoice {
+            canSendVoiceInCurrentContext = canSendVoice
         }
     }
 }

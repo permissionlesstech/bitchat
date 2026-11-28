@@ -76,9 +76,8 @@ struct GeohashPickerView: View {
                 Spacer(minLength: 0)
                 bottomControls
             }
-            .padding(.horizontal, 16)
-            .padding(.top, 20)
-            .padding(.bottom, 20)
+            .padding(.top, 4)
+            .padding(.bottom, 6)
         }
         #if os(macOS)
         .frame(minWidth: 560, minHeight: 640)
@@ -92,75 +91,83 @@ struct GeohashPickerView: View {
     // MARK: - Chrome
 
     private var topBar: some View {
-        HStack(spacing: 10) {
+        AppTopBar {
             Text(Strings.instruction)
-                .bitchatFont(size: 12)
-                .foregroundColor(palette.primary)
-                .multilineTextAlignment(.center)
-                .fixedSize(horizontal: false, vertical: true)
-                .padding(.horizontal, 14)
-                .padding(.vertical, 10)
-                .frame(maxWidth: .infinity)
-                .geohashPickerPanel()
-
+                .bitchatFont(size: 12.5, weight: .medium)
+                .foregroundColor(palette.secondary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
+        } trailing: {
             SheetCloseButton(action: onCancel)
                 .foregroundColor(palette.primary)
-                .frame(width: 40, height: 40)
-                .geohashPickerPanel(cornerRadius: 20)
         }
     }
 
     private var bottomControls: some View {
-        VStack(spacing: 10) {
-            VStack(spacing: 2) {
+        HStack(spacing: 10) {
+            VStack(alignment: .leading, spacing: 2) {
                 Text(verbatim: hasSelection ? "#\(state.selectedGeohash)" : Strings.noSelection)
-                    .bitchatFont(size: 14, weight: .medium)
+                    .bitchatFont(size: 16, weight: .bold)
                     .foregroundColor(palette.primary)
+                    .lineLimit(1)
                 if hasSelection {
-                    Text(verbatim: "\(GeohashCoverage.level(forLength: state.precision).displayName) • \(GeohashCoverage.string(forPrecision: state.precision))")
-                        .bitchatFont(size: 10)
+                    Text(verbatim: "\(GeohashCoverage.level(forLength: state.precision).displayName) · \(GeohashCoverage.string(forPrecision: state.precision))")
+                        .bitchatFont(size: 11)
                         .foregroundColor(palette.secondary)
+                        .lineLimit(1)
                 }
             }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 8)
-            .geohashPickerPanel()
             .accessibilityElement(children: .combine)
 
-            HStack(spacing: 10) {
+            Spacer(minLength: 6)
+
+            HStack(spacing: 0) {
                 precisionButton(systemImage: "minus", label: Strings.decreasePrecision) {
                     state.animatePrecision(state.precision - 1)
                 }
+                Rectangle()
+                    .fill(palette.divider)
+                    .frame(width: 1, height: 18)
                 precisionButton(systemImage: "plus", label: Strings.increasePrecision) {
                     state.animatePrecision(state.precision + 1)
                 }
-                Button {
-                    guard hasSelection else { return }
-                    onSelect(state.selectedGeohash)
-                } label: {
-                    HStack(spacing: 6) {
-                        Image(systemName: "checkmark")
-                            .font(.bitchatSystem(size: 14, weight: .semibold))
-                        Text(verbatim: Strings.select)
-                            .bitchatFont(size: 12)
-                    }
-                    .foregroundColor(palette.primary)
-                    .pickerCapsule(fill: palette.accentBlue.opacity(0.12))
-                }
-                .buttonStyle(.plain)
-                .disabled(!hasSelection)
-                .opacity(hasSelection ? 1 : 0.38)
-                .accessibilityLabel(Strings.selectHint)
             }
+            .background(palette.cardBackground)
+            .overlay(
+                Capsule()
+                    .stroke(palette.cardBorder, lineWidth: 1)
+            )
+            .clipShape(Capsule())
+
+            Button {
+                guard hasSelection else { return }
+                onSelect(state.selectedGeohash)
+            } label: {
+                Text(verbatim: Strings.select.capitalized)
+                    .bitchatFont(size: 13, weight: .semibold)
+                    .foregroundColor(palette.accentForeground)
+                    .padding(.horizontal, 16)
+                    .frame(height: 36)
+                    .background(palette.accent)
+                    .clipShape(Capsule())
+            }
+            .buttonStyle(.plain)
+            .disabled(!hasSelection)
+            .opacity(hasSelection ? 1 : 0.4)
+            .accessibilityLabel(Strings.selectHint)
         }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 10)
+        .themedChromePanel(edge: .bottom)
     }
 
     private func precisionButton(systemImage: String, label: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Image(systemName: systemImage)
-                .font(.bitchatSystem(size: 16, weight: .semibold))
-                .foregroundColor(palette.locationAccent)
-                .pickerCapsule(fill: palette.locationAccent.opacity(0.12))
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundColor(palette.primary)
+                .frame(width: 34, height: 34)
+                .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .accessibilityLabel(label)
@@ -209,42 +216,5 @@ struct GeohashPickerView: View {
                 star: onSurfaceVariant
             )
         }
-    }
-}
-
-// MARK: - Styling
-
-private struct GeohashPickerPanel: ViewModifier {
-    @Environment(\.appTheme) private var theme
-    @ThemedPalette private var palette
-    let cornerRadius: CGFloat
-
-    @ViewBuilder
-    func body(content: Content) -> some View {
-        if theme.usesGlassChrome {
-            content.themedOverlayPanel()
-        } else {
-            let shape = RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-            content
-                .background(shape.fill(palette.background.opacity(0.85)))
-                .overlay(shape.stroke(palette.divider, lineWidth: 1))
-                .shadow(color: .black.opacity(0.25), radius: 6, x: 0, y: 2)
-        }
-    }
-}
-
-private extension View {
-    /// Floating translucent surface for the picker's hint, readout and close button.
-    func geohashPickerPanel(cornerRadius: CGFloat = 12) -> some View {
-        modifier(GeohashPickerPanel(cornerRadius: cornerRadius))
-    }
-
-    /// Pill button body sized like a standard 40pt-tall button.
-    func pickerCapsule(fill: Color) -> some View {
-        self
-            .padding(.horizontal, 24)
-            .frame(minHeight: 40)
-            .background(Capsule().fill(fill))
-            .contentShape(Capsule())
     }
 }

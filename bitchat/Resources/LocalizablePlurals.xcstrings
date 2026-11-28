@@ -116,7 +116,7 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "rendezvous cell: %1$@ · %2$#@people@"
+            "value": "Rendezvous cell: %1$@ · %2$#@people@"
           },
           "substitutions": {
             "people": {
@@ -1567,7 +1567,7 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "vouched for by %#@people@ you verified"
+            "value": "Vouched for by %#@people@ you verified"
           },
           "substitutions": {
             "people": {

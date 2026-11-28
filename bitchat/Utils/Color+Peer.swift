@@ -34,6 +34,15 @@ enum PeerColorContrast {
         let adjustedBrightness = max(brightness, minBri)
         return (min(1.0, max(0.0, adjustedSaturation)), min(1.0, max(0.0, adjustedBrightness)))
     }
+
+    /// Signature orange reserved for the local user's own messages and @mentions.
+    /// In Dark Mode uses bright system orange; in Light Mode deepens slightly to
+    /// a burnt orange so contrast on white / light-glass canvases matches peers.
+    static func selfColor(isDark: Bool) -> Color {
+        isDark
+            ? .orange
+            : Color(hue: 28.0 / 360.0, saturation: 0.90, brightness: 0.70)
+    }
 }
 
 extension Color {

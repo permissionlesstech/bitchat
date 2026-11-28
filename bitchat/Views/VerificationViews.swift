@@ -397,23 +397,13 @@ struct VerificationSheetView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            // Top header (always at top)
-            HStack {
-                Text(String(localized: "verification.sheet.title"))
-                    .bitchatFont(size: 14, weight: .bold)
-                    .foregroundColor(accentColor)
-                Spacer()
-                SheetCloseButton {
+            ThemedSheetHeader(
+                title: String(localized: "verification.sheet.title", defaultValue: "Verify Identity", comment: "Title for the verification QR sheet"),
+                onClose: {
                     showingScanner = false
                     isPresented = false
                 }
-                .foregroundColor(accentColor)
-            }
-            .padding(.horizontal, 16)
-            .padding(.top, 12)
-            .padding(.bottom, 8)
-
-            Divider()
+            )
 
             // Content area
             Group {

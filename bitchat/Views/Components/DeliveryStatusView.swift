@@ -188,7 +188,7 @@ struct MessageDeliveryStatusButton: View {
 }
 
 /// Expanded delivery-status caption under an outgoing private message.
-/// Failure reasons stay visible without a tap; other statuses reveal on demand.
+/// Failure reasons and courier handoffs stay visible without a tap; other statuses reveal on demand.
 struct MessageDeliveryDetailCaption: View {
     @ThemedPalette private var palette
     let status: DeliveryStatus
@@ -199,6 +199,11 @@ struct MessageDeliveryDetailCaption: View {
             Text(verbatim: status.bitchatDescription)
                 .bitchatFont(size: 11)
                 .foregroundColor(Color.red.opacity(0.9))
+                .fixedSize(horizontal: false, vertical: true)
+        } else if case .carried = status {
+            Text(verbatim: status.bitchatDescription)
+                .bitchatFont(size: 11)
+                .foregroundColor(Color.orange.opacity(0.85))
                 .fixedSize(horizontal: false, vertical: true)
         } else if showDetail {
             Text(verbatim: status.bitchatDescription)

@@ -2,6 +2,12 @@ import BitFoundation
 import BitLogger
 import Foundation
 
+/// Remote peer currently streaming a live voice burst in a DM.
+struct LiveVoiceTalker: Equatable {
+    let peerID: PeerID
+    let nickname: String
+}
+
 /// The narrow surface `ChatLiveVoiceCoordinator` needs from its owner.
 ///
 /// Follows the `ChatDeliveryContext` exemplar: the coordinator depends on the
@@ -42,6 +48,26 @@ protocol ChatLiveVoiceContext: AnyObject {
     /// Publishes who is currently talking live in the public mesh channel
     /// (floor-courtesy indicator on the composer mic), nil when nobody is.
     func setActivePublicVoiceTalker(_ nickname: String?)
+    /// Publishes who is currently talking live in a direct message or group, nil when nobody is.
+    func setActiveDirectVoiceTalker(_ talker: LiveVoiceTalker?)
+    /// Verifies that `senderPeerID` belongs to `groupID` and returns the
+    /// group's virtual `PeerID`, or `nil` if unknown/unauthorized.
+    func resolveAuthorizedGroupPeerID(forGroupID groupID: Data, senderPeerID: PeerID) -> PeerID?
+    /// Appends an inbound live voice bubble into a group conversation, marking
+    /// unread and notifying if the user isn't currently viewing that group.
+    func appendGroupLiveVoiceMessage(_ message: BitchatMessage, to groupPeerID: PeerID)
+    /// Stable preference key for per-chat live voice auto-listen rules.
+    func autoListenPolicyKey(for peerID: PeerID) -> String
+    /// Whether notifications/audio are muted for this conversation.
+    func isConversationMutedForLiveVoice(_ peerID: PeerID) -> Bool
+}
+
+extension ChatLiveVoiceContext {
+    func setActiveDirectVoiceTalker(_ talker: LiveVoiceTalker?) {}
+    func resolveAuthorizedGroupPeerID(forGroupID groupID: Data, senderPeerID: PeerID) -> PeerID? { nil }
+    func appendGroupLiveVoiceMessage(_ message: BitchatMessage, to groupPeerID: PeerID) {}
+    func autoListenPolicyKey(for peerID: PeerID) -> String { peerID.id }
+    func isConversationMutedForLiveVoice(_ peerID: PeerID) -> Bool { false }
 }
 
 extension ChatViewModel: ChatLiveVoiceContext {
@@ -62,11 +88,46 @@ extension ChatViewModel: ChatLiveVoiceContext {
             activePublicVoiceTalker = nickname
         }
     }
+
+    func setActiveDirectVoiceTalker(_ talker: LiveVoiceTalker?) {
+        if activeDirectVoiceTalker != talker {
+            activeDirectVoiceTalker = talker
+        }
+    }
+
+    func resolveAuthorizedGroupPeerID(forGroupID groupID: Data, senderPeerID: PeerID) -> PeerID? {
+        guard let group = groupStore.group(withID: groupID),
+              let fingerprint = meshFingerprint(for: senderPeerID),
+              group.isMember(fingerprint: fingerprint) else {
+            return nil
+        }
+        return group.peerID
+    }
+
+    func appendGroupLiveVoiceMessage(_ message: BitchatMessage, to groupPeerID: PeerID) {
+        _ = appendPrivateMessage(message, to: groupPeerID)
+        if selectedPrivateChatPeer != groupPeerID {
+            markPrivateChatUnread(groupPeerID)
+            notifyPrivateMessage(from: message.sender, message: message.content, peerID: groupPeerID)
+        }
+    }
+
+    func autoListenPolicyKey(for peerID: PeerID) -> String {
+        if peerID.isGroup {
+            return peerID.id
+        }
+        return getFingerprint(for: peerID) ?? peerID.id
+    }
+
+    func isConversationMutedForLiveVoice(_ peerID: PeerID) -> Bool {
+        isConversationMuted(for: peerID)
+    }
 }
 
-/// Where a live voice burst lives: a Noise DM or the public mesh timeline.
+/// Where a live voice burst lives: a Noise DM, a mesh group, or the public mesh timeline.
 enum VoiceBurstScope: Hashable {
     case directMessage
+    case group(PeerID)
     case publicMesh
 }
 
@@ -279,11 +340,25 @@ final class ChatLiveVoiceCoordinator {
             return
         }
 
+        // Group-scoped live bursts ride encrypted Noise sessions (never public
+        // broadcast) and carry a 16-byte groupID verified against local membership.
+        let resolvedScope: VoiceBurstScope
+        if let groupID = packet.groupID {
+            guard scope == .directMessage,
+                  let groupPeerID = context.resolveAuthorizedGroupPeerID(forGroupID: groupID, senderPeerID: peerID) else {
+                SecureLogger.debug("PTT: dropping unauthorized/unknown group voice frame from \(peerID.id.prefix(8))…", category: .security)
+                return
+            }
+            resolvedScope = .group(groupPeerID)
+        } else {
+            resolvedScope = scope
+        }
+
         // The sender is authenticated (Noise session or packet signature),
         // and the key binds the burst ID to that (peer, scope): a colliding
         // START from another peer opens its own assembly instead of
         // capturing this one's frames.
-        let key = AssemblyKey(peerID: peerID, scope: scope, burstID: packet.burstID)
+        let key = AssemblyKey(peerID: peerID, scope: resolvedScope, burstID: packet.burstID)
         let payloadByteCount = payload.count
         if let assembly = assemblies[key] {
             apply(packet, payloadByteCount: payloadByteCount, to: assembly)
@@ -298,7 +373,7 @@ final class ChatLiveVoiceCoordinator {
                 SecureLogger.debug("PTT: dropping burst from \(peerID.id.prefix(8))… — assembly cap reached", category: .session)
                 return
             }
-            guard let assembly = makeAssembly(burstID: packet.burstID, peerID: peerID, scope: scope, nickname: nickname, timestamp: timestamp) else { return }
+            guard let assembly = makeAssembly(burstID: packet.burstID, peerID: peerID, scope: resolvedScope, nickname: nickname, timestamp: timestamp) else { return }
             assemblies[key] = assembly
             updatePublicTalkerIndicator()
             apply(packet, payloadByteCount: payloadByteCount, to: assembly)
@@ -311,6 +386,19 @@ final class ChatLiveVoiceCoordinator {
     /// Whether this message is the bubble of a burst still streaming in.
     func isLiveVoiceMessage(_ message: BitchatMessage) -> Bool {
         assemblies.values.contains { $0.messageID == message.id }
+    }
+
+    /// Stops any live speaker playback immediately (when the user taps Mute)
+    /// while continuing to record the inbound stream into its replayable bubble.
+    func muteActivePlayback() {
+        for assembly in assemblies.values {
+            assembly.player?.stop()
+            assembly.player = nil
+        }
+        for player in drainingPlayers.values {
+            player.stop()
+        }
+        drainingPlayers.removeAll(keepingCapacity: false)
     }
 
     /// Stop every live file handle/player before the panic media directory is
@@ -328,6 +416,7 @@ final class ChatLiveVoiceCoordinator {
         createdCaptureFileNames.removeAll(keepingCapacity: false)
         startupSweepTask?.cancel()
         startupSweepTask = nil
+        SystemPTTChannelManager.shared.leaveCurrentChannel()
         updatePublicTalkerIndicator()
     }
 
@@ -412,6 +501,8 @@ final class ChatLiveVoiceCoordinator {
             }
         case .publicMesh:
             context.upsertPublicMeshMessage(replacement)
+        case .group(let groupPeerID):
+            context.upsertPrivateMessage(replacement, in: groupPeerID)
         }
 
         // The complete .m4a replaces the partial live capture.
@@ -454,7 +545,10 @@ final class ChatLiveVoiceCoordinator {
             return nil
         }
 
-        let isPrivate = scope == .directMessage
+        let isPrivate: Bool = switch scope {
+        case .directMessage, .group: true
+        case .publicMesh: false
+        }
         let message = BitchatMessage(
             sender: nickname,
             content: "\(MimeType.Category.audio.messagePrefix)\(fileURL.lastPathComponent)",
@@ -483,29 +577,90 @@ final class ChatLiveVoiceCoordinator {
         switch scope {
         case .directMessage:
             context.handlePrivateMessage(message)
+        case .group(let groupPeerID):
+            context.appendGroupLiveVoiceMessage(message, to: groupPeerID)
         case .publicMesh:
             context.appendPublicMeshMessage(message)
         }
 
         // Live playback only when the user is looking at this conversation
-        // with the app frontmost and live voice enabled.
-        let isViewing = switch scope {
-        case .directMessage: context.selectedPrivateChatPeer == peerID
-        case .publicMesh: context.isViewingPublicMeshTimeline
+        // with the app frontmost, live voice enabled, speaker unmuted, and the
+        // conversation's auto-listen policy allows automatic playback.
+        let isViewing: Bool
+        let policyAllowsAutoPlay: Bool
+        switch scope {
+        case .directMessage:
+            isViewing = context.selectedPrivateChatPeer?.toShort() == peerID.toShort()
+            policyAllowsAutoPlay = PTTSettings.shouldAutoPlayInbound(
+                isPublicMesh: false,
+                chatKey: context.autoListenPolicyKey(for: peerID),
+                isChatMuted: context.isConversationMutedForLiveVoice(peerID),
+                liveEnabled: liveVoiceEnabled(),
+                isSpeakerMuted: PTTSettings.isAutoListenMuted
+            )
+        case .group(let groupPeerID):
+            isViewing = context.selectedPrivateChatPeer == groupPeerID
+            policyAllowsAutoPlay = PTTSettings.shouldAutoPlayInbound(
+                isPublicMesh: false,
+                chatKey: context.autoListenPolicyKey(for: groupPeerID),
+                isChatMuted: context.isConversationMutedForLiveVoice(groupPeerID),
+                liveEnabled: liveVoiceEnabled(),
+                isSpeakerMuted: PTTSettings.isAutoListenMuted
+            )
+        case .publicMesh:
+            isViewing = context.isViewingPublicMeshTimeline
+            policyAllowsAutoPlay = PTTSettings.shouldAutoPlayInbound(
+                isPublicMesh: true,
+                chatKey: nil,
+                isChatMuted: false,
+                liveEnabled: liveVoiceEnabled(),
+                isSpeakerMuted: PTTSettings.isAutoListenMuted
+            )
         }
-        if liveVoiceEnabled(), PTTSettings.isAppActive, isViewing {
+        if policyAllowsAutoPlay, PTTSettings.isAppActive, isViewing {
             assembly.player = PTTBurstPlayer()
+            if assembly.player != nil {
+                WalkieFeedback.incomingBurstStarted()
+            }
         }
 
         SecureLogger.debug("PTT: burst \(burstID.hexEncodedString()) started from \(peerID.id.prefix(8))…", category: .session)
         return assembly
     }
 
-    /// Keeps the composer's floor-courtesy indicator pointing at whoever is
-    /// currently talking live in the public mesh channel.
+    /// Keeps the floor-courtesy and live-talker indicators pointing at whoever
+    /// is currently talking live in the public mesh channel, a DM, or a group.
     private func updatePublicTalkerIndicator() {
-        let talker = assemblies.values.first { $0.scope == .publicMesh }?.nickname
-        context.setActivePublicVoiceTalker(talker)
+        let publicTalker = assemblies.values.first { $0.scope == .publicMesh }?.nickname
+        context.setActivePublicVoiceTalker(publicTalker)
+
+        let selected = context.selectedPrivateChatPeer
+        let matchingDirect = assemblies.values.first { assembly in
+            switch assembly.scope {
+            case .directMessage:
+                return selected != nil && selected?.toShort() == assembly.peerID.toShort()
+            case .group(let groupPeerID):
+                return selected == groupPeerID
+            case .publicMesh:
+                return false
+            }
+        } ?? assemblies.values.first {
+            switch $0.scope {
+            case .directMessage, .group: return true
+            case .publicMesh: return false
+            }
+        }
+
+        let directTalker: LiveVoiceTalker? = matchingDirect.map { assembly in
+            switch assembly.scope {
+            case .group(let groupPeerID):
+                return LiveVoiceTalker(peerID: groupPeerID, nickname: assembly.nickname)
+            case .directMessage, .publicMesh:
+                return LiveVoiceTalker(peerID: assembly.peerID, nickname: assembly.nickname)
+            }
+        }
+        context.setActiveDirectVoiceTalker(directTalker)
+        SystemPTTChannelManager.shared.reportRemoteSpeaker(directTalker?.nickname ?? publicTalker)
     }
 
     private func apply(_ packet: VoiceBurstPacket, payloadByteCount: Int, to assembly: Assembly) {
@@ -658,7 +813,7 @@ final class ChatLiveVoiceCoordinator {
 
     private func removeBubble(of assembly: Assembly) {
         switch assembly.scope {
-        case .directMessage:
+        case .directMessage, .group:
             context.removePrivateMessage(withID: assembly.messageID)
         case .publicMesh:
             context.removeMessage(withID: assembly.messageID, cleanupFile: false)
@@ -669,20 +824,26 @@ final class ChatLiveVoiceCoordinator {
         // Same row (same ID), content re-pointed at `fileURL`; the delivery
         // status is carried over because the inbound pipeline may have
         // updated it on the shared original.
+        let isPrivate: Bool = switch assembly.scope {
+        case .directMessage, .group: true
+        case .publicMesh: false
+        }
         let message = BitchatMessage(
             id: assembly.messageID,
             sender: assembly.nickname,
             content: "\(MimeType.Category.audio.messagePrefix)\(fileURL.lastPathComponent)",
             timestamp: assembly.messageTimestamp,
             isRelay: false,
-            isPrivate: assembly.scope == .directMessage,
-            recipientNickname: assembly.scope == .directMessage ? context.nickname : nil,
+            isPrivate: isPrivate,
+            recipientNickname: isPrivate ? context.nickname : nil,
             senderPeerID: assembly.peerID,
             deliveryStatus: assembly.message.deliveryStatus
         )
         switch assembly.scope {
         case .directMessage:
             context.upsertPrivateMessage(message, in: assembly.peerID)
+        case .group(let groupPeerID):
+            context.upsertPrivateMessage(message, in: groupPeerID)
         case .publicMesh:
             context.upsertPublicMeshMessage(message)
         }
@@ -787,7 +948,11 @@ final class ChatLiveVoiceCoordinator {
     /// so live captures can never absorb a note.
     private func makeIncomingURL(burstID: Data, peerID: PeerID, scope: VoiceBurstScope) -> URL? {
         guard let directory = try? fileStore.incomingDirectory(subdirectory: Self.incomingSubdirectory) else { return nil }
-        let scopeTag = scope == .directMessage ? "dm" : "mesh"
+        let scopeTag: String = switch scope {
+        case .directMessage: "dm"
+        case .publicMesh: "mesh"
+        case .group(let groupPeerID): "grp_\(groupPeerID.id.prefix(12))"
+        }
         return directory.appendingPathComponent("\(BLEIncomingFileStore.liveCapturePrefix)\(burstID.hexEncodedString())_\(peerID.id)_\(scopeTag).aac")
     }
 
