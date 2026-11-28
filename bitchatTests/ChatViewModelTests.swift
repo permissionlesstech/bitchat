@@ -711,11 +711,12 @@ struct ChatViewModelFormattingTests {
 
         #expect(String(header.characters) == "<@Alice#a1b2> ")
         #expect(String(fullText.characters).hasPrefix("<@Alice#a1b2> hello"))
+        let senderColor = viewModel.colorForPeer(id: PeerID(str: "00000000000000b3"), isDark: true)
         #expect(
             message.getCachedFormattedText(
                 isDark: true,
                 isSelf: false,
-                variant: ChatMessageFormatter.headerCacheNamespace
+                variant: ChatMessageFormatter.headerCacheNamespace + "|\(senderColor.hashValue)"
             ) == header
         )
         // Later lookups are answered from each one's own cache entry.
