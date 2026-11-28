@@ -1137,7 +1137,7 @@ private final class BoundedReaderStubURLProtocol: URLProtocol, @unchecked Sendab
         return stopCountsByURL[url] ?? 0
     }
 
-    override class func canInit(with request: URLRequest) -> Bool {
+    override static func canInit(with request: URLRequest) -> Bool {
         guard let url = request.url else { return false }
         lock.lock()
         let registered = behaviorsByURL[url] != nil
@@ -1145,7 +1145,7 @@ private final class BoundedReaderStubURLProtocol: URLProtocol, @unchecked Sendab
         return registered
     }
 
-    override class func canonicalRequest(for request: URLRequest) -> URLRequest {
+    override static func canonicalRequest(for request: URLRequest) -> URLRequest {
         request
     }
 
