@@ -365,7 +365,8 @@ private struct MessageListContentView: View {
                                 }
                             }
                         }
-                        .padding(.vertical, 2)
+                        .padding(.top, 8)
+                        .padding(.bottom, 2)
 
                         // Only carried history on screen: the ambient layer (radar,
                         // sightings, live hints) stays visible below it instead of
@@ -947,9 +948,7 @@ private struct MessageRowView: View, Equatable {
                 }
             }
             .padding(.horizontal, 12)
-            .padding(.vertical, 1)
-            // Archived echoes read as one tinted block, not just faded rows.
-            .background(message.isArchivedEcho ? palette.secondary.opacity(0.08) : Color.clear)
+            .padding(.vertical, 2)
     }
 
     @ViewBuilder

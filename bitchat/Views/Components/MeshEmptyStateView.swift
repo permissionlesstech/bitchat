@@ -98,9 +98,6 @@ struct MeshEmptyStateView: View {
                 if let conversation = nearbyConversation {
                     conversationHint(conversation)
                 }
-                if showsCheckNotesHint {
-                    checkNotesHint
-                }
             } else {
                 // The radar + tally already say "scanning, nobody yet", so
                 // the narration stays to two lines with the live hint after
@@ -109,9 +106,6 @@ struct MeshEmptyStateView: View {
                 narrationLine(Strings.switchHint)
                 if let conversation = nearbyConversation {
                     conversationHint(conversation)
-                }
-                if showsCheckNotesHint {
-                    checkNotesHint
                 }
 
                 // The radar centers in whatever space is left below the
