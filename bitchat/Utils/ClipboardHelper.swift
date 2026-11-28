@@ -14,12 +14,12 @@ import AppKit
 #endif
 
 enum ClipboardHelper {
+    #if os(iOS)
     /// Auto-expire copied messages, fingerprints, and tokens after two minutes
     /// on iOS and keep clipboard entries strictly local to this device so
     /// Universal Clipboard / Handoff never broadcasts them to nearby Apple devices.
     private static let expirationInterval: TimeInterval = 120
-
-    #if os(macOS)
+    #elseif os(macOS)
     private static let transientType = NSPasteboard.PasteboardType("org.nspasteboard.TransientType")
     private static let concealedType = NSPasteboard.PasteboardType("org.nspasteboard.ConcealedType")
     #endif
