@@ -90,6 +90,6 @@ f76134e09706af4bd9535676b0a53eb898b6ec7a1750165acee9a754d499412e  localPackages/
 
 - Record `rustc --version`, `cargo --version`, `cbindgen --version`, and `xcodebuild -version` in the PR when refreshing the binary.
 - Include the hash output above after any binary change.
-- If a rebuild changes only xcframework/library bytes, record the new hashes and app validation evidence in the PR.
+- CI fails a binary change unless the same PR also changes `localPackages/Arti/Cargo.toml`, `Cargo.lock`, `build-ios.sh`, or `arti-bitchat/` (a change to this doc alone does not count). Record the new hashes and app validation evidence in the PR.
 - Keep `target/`, `.build/`, and `.swiftpm/` out of source control.
 - Do not accept an xcframework-only update without matching source, lockfile, or build-script evidence explaining where it came from.

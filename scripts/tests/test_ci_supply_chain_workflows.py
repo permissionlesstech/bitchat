@@ -124,6 +124,11 @@ class ArtiProvenanceWorkflowTests(unittest.TestCase):
             if "uses:" in line:
                 self.assertRegex(line, SHA_PINNED_USES)
 
+    def test_change_detection_does_not_shallow_fetch_the_base(self) -> None:
+        # Checkout already has full history. A second --depth fetch cuts the
+        # history of a newer base tip, and "base...HEAD" has no merge base.
+        self.assertNotIn("--depth", self.directives)
+
 
 class BuildIosAndSwiftTestsHardeningTests(unittest.TestCase):
     def test_build_ios_uses_locked_exact_target_match_and_no_eval(self) -> None:
