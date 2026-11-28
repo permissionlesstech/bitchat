@@ -31311,6 +31311,192 @@
         }
       }
     },
+    "command.fav.ambiguous" : {
+      "comment" : "Error when /fav or /unfav matches multiple offline peer identities",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "القرين %@ غامض — افتح المحادثة أو انقر على صف القرين مباشرة"
+          }
+        },
+        "bn" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "অস্পষ্ট পিয়ার %@ — চ্যাট খুলুন বা সরাসরি পিয়ার সারিতে ট্যাপ করুন"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "mehrdeutiger peer %@ — öffne den chat oder tippe direkt auf die peer-zeile"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ambiguous peer %@ — open the chat or tap the peer row directly"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "peer ambiguo %@ — abre el chat o toca la fila del peer directamente"
+          }
+        },
+        "fa" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "همتای مبهم %@ — گفت‌وگو را باز کنید یا مستقیماً روی ردیف همتا ضربه بزنید"
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "hindi malinaw na peer %@ — buksan ang chat o direktang i-tap ang row ng peer"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "pair ambigu %@ — ouvrez la discussion ou appuyez directement sur la ligne du pair"
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "עמית דו-משמעי %@ — פתח את הצ'אט או הקש ישירות על שורת העמית"
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "अस्पष्ट पीयर %@ — चैट खोलें या सीधे पीयर पंक्ति पर टैप करें"
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "peer ambigu %@ — buka obrolan atau ketuk baris peer secara langsung"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "peer ambiguo %@ — apri la chat o tocca direttamente la riga del peer"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ピア %@ が曖昧です — チャットを開くかピアの行を直接タップしてください"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "모호한 피어 %@ — 채팅을 열거나 피어 행을 직접 탭하세요"
+          }
+        },
+        "ms" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "rakan kabur %@ — buka sembang atau ketik baris rakan secara terus"
+          }
+        },
+        "ne" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "अस्पष्ट पियर %@ — च्याट खोल्नुहोस् वा पियरको पङ्क्तिमा सिधै ट्याप गर्नुहोस्"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "dubbelzinnige peer %@ — open de chat of tik direct op de peer-rij"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "niejednoznaczny peer %@ — otwórz czat lub stuknij bezpośrednio wiersz peera"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "peer ambíguo %@ — abre o chat ou toca diretamente na linha do peer"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "peer ambíguo %@ — abra o chat ou toque diretamente na linha do peer"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "неоднозначный пир %@ — откройте чат или нажмите на строку пира напрямую"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "tvetydig person %@ — öppna chatten eller tryck direkt på raden"
+          }
+        },
+        "ta" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "தெளிவற்ற நபர் %@ — அரட்டையைத் திறக்கவும் அல்லது நபர் வரிசையை நேரடியாகத் தட்டவும்"
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ระบุตัวตน %@ ไม่ชัดเจน — เปิดแชตหรือแตะที่แถวของคนนี้โดยตรง"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "belirsiz kişi %@ — sohbeti açın veya kişi satırına doğrudan dokunun"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "неоднозначна людина %@ — відкрийте чат або натисніть безпосередньо на рядок"
+          }
+        },
+        "ur" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "مبہم شخص %@ — چیٹ کھولیں یا براہِ راست اس شخص کی قطار پر ٹیپ کریں"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "người dùng %@ không rõ ràng — hãy mở cuộc trò chuyện hoặc chạm trực tiếp vào hàng của họ"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "无法唯一确定 %@ — 请打开聊天或直接轻点该联系人所在行"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "無法唯一確定 %@ — 請開啟聊天或直接點按該聯絡人所在列"
+          }
+        }
+      }
+    },
     "command.fav.not_favorite" : {
       "comment" : "Reply when /unfav targets someone who isn't a favorite",
       "extractionState" : "manual",
