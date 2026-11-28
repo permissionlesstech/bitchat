@@ -1,5 +1,6 @@
 import Testing
 import Foundation
+@testable import bitchat
 
 /// Guards against locale gaps in the string catalogs: every translatable key
 /// must have a localization for every supported locale, so no user ever sees
@@ -221,8 +222,105 @@ struct LocalizationCoverageTests {
     }
 
     private static let mainCatalogPath = "bitchat/Localizable.xcstrings"
+    private static let pluralsCatalogPath = "bitchat/Resources/LocalizablePlurals.xcstrings"
     private static let shareExtensionCatalogPath =
         "bitchatShareExtension/Localization/Localizable.xcstrings"
+
+    /// Ensures `LocalizablePlurals.xcstrings` stays strictly in sync with all
+    /// plural/substitution entries in `bitchat/Localizable.xcstrings`.
+    /// Regenerate with:
+    /// `python3 scripts/compress_localizations.py --input bitchat/Localizable.xcstrings --plurals-out bitchat/Resources/LocalizablePlurals.xcstrings`
+    @Test func localizablePluralsMatchesMainCatalog() throws {
+        let mainStrings = try Self.loadStrings(Self.mainCatalogPath)
+        let pluralStrings = try Self.loadStrings(Self.pluralsCatalogPath)
+
+        let expectedPluralKeys = Set(mainStrings.compactMap { key, value -> String? in
+            guard let entry = value as? [String: Any],
+                  let locs = entry["localizations"] as? [String: Any]
+            else { return nil }
+            let hasPlural = locs.values.contains { rawLoc in
+                guard let loc = rawLoc as? [String: Any] else { return false }
+                return loc["variations"] != nil || loc["substitutions"] != nil
+            }
+            return hasPlural ? key : nil
+        })
+
+        #expect(Set(pluralStrings.keys) == expectedPluralKeys)
+        for key in expectedPluralKeys.sorted() {
+            let mainData = try JSONSerialization.data(
+                withJSONObject: try #require(mainStrings[key]),
+                options: [.sortedKeys]
+            )
+            let pluralData = try JSONSerialization.data(
+                withJSONObject: try #require(pluralStrings[key]),
+                options: [.sortedKeys]
+            )
+            #expect(
+                mainData == pluralData,
+                "LocalizablePlurals.xcstrings entry for '\(key)' drifted from Localizable.xcstrings"
+            )
+        }
+    }
+
+    /// Exercises raw-deflate decompression, multi-locale lookup, English
+    /// fallback, and (when hosted inside the app bundle) runtime resolution of
+    /// both compressed plain strings and native CLDR plural strings.
+    @Test func compressedLocalizationsRoundTripAndBundleResolution() throws {
+        let payload: [String: Any] = [
+            "k": ["common.cancel", "only.en"],
+            "l": [
+                "en": ["cancel", "english only"],
+                "es": ["cancelar", ""],
+                "fa": ["لغو", ""],
+                "ja": ["キャンセル", ""],
+                "ar": ["إلغاء", ""]
+            ]
+        ]
+        let raw = try JSONSerialization.data(withJSONObject: payload)
+        let compressed = try (raw as NSData).compressed(using: .zlib) as Data
+
+        let spanish = CompressedLocalizations(compressedData: compressed, preferredLanguages: ["es-MX"])
+        #expect(spanish.lookup("common.cancel") == "cancelar")
+        #expect(spanish.lookup("only.en") == "english only")
+        #expect(spanish.lookup("missing.key") == nil)
+
+        let farsi = CompressedLocalizations(compressedData: compressed, preferredLanguages: ["fa"])
+        #expect(farsi.lookup("common.cancel") == "لغو")
+
+        let japanese = CompressedLocalizations(compressedData: compressed, preferredLanguages: ["ja-JP"])
+        #expect(japanese.lookup("common.cancel") == "キャンセル")
+
+        let arabic = CompressedLocalizations(compressedData: compressed, preferredLanguages: ["ar"])
+        #expect(arabic.lookup("common.cancel") == "إلغاء")
+
+        let unsupported = CompressedLocalizations(compressedData: compressed, preferredLanguages: ["xx"])
+        #expect(unsupported.lookup("common.cancel") == "cancel")
+
+        if Bundle.main.bundlePath.hasSuffix(".app") {
+            #expect(CompressedLocalizations.shared.lookup("common.cancel") != nil)
+            #expect(String(localized: "common.cancel") != "common.cancel")
+            #expect(!String(localized: "common.cancel").isEmpty)
+
+            let onePerson = String(
+                format: String(localized: "app_info.settings.bridge.cell_people"),
+                locale: Locale(identifier: "en"),
+                "9q8yy",
+                1
+            )
+            let twoPeople = String(
+                format: String(localized: "app_info.settings.bridge.cell_people"),
+                locale: Locale(identifier: "en"),
+                "9q8yy",
+                2
+            )
+            #expect(onePerson.contains("1"))
+            #expect(twoPeople.contains("2"))
+            #expect(onePerson != twoPeople)
+
+            let mainCatalog = try Self.loadCatalog(Self.mainCatalogPath)
+            #expect(Set(AppLanguageSettings.availableLanguages) == mainCatalog.allLocales)
+        }
+    }
 
     /// A literal `String(localized:)` key, with where it was written.
     private struct KeyReference {

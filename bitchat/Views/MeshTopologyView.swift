@@ -40,12 +40,12 @@ struct MeshTopologyView: View {
         #if os(macOS)
         VStack(spacing: 0) {
             HStack {
-                Text("topology.title")
+                Text(String(localized: "topology.title"))
                     .bitchatFont(size: 16, weight: .bold)
                     .foregroundColor(palette.primary)
                 Spacer()
                 refreshButton
-                Button("app_info.done") {
+                Button(String(localized: "app_info.done")) {
                     dismiss()
                 }
                 .buttonStyle(.plain)
@@ -62,7 +62,7 @@ struct MeshTopologyView: View {
         NavigationView {
             content
                 .themedSheetBackground()
-                .navigationTitle(Text("topology.title"))
+                .navigationTitle(Text(String(localized: "topology.title")))
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar {
                     ToolbarItem(placement: .navigationBarLeading) {
@@ -86,7 +86,7 @@ struct MeshTopologyView: View {
                 .foregroundColor(palette.primary)
         }
         .buttonStyle(.plain)
-        .accessibilityLabel(Text("topology.refresh"))
+        .accessibilityLabel(Text(String(localized: "topology.refresh")))
     }
 
     @ViewBuilder
@@ -94,7 +94,7 @@ struct MeshTopologyView: View {
         VStack(spacing: 12) {
             if model.nodes.count <= 1 {
                 Spacer()
-                Text("topology.empty")
+                Text(String(localized: "topology.empty"))
                     .bitchatFont(size: 14)
                     .foregroundColor(palette.secondary)
                     .multilineTextAlignment(.center)
@@ -109,7 +109,7 @@ struct MeshTopologyView: View {
                 Text(summaryText)
                     .bitchatFont(size: 13, weight: .semibold)
                     .foregroundColor(palette.primary)
-                Text("topology.caption")
+                Text(String(localized: "topology.caption"))
                     .bitchatFont(size: 11)
                     .foregroundColor(palette.secondary)
                     .multilineTextAlignment(.center)

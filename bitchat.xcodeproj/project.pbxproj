@@ -78,6 +78,7 @@
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
 				Info.plist,
+				Localizable.xcstrings,
 				ViewModels/Extensions/README.md,
 			);
 			target = AF077EA0474EDEDE2C72716C /* bitchat_iOS */;
@@ -87,6 +88,7 @@
 			membershipExceptions = (
 				Info.plist,
 				LaunchScreen.storyboard,
+				Localizable.xcstrings,
 				ViewModels/Extensions/README.md,
 			);
 			target = 0576A29205865664C0937536 /* bitchat_macOS */;
@@ -216,6 +218,7 @@
 			buildPhases = (
 				137ABE739BF20ACDDF8CC605 /* Sources */,
 				0214973A876129753D39EB47 /* Resources */,
+				C6F1E2A34B5C6D7E8F901235 /* Compress Localizations */,
 				31F6FDADA63050361C14F3A1 /* Frameworks */,
 			);
 			buildRules = (
@@ -297,6 +300,7 @@
 			buildPhases = (
 				4E49E34F00154C051AE90FED /* Sources */,
 				CD6E8F32BC38357473954F97 /* Resources */,
+				C6F1E2A34B5C6D7E8F901234 /* Compress Localizations */,
 				B5A5CC493FFB3D8966548140 /* Frameworks */,
 				B6C356449BAE4E0F650565D1 /* Embed Foundation Extensions */,
 			);
@@ -400,6 +404,43 @@
 			);
 		};
 /* End PBXResourcesBuildPhase section */
+
+/* Begin PBXShellScriptBuildPhase section */
+		C6F1E2A34B5C6D7E8F901234 /* Compress Localizations */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputPaths = (
+				"$(SRCROOT)/bitchat/Localizable.xcstrings",
+				"$(SRCROOT)/scripts/compress_localizations.py",
+			);
+			name = "Compress Localizations";
+			outputPaths = (
+				"$(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/Localizations.zlib",
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "/usr/bin/python3 -B \"${SRCROOT}/scripts/compress_localizations.py\" --input \"${SRCROOT}/bitchat/Localizable.xcstrings\" --zlib-out \"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/Localizations.zlib\"\n";
+		};
+		C6F1E2A34B5C6D7E8F901235 /* Compress Localizations */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputPaths = (
+				"$(SRCROOT)/bitchat/Localizable.xcstrings",
+				"$(SRCROOT)/scripts/compress_localizations.py",
+			);
+			name = "Compress Localizations";
+			outputPaths = (
+				"$(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/Localizations.zlib",
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "/usr/bin/python3 -B \"${SRCROOT}/scripts/compress_localizations.py\" --input \"${SRCROOT}/bitchat/Localizable.xcstrings\" --zlib-out \"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/Localizations.zlib\"\n";
+		};
+/* End PBXShellScriptBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
 		0A08E70F08F55FD5BA8C7EF3 /* Sources */ = {

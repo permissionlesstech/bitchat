@@ -40,6 +40,9 @@ let package = Package(
                 "bitchat-macOS.entitlements",
                 "LaunchScreen.storyboard",
                 "ViewModels/Extensions/README.md",
+                // Plural-only catalog used by the Xcode app targets alongside
+                // Localizations.zlib; SwiftPM compiles Localizable.xcstrings directly.
+                "Resources/LocalizablePlurals.xcstrings",
                 // Globe picker geometry, bundled by the Xcode app targets and read
                 // from Bundle.main; the SwiftPM build only runs tests.
                 "Resources/Globe"

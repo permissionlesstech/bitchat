@@ -5,8 +5,8 @@ import SwiftUI
 /// surfaces (App Info's connectivity toggles and friends).
 struct IRCToggleStyle: ToggleStyle {
     let accent: Color
-    let onLabel: LocalizedStringKey
-    let offLabel: LocalizedStringKey
+    let onLabel: String
+    let offLabel: String
 
     func makeBody(configuration: Configuration) -> some View {
         Button(action: { configuration.isOn.toggle() }) {
