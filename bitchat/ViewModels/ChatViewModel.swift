@@ -1649,7 +1649,7 @@ final class ChatViewModel: ObservableObject, SynchronousMessageTransportEventDel
 
     @MainActor
     @discardableResult
-    func toggleFavorite(peerID: PeerID) -> Bool {
+    func toggleFavorite(peerID: PeerID) -> FavoriteToggleOutcome {
         peerIdentityCoordinator.toggleFavorite(peerID: peerID)
     }
 

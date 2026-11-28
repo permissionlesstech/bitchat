@@ -3,6 +3,18 @@ import BitLogger
 import CoreBluetooth
 import Foundation
 
+enum ShortPeerNoiseKeyResolution: Equatable {
+    case resolved(Data)
+    case notFound
+    case ambiguous
+}
+
+enum FavoriteToggleOutcome: Equatable {
+    case toggled
+    case notFound
+    case ambiguous
+}
+
 /// The narrow surface `ChatPeerIdentityCoordinator` needs from its owner.
 ///
 /// Follows the `ChatDeliveryContext` exemplar: the coordinator depends on the
@@ -58,8 +70,9 @@ protocol ChatPeerIdentityContext: AnyObject {
     func unifiedPeerID(forNickname nickname: String) -> PeerID?
     /// Resolves the ephemeral (short) peer ID for a known Noise public key, if connected.
     func ephemeralPeerID(forNoiseKey noiseKey: Data) -> PeerID?
-    /// Resolves a unique persisted 32-byte Noise key for an offline 16-hex short peer ID.
-    func knownNoiseKey(forShortPeerID peerID: PeerID) -> Data?
+    /// Resolves a persisted 32-byte Noise key for an offline 16-hex short peer ID,
+    /// distinguishing missing identities from prefix collisions.
+    func resolveKnownNoiseKey(forShortPeerID peerID: PeerID) -> ShortPeerNoiseKeyResolution
 
     // MARK: Mesh & Noise sessions
     func peerNickname(for peerID: PeerID) -> String?
@@ -134,12 +147,18 @@ extension ChatViewModel: ChatPeerIdentityContext {
         unifiedPeerService.toggleFavorite(peerID)
     }
 
-    func knownNoiseKey(forShortPeerID peerID: PeerID) -> Data? {
-        guard peerID.isShort else { return nil }
+    func resolveKnownNoiseKey(forShortPeerID peerID: PeerID) -> ShortPeerNoiseKeyResolution {
+        guard peerID.isShort else { return .notFound }
         let matches = identityManager.getCryptoIdentitiesByPeerIDPrefix(peerID)
             .filter { $0.publicKey.count == FavoritesPersistenceService.expectedNoiseKeyLength }
-        guard matches.count == 1 else { return nil }
-        return matches[0].publicKey
+        switch matches.count {
+        case 0:
+            return .notFound
+        case 1:
+            return .resolved(matches[0].publicKey)
+        default:
+            return .ambiguous
+        }
     }
 
     func unifiedFingerprint(for peerID: PeerID) -> String? {
@@ -283,27 +302,30 @@ final class ChatPeerIdentityCoordinator {
 
     @MainActor
     @discardableResult
-    func toggleFavorite(peerID: PeerID) -> Bool {
+    func toggleFavorite(peerID: PeerID) -> FavoriteToggleOutcome {
         if let noisePublicKey = peerID.noiseKey {
-            return toggleFavoriteForNoiseKey(noisePublicKey, peerID: peerID)
+            return toggleFavoriteForNoiseKey(noisePublicKey, peerID: peerID) ? .toggled : .notFound
         }
 
         if context.unifiedPeer(for: peerID) != nil {
-            return context.unifiedToggleFavorite(peerID)
+            return context.unifiedToggleFavorite(peerID) ? .toggled : .notFound
         }
 
         // Offline 16-hex mesh conversation: resolve the underlying 32-byte
         // Noise key from the favorites store or persisted crypto identities
         // so one-sided favorites and offline passersby can still be toggled.
         if let relationship = context.favoriteRelationship(forPeerID: peerID) {
-            return toggleFavoriteForNoiseKey(relationship.peerNoisePublicKey, peerID: peerID)
+            return toggleFavoriteForNoiseKey(relationship.peerNoisePublicKey, peerID: peerID) ? .toggled : .notFound
         }
 
-        if let noisePublicKey = context.knownNoiseKey(forShortPeerID: peerID) {
-            return toggleFavoriteForNoiseKey(noisePublicKey, peerID: peerID)
+        switch context.resolveKnownNoiseKey(forShortPeerID: peerID) {
+        case .resolved(let noisePublicKey):
+            return toggleFavoriteForNoiseKey(noisePublicKey, peerID: peerID) ? .toggled : .notFound
+        case .ambiguous:
+            return .ambiguous
+        case .notFound:
+            return .notFound
         }
-
-        return false
     }
 
     @MainActor
@@ -652,7 +674,7 @@ extension ChatPeerIdentityContext {
         privateChats[peerID] ?? []
     }
 
-    func knownNoiseKey(forShortPeerID peerID: PeerID) -> Data? {
-        nil
+    func resolveKnownNoiseKey(forShortPeerID peerID: PeerID) -> ShortPeerNoiseKeyResolution {
+        .notFound
     }
 }

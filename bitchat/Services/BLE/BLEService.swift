@@ -2848,13 +2848,24 @@ final class BLEService: NSObject {
     func sendFavoriteNotification(to peerID: PeerID, isFavorite: Bool) {
         SecureLogger.debug("🔔 sendFavoriteNotification peer=\(peerID.id.prefix(8))… isFavorite=\(isFavorite)", category: .session)
         
-        // Include Nostr public key in the notification
+        // Include a cryptographically bound Nostr identity bundle on [FAVORITED]
+        // so the mesh peer can verify our npub belongs to our Noise static key
+        // (backwards-compatible with 1.x parsers reading parts[1]).
         var content = isFavorite ? "[FAVORITED]" : "[UNFAVORITED]"
         var includesNostrIdentity = false
         
-        // Add our Nostr public key if available
         if let myNostrIdentity = try? idBridge.getCurrentNostrIdentity() {
-            content += ":" + myNostrIdentity.npub
+            if isFavorite,
+               let signedInvite = FriendInvite.makeSigned(
+                   nickname: myNickname,
+                   noisePublicKey: noiseStaticPublicKeyData(),
+                   signingPublicKey: noiseSigningPublicKeyData(),
+                   nostrIdentity: myNostrIdentity
+               ) {
+                content = signedInvite.favoriteAcceptancePayload()
+            } else {
+                content += ":" + myNostrIdentity.npub
+            }
             includesNostrIdentity = true
             SecureLogger.debug("📝 Favorite notification includes Nostr npub=\(myNostrIdentity.npub.prefix(16))…", category: .session)
         }

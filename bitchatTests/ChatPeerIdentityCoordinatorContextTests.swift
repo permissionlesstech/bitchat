@@ -88,7 +88,7 @@ private final class MockChatPeerIdentityContext: ChatPeerIdentityContext {
     var fingerprintsByPeerID: [PeerID: String] = [:]
     var peerIDsByNickname: [String: PeerID] = [:]
     var ephemeralPeerIDsByNoiseKey: [Data: PeerID] = [:]
-    var knownNoiseKeysByShortPeerID: [PeerID: Data] = [:]
+    var knownNoiseKeyResolutionsByShortPeerID: [PeerID: ShortPeerNoiseKeyResolution] = [:]
     private(set) var toggledFavoritePeers: [PeerID] = []
     private(set) var favoriteEventLog: [String] = []
 
@@ -102,7 +102,9 @@ private final class MockChatPeerIdentityContext: ChatPeerIdentityContext {
     func unifiedFingerprint(for peerID: PeerID) -> String? { fingerprintsByPeerID[peerID] }
     func unifiedPeerID(forNickname nickname: String) -> PeerID? { peerIDsByNickname[nickname] }
     func ephemeralPeerID(forNoiseKey noiseKey: Data) -> PeerID? { ephemeralPeerIDsByNoiseKey[noiseKey] }
-    func knownNoiseKey(forShortPeerID peerID: PeerID) -> Data? { knownNoiseKeysByShortPeerID[peerID] }
+    func resolveKnownNoiseKey(forShortPeerID peerID: PeerID) -> ShortPeerNoiseKeyResolution {
+        knownNoiseKeyResolutionsByShortPeerID[peerID] ?? .notFound
+    }
 
     // Mesh & Noise sessions
     var nicknamesByPeerID: [PeerID: String] = [:]
@@ -499,14 +501,14 @@ struct ChatPeerIdentityCoordinatorContextTests {
         )
         #expect(coordinator.isFavorite(peerID: peerID) == true)
         let removed = coordinator.toggleFavorite(peerID: peerID)
-        #expect(removed == true)
+        #expect(removed == .toggled)
         #expect(context.removedFavorites == [noiseKey])
         #expect(context.nostrFavoriteNotifications.map(\.isFavorite) == [true, false])
         #expect(context.favoriteEventLog.suffix(2) == ["notify:false", "remove"])
     }
 
     @Test @MainActor
-    func toggleFavorite_offlineShortPeerID_resolvesFavoriteAndKnownNoiseKey() async {
+    func toggleFavorite_offlineShortPeerID_resolvesFavoriteKnownKeyAndSurfacesAmbiguity() async {
         let context = MockChatPeerIdentityContext()
         let coordinator = ChatPeerIdentityCoordinator(context: context)
         let noiseKey = Data(repeating: 0xCD, count: 32)
@@ -518,23 +520,28 @@ struct ChatPeerIdentityCoordinatorContextTests {
         context.favoriteRelationshipsByPeerID[shortPeerID] = rel
 
         #expect(coordinator.isFavorite(peerID: shortPeerID) == true)
-        #expect(coordinator.toggleFavorite(peerID: shortPeerID) == true)
+        #expect(coordinator.toggleFavorite(peerID: shortPeerID) == .toggled)
         #expect(context.removedFavorites == [noiseKey])
         #expect(context.favoriteEventLog == ["notify:false", "remove"])
 
         // Offline passerby not in favorites or unifiedPeerService, resolved via persisted crypto identity.
         let strangerKey = Data(repeating: 0xEF, count: 32)
         let strangerShortID = PeerID(publicKey: strangerKey)
-        context.knownNoiseKeysByShortPeerID[strangerShortID] = strangerKey
+        context.knownNoiseKeyResolutionsByShortPeerID[strangerShortID] = .resolved(strangerKey)
         context.nicknamesByPeerID[strangerShortID] = "carol"
 
         #expect(coordinator.isFavorite(peerID: strangerShortID) == false)
-        #expect(coordinator.toggleFavorite(peerID: strangerShortID) == true)
+        #expect(coordinator.toggleFavorite(peerID: strangerShortID) == .toggled)
         #expect(context.addedFavorites.last?.noiseKey == strangerKey)
         #expect(context.addedFavorites.last?.nickname == "carol")
 
-        // Completely unknown short ID returns false cleanly.
-        #expect(coordinator.toggleFavorite(peerID: PeerID(str: "0123456789abcdef")) == false)
+        // Prefix collision surfaces explicit ambiguity instead of pretending not found.
+        let ambiguousID = PeerID(str: "deadbeefdeadbeef")
+        context.knownNoiseKeyResolutionsByShortPeerID[ambiguousID] = .ambiguous
+        #expect(coordinator.toggleFavorite(peerID: ambiguousID) == .ambiguous)
+
+        // Completely unknown short ID returns .notFound cleanly.
+        #expect(coordinator.toggleFavorite(peerID: PeerID(str: "0123456789abcdef")) == .notFound)
     }
 
 }
