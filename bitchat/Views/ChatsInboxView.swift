@@ -128,7 +128,7 @@ struct ChatsInboxView: View {
         Button(action: onSwitchToNearby) {
             HStack(spacing: 8) {
                 Image(systemName: "antenna.radiowaves.left.and.right")
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(.system(size: 14, weight: .semibold))
                     .foregroundColor(palette.accentBlue)
                 Text(
                     peerListModel.reachableMeshPeerCount == 1
@@ -143,7 +143,7 @@ struct ChatsInboxView: View {
                 .foregroundColor(palette.primary)
                 Spacer()
                 Image(systemName: "chevron.right")
-                    .font(.system(size: 11, weight: .semibold))
+                    .font(.system(size: ChromeMetrics.rowChevronSize, weight: .semibold))
                     .foregroundColor(palette.secondary)
             }
             .padding(.horizontal, 14)

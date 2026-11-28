@@ -432,3 +432,22 @@ final class PlaceTitleResolutionTests: XCTestCase {
         XCTAssertEqual(title, "United States")
     }
 }
+
+final class AppRootTabPersistenceTests: XCTestCase {
+    func test_persistsAndRestoresLastSelectedTab() {
+        let suiteName = "AppRootTabPersistenceTests.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+
+        XCTAssertEqual(AppRootTab.persisted(in: defaults), .chats)
+
+        AppRootTab.persist(.places, in: defaults)
+        XCTAssertEqual(AppRootTab.persisted(in: defaults), .places)
+
+        AppRootTab.persist(.nearby, in: defaults)
+        XCTAssertEqual(AppRootTab.persisted(in: defaults), .nearby)
+
+        AppRootTab.persist(.settings, in: defaults)
+        XCTAssertEqual(AppRootTab.persisted(in: defaults), .settings)
+    }
+}

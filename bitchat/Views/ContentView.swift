@@ -159,11 +159,25 @@ struct FocusEffectDisabledModifier: ViewModifier {
     }
 }
 
-enum AppRootTab: Hashable {
+enum AppRootTab: String, Hashable {
     case chats
     case nearby
     case places
     case settings
+
+    static let storageKey = "app.lastSelectedTab"
+
+    static func persisted(in defaults: UserDefaults = .standard) -> AppRootTab {
+        guard let raw = defaults.string(forKey: storageKey),
+              let tab = AppRootTab(rawValue: raw) else {
+            return .chats
+        }
+        return tab
+    }
+
+    static func persist(_ tab: AppRootTab, in defaults: UserDefaults = .standard) {
+        defaults.set(tab.rawValue, forKey: storageKey)
+    }
 }
 
 struct ContentView: View {
@@ -201,8 +215,11 @@ struct ContentView: View {
     @State private var topChromeHeight: CGFloat = ChromeMetrics.barHeight + 4
     @State private var bottomChromeHeight: CGFloat = 54
 
-    init(initialTab: AppRootTab = .chats) {
-        _selectedTab = State(initialValue: initialTab)
+    private let shouldPersistSelection: Bool
+
+    init(initialTab: AppRootTab? = nil) {
+        self.shouldPersistSelection = (initialTab == nil)
+        _selectedTab = State(initialValue: initialTab ?? AppRootTab.persisted())
     }
 
     @ThemedPalette private var palette
@@ -380,6 +397,9 @@ struct ContentView: View {
             }
         }
         .onChange(of: selectedTab) { newTab in
+            if shouldPersistSelection {
+                AppRootTab.persist(newTab)
+            }
             switch newTab {
             case .nearby:
                 if case .location = locationChannelsModel.selectedChannel {
@@ -539,7 +559,8 @@ struct ContentView: View {
                 tab: .chats,
                 title: String(localized: "tab.chats", defaultValue: "Chats", comment: "Navigation item for Chats inbox"),
                 systemImage: "bubble.left.and.bubble.right.fill",
-                badgeCount: unreadChatsCount
+                badgeCount: unreadChatsCount,
+                showsAlertDot: unreadChatsCount > 0
             ),
             SectionNavItem(
                 tab: .nearby,

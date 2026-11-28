@@ -56,9 +56,10 @@ struct ContentHeaderView: View {
         AppTopBar {
             if let onBack {
                 Button(action: onBack) {
-                    HStack(spacing: 5) {
+                    HStack(spacing: 6) {
                         Image(systemName: "chevron.left")
-                            .font(.system(size: 14, weight: .semibold))
+                            .font(.system(size: ChromeMetrics.backChevronSize, weight: .semibold))
+                            .frame(width: 28, height: ChromeMetrics.iconTapSize)
                         VStack(alignment: .leading, spacing: 0) {
                             Text(placeTitle ?? String(localized: "tab.places", defaultValue: "Places", comment: "Back label to Places directory"))
                                 .bitchatFont(size: 17, weight: .bold)
@@ -100,7 +101,7 @@ struct ContentHeaderView: View {
                     } label: {
                         HStack(spacing: 4) {
                             Image(systemName: "antenna.radiowaves.left.and.right")
-                                .font(.system(size: 11, weight: .semibold))
+                                .font(.system(size: 12, weight: .semibold))
                             Text(headerOtherPeersCount, format: .number)
                                 .bitchatFont(size: 12, weight: .semibold)
                         }
@@ -158,7 +159,7 @@ struct ContentHeaderView: View {
                 } label: {
                     HStack(spacing: 4) {
                         Image(systemName: "person.2.fill")
-                            .font(.system(size: 11, weight: .semibold))
+                            .font(.system(size: 12, weight: .semibold))
                         Text(headerOtherPeersCount, format: .number)
                             .bitchatFont(size: 12, weight: .semibold)
                     }

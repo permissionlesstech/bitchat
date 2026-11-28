@@ -12,11 +12,13 @@
 
 import SwiftUI
 
-/// Standard height and icon metrics shared across all top bars.
+/// Standard height and icon metrics shared across all top bars and rows.
 enum ChromeMetrics {
     static let barHeight: CGFloat = 46
     static let iconSize: CGFloat = 16
     static let iconTapSize: CGFloat = 36
+    static let backChevronSize: CGFloat = 15
+    static let rowChevronSize: CGFloat = 12
 }
 
 /// Descriptor for one destination in the top-left section dropdown menu.
@@ -25,6 +27,9 @@ struct SectionNavItem<Tab: Hashable>: Identifiable {
     let title: String
     let systemImage: String
     var badgeCount: Int = 0
+    /// True only for actionable unread indicators (e.g. unread DMs in Chats),
+    /// never for passive presence counts like nearby BLE peers.
+    var showsAlertDot: Bool = false
 
     var id: Tab { tab }
 }
@@ -43,7 +48,7 @@ struct SectionNavMenu<Tab: Hashable>: View {
     }
 
     private var hasUnreadElsewhere: Bool {
-        items.contains { $0.tab != currentTab && $0.badgeCount > 0 }
+        items.contains { $0.tab != currentTab && $0.showsAlertDot }
     }
 
     var body: some View {
@@ -67,24 +72,20 @@ struct SectionNavMenu<Tab: Hashable>: View {
                 }
             }
         } label: {
-            HStack(spacing: 5) {
+            HStack(spacing: 6) {
                 Text(currentTitle)
                     .bitchatFont(size: 19, weight: .bold)
                     .foregroundColor(palette.primary)
                     .lineLimit(1)
 
-                ZStack(alignment: .topTrailing) {
-                    Image(systemName: "chevron.down")
-                        .font(.system(size: 11, weight: .bold))
-                        .foregroundColor(palette.secondary)
-                        .padding(.top, 2)
+                Image(systemName: "chevron.down")
+                    .font(.system(size: ChromeMetrics.rowChevronSize, weight: .semibold))
+                    .foregroundColor(palette.secondary)
 
-                    if hasUnreadElsewhere {
-                        Circle()
-                            .fill(palette.alertRed)
-                            .frame(width: 6, height: 6)
-                            .offset(x: 4, y: -2)
-                    }
+                if hasUnreadElsewhere {
+                    Circle()
+                        .fill(palette.alertRed)
+                        .frame(width: 7, height: 7)
                 }
             }
             .contentShape(Rectangle())

@@ -421,9 +421,9 @@ private struct ContentPrivateChatSheetView: View {
                             }
                         }) {
                             Image(systemName: "chevron.left")
-                                .font(.system(size: 15, weight: .semibold))
+                                .font(.system(size: ChromeMetrics.backChevronSize, weight: .semibold))
                                 .foregroundColor(palette.primary)
-                                .frame(width: 32, height: ChromeMetrics.iconTapSize)
+                                .frame(width: 28, height: ChromeMetrics.iconTapSize)
                                 .contentShape(Rectangle())
                         }
                         .buttonStyle(.plain)
@@ -598,60 +598,49 @@ private struct ContentPrivateHeaderInfoButton: View {
             HStack(spacing: 6) {
                 if headerState.isGroupConversation {
                     Image(systemName: "person.3.fill")
-                        .font(.bitchatSystem(size: 14))
+                        .font(.system(size: 14, weight: .medium))
                         .foregroundColor(palette.primary)
                         .accessibilityLabel(String(localized: "content.accessibility.group_chat", comment: "Accessibility label for the group chat indicator"))
                 } else {
                     switch headerState.availability {
                     case .bluetoothConnected:
                         Image(systemName: "dot.radiowaves.left.and.right")
-                            .font(.bitchatSystem(size: 14))
+                            .font(.system(size: 14, weight: .medium))
                             .foregroundColor(palette.primary)
                             .accessibilityLabel(String(localized: "content.accessibility.connected_mesh", comment: "Accessibility label for mesh-connected peer indicator"))
                     case .meshReachable:
                         Image(systemName: "point.3.filled.connected.trianglepath.dotted")
-                            .font(.bitchatSystem(size: 14))
+                            .font(.system(size: 14, weight: .medium))
                             .foregroundColor(palette.primary)
                             .accessibilityLabel(String(localized: "content.accessibility.reachable_mesh", comment: "Accessibility label for mesh-reachable peer indicator"))
                     case .nostrAvailable:
                         Image(systemName: "globe")
-                            .font(.bitchatSystem(size: 14))
+                            .font(.system(size: 14, weight: .medium))
                             .foregroundColor(.purple)
                             .accessibilityLabel(String(localized: "content.accessibility.available_nostr", comment: "Accessibility label for Nostr-available peer indicator"))
                     case .offline:
-                        // Slashed variant of the connected glyph — offline as
-                        // the negation of connected, no text label (a leading
-                        // one read as part of the name: "sin conexión bob").
-                        // VoiceOver still says it.
                         Image(systemName: "antenna.radiowaves.left.and.right.slash")
-                            .font(.bitchatSystem(size: 14))
+                            .font(.system(size: 14, weight: .medium))
                             .foregroundColor(palette.secondary)
                             .accessibilityLabel(String(localized: "mesh_peers.state.offline", comment: "State label for a peer that is not currently reachable"))
                     }
                 }
 
                 Text(headerState.displayName)
-                    .bitchatFont(size: 16, weight: .medium)
+                    .bitchatFont(size: 17, weight: .bold)
                     .foregroundColor(palette.primary)
-                    // Middle truncation keeps the identity suffix visible on
-                    // long nicknames instead of wrapping into the fixed-height
-                    // header.
                     .lineLimit(1)
                     .truncationMode(.middle)
 
                 if let encryptionStatus = headerState.encryptionStatus,
                    let icon = encryptionStatus.icon {
                     Image(systemName: icon)
-                        .font(.bitchatSystem(size: 14))
-                        // Optical centering: the lock glyphs' ink is bottom-heavy
-                        // (solid body, thin shackle), so geometric centering reads
-                        // ~1pt low next to the name. The seal badge is symmetric
-                        // and needs no lift.
-                        .offset(y: icon.hasPrefix("lock") ? -1 : 0)
+                        .font(.system(size: 13, weight: .medium))
+                        .offset(y: icon.hasPrefix("lock") ? -0.5 : 0)
                         .foregroundColor(
                             encryptionStatus == .noiseVerified || encryptionStatus == .noiseSecured
-                            ? palette.primary
-                            : Color.red
+                            ? palette.secondary
+                            : palette.alertRed
                         )
                         .accessibilityLabel(
                             String(

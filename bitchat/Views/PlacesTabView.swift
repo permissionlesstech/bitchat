@@ -275,9 +275,9 @@ struct PlacesTabView<RoomContent: View>: View {
                 ThemedCard {
                     HStack(spacing: 12) {
                         Image(systemName: count > 0 ? "pin.fill" : "pin")
-                            .font(.system(size: 16, weight: .semibold))
+                            .font(.system(size: 15, weight: .semibold))
                             .foregroundColor(count > 0 ? Color.orange : palette.locationAccent)
-                            .frame(width: 28, height: 28)
+                            .frame(width: 32, height: 32)
                             .background((count > 0 ? Color.orange : palette.locationAccent).opacity(0.14))
                             .clipShape(Circle())
 
@@ -399,16 +399,19 @@ struct PlacesTabView<RoomContent: View>: View {
                 Button {
                     showGlobePicker = true
                 } label: {
-                    HStack(spacing: 10) {
+                    HStack(spacing: 12) {
                         Image(systemName: "globe.americas.fill")
-                            .font(.system(size: 18))
+                            .font(.system(size: 15, weight: .semibold))
                             .foregroundColor(palette.locationAccent)
+                            .frame(width: 32, height: 32)
+                            .background(palette.locationAccent.opacity(0.14))
+                            .clipShape(Circle())
                         Text(String(localized: "places.action.pick_on_globe", defaultValue: "Pick a Place on the Globe", comment: "Button to open the 3D globe picker"))
                             .bitchatFont(size: 15, weight: .medium)
                             .foregroundColor(palette.primary)
                         Spacer()
                         Image(systemName: "chevron.right")
-                            .font(.system(size: 12))
+                            .font(.system(size: ChromeMetrics.rowChevronSize, weight: .semibold))
                             .foregroundColor(palette.secondary)
                     }
                     .contentShape(Rectangle())
@@ -522,9 +525,9 @@ struct PlacesTabView<RoomContent: View>: View {
                 locationChannelsModel.toggleBookmark(geohash)
             } label: {
                 Image(systemName: locationChannelsModel.isBookmarked(geohash) ? "bookmark.fill" : "bookmark")
-                    .font(.system(size: 14))
+                    .font(.system(size: 15, weight: .medium))
                     .foregroundColor(locationChannelsModel.isBookmarked(geohash) ? palette.locationAccent : palette.secondary)
-                    .frame(width: 34, height: 34)
+                    .frame(width: ChromeMetrics.iconTapSize, height: ChromeMetrics.iconTapSize)
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)

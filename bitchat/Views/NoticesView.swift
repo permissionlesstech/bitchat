@@ -454,113 +454,150 @@ struct NoticesView: View {
 
     private var locationNotesDisabledSection: some View {
         ScrollView {
-            Toggle(
-                isOn: Binding(
-                    get: { locationNotesEnabled },
-                    set: { enabled in
-                        locationNotesEnabled = enabled
-                        LocationNotesSettings.enabled = enabled
+            ThemedCard {
+                Toggle(
+                    isOn: Binding(
+                        get: { locationNotesEnabled },
+                        set: { enabled in
+                            locationNotesEnabled = enabled
+                            LocationNotesSettings.enabled = enabled
+                        }
+                    )
+                ) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(Strings.locationNotesTitle)
+                            .bitchatFont(size: 15, weight: .semibold)
+                            .foregroundColor(palette.primary)
+                        Text(Strings.locationNotesDescription)
+                            .bitchatFont(size: 13)
+                            .foregroundColor(palette.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
                     }
-                )
-            ) {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(Strings.locationNotesTitle)
-                        .bitchatFont(size: 14)
-                    Text(Strings.locationNotesDescription)
-                        .bitchatFont(size: 12)
-                        .foregroundColor(palette.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
                 }
+                .toggleStyle(.switch)
             }
-            .toggleStyle(.switch)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.horizontal, 16)
-            .padding(.vertical, 12)
+            .padding(16)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .themedSurface()
     }
 
     private var locationUnavailableSection: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 12) {
+            ThemedCard {
                 Text(Strings.locationUnavailable)
-                    .bitchatFont(size: 14)
+                    .bitchatFont(size: 13)
                     .foregroundColor(palette.secondary)
                     .fixedSize(horizontal: false, vertical: true)
-                Button(Strings.enableLocation) {
-                    locationChannelsModel.enableAndRefresh()
+                Button(action: { locationChannelsModel.enableAndRefresh() }) {
+                    Text(Strings.enableLocation)
+                        .bitchatFont(size: 14, weight: .semibold)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 10)
+                        .background(palette.accent)
+                        .foregroundColor(palette.accentForeground)
+                        .clipShape(RoundedRectangle(cornerRadius: palette.buttonRadius, style: .continuous))
                 }
-                .buttonStyle(.bordered)
+                .buttonStyle(.plain)
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.horizontal, 16)
-            .padding(.vertical, 12)
+            .padding(16)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .themedSurface()
     }
 
     private var composer: some View {
         VStack(alignment: .leading, spacing: 8) {
-            HStack(alignment: .top, spacing: 10) {
+            HStack(spacing: 6) {
+                if tab == .mesh {
+                    Button {
+                        urgent.toggle()
+                    } label: {
+                        HStack(spacing: 4) {
+                            Image(systemName: urgent ? "exclamationmark.triangle.fill" : "exclamationmark.triangle")
+                                .font(.system(size: 11, weight: .semibold))
+                            Text(Strings.urgentToggle)
+                                .bitchatFont(size: 11, weight: .semibold)
+                        }
+                        .padding(.horizontal, 9)
+                        .padding(.vertical, 5)
+                        .background(urgent ? palette.alertRed.opacity(0.16) : palette.cardBackground)
+                        .foregroundColor(urgent ? palette.alertRed : palette.secondary)
+                        .overlay(
+                            Capsule()
+                                .stroke(urgent ? palette.alertRed.opacity(0.4) : palette.cardBorder, lineWidth: 1)
+                        )
+                        .clipShape(Capsule())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(Strings.urgentToggle)
+                }
+
+                Spacer()
+
+                HStack(spacing: 4) {
+                    Text(Strings.expiryLabel)
+                        .bitchatFont(size: 11)
+                        .foregroundColor(palette.secondary)
+                        .padding(.trailing, 2)
+
+                    let expiryOptions: [(tag: Int, label: String, a11y: String)] = {
+                        var options: [(Int, String, String)] = []
+                        if tab == .geo {
+                            options.append((Self.permanentExpiry, "∞", Strings.permanentOption))
+                        }
+                        for days in [1, 3, 7] {
+                            let label = Strings.expiryDaysOption(days)
+                            options.append((days, label, label))
+                        }
+                        return options
+                    }()
+
+                    ForEach(expiryOptions, id: \.tag) { option in
+                        let isSelected = expiryDays == option.tag
+                        Button {
+                            expiryDays = option.tag
+                        } label: {
+                            Text(verbatim: option.label)
+                                .bitchatFont(size: 11, weight: isSelected ? .semibold : .medium)
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 4)
+                                .background(isSelected ? palette.accent : palette.cardBackground)
+                                .foregroundColor(isSelected ? palette.accentForeground : palette.secondary)
+                                .clipShape(Capsule())
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel(option.a11y)
+                    }
+                }
+            }
+            .padding(.horizontal, 14)
+
+            HStack(alignment: .bottom, spacing: 8) {
                 TextField(Strings.placeholder, text: $draft, axis: .vertical)
                     .textFieldStyle(.plain)
-                    .bitchatFont(size: 14)
-                    .lineLimit(maxDraftLines, reservesSpace: true)
-                    .padding(.vertical, 6)
+                    .bitchatFont(size: 15)
+                    .foregroundColor(palette.primary)
+                    .lineLimit(1...maxDraftLines)
+                    .padding(.vertical, 8)
+                    .padding(.horizontal, 8)
+                    .themedInputBackground()
+                    .frame(maxWidth: .infinity, alignment: .leading)
+
                 Button(action: send) {
                     Image(systemName: "arrow.up.circle.fill")
-                        .font(.bitchatSystem(size: 20))
-                        .foregroundColor(sendEnabled ? palette.accent : .secondary)
+                        .font(.system(size: 26, weight: .medium))
+                        .foregroundColor(sendEnabled ? palette.accent : palette.secondary.opacity(0.4))
+                        .frame(width: 32, height: 32)
                 }
-                .padding(.top, 2)
                 .buttonStyle(.plain)
                 .disabled(!sendEnabled)
                 .accessibilityLabel(Strings.send)
             }
-            // Both tabs pick an expiry (geo notes may be ∞); urgency is a
-            // mesh-board concept — notes are ambient by nature.
-            HStack(spacing: 12) {
-                if tab == .mesh {
-                    Toggle(isOn: $urgent) {
-                        Text(Strings.urgentToggle)
-                            .bitchatFont(size: 12)
-                            .foregroundColor(urgent ? palette.alertRed : palette.secondary)
-                    }
-                    .toggleStyle(.switch)
-                    .fixedSize()
-                    .accessibilityLabel(Strings.urgentToggle)
-                }
-                Spacer()
-                Text(Strings.expiryLabel)
-                    .bitchatFont(size: 12)
-                    .foregroundColor(palette.secondary)
-                Picker(Strings.expiryLabel, selection: $expiryDays) {
-                    // Mesh board posts must fade (the wire caps their
-                    // lifetime); only relay-backed geo notes can be ∞.
-                    if tab == .geo {
-                        Text(verbatim: "∞")
-                            .accessibilityLabel(Strings.permanentOption)
-                            .tag(Self.permanentExpiry)
-                    }
-                    ForEach([1, 3, 7], id: \.self) { days in
-                        Text(Strings.expiryDaysOption(days)).tag(days)
-                    }
-                }
-                .pickerStyle(.segmented)
-                // macOS segmented pickers render their own label; the themed
-                // Text alongside already carries it (and accessibility keeps
-                // the explicit label below).
-                .labelsHidden()
-                .fixedSize()
-                .accessibilityLabel(Strings.expiryLabel)
-            }
+            .padding(.horizontal, 8)
+            .padding(.vertical, 6)
+            .themedChromePanel(edge: .bottom)
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 14)
-        .themedSurface()
-        .overlay(Divider(), alignment: .top)
+        .padding(.top, 6)
+        .padding(.bottom, 4)
     }
 
     private var sendEnabled: Bool {
@@ -641,40 +678,42 @@ private struct NoticesList: View {
     private typealias Strings = NoticesView.Strings
 
     var body: some View {
-        Group {
-            if items.isEmpty {
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 4) {
-                        statusRows
-                        if showEmptyState {
-                            Text(Strings.emptyTitle)
-                                .bitchatFont(size: 13, weight: .semibold)
-                            Text(Strings.emptySubtitle)
-                                .bitchatFont(size: 12)
+        ScrollView {
+            LazyVStack(alignment: .leading, spacing: 10) {
+                statusRows
+
+                if items.isEmpty {
+                    if showEmptyState {
+                        VStack(spacing: 10) {
+                            Image(systemName: "pin")
+                                .font(.system(size: 24, weight: .medium))
                                 .foregroundColor(palette.secondary)
+                                .frame(width: 52, height: 52)
+                                .background(palette.cardBackground)
+                                .clipShape(Circle())
+                            Text(Strings.emptyTitle)
+                                .bitchatFont(size: 15, weight: .semibold)
+                                .foregroundColor(palette.primary)
+                            Text(Strings.emptySubtitle)
+                                .bitchatFont(size: 13)
+                                .foregroundColor(palette.secondary)
+                                .multilineTextAlignment(.center)
                         }
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 48)
+                        .padding(.horizontal, 24)
                     }
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 12)
-                }
-            } else {
-                List {
-                    statusRows
-                        .listRowBackground(palette.background)
-                        .listRowSeparatorTint(palette.divider)
+                } else {
                     ForEach(items) { item in
                         row(item)
-                            .listRowBackground(palette.background)
-                            .listRowSeparatorTint(palette.divider)
                     }
                 }
-                .listStyle(.plain)
-                .scrollContentBackground(.hidden)
             }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 10)
         }
+        .scrollDismissesKeyboard(.interactively)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .themedSurface()
     }
 
     /// Notes may still be loading or unreachable; only claim "no notices yet"
@@ -758,18 +797,25 @@ private struct NoticesList: View {
 
     private func row(_ item: NoticeItem) -> some View {
         let isOwn = canDelete(item)
-        return VStack(alignment: .leading, spacing: 2) {
+        return VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 6) {
                 if item.isUrgent {
-                    Image(systemName: "exclamationmark.triangle.fill")
-                        .font(.bitchatSystem(size: 11))
-                        .foregroundColor(palette.alertRed)
-                    Text(Strings.urgentBadge)
-                        .bitchatFont(size: 11, weight: .semibold)
-                        .foregroundColor(palette.alertRed)
+                    HStack(spacing: 3) {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .font(.system(size: 10, weight: .semibold))
+                        Text(Strings.urgentBadge)
+                            .bitchatFont(size: 10, weight: .semibold)
+                    }
+                    .foregroundColor(palette.alertRed)
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 2)
+                    .background(palette.alertRed.opacity(0.14))
+                    .clipShape(Capsule())
                 }
                 Text(verbatim: "@\(item.author)")
-                    .bitchatFont(size: 12, weight: .semibold)
+                    .bitchatFont(size: 13, weight: .semibold)
+                    .foregroundColor(palette.primary)
+                    .lineLimit(1)
                 Text(Self.timestampText(for: item.createdAt))
                     .bitchatFont(size: 11)
                     .foregroundColor(palette.secondary)
@@ -777,8 +823,9 @@ private struct NoticesList: View {
                     Text(Strings.fades(expiresAt))
                         .bitchatFont(size: 11)
                         .foregroundColor(palette.secondary.opacity(0.8))
+                        .lineLimit(1)
                 }
-                Spacer()
+                Spacer(minLength: 4)
                 if showsSource {
                     sourceBadge(item)
                 }
@@ -787,8 +834,10 @@ private struct NoticesList: View {
                         delete(item)
                     } label: {
                         Image(systemName: "trash")
-                            .font(.bitchatSystem(size: 12))
+                            .font(.system(size: 13, weight: .medium))
                             .foregroundColor(palette.secondary)
+                            .frame(width: 28, height: 28)
+                            .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
                     .accessibilityLabel(Strings.deleteAction)
@@ -796,9 +845,17 @@ private struct NoticesList: View {
             }
             Text(item.content)
                 .bitchatFont(size: 14)
+                .foregroundColor(palette.primary)
                 .fixedSize(horizontal: false, vertical: true)
         }
-        .padding(.vertical, 4)
+        .padding(14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(palette.cardBackground)
+        .overlay(
+            RoundedRectangle(cornerRadius: palette.cardRadius, style: .continuous)
+                .stroke(item.isUrgent ? palette.alertRed.opacity(0.35) : palette.cardBorder, lineWidth: 1)
+        )
+        .clipShape(RoundedRectangle(cornerRadius: palette.cardRadius, style: .continuous))
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(Strings.rowAccessibilityLabel(author: item.author, content: item.content, urgent: item.isUrgent))
         .accessibilityActions {
@@ -806,25 +863,20 @@ private struct NoticesList: View {
                 Button(Strings.deleteAction) { delete(item) }
             }
         }
-        .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-            if isOwn {
-                Button(role: .destructive) {
-                    delete(item)
-                } label: {
-                    Label(Strings.deleteAction, systemImage: "trash")
-                }
-            }
-        }
     }
 
     private func sourceBadge(_ item: NoticeItem) -> some View {
         HStack(spacing: 3) {
             Image(systemName: item.isBoardPost ? "antenna.radiowaves.left.and.right" : "globe")
-                .font(.bitchatSystem(size: 10))
+                .font(.system(size: 10, weight: .medium))
             Text(item.isBoardPost ? Strings.meshSource : Strings.nostrSource)
-                .bitchatFont(size: 10)
+                .bitchatFont(size: 10, weight: .medium)
         }
-        .foregroundColor(palette.secondary.opacity(0.8))
+        .foregroundColor(palette.secondary)
+        .padding(.horizontal, 6)
+        .padding(.vertical, 2)
+        .background(palette.secondary.opacity(0.10))
+        .clipShape(Capsule())
         .accessibilityLabel(item.isBoardPost ? Strings.meshSource : Strings.nostrSource)
     }
 
