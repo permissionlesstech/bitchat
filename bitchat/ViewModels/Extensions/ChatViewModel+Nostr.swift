@@ -16,6 +16,11 @@ extension ChatViewModel {
     }
 
     @MainActor
+    func ensureCurrentGeohashSubscribed() {
+        nostrCoordinator.subscriptions.ensureCurrentGeohashSubscribed()
+    }
+
+    @MainActor
     func switchLocationChannel(to channel: ChannelID) {
         nostrCoordinator.subscriptions.switchLocationChannel(to: channel)
     }

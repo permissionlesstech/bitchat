@@ -25,10 +25,47 @@ protocol NetworkReachabilityMonitoring: AnyObject {
     var isReachable: Bool { get }
     /// Emits the debounced reachability whenever it changes (main-actor).
     var reachabilityPublisher: AnyPublisher<Bool, Never> { get }
+    /// Emits when the underlying network path recovers from a brief blip or
+    /// switches interfaces (e.g. Wi-Fi ↔ Cellular) while `isReachable` stays
+    /// `true`. Lets relay managers clear transient DNS/backoff failures
+    /// without disrupting already-healthy sockets.
+    var pathDidChangePublisher: AnyPublisher<Void, Never> { get }
     /// Begin monitoring. Idempotent.
     func start()
     /// Stop monitoring and discard pending debounce work. Idempotent.
     func stop()
+}
+
+extension NetworkReachabilityMonitoring {
+    var pathDidChangePublisher: AnyPublisher<Void, Never> {
+        Empty().eraseToAnyPublisher()
+    }
+}
+
+/// Coarse fingerprint of active satisfied network interfaces so Wi-Fi ↔
+/// Cellular transitions can be detected without flapping on unrelated path
+/// metadata changes.
+struct NetworkInterfaceSignature: Equatable {
+    let usesWiFi: Bool
+    let usesCellular: Bool
+    let usesWired: Bool
+    let usesOther: Bool
+
+    #if canImport(Network)
+    init(path: NWPath) {
+        self.usesWiFi = path.usesInterfaceType(.wifi)
+        self.usesCellular = path.usesInterfaceType(.cellular)
+        self.usesWired = path.usesInterfaceType(.wiredEthernet)
+        self.usesOther = path.usesInterfaceType(.other)
+    }
+    #endif
+
+    init(usesWiFi: Bool = false, usesCellular: Bool = false, usesWired: Bool = false, usesOther: Bool = false) {
+        self.usesWiFi = usesWiFi
+        self.usesCellular = usesCellular
+        self.usesWired = usesWired
+        self.usesOther = usesOther
+    }
 }
 
 /// Pure debounce/decision logic for reachability, split out so it can be
@@ -95,8 +132,10 @@ struct ReachabilityDebounce {
 @MainActor
 final class NWPathReachabilityMonitor: NetworkReachabilityMonitoring {
     private let subject: CurrentValueSubject<Bool, Never>
+    private let pathChangeSubject = PassthroughSubject<Void, Never>()
     private var debounce: ReachabilityDebounce
     private var flushWorkItem: DispatchWorkItem?
+    private var lastSatisfiedInterfaceSignature: NetworkInterfaceSignature?
     private var started = false
     private let now: () -> Date
 
@@ -117,6 +156,10 @@ final class NWPathReachabilityMonitor: NetworkReachabilityMonitoring {
         subject.removeDuplicates().dropFirst().eraseToAnyPublisher()
     }
 
+    var pathDidChangePublisher: AnyPublisher<Void, Never> {
+        pathChangeSubject.eraseToAnyPublisher()
+    }
+
     func start() {
         guard !started else { return }
         started = true
@@ -126,8 +169,9 @@ final class NWPathReachabilityMonitor: NetworkReachabilityMonitoring {
         monitor.pathUpdateHandler = { [weak self] path in
             // Conservative: only "no interface at all" counts as unreachable.
             let reachable = path.status != .unsatisfied
+            let signature = reachable ? NetworkInterfaceSignature(path: path) : nil
             Task { @MainActor in
-                self?.ingest(reachable: reachable)
+                self?.ingest(reachable: reachable, interfaceSignature: signature)
             }
         }
         monitor.start(queue: monitorQueue)
@@ -141,6 +185,7 @@ final class NWPathReachabilityMonitor: NetworkReachabilityMonitoring {
         started = false
         flushWorkItem?.cancel()
         flushWorkItem = nil
+        lastSatisfiedInterfaceSignature = nil
         #if canImport(Network)
         monitor?.pathUpdateHandler = nil
         monitor?.cancel()
@@ -150,13 +195,38 @@ final class NWPathReachabilityMonitor: NetworkReachabilityMonitoring {
 
     /// Feed an observation into the debounce and publish committed changes.
     /// Exposed internally so higher layers/tests could drive it if needed.
-    func ingest(reachable: Bool) {
+    func ingest(reachable: Bool, interfaceSignature: NetworkInterfaceSignature? = nil) {
+        let hadPendingDrop = debounce.hasPendingChange && debounce.committed
         flushWorkItem?.cancel()
         flushWorkItem = nil
         if let committed = debounce.observe(reachable: reachable, at: now()) {
+            if committed {
+                lastSatisfiedInterfaceSignature = interfaceSignature
+            } else {
+                lastSatisfiedInterfaceSignature = nil
+            }
             publish(committed)
         } else if debounce.hasPendingChange {
             scheduleFlush()
+        } else if reachable && debounce.committed {
+            // Still committed-reachable, but either a brief (<debounce) offline
+            // blip just cleared or the active interface changed (e.g. Wi-Fi ↔
+            // Cellular). Notify listeners so failed/DNS-blacklisted relays can
+            // retry immediately instead of waiting out the 10-minute cooldown.
+            var interfaceChanged = false
+            if let interfaceSignature {
+                if let previous = lastSatisfiedInterfaceSignature, previous != interfaceSignature {
+                    interfaceChanged = true
+                }
+                lastSatisfiedInterfaceSignature = interfaceSignature
+            }
+            if hadPendingDrop || interfaceChanged {
+                SecureLogger.debug(
+                    "NWPathReachabilityMonitor: path recovered/switched (pendingDrop=\(hadPendingDrop), interfaceChanged=\(interfaceChanged))",
+                    category: .session
+                )
+                pathChangeSubject.send(())
+            }
         }
     }
 
@@ -164,6 +234,9 @@ final class NWPathReachabilityMonitor: NetworkReachabilityMonitoring {
         let work = DispatchWorkItem { [weak self] in
             guard let self else { return }
             if let committed = self.debounce.flush(at: self.now()) {
+                if !committed {
+                    self.lastSatisfiedInterfaceSignature = nil
+                }
                 self.publish(committed)
             }
         }

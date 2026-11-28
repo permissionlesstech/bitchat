@@ -131,6 +131,47 @@ struct NostrTransportTests {
         #expect(undeliverable)
     }
 
+    @Test("Relay connectivity transition updates prompt delivery synchronously before callback")
+    @MainActor
+    func relayConnectivityChangeUpdatesPromptDeliveryBeforeCallback() async throws {
+        let keychain = MockKeychain()
+        let idBridge = NostrIdentityBridge(keychain: keychain)
+        let recipient = try NostrIdentity.generate()
+        let noiseKey = Data((1..<33).map(UInt8.init))
+        let peerID = PeerID(hexData: noiseKey)
+        let relationship = makeRelationship(
+            peerNoisePublicKey: noiseKey,
+            peerNostrPublicKey: recipient.npub,
+            peerNickname: "Alice"
+        )
+        let connectivity = CurrentValueSubject<Bool, Never>(false)
+
+        let transport = NostrTransport(
+            keychain: keychain,
+            idBridge: idBridge,
+            dependencies: makeDependencies(
+                loadFavorites: { [noiseKey: relationship] },
+                relayConnectivity: { connectivity.eraseToAnyPublisher() }
+            )
+        )
+
+        var observedPromptStateInCallback: [Bool] = []
+        transport.onRelayConnectivityChanged = { connected in
+            // By the time the callback runs, canDeliverPromptly must already
+            // match the new relay state (no async barrier race).
+            observedPromptStateInCallback.append(transport.canDeliverPromptly(to: peerID) == connected)
+        }
+
+        connectivity.send(true)
+        #expect(transport.canDeliverPromptly(to: peerID) == true)
+        let callbackFired = await TestHelpers.waitUntil(
+            { observedPromptStateInCallback.count == 1 },
+            timeout: TestConstants.settleTimeout
+        )
+        #expect(callbackFired)
+        #expect(observedPromptStateInCallback == [true])
+    }
+
     @Test("Private message resolves short peer ID and emits decryptable packet")
     @MainActor
     func sendPrivateMessageResolvesShortPeerID() async throws {

@@ -79,6 +79,10 @@ protocol ChatPrivateConversationContext: ChatIdentityContext, ChatDirectMessageS
     func isNostrBlocked(pubkeyHexLowercased: String) -> Bool
     func displayNameForNostrPubkey(_ pubkeyHex: String) -> String
     func deriveNostrIdentity(forGeohash geohash: String) throws -> NostrIdentity
+    /// Whether at least one default (DM-capable) Nostr relay is connected right
+    /// now. Prevents offline mutual-favorite DMs from falsely showing `.sent`
+    /// while they are actually queued in the outbox waiting for internet.
+    var isNostrRelayConnected: Bool { get }
 
     // MARK: Routing & acknowledgements
     func routePrivateMessage(_ content: String, to peerID: PeerID, recipientNickname: String, messageID: String)
@@ -119,6 +123,7 @@ protocol ChatPrivateConversationContext: ChatIdentityContext, ChatDirectMessageS
 
 extension ChatPrivateConversationContext {
     var sendReadReceiptsEnabled: Bool { true }
+    var isNostrRelayConnected: Bool { true }
     func reconcileDisappearingTimer(from sourcePeerID: PeerID, to destinationPeerID: PeerID) {}
     func registerVerifiedFriendInviteIdentity(_ invite: FriendInvite) {}
     func favoriteNoiseKey(forNostrPubkey nostrPubkey: String) -> Data? { nil }
@@ -195,6 +200,10 @@ extension ChatViewModel: ChatPrivateConversationContext {
 
     func currentNostrIdentity() -> NostrIdentity? {
         try? idBridge.getCurrentNostrIdentity()
+    }
+
+    var isNostrRelayConnected: Bool {
+        NostrRelayManager.shared.isDMRelayConnected
     }
 
     func routePrivateMessage(_ content: String, to peerID: PeerID, recipientNickname: String, messageID: String) {
@@ -433,7 +442,7 @@ final class ChatPrivateConversationCoordinator {
             recipientNickname: recipientNickname,
             messageID: messageID
         )
-        if isConnected || isReachable || (isMutualFavorite && hasNostrKey) {
+        if isConnected || isReachable || (isMutualFavorite && hasNostrKey && context.isNostrRelayConnected) {
             context.setPrivateDeliveryStatus(.sent, forMessageID: messageID, peerID: peerID)
         }
         // Otherwise the message stays "sending"; router callbacks move it to

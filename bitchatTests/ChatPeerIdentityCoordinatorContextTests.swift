@@ -324,6 +324,37 @@ struct ChatPeerIdentityCoordinatorContextTests {
         #expect(context.selectedPrivateChatPeer == newPeerID)
         // Unread moved to the new peer, then cleared for the now-open chat.
         #expect(context.unreadPrivateMessages.isEmpty)
+        #expect(context.markedReadPeers == [newPeerID])
+    }
+
+    @Test @MainActor
+    func startPrivateChat_offlineNoiseKeyPeerRetainsFingerprintAndMigratesOnBLEConnect() async {
+        let context = MockChatPeerIdentityContext()
+        let coordinator = ChatPeerIdentityCoordinator(context: context)
+        let noiseKey = Data((1...32).map(UInt8.init))
+        let stablePeerID = PeerID(hexData: noiseKey)
+        let bleShortPeerID = stablePeerID.toShort()
+        let expectedFingerprint = noiseKey.sha256Fingerprint()
+
+        context.privateChats[stablePeerID] = [
+            makePrivateMessage(id: "offline-1", timestamp: Date(timeIntervalSince1970: 10))
+        ]
+
+        // Opening an offline 64-hex non-favorite chat retains its fingerprint
+        // even though no live BLE/favorite mapping exists yet.
+        coordinator.startPrivateChat(with: stablePeerID)
+        #expect(context.selectedPrivateChatFingerprint == expectedFingerprint)
+        context.selectedPrivateChatPeer = stablePeerID
+
+        // Peer reconnects on BLE with the matching fingerprint.
+        context.connectedPeers = [bleShortPeerID]
+        context.fingerprintsByPeerID[bleShortPeerID] = expectedFingerprint
+        coordinator.updatePrivateChatPeerIfNeeded()
+
+        #expect(context.selectedPrivateChatPeer == bleShortPeerID)
+        #expect(context.privateChats[stablePeerID] == nil)
+        #expect(context.privateChats[bleShortPeerID]?.map(\.id) == ["offline-1"])
+        #expect(context.markedReadPeers.last == bleShortPeerID)
     }
 
     @Test @MainActor

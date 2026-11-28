@@ -153,6 +153,10 @@ final class BridgeService: ObservableObject {
     var openSubscription: (@MainActor ([String]) -> Void)?
     /// Closes the rendezvous subscription.
     var closeSubscription: (@MainActor () -> Void)?
+    /// Whether the rendezvous subscription is currently registered on the
+    /// relay manager. When `false` after an offline → online transition,
+    /// `ensureSubscriptionOpen()` re-opens it.
+    var isSubscriptionRegistered: (@MainActor () -> Bool)?
     /// Whether any Nostr relay connection is currently working.
     var relaysConnected: (@MainActor () -> Bool)?
     /// The local neighborhood cell from CoreLocation, if permitted.
@@ -347,6 +351,18 @@ final class BridgeService: ObservableObject {
         SecureLogger.info("🌉 Bridge: rendezvous open for cell \(cell)", category: .session)
         publishPresence()
         armPresenceTimerIfNeeded()
+    }
+
+    /// Re-opens the rendezvous subscription when relays come back online after
+    /// an outage during which the original `openSubscription` call was dropped
+    /// by the network activation gate. Idempotent when already registered.
+    func ensureSubscriptionOpen() {
+        guard isEnabled, let cell = activeCell else { return }
+        if isSubscriptionRegistered?() == true { return }
+        let cells = [cell] + Geohash.neighbors(of: cell)
+        subscribedCells = Set(cells)
+        openSubscription?(cells)
+        SecureLogger.info("🌉 Bridge: restored rendezvous subscription for cell \(cell)", category: .session)
     }
 
     /// The rendezvous cell: our own location when we have it, else the cell

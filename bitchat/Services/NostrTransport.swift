@@ -176,6 +176,10 @@ final class NostrTransport: Transport, @unchecked Sendable {
     // canDeliverPromptly is called synchronously off the main actor.
     private var relaysConnected = false
     private var relayConnectivityCancellable: AnyCancellable?
+    /// Invoked on the main actor after `relaysConnected` transitions, so
+    /// higher layers (e.g. MessageRouter outbox flush) always observe the
+    /// updated `canDeliverPromptly` state with no barrier race.
+    var onRelayConnectivityChanged: (@MainActor (Bool) -> Void)?
     private let queue = DispatchQueue(label: "nostr.transport.state", attributes: .concurrent)
 
     @MainActor
@@ -192,9 +196,19 @@ final class NostrTransport: Transport, @unchecked Sendable {
         refreshReachablePeersSynchronously()
 
         relayConnectivityCancellable = self.dependencies.relayConnectivity()
+            .removeDuplicates()
             .sink { [weak self] connected in
                 guard let self else { return }
-                self.queue.async(flags: .barrier) { self.relaysConnected = connected }
+                let didChange: Bool = self.queue.sync(flags: .barrier) {
+                    let changed = self.relaysConnected != connected
+                    self.relaysConnected = connected
+                    return changed
+                }
+                if didChange {
+                    Task { @MainActor [weak self] in
+                        self?.onRelayConnectivityChanged?(connected)
+                    }
+                }
             }
     }
 

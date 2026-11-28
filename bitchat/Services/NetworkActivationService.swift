@@ -14,6 +14,20 @@ protocol NetworkActivationTorControlling: AnyObject {
 protocol NetworkActivationRelayControlling: AnyObject {
     func connect()
     func disconnect()
+    /// Reconnects after the network gate reopens (e.g. offline → online),
+    /// clearing transient DNS/backoff failures accumulated during the outage.
+    func resetForNetworkRecovery()
+    /// Retries only disconnected/failed relays after an in-place interface
+    /// switch or brief blip without tearing down already-healthy sockets.
+    func recoverFailedRelays()
+}
+
+extension NetworkActivationRelayControlling {
+    func resetForNetworkRecovery() {
+        connect()
+    }
+
+    func recoverFailedRelays() {}
 }
 
 protocol NetworkActivationProxyControlling: AnyObject {
@@ -192,6 +206,17 @@ final class NetworkActivationService: ObservableObject {
                 self.reevaluate()
             }
             .store(in: &cancellables)
+
+        // React to interface transitions or brief (<debounce) offline blips
+        // while staying reachable: clear transient DNS/backoff blacklists so
+        // relays recover immediately without disturbing healthy sockets.
+        reachabilityMonitor.pathDidChangePublisher
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] in
+                guard let self, self.started, self.activationAllowed else { return }
+                self.relayController.recoverFailedRelays()
+            }
+            .store(in: &cancellables)
     }
 
     /// Stops all internet-facing work at the synchronous panic boundary and
@@ -259,7 +284,11 @@ final class NetworkActivationService: ObservableObject {
         }
 
         if allowed {
-            relayController.connect()
+            if statusChanged {
+                relayController.resetForNetworkRecovery()
+            } else {
+                relayController.connect()
+            }
         }
     }
 

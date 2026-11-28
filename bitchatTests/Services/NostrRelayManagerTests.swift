@@ -1901,6 +1901,93 @@ final class NostrRelayManagerTests: XCTestCase {
         XCTAssertTrue(context.manager.relays.contains { $0.url == "wss://nos.lol" })
     }
 
+    // MARK: - Offline ↔ Online & Path Recovery
+
+    @MainActor
+    func test_resetForNetworkRecovery_clearsDNSBlacklistAndReconnectsImmediately() async {
+        let relayURL = "wss://offline-dns-recovery.example"
+        let context = makeContext(permission: .denied)
+        context.sessionFactory.pingErrorByURL[relayURL] = NSError(
+            domain: NSURLErrorDomain,
+            code: NSURLErrorCannotFindHost,
+            userInfo: [NSLocalizedDescriptionKey: "A server with the specified hostname could not be found."]
+        )
+
+        // Simulate DNS failure during the 2.5s window before offline debounce commits.
+        context.manager.ensureConnections(to: [relayURL])
+        let blacklisted = await waitUntil {
+            context.manager.relays.first(where: { $0.url == relayURL })?.reconnectAttempts == TransportConfig.nostrRelayMaxReconnectAttempts
+        }
+        XCTAssertTrue(blacklisted)
+
+        // Offline → Online: network comes back immediately (well inside the 10m cooldown).
+        context.manager.disconnect()
+        context.sessionFactory.pingErrorByURL[relayURL] = nil
+        let requestsBefore = context.sessionFactory.requestedURLs.count
+
+        context.manager.resetForNetworkRecovery()
+
+        let recovered = await waitUntil {
+            context.sessionFactory.requestedURLs.count == requestsBefore + 1 &&
+            context.manager.relays.first(where: { $0.url == relayURL })?.isConnected == true &&
+            context.manager.relays.first(where: { $0.url == relayURL })?.reconnectAttempts == 0 &&
+            context.manager.relays.first(where: { $0.url == relayURL })?.lastError == nil
+        }
+        XCTAssertTrue(recovered)
+    }
+
+    @MainActor
+    func test_recoverFailedRelays_retriesFailedRelayWithoutDisruptingHealthyRelay() async {
+        let healthyURL = "wss://healthy-path.example"
+        let failedURL = "wss://dns-handoff.example"
+        let context = makeContext(permission: .denied)
+        context.sessionFactory.pingErrorByURL[failedURL] = NSError(
+            domain: NSURLErrorDomain,
+            code: NSURLErrorCannotFindHost,
+            userInfo: [NSLocalizedDescriptionKey: "DNS failure"]
+        )
+
+        context.manager.ensureConnections(to: [healthyURL, failedURL])
+        let settled = await waitUntil {
+            context.manager.relays.first(where: { $0.url == healthyURL })?.isConnected == true &&
+            context.manager.relays.first(where: { $0.url == failedURL })?.reconnectAttempts == TransportConfig.nostrRelayMaxReconnectAttempts
+        }
+        XCTAssertTrue(settled)
+        let originalHealthyConnection = context.sessionFactory.latestConnection(for: healthyURL)
+
+        // Network path switches (e.g. Wi-Fi → Cellular) without tripping offline debounce.
+        context.sessionFactory.pingErrorByURL[failedURL] = nil
+        context.manager.recoverFailedRelays()
+
+        let recovered = await waitUntil {
+            context.manager.relays.first(where: { $0.url == failedURL })?.isConnected == true &&
+            context.manager.relays.first(where: { $0.url == healthyURL })?.isConnected == true
+        }
+        XCTAssertTrue(recovered)
+        // The already-healthy relay socket must remain undisturbed.
+        XCTAssertTrue(context.sessionFactory.latestConnection(for: healthyURL) === originalHealthyConnection)
+        XCTAssertEqual(originalHealthyConnection?.cancelCallCount, 0)
+    }
+
+    @MainActor
+    func test_subscribe_whileDisallowed_invokesEOSEImmediatelyAndReportsUnregistered() {
+        let relayURL = "wss://offline-sub.example"
+        let context = makeContext(permission: .denied, activationAllowed: false)
+        var eoseCount = 0
+
+        context.manager.subscribe(
+            filter: makeFilter(),
+            id: "offline-notes-sub",
+            relayUrls: [relayURL],
+            handler: { _ in },
+            onEOSE: { eoseCount += 1 }
+        )
+
+        XCTAssertEqual(eoseCount, 1)
+        XCTAssertFalse(context.manager.hasRegisteredSubscription(id: "offline-notes-sub"))
+        XCTAssertTrue(context.sessionFactory.requestedURLs.isEmpty)
+    }
+
     private func makeContext(
         permission: LocationChannelManager.PermissionState,
         favorites: Set<Data> = [],

@@ -1132,4 +1132,44 @@ struct AppArchitectureTests {
         #expect(payment.contentScan.lightningLinks == ["lightning:lnbc1test"])
         #expect(!payment.contentScan.isLongForDisplay)
     }
+
+    @Test("AppRuntime foreground reconnect covers both Everyday direct mode and Tor mode")
+    func foregroundNostrReconnectActionCoversEverydayAndTorModes() {
+        // Everyday Mode (Tor off): returning from background MUST reconnect directly.
+        #expect(
+            AppRuntime.resolveForegroundNostrReconnectAction(
+                didEnterBackground: true,
+                activationAllowed: true,
+                userTorEnabled: false,
+                torAutoStartAllowed: false
+            ) == .reconnectDirect
+        )
+        // Tor Mode (Tor on): returning from background awaits Tor readiness.
+        #expect(
+            AppRuntime.resolveForegroundNostrReconnectAction(
+                didEnterBackground: true,
+                activationAllowed: true,
+                userTorEnabled: true,
+                torAutoStartAllowed: true
+            ) == .awaitTorAndReconnect
+        )
+        // Offline / activation disallowed: never reconnect on foreground.
+        #expect(
+            AppRuntime.resolveForegroundNostrReconnectAction(
+                didEnterBackground: true,
+                activationAllowed: false,
+                userTorEnabled: false,
+                torAutoStartAllowed: false
+            ) == .none
+        )
+        // Fresh foreground (never backgrounded): no redundant reset.
+        #expect(
+            AppRuntime.resolveForegroundNostrReconnectAction(
+                didEnterBackground: false,
+                activationAllowed: true,
+                userTorEnabled: false,
+                torAutoStartAllowed: false
+            ) == .none
+        )
+    }
 }

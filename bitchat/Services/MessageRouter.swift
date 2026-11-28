@@ -63,6 +63,12 @@ final class MessageRouter {
     /// message until an ack arrives.
     var onMessageCarried: ((_ messageID: String, _ peerID: PeerID) -> Void)?
 
+    /// Invoked when a previously queued or failed-over private message is
+    /// handed to a live transport during a flush or disconnect failover, so
+    /// the UI can advance `.sending` → `.sent` without ever downgrading
+    /// stronger states (`.carried`/`.delivered`/`.read`).
+    var onMessageSent: ((_ messageID: String, _ peerID: PeerID) -> Void)?
+
     /// Parallel deposit into the internet bridge: park a sealed copy on
     /// relays as a courier drop, so delivery stops requiring a physical
     /// courier encounter. No-op unless the bridge is enabled. Runs alongside
@@ -236,22 +242,37 @@ final class MessageRouter {
             return
         }
 
-        if let transport = reachableTransport(for: peerID) {
-            // Reachability without a connection is a freshness heuristic (e.g.
-            // the mesh retention window), so the send can silently go nowhere.
-            // Send now, but retain a copy until a delivery/read ack clears it;
-            // receivers dedup resends by message ID.
-            SecureLogger.debug("Routing PM via \(type(of: transport)) (reachable) to \(peerID.id.prefix(8))… id=\(messageID.prefix(8))…", category: .session)
+        let promptTransports = transports.filter {
+            $0.isPeerReachable(peerID) && $0.canDeliverPromptly(to: peerID)
+        }
+        if !promptTransports.isEmpty {
+            // Reachability without a direct connection can be a freshness
+            // heuristic (e.g. the BLE retention window after a peer walked
+            // away) or a live Nostr relay. Sending across every promptly
+            // deliverable transport (e.g. BLE multi-hop + live Nostr) avoids
+            // stranding a DM in a stale 60s BLE retention window while still
+            // reaching offline multi-hop mesh peers; receivers dedup by ID.
             enqueue(message, for: peerID)
-            transport.sendPrivateMessage(content, to: peerID, recipientNickname: recipientNickname, messageID: messageID)
-            // "Reachable" without prompt delivery means the send only joined
-            // a queue (Nostr with relays down): also hand a sealed copy to
-            // any connected couriers rather than waiting for internet that
-            // may never come. Double delivery is harmless — receivers dedup
-            // by message ID, and delivered/read acks never downgrade.
-            if !transport.canDeliverPromptly(to: peerID) {
-                attemptCourierDeposit(messageID: messageID, for: peerID)
+            for transport in promptTransports {
+                SecureLogger.debug("Routing PM via \(type(of: transport)) (reachable/prompt) to \(peerID.id.prefix(8))… id=\(messageID.prefix(8))…", category: .session)
+                transport.sendPrivateMessage(content, to: peerID, recipientNickname: recipientNickname, messageID: messageID)
             }
+            return
+        }
+
+        if let transport = reachableTransport(for: peerID) {
+            // Reachable without prompt delivery means the send only joins a
+            // transport queue (or drops while offline, e.g. Nostr with relays
+            // down). Keep `sendAttempts = 0` so offline sends never burn the
+            // retry budget before relays reconnect, hand off to the transport
+            // (so Tor-warmup queues still work), and deposit a sealed copy
+            // with couriers in parallel.
+            var unsent = message
+            unsent.sendAttempts = 0
+            enqueue(unsent, for: peerID)
+            SecureLogger.debug("Routing PM via \(type(of: transport)) (reachable, not prompt) to \(peerID.id.prefix(8))… id=\(messageID.prefix(8))…", category: .session)
+            transport.sendPrivateMessage(content, to: peerID, recipientNickname: recipientNickname, messageID: messageID)
+            attemptCourierDeposit(messageID: messageID, for: peerID)
         } else {
             var unsent = message
             unsent.sendAttempts = 0
@@ -502,6 +523,22 @@ final class MessageRouter {
         return true
     }
 
+    /// Marks an offline-queued (`sendAttempts == 0`) message as handed off to
+    /// a connected pre-handshake link without burning past 1 on subsequent
+    /// insecure flushes. Prevents `retrySecurePrivateMessagesAfterAuthentication`
+    /// from duplicating the message BLE's handshake queue already drains.
+    @discardableResult
+    private func markPreHandshakeHandoffIfUnsent(_ messageID: String, for peerID: PeerID) -> Bool {
+        guard var queue = outbox[peerID],
+              let index = queue.firstIndex(where: { $0.messageID == messageID }),
+              queue[index].sendAttempts == 0 else {
+            return false
+        }
+        queue[index].sendAttempts = 1
+        outbox[peerID] = queue
+        return true
+    }
+
     private func dropMessage(_ messageID: String, for peerID: PeerID) {
         secureTransmissions.remove(PeerMessageKey(peerID: peerID, messageID: messageID))
         onMessageDropped?(messageID, peerID)
@@ -540,11 +577,14 @@ final class MessageRouter {
         outboxStore?.wipe()
     }
 
-    /// Returns true only when the receipt was handed to a reachable transport.
+    /// Returns true only when the receipt was handed to a transport that can
+    /// deliver it (connected, or reachable with prompt delivery — never an
+    /// offline Nostr transport whose send would be dropped).
     /// Prefers a transport that can deliver securely right now (established
     /// Noise session on BLE, or connected DM relay on Nostr), then a connected
-    /// transport, then any reachable transport — avoiding throwing receipts
-    /// into a stale BLE reachability retention window when Nostr is live.
+    /// transport, then any promptly-deliverable reachable transport — avoiding
+    /// throwing receipts into a stale BLE reachability retention window when
+    /// Nostr is live, and avoiding burning receipts while offline.
     /// A false result means it was dropped (no route) and must NOT be recorded
     /// as sent, or the sender's message would stay unread forever — the receipt
     /// is retried on the next read scan (chat open / foreground / reconnect).
@@ -552,7 +592,7 @@ final class MessageRouter {
     func sendReadReceipt(_ receipt: ReadReceipt, to peerID: PeerID) -> Bool {
         let transport = transports.first { $0.isPeerReachable(peerID) && $0.canDeliverSecurely(to: peerID) }
             ?? connectedTransport(for: peerID)
-            ?? reachableTransport(for: peerID)
+            ?? transports.first { $0.isPeerReachable(peerID) && $0.canDeliverPromptly(to: peerID) }
         if let transport {
             SecureLogger.debug("Routing READ ack via \(type(of: transport)) to \(peerID.id.prefix(8))… id=\(receipt.originalMessageID.prefix(8))…", category: .session)
             transport.sendReadReceipt(receipt, to: peerID)
@@ -565,6 +605,8 @@ final class MessageRouter {
 
     func sendFavoriteNotification(to peerID: PeerID, isFavorite: Bool) {
         if let transport = connectedTransport(for: peerID) {
+            transport.sendFavoriteNotification(to: peerID, isFavorite: isFavorite)
+        } else if let transport = transports.first(where: { $0.isPeerReachable(peerID) && $0.canDeliverPromptly(to: peerID) }) {
             transport.sendFavoriteNotification(to: peerID, isFavorite: isFavorite)
         } else if let transport = reachableTransport(for: peerID) {
             transport.sendFavoriteNotification(to: peerID, isFavorite: isFavorite)
@@ -802,35 +844,7 @@ final class MessageRouter {
         }
 
         let key = PeerMessageKey(peerID: peerID, messageID: message.messageID)
-        let routeTarget: (transport: Transport, sendPeerID: PeerID, kind: Int)? = {
-            if let transport = connectedTransport(for: peerID), transport.canDeliverSecurely(to: peerID) {
-                return (transport, peerID, 0)
-            }
-            if let fallbackPeerID, fallbackPeerID != peerID,
-               let transport = connectedTransport(for: fallbackPeerID), transport.canDeliverSecurely(to: fallbackPeerID) {
-                return (transport, fallbackPeerID, 0)
-            }
-            if let transport = connectedTransport(for: peerID) {
-                return (transport, peerID, 1)
-            }
-            if let fallbackPeerID, fallbackPeerID != peerID,
-               let transport = connectedTransport(for: fallbackPeerID) {
-                return (transport, fallbackPeerID, 1)
-            }
-            if let transport = reachableTransport(for: peerID) {
-                return (transport, peerID, 2)
-            }
-            if let fallbackPeerID, fallbackPeerID != peerID,
-               let transport = reachableTransport(for: fallbackPeerID) {
-                return (transport, fallbackPeerID, 2)
-            }
-            return nil
-        }()
-
-        guard let (transport, sendPeerID, kind) = routeTarget else { return false }
-
-        switch kind {
-        case 0:
+        if let (transport, sendPeerID) = connectedSecureTarget(for: peerID, fallbackPeerID: fallbackPeerID) {
             // Bound actual secure transmissions for peers that never ack.
             if dropIfExpiredOrAtAttemptCap(message, for: peerID, now: now, enforceAttemptCap: true) {
                 return true
@@ -838,24 +852,181 @@ final class MessageRouter {
             SecureLogger.debug("Outbox -> \(type(of: transport)) (connected) for \(peerID.id.prefix(8))… id=\(message.messageID.prefix(8))…", category: .session)
             secureTransmissions.insert(key)
             transport.sendPrivateMessage(message.content, to: sendPeerID, recipientNickname: message.nickname, messageID: message.messageID)
+            onMessageSent?(message.messageID, peerID)
             return incrementSendAttemptsIfQueued(message.messageID, for: peerID)
-        case 1:
+        }
+
+        if let (transport, sendPeerID) = connectedTarget(for: peerID, fallbackPeerID: fallbackPeerID) {
             // Connected without a secure session: send over the live link
             // without burning the attempt cap (bounded by 24h TTL + FIFO cap).
+            // Mark an unsent (0-attempt) entry as handed off to BLE so the
+            // subsequent authentication callback does not duplicate it.
             SecureLogger.debug("Outbox -> \(type(of: transport)) (connected, no secure session) for \(peerID.id.prefix(8))… id=\(message.messageID.prefix(8))…", category: .session)
             secureTransmissions.remove(key)
             transport.sendPrivateMessage(message.content, to: sendPeerID, recipientNickname: message.nickname, messageID: message.messageID)
-            return false
-        default:
-            // Reachability without a connection is a freshness heuristic:
-            // send and retain, bounded by attempt count for silent peers.
-            if dropIfExpiredOrAtAttemptCap(message, for: peerID, now: now, enforceAttemptCap: true) {
-                return true
-            }
-            SecureLogger.debug("Outbox -> \(type(of: transport)) (reachable) for \(peerID.id.prefix(8))… id=\(message.messageID.prefix(8))…", category: .session)
-            transport.sendPrivateMessage(message.content, to: sendPeerID, recipientNickname: message.nickname, messageID: message.messageID)
-            return incrementSendAttemptsIfQueued(message.messageID, for: peerID)
+            onMessageSent?(message.messageID, peerID)
+            return markPreHandshakeHandoffIfUnsent(message.messageID, for: peerID)
         }
+
+        let promptTargets = promptReachableTargets(for: peerID, fallbackPeerID: fallbackPeerID)
+        guard !promptTargets.isEmpty else { return false }
+
+        // Reachability without a connection: send only on promptly deliverable
+        // transports (never burn attempts against an offline Nostr queue),
+        // bounded by attempt count for silent peers.
+        if dropIfExpiredOrAtAttemptCap(message, for: peerID, now: now, enforceAttemptCap: true) {
+            return true
+        }
+        for (transport, sendPeerID) in promptTargets {
+            SecureLogger.debug("Outbox -> \(type(of: transport)) (reachable/prompt) for \(peerID.id.prefix(8))… id=\(message.messageID.prefix(8))…", category: .session)
+            transport.sendPrivateMessage(message.content, to: sendPeerID, recipientNickname: message.nickname, messageID: message.messageID)
+        }
+        onMessageSent?(message.messageID, peerID)
+        return incrementSendAttemptsIfQueued(message.messageID, for: peerID)
+    }
+
+    /// Immediately fails over unacked retained messages for a peer whose
+    /// transport just disconnected (e.g. BLE peer walked out of range) to any
+    /// alternate transport that can deliver promptly (e.g. live Nostr relays).
+    func failOverOutbox(for peerIDAliases: [PeerID], excluding disconnectedTransport: Transport) {
+        typealias Entry = (peerID: PeerID, message: QueuedMessage, aliasOrder: Int, queueOrder: Int)
+        var expandedAliases: [PeerID] = []
+        var seenAlias = Set<PeerID>()
+        for alias in peerIDAliases {
+            for candidateAlias in outboxAliases(for: alias) where seenAlias.insert(candidateAlias).inserted {
+                expandedAliases.append(candidateAlias)
+            }
+        }
+        guard !expandedAliases.isEmpty else { return }
+
+        var entries: [Entry] = []
+        for (aliasOrder, alias) in expandedAliases.enumerated() {
+            guard let queued = outbox[alias] else { continue }
+            for (queueOrder, message) in queued.enumerated() {
+                entries.append((alias, message, aliasOrder, queueOrder))
+            }
+        }
+        guard !entries.isEmpty else { return }
+
+        entries.sort { lhs, rhs in
+            if lhs.message.timestamp != rhs.message.timestamp {
+                return lhs.message.timestamp < rhs.message.timestamp
+            }
+            if lhs.aliasOrder != rhs.aliasOrder {
+                return lhs.aliasOrder < rhs.aliasOrder
+            }
+            if lhs.queueOrder != rhs.queueOrder {
+                return lhs.queueOrder < rhs.queueOrder
+            }
+            return lhs.message.messageID < rhs.message.messageID
+        }
+
+        let currentDate = now()
+        var sentMessageIDs = Set<String>()
+        var outboxChanged = false
+        for entry in entries {
+            let peerID = entry.peerID
+            let message = entry.message
+            guard sentMessageIDs.insert(message.messageID).inserted,
+                  queuedMessage(message.messageID, for: peerID) != nil else {
+                continue
+            }
+            let targets = alternatePromptTargets(
+                for: peerID,
+                fallbackAliases: peerIDAliases,
+                excluding: disconnectedTransport
+            )
+            guard !targets.isEmpty else { continue }
+
+            if dropIfExpiredOrAtAttemptCap(message, for: peerID, now: currentDate, enforceAttemptCap: true) {
+                outboxChanged = true
+                continue
+            }
+            secureTransmissions.remove(PeerMessageKey(peerID: peerID, messageID: message.messageID))
+            for (transport, sendPeerID) in targets {
+                SecureLogger.debug(
+                    "Failover -> \(type(of: transport)) after disconnect for \(peerID.id.prefix(8))… id=\(message.messageID.prefix(8))…",
+                    category: .session
+                )
+                transport.sendPrivateMessage(
+                    message.content,
+                    to: sendPeerID,
+                    recipientNickname: message.nickname,
+                    messageID: message.messageID
+                )
+            }
+            onMessageSent?(message.messageID, peerID)
+            outboxChanged = incrementSendAttemptsIfQueued(message.messageID, for: peerID) || outboxChanged
+        }
+
+        if outboxChanged {
+            persistOutbox()
+        }
+    }
+
+    private func connectedSecureTarget(
+        for peerID: PeerID,
+        fallbackPeerID: PeerID?
+    ) -> (Transport, PeerID)? {
+        if let transport = connectedTransport(for: peerID), transport.canDeliverSecurely(to: peerID) {
+            return (transport, peerID)
+        }
+        if let fallbackPeerID, fallbackPeerID != peerID,
+           let transport = connectedTransport(for: fallbackPeerID), transport.canDeliverSecurely(to: fallbackPeerID) {
+            return (transport, fallbackPeerID)
+        }
+        return nil
+    }
+
+    private func connectedTarget(
+        for peerID: PeerID,
+        fallbackPeerID: PeerID?
+    ) -> (Transport, PeerID)? {
+        if let transport = connectedTransport(for: peerID) {
+            return (transport, peerID)
+        }
+        if let fallbackPeerID, fallbackPeerID != peerID,
+           let transport = connectedTransport(for: fallbackPeerID) {
+            return (transport, fallbackPeerID)
+        }
+        return nil
+    }
+
+    private func promptReachableTargets(
+        for peerID: PeerID,
+        fallbackPeerID: PeerID?
+    ) -> [(Transport, PeerID)] {
+        var targets: [(Transport, PeerID)] = []
+        for transport in transports {
+            if transport.isPeerReachable(peerID) && transport.canDeliverPromptly(to: peerID) {
+                targets.append((transport, peerID))
+            } else if let fallbackPeerID, fallbackPeerID != peerID,
+                      transport.isPeerReachable(fallbackPeerID) && transport.canDeliverPromptly(to: fallbackPeerID) {
+                targets.append((transport, fallbackPeerID))
+            }
+        }
+        return targets
+    }
+
+    private func alternatePromptTargets(
+        for peerID: PeerID,
+        fallbackAliases: [PeerID],
+        excluding disconnectedTransport: Transport
+    ) -> [(Transport, PeerID)] {
+        var targets: [(Transport, PeerID)] = []
+        for transport in transports where transport !== disconnectedTransport {
+            if transport.isPeerConnected(peerID) || (transport.isPeerReachable(peerID) && transport.canDeliverPromptly(to: peerID)) {
+                targets.append((transport, peerID))
+                continue
+            }
+            for alias in fallbackAliases where alias != peerID && alias.toShort() == peerID.toShort() {
+                if transport.isPeerConnected(alias) || (transport.isPeerReachable(alias) && transport.canDeliverPromptly(to: alias)) {
+                    targets.append((transport, alias))
+                    break
+                }
+            }
+        }
+        return targets
     }
 
     /// Removes and drops `message` when its TTL has expired or (when

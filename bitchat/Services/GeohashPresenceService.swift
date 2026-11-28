@@ -86,10 +86,20 @@ final class GeohashPresenceService: ObservableObject {
         self.availableChannelsProvider = { LocationStateManager.shared.availableChannels }
         self.isLocationAuthorized = { LocationStateManager.shared.permissionState == .authorized }
         self.locationChanges = LocationStateManager.shared.$availableChannels.eraseToAnyPublisher()
-        self.torReadyPublisher = NotificationCenter.default.publisher(for: .TorDidBecomeReady)
-            .map { _ in () }
-            .eraseToAnyPublisher()
-        self.torIsReady = { TorManager.shared.isReady }
+        self.torReadyPublisher = Publishers.Merge(
+            NotificationCenter.default.publisher(for: .TorDidBecomeReady).map { _ in () },
+            NetworkActivationService.shared.$activationAllowed
+                .removeDuplicates()
+                .filter { $0 }
+                .map { _ in () }
+        ).eraseToAnyPublisher()
+        self.torIsReady = {
+            guard NetworkActivationService.shared.activationAllowed else { return false }
+            if NetworkActivationService.shared.userTorEnabled {
+                return TorManager.shared.isReady
+            }
+            return true
+        }
         self.torIsForeground = { TorManager.shared.isForeground() }
         self.deriveIdentity = { try idBridge.deriveIdentity(forGeohash: $0) }
         self.clearIdentityCache = { idBridge.clearInMemoryCaches() }

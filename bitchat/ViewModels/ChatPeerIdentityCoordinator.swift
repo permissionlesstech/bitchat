@@ -347,11 +347,14 @@ final class ChatPeerIdentityCoordinator {
         if let oldPeerID = context.selectedPrivateChatPeer, oldPeerID != currentPeerID {
             migrateChatState(from: oldPeerID, to: currentPeerID)
             context.selectedPrivateChatPeer = currentPeerID
+            context.markPrivateChatRead(currentPeerID)
+            context.markPrivateMessagesAsRead(from: currentPeerID)
         } else if context.selectedPrivateChatPeer == nil {
             context.selectedPrivateChatPeer = currentPeerID
+            context.markPrivateChatRead(currentPeerID)
+        } else {
+            context.markPrivateChatRead(currentPeerID)
         }
-
-        context.markPrivateChatRead(currentPeerID)
     }
 
     @MainActor
@@ -404,6 +407,11 @@ final class ChatPeerIdentityCoordinator {
         if let fingerprint = getFingerprint(for: peerID) {
             context.setStoredFingerprint(fingerprint, for: peerID)
             context.selectedPrivateChatFingerprint = fingerprint
+        } else if let noiseKey = peerID.noiseKey {
+            // Offline 64-hex Noise-key chats (e.g. non-favorite persisted or
+            // courier threads) still carry their static key, so retain the
+            // fingerprint for automatic migration when the peer reconnects on BLE.
+            context.selectedPrivateChatFingerprint = noiseKey.sha256Fingerprint()
         } else {
             context.selectedPrivateChatFingerprint = nil
         }
