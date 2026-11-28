@@ -451,3 +451,28 @@ final class AppRootTabPersistenceTests: XCTestCase {
         XCTAssertEqual(AppRootTab.persisted(in: defaults), .settings)
     }
 }
+
+final class InboxPinnedChatsTests: XCTestCase {
+    func test_toggleUnpinAndClearPersistAcrossReads() {
+        let suiteName = "InboxPinnedChatsTests.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+
+        XCTAssertFalse(InboxPinnedChats.isPinned("chat-a", in: defaults))
+        XCTAssertTrue(InboxPinnedChats.toggle("chat-a", in: defaults))
+        XCTAssertTrue(InboxPinnedChats.isPinned("chat-a", in: defaults))
+
+        XCTAssertTrue(InboxPinnedChats.toggle("chat-b", in: defaults))
+        XCTAssertEqual(InboxPinnedChats.pinnedKeys(in: defaults), Set(["chat-a", "chat-b"]))
+
+        XCTAssertFalse(InboxPinnedChats.toggle("chat-a", in: defaults))
+        XCTAssertFalse(InboxPinnedChats.isPinned("chat-a", in: defaults))
+
+        InboxPinnedChats.unpin("chat-b", in: defaults)
+        XCTAssertTrue(InboxPinnedChats.pinnedKeys(in: defaults).isEmpty)
+
+        InboxPinnedChats.toggle("chat-c", in: defaults)
+        InboxPinnedChats.clear(in: defaults)
+        XCTAssertTrue(InboxPinnedChats.pinnedKeys(in: defaults).isEmpty)
+    }
+}

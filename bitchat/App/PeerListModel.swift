@@ -53,8 +53,46 @@ struct RecentChatRow: Identifiable, Equatable {
     var id: String { peerID.id }
 }
 
+/// Persists pinned chat keys for the Chats inbox. Cleared on panic wipe.
+enum InboxPinnedChats {
+    static let storageKey = "inbox.pinnedChatKeys"
+
+    static func pinnedKeys(in defaults: UserDefaults = .standard) -> Set<String> {
+        Set(defaults.stringArray(forKey: storageKey) ?? [])
+    }
+
+    static func isPinned(_ key: String, in defaults: UserDefaults = .standard) -> Bool {
+        pinnedKeys(in: defaults).contains(key)
+    }
+
+    @discardableResult
+    static func toggle(_ key: String, in defaults: UserDefaults = .standard) -> Bool {
+        var keys = pinnedKeys(in: defaults)
+        let nowPinned: Bool
+        if keys.contains(key) {
+            keys.remove(key)
+            nowPinned = false
+        } else {
+            keys.insert(key)
+            nowPinned = true
+        }
+        defaults.set(Array(keys).sorted(), forKey: storageKey)
+        return nowPinned
+    }
+
+    static func unpin(_ key: String, in defaults: UserDefaults = .standard) {
+        var keys = pinnedKeys(in: defaults)
+        guard keys.remove(key) != nil else { return }
+        defaults.set(Array(keys).sorted(), forKey: storageKey)
+    }
+
+    static func clear(in defaults: UserDefaults = .standard) {
+        defaults.removeObject(forKey: storageKey)
+    }
+}
+
 /// Unified row for the Inbox-first Chats tab: combines private groups,
-/// mutual friends, and any active DM threads in recency order.
+/// mutual friends, and any active DM threads in pinned + recency order.
 struct InboxChatRow: Identifiable, Equatable {
     enum Reachability: Equatable {
         case meshConnected
@@ -65,10 +103,12 @@ struct InboxChatRow: Identifiable, Equatable {
     }
 
     let peerID: PeerID
+    let pinKey: String
     let displayName: String
     let subtitle: String
     let lastActivity: Date?
     let hasUnread: Bool
+    let isPinned: Bool
     let isGroup: Bool
     let memberCount: Int
     let isFavorite: Bool
@@ -228,6 +268,20 @@ final class PeerListModel: ObservableObject {
 
     func createGroup(named name: String, memberPeerIDs: [PeerID]) -> CommandResult {
         chatViewModel.groupCoordinator.createGroup(named: name, initialMemberPeerIDs: memberPeerIDs)
+    }
+
+    func togglePin(for row: InboxChatRow) {
+        InboxPinnedChats.toggle(row.pinKey)
+        refresh()
+    }
+
+    func deleteInboxChat(_ row: InboxChatRow) {
+        chatViewModel.deleteInboxConversation(
+            peerID: row.peerID,
+            pinKey: row.pinKey,
+            isGroup: row.isGroup
+        )
+        refresh()
     }
 
     private func bind() {
@@ -425,6 +479,7 @@ final class PeerListModel: ObservableObject {
 
     private func buildInboxRows(meshRows: [MeshPeerRow], groupRows: [GroupChatRow]) -> [InboxChatRow] {
         var rowsByKey: [String: InboxChatRow] = [:]
+        let pinnedKeys = InboxPinnedChats.pinnedKeys()
 
         // 1. Groups
         for group in groupRows {
@@ -435,12 +490,15 @@ final class PeerListModel: ObservableObject {
                     locale: .current,
                     group.memberCount
                 )
-            rowsByKey[group.peerID.id] = InboxChatRow(
+            let key = group.peerID.id
+            rowsByKey[key] = InboxChatRow(
                 peerID: group.peerID,
+                pinKey: key,
                 displayName: group.name,
                 subtitle: preview,
                 lastActivity: lastMsg?.timestamp,
                 hasUnread: group.hasUnread,
+                isPinned: pinnedKeys.contains(key),
                 isGroup: true,
                 memberCount: group.memberCount,
                 isFavorite: false,
@@ -503,10 +561,12 @@ final class PeerListModel: ObservableObject {
             }()
             let row = InboxChatRow(
                 peerID: targetPeerID,
+                pinKey: fingerprint,
                 displayName: meshRow?.displayName ?? rel.peerNickname,
                 subtitle: lastMsg?.content ?? fallbackSubtitle,
                 lastActivity: lastMsg?.timestamp ?? rel.lastUpdated,
                 hasUnread: chatViewModel.hasUnreadMessages(for: targetPeerID),
+                isPinned: pinnedKeys.contains(fingerprint),
                 isGroup: false,
                 memberCount: 0,
                 isFavorite: true,
@@ -539,10 +599,12 @@ final class PeerListModel: ObservableObject {
             }()
             rowsByKey[key] = InboxChatRow(
                 peerID: meshRow?.peerID ?? peerID,
+                pinKey: key,
                 displayName: meshRow?.displayName ?? displayName(for: peerID),
                 subtitle: lastMsg.content,
                 lastActivity: lastMsg.timestamp,
                 hasUnread: chatViewModel.hasUnreadMessages(for: peerID),
+                isPinned: pinnedKeys.contains(key),
                 isGroup: false,
                 memberCount: 0,
                 isFavorite: meshRow?.isFavorite ?? false,
@@ -552,6 +614,7 @@ final class PeerListModel: ObservableObject {
         }
 
         return rowsByKey.values.sorted { lhs, rhs in
+            if lhs.isPinned != rhs.isPinned { return lhs.isPinned }
             if lhs.hasUnread != rhs.hasUnread { return lhs.hasUnread }
             let lDate = lhs.lastActivity ?? .distantPast
             let rDate = rhs.lastActivity ?? .distantPast

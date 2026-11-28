@@ -1387,6 +1387,52 @@ final class ChatViewModel: ObservableObject, SynchronousMessageTransportEventDel
         encryptedHistoryStore.clearPersistedHistory()
     }
 
+    /// Deletes a chat from the Chats inbox: leaves the group (for groups) or
+    /// removes all matching direct conversation history, timer, pin, and
+    /// favorite entry (for 1:1 DMs), then flushes encrypted history to disk.
+    func deleteInboxConversation(peerID: PeerID, pinKey: String, isGroup: Bool) {
+        InboxPinnedChats.unpin(pinKey)
+
+        if isGroup {
+            _ = groupCoordinator.leaveGroup(peerID: peerID)
+            encryptedHistoryStore.setTimer(.off, for: peerID)
+            flushPersistedPrivateHistorySynchronously()
+            return
+        }
+
+        let targetFingerprint = getFingerprint(for: peerID) ?? (pinKey != peerID.id ? pinKey : nil)
+        var peerIDsToRemove: Set<PeerID> = [peerID]
+        for (id, _) in conversations.conversationsByID {
+            guard case .direct(let handle) = id else { continue }
+            let candidate = handle.routingPeerID
+            if candidate == peerID {
+                peerIDsToRemove.insert(candidate)
+            } else if let targetFingerprint, getFingerprint(for: candidate) == targetFingerprint {
+                peerIDsToRemove.insert(candidate)
+            }
+        }
+
+        if let selected = selectedPrivateChatPeer, peerIDsToRemove.contains(selected) {
+            endPrivateChat()
+        }
+
+        for id in peerIDsToRemove {
+            conversations.removeConversation(.directPeer(id))
+            encryptedHistoryStore.setTimer(.off, for: id)
+        }
+
+        // Remove any favorite entry for this contact so the deleted chat
+        // doesn't immediately reappear as an empty favorite row in the inbox.
+        if let targetFingerprint {
+            for (noiseKey, _) in FavoritesPersistenceService.shared.favorites
+            where noiseKey.sha256Fingerprint() == targetFingerprint {
+                FavoritesPersistenceService.shared.removeFavorite(peerNoisePublicKey: noiseKey)
+            }
+        }
+
+        flushPersistedPrivateHistorySynchronously()
+    }
+
     private func pruneExpiredPrivateMessages(for peerID: PeerID, now: Date = Date()) {
         let timer = encryptedHistoryStore.timer(for: peerID)
         guard let duration = timer.duration, duration > 0 else { return }
@@ -1866,6 +1912,7 @@ final class ChatViewModel: ObservableObject, SynchronousMessageTransportEventDel
         // the legacy mirror empty with it)
         conversations.clearAll()
         pendingGeohashSystemMessages.removeAll()
+        InboxPinnedChats.clear()
 
         // Delete all keychain data (including Noise and Nostr keys)
         let keychainWipeCompleted = keychain.deleteAllKeychainData()

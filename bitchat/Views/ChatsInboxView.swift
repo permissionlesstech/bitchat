@@ -163,13 +163,26 @@ struct ChatsInboxView: View {
 
     @ViewBuilder
     private var inboxList: some View {
-        let list = ScrollView {
-            LazyVStack(spacing: 0) {
+        let list = List {
+            if appChromeModel.panicWipeBlocked || ConnectivityIssue.resolve(
+                bluetoothState: appChromeModel.bluetoothState,
+                torBlocked: appChromeModel.torBlocked
+            ) != nil {
                 banners
-                if peerListModel.reachableMeshPeerCount > 0 {
-                    nearbyBanner
-                }
-                ForEach(peerListModel.inboxRows) { row in
+                    .listRowInsets(EdgeInsets())
+                    .listRowSeparator(.hidden)
+                    .listRowBackground(Color.clear)
+            }
+
+            if peerListModel.reachableMeshPeerCount > 0 {
+                nearbyBanner
+                    .listRowInsets(EdgeInsets())
+                    .listRowSeparator(.hidden)
+                    .listRowBackground(Color.clear)
+            }
+
+            ForEach(peerListModel.inboxRows) { row in
+                VStack(spacing: 0) {
                     Button {
                         privateConversationModel.openConversation(for: row.peerID)
                     } label: {
@@ -182,9 +195,61 @@ struct ChatsInboxView: View {
                         .frame(height: 1)
                         .padding(.leading, 72)
                 }
+                .listRowInsets(EdgeInsets())
+                .listRowSeparator(.hidden)
+                .listRowBackground(Color.clear)
+                .swipeActions(edge: .leading, allowsFullSwipe: true) {
+                    Button {
+                        withAnimation(.easeInOut(duration: 0.2)) {
+                            peerListModel.togglePin(for: row)
+                        }
+                    } label: {
+                        Label(
+                            row.isPinned
+                                ? String(localized: "inbox.action.unpin", defaultValue: "Unpin", comment: "Swipe action to unpin a chat in the inbox")
+                                : String(localized: "inbox.action.pin", defaultValue: "Pin", comment: "Swipe action to pin a chat to the top of the inbox"),
+                            systemImage: row.isPinned ? "pin.slash.fill" : "pin.fill"
+                        )
+                    }
+                    .tint(Color.orange)
+                }
+                .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+                    Button(role: .destructive) {
+                        withAnimation(.easeInOut(duration: 0.2)) {
+                            peerListModel.deleteInboxChat(row)
+                        }
+                    } label: {
+                        Label(
+                            String(localized: "board.action.delete", defaultValue: "delete", comment: "Swipe action to delete a chat").capitalized,
+                            systemImage: "trash.fill"
+                        )
+                    }
+                }
+                .contextMenu {
+                    Button {
+                        peerListModel.togglePin(for: row)
+                    } label: {
+                        Label(
+                            row.isPinned
+                                ? String(localized: "inbox.action.unpin", defaultValue: "Unpin", comment: "Context menu action to unpin a chat")
+                                : String(localized: "inbox.action.pin", defaultValue: "Pin", comment: "Context menu action to pin a chat"),
+                            systemImage: row.isPinned ? "pin.slash" : "pin"
+                        )
+                    }
+
+                    Button(role: .destructive) {
+                        peerListModel.deleteInboxChat(row)
+                    } label: {
+                        Label(
+                            String(localized: "board.action.delete", defaultValue: "delete", comment: "Context menu action to delete a chat").capitalized,
+                            systemImage: "trash"
+                        )
+                    }
+                }
             }
-            .padding(.top, 6)
         }
+        .listStyle(.plain)
+        .scrollContentBackground(.hidden)
 
         if theme.usesGlassChrome {
             if #available(iOS 17.0, macOS 14.0, *) {
@@ -242,6 +307,11 @@ struct ChatsInboxView: View {
                         .foregroundColor(row.hasUnread ? palette.primary : palette.secondary)
                         .lineLimit(1)
                     Spacer(minLength: 4)
+                    if row.isPinned {
+                        Image(systemName: "pin.fill")
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundColor(Color.orange)
+                    }
                     if row.hasUnread {
                         Circle()
                             .fill(Color.orange)
