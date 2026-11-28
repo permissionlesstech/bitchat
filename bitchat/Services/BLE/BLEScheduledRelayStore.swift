@@ -37,7 +37,7 @@ struct BLEScheduledRelayStore {
 
     mutating func removeAllIfOverCapacity(_ maxCount: Int) {
         if relays.count > maxCount {
-            relays.removeAll()
+            cancelAll()
         }
     }
 }

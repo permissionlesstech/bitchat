@@ -67,7 +67,11 @@ extension BLEService {
             guard let self else { return }
             for courier in connected {
                 SecureLogger.debug("📦 Depositing courier envelope with \(courier.id.prefix(8))… id=\(messageID.prefix(8))…", category: .session)
-                self.sendPacketDirected(self.makeCourierPacket(payload, to: courier), to: courier)
+                self.sendPacketDirected(
+                    self.makeCourierPacket(payload, to: courier),
+                    to: courier,
+                    requireDirectPeerLink: true
+                )
             }
         }
         return true

@@ -205,6 +205,37 @@ struct BLEOutboundFragmentPlannerTests {
         #expect(direct.fragmentPackets.map(\.payload) == viaRequest.fragmentPackets.map(\.payload))
     }
 
+    @Test("source-routed fragments preserve final recipient when directed to intermediate hop")
+    func sourceRoutedFragmentsPreserveFinalRecipientWhenDirectedToIntermediateHop() throws {
+        let finalRecipient = PeerID(str: "8877665544332211")
+        let nextHop = PeerID(str: "1011121314151617")
+        let route = [Data(hexString: nextHop.id)!]
+        let packet = BitchatPacket(
+            type: MessageType.noiseEncrypted.rawValue,
+            senderID: Data(hexString: "0011223344556677") ?? Data(),
+            recipientID: Data(hexString: finalRecipient.id),
+            timestamp: 0x0102030405,
+            payload: makePayload(count: 256),
+            signature: nil,
+            ttl: 5,
+            version: 2,
+            route: route
+        )
+
+        let plan = try #require(BLEOutboundFragmentPlanner.makePlan(
+            packet: packet,
+            pad: false,
+            maxChunk: 96,
+            directedPeer: nextHop,
+            defaultChunkSize: 256,
+            bleMaxMTU: 512,
+            fragmentID: Data(repeating: 0xF6, count: 8)
+        ))
+
+        #expect(plan.fragmentPackets.allSatisfy { $0.recipientID == Data(hexString: finalRecipient.id) })
+        #expect(plan.fragmentPackets.allSatisfy { $0.route == route })
+    }
+
     private func makePacket(
         payload: Data,
         route: [Data]? = nil,

@@ -204,6 +204,29 @@ struct BLEIngressLinkRegistryTests {
         #expect(context.receivedFromPeerID == boundPeer)
         #expect(context.validationPeerID == boundPeer)
     }
+
+    @Test
+    func recordIfNewAccumulatesSecondaryLinksAndPeersWhilePreservingPrimary() {
+        var registry = BLEIngressLinkRegistry()
+        let packet = makePacket(sender: PeerID(str: "1122334455667788"), timestamp: 42)
+        let firstPeer = PeerID(str: "1122334455667788")
+        let secondPeer = PeerID(str: "8899aabbccddeeff")
+        let now = Date()
+
+        let first = registry.recordIfNew(packet, link: .central("c1"), peerID: firstPeer, now: now, lifetime: 3.0)
+        let second = registry.recordIfNew(packet, link: .peripheral("p2"), peerID: secondPeer, now: now.addingTimeInterval(0.5), lifetime: 3.0)
+        #expect(first)
+        #expect(!second)
+
+        #expect(registry.link(for: packet) == .central("c1"))
+        #expect(registry.peerID(for: packet) == firstPeer)
+        #expect(registry.allLinks(for: packet) == Set([.central("c1"), .peripheral("p2")]))
+        #expect(registry.allPeerIDs(for: packet) == Set([firstPeer, secondPeer]))
+
+        registry.prune(before: now.addingTimeInterval(4.0))
+        #expect(registry.allLinks(for: packet).isEmpty)
+        #expect(registry.allPeerIDs(for: packet).isEmpty)
+    }
 }
 
 private func makePacket(sender: PeerID, timestamp: UInt64) -> BitchatPacket {

@@ -62,6 +62,24 @@ final class RequestSyncManagerTests: XCTestCase {
         XCTAssertTrue(manager.isValidResponse(from: freshPeer, isRSR: true))
     }
 
+    func test_isValidResponse_acceptsResponseToBroadcastRequestWithinWindow() {
+        let clock = MutableSyncClock(now: 1_000)
+        let manager = RequestSyncManager(responseWindow: 30, now: { clock.now })
+        let responder = PeerID(str: "1234567890abcdef")
+
+        XCTAssertFalse(manager.isValidResponse(from: responder, isRSR: true))
+
+        manager.registerBroadcastRequest()
+        clock.now = 1_015
+        XCTAssertTrue(manager.isValidResponse(from: responder, isRSR: true))
+
+        clock.now = 1_031
+        XCTAssertFalse(manager.isValidResponse(from: responder, isRSR: true))
+
+        manager.cleanup()
+        XCTAssertFalse(manager.isValidResponse(from: responder, isRSR: true))
+    }
+
     private func waitUntil(
         timeout: TimeInterval = TestConstants.settleTimeout,
         condition: @escaping () -> Bool

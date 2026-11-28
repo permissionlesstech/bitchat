@@ -69,6 +69,41 @@ struct BLEReceivePipelineTests {
         #expect(!decision.shouldRelay)
     }
 
+    @Test("relay decision treats 8-byte 0xFF recipient sentinel as broadcast")
+    func relayDecisionTreatsBroadcastSentinelAsBroadcastNotDirected() {
+        let sender = PeerID(str: "1122334455667788")
+        let local = PeerID(str: "8877665544332211")
+        let sentinelPacket = BitchatPacket(
+            type: MessageType.message.rawValue,
+            senderID: Data(hexString: sender.id) ?? Data(),
+            recipientID: Data(repeating: 0xFF, count: 8),
+            timestamp: 1,
+            payload: Data([0x01, 0x02]),
+            signature: nil,
+            ttl: 7
+        )
+
+        // With high degree (>= highDegreeThreshold), directed packets always
+        // relay with p=1.0, while broadcast packets use probabilistic dense
+        // relay and TTL capping. Run enough trials to confirm the broadcast
+        // sentinel is classified as broadcast (at least one skip or capped TTL).
+        var sawBroadcastBehavior = false
+        for _ in 0..<200 {
+            let decision = BLEReceivePipeline.relayDecision(
+                for: sentinelPacket,
+                senderID: sender,
+                localPeerID: local,
+                degree: 10,
+                highDegreeThreshold: 6
+            )
+            if !decision.shouldRelay || decision.newTTL < 6 {
+                sawBroadcastBehavior = true
+                break
+            }
+        }
+        #expect(sawBroadcastBehavior)
+    }
+
     @Test("recent traffic tracker prunes by count and time window")
     func recentTrafficTrackerPrunesByCountAndWindow() {
         var tracker = BLERecentTrafficTracker()

@@ -67,7 +67,15 @@ enum BLEOutboundFragmentPlanner {
 
         guard !chunks.isEmpty else { return nil }
 
+        // Source-routed packets must preserve their final recipientID on every
+        // fragment (SOURCE_ROUTING.md §5) even when `directedPeer` names an
+        // intermediate next-hop relay; overwriting it with the relay's ID would
+        // cause the relay to reassemble and drop the packet with TTL 0.
+        let hasRoute = !(packet.route?.isEmpty ?? true)
         let fragmentRecipient: Data? = {
+            if hasRoute, let originalRecipient = packet.recipientID {
+                return originalRecipient
+            }
             if let directedPeer {
                 return Data(hexString: directedPeer.id)
             }
