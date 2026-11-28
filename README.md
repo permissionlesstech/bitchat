@@ -129,6 +129,9 @@ Useful command-line checks from the repository root:
 xcodebuild -project bitchat.xcodeproj -scheme "bitchat (macOS)" \
   -configuration Debug CODE_SIGNING_ALLOWED=NO build
 
+# Headless macOS terminal mode (full BLE mesh + Noise E2E DMs + Nostr)
+/path/to/bitchat.app/Contents/MacOS/bitchat --cli
+
 # Full SwiftPM test suite
 swift test
 
