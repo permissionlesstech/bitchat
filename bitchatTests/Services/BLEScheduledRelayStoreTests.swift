@@ -56,13 +56,22 @@ struct BLEScheduledRelayStoreTests {
     func capacityGuardRemovesOnlyWhenOverLimit() {
         var store = BLEScheduledRelayStore()
 
-        store.schedule(DispatchWorkItem {}, messageID: "one")
-        store.schedule(DispatchWorkItem {}, messageID: "two")
+        let first = DispatchWorkItem {}
+        let second = DispatchWorkItem {}
+        let third = DispatchWorkItem {}
+
+        store.schedule(first, messageID: "one")
+        store.schedule(second, messageID: "two")
         store.removeAllIfOverCapacity(2)
         #expect(store.count == 2)
+        #expect(!first.isCancelled)
+        #expect(!second.isCancelled)
 
-        store.schedule(DispatchWorkItem {}, messageID: "three")
+        store.schedule(third, messageID: "three")
         store.removeAllIfOverCapacity(2)
         #expect(store.isEmpty)
+        #expect(first.isCancelled)
+        #expect(second.isCancelled)
+        #expect(third.isCancelled)
     }
 }

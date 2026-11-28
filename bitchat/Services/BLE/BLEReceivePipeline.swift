@@ -46,10 +46,11 @@ struct BLEReceivePipeline {
         degree: Int,
         highDegreeThreshold: Int
     ) -> RelayDecision {
-        RelayController.decide(
+        let hasDirectedRecipient = !BLEPacketFreshnessPolicy.isBroadcastRecipient(packet.recipientID)
+        return RelayController.decide(
             ttl: packet.ttl,
             senderIsSelf: senderID == localPeerID,
-            recipientIsSelf: PeerID(hexData: packet.recipientID) == localPeerID,
+            recipientIsSelf: hasDirectedRecipient && PeerID(hexData: packet.recipientID) == localPeerID,
             isEncrypted: packet.type == MessageType.noiseEncrypted.rawValue,
             // Courier envelopes are directed opaque ciphertext like DMs; a
             // remote handover toward a relayed announce rides this same
@@ -63,9 +64,9 @@ struct BLEReceivePipeline {
                 || packet.type == MessageType.courierEnvelope.rawValue
                 || packet.type == MessageType.ping.rawValue
                 || packet.type == MessageType.pong.rawValue
-                || packet.type == MessageType.nostrCarrier.rawValue) && packet.recipientID != nil,
+                || packet.type == MessageType.nostrCarrier.rawValue) && hasDirectedRecipient,
             isFragment: packet.type == MessageType.fragment.rawValue,
-            isDirectedFragment: packet.type == MessageType.fragment.rawValue && packet.recipientID != nil,
+            isDirectedFragment: packet.type == MessageType.fragment.rawValue && hasDirectedRecipient,
             isHandshake: packet.type == MessageType.noiseHandshake.rawValue,
             isAnnounce: packet.type == MessageType.announce.rawValue,
             isRequestSync: packet.type == MessageType.requestSync.rawValue,

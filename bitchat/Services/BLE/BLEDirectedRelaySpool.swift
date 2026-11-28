@@ -4,6 +4,20 @@ import Foundation
 struct BLEDirectedRelaySpoolEntry {
     let recipient: PeerID
     let packet: BitchatPacket
+    let enqueuedAt: Date
+    let ingressPeerID: PeerID?
+
+    init(
+        recipient: PeerID,
+        packet: BitchatPacket,
+        enqueuedAt: Date = Date(),
+        ingressPeerID: PeerID? = nil
+    ) {
+        self.recipient = recipient
+        self.packet = packet
+        self.enqueuedAt = enqueuedAt
+        self.ingressPeerID = ingressPeerID
+    }
 }
 
 /// Directed packets held at a relay while no onward link exists.
@@ -24,6 +38,7 @@ struct BLEDirectedRelaySpool {
     private struct StoredPacket {
         let packet: BitchatPacket
         let enqueuedAt: Date
+        let ingressPeerID: PeerID?
     }
 
     private let capacity: Int
@@ -58,14 +73,15 @@ struct BLEDirectedRelaySpool {
         packet: BitchatPacket,
         recipient: PeerID,
         messageID: String,
-        enqueuedAt: Date
+        enqueuedAt: Date,
+        ingressPeerID: PeerID? = nil
     ) -> Bool {
         let key = Key(recipient: recipient, messageID: messageID)
         guard packets[key] == nil, packet.payload.count <= byteBudget else {
             return false
         }
 
-        packets[key] = StoredPacket(packet: packet, enqueuedAt: enqueuedAt)
+        packets[key] = StoredPacket(packet: packet, enqueuedAt: enqueuedAt, ingressPeerID: ingressPeerID)
         order.append(key)
         payloadBytes += packet.payload.count
         while order.count > capacity || payloadBytes > byteBudget {
@@ -83,7 +99,12 @@ struct BLEDirectedRelaySpool {
         for key in order {
             guard let stored = packets[key],
                   now.timeIntervalSince(stored.enqueuedAt) <= window else { continue }
-            entries.append(BLEDirectedRelaySpoolEntry(recipient: key.recipient, packet: stored.packet))
+            entries.append(BLEDirectedRelaySpoolEntry(
+                recipient: key.recipient,
+                packet: stored.packet,
+                enqueuedAt: stored.enqueuedAt,
+                ingressPeerID: stored.ingressPeerID
+            ))
         }
 
         removeAll()

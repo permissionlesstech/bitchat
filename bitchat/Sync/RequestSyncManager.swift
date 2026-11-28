@@ -18,6 +18,7 @@ final class RequestSyncManager {
     
     private let lock = NSLock()
     private var pendingRequests: [PeerID: TimeInterval] = [:]
+    private var lastBroadcastRequest: TimeInterval?
     private let responseWindow: TimeInterval
     private let now: () -> TimeInterval
     
@@ -38,6 +39,15 @@ final class RequestSyncManager {
         }
         SecureLogger.debug("Registering sync request to \(peerID.id.prefix(8))…", category: .sync)
     }
+
+    /// Register that we are broadcasting a link-local sync request during discovery.
+    func registerBroadcastRequest() {
+        let now = self.now()
+        lock.withLock {
+            lastBroadcastRequest = now
+        }
+        SecureLogger.debug("Registering broadcast sync request", category: .sync)
+    }
     
     /// Check if a packet from a peer is a valid response to a sync request.
     ///
@@ -48,19 +58,22 @@ final class RequestSyncManager {
     func isValidResponse(from peerID: PeerID, isRSR: Bool) -> Bool {
         guard isRSR else { return false }
         
-        let requestTime = lock.withLock { pendingRequests[peerID] }
-        guard let requestTime else {
-            SecureLogger.warning("Received unsolicited RSR packet from \(peerID.id.prefix(8))…", category: .security)
-            return false
+        let (requestTime, broadcastRequestTime) = lock.withLock {
+            (pendingRequests[peerID], lastBroadcastRequest)
         }
-        
-        if self.now() - requestTime > responseWindow {
+        let currentTime = self.now()
+        if let requestTime, currentTime - requestTime <= responseWindow {
+            return true
+        }
+        if let broadcastRequestTime, currentTime - broadcastRequestTime <= responseWindow {
+            return true
+        }
+        if requestTime != nil || broadcastRequestTime != nil {
             SecureLogger.warning("Received RSR packet from \(peerID.id.prefix(8))… outside of response window", category: .security)
-            // We don't remove here because we might receive multiple packets for one request
-            return false
+        } else {
+            SecureLogger.warning("Received unsolicited RSR packet from \(peerID.id.prefix(8))…", category: .security)
         }
-        
-        return true
+        return false
     }
     
     /// Periodic cleanup of expired requests
@@ -70,6 +83,9 @@ final class RequestSyncManager {
             let originalCount = pendingRequests.count
             pendingRequests = pendingRequests.filter { _, timestamp in
                 now - timestamp <= responseWindow
+            }
+            if let broadcast = lastBroadcastRequest, now - broadcast > responseWindow {
+                lastBroadcastRequest = nil
             }
             return originalCount - pendingRequests.count
         }

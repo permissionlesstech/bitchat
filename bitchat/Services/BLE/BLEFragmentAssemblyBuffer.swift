@@ -13,12 +13,34 @@ struct BLEFragmentHeader: Equatable {
     let originalType: UInt8
     let fragmentData: Data
     let isBroadcastFragment: Bool
+    let isRSR: Bool
+    let rsrResponder: PeerID?
 
     var idLogString: String {
         String(format: "%016llx", key.id)
     }
 
-    init?(packet: BitchatPacket) {
+    init(
+        key: BLEFragmentKey,
+        index: Int,
+        total: Int,
+        originalType: UInt8,
+        fragmentData: Data,
+        isBroadcastFragment: Bool,
+        isRSR: Bool = false,
+        rsrResponder: PeerID? = nil
+    ) {
+        self.key = key
+        self.index = index
+        self.total = total
+        self.originalType = originalType
+        self.fragmentData = fragmentData
+        self.isBroadcastFragment = isBroadcastFragment
+        self.isRSR = isRSR
+        self.rsrResponder = isRSR ? rsrResponder : nil
+    }
+
+    init?(packet: BitchatPacket, rsrResponder: PeerID? = nil) {
         // Minimum header: 8 bytes ID + 2 index + 2 total + 1 type.
         guard packet.payload.count >= 13 else { return nil }
 
@@ -50,6 +72,8 @@ struct BLEFragmentHeader: Equatable {
         self.originalType = packet.payload[12]
         self.fragmentData = Data(packet.payload.suffix(from: 13))
         self.isBroadcastFragment = isBroadcastFragment
+        self.isRSR = packet.isRSR
+        self.rsrResponder = packet.isRSR ? rsrResponder : nil
     }
 }
 
@@ -69,6 +93,8 @@ struct BLEFragmentAssemblyBuffer {
         var lastFragmentAt: Date
         var lastResyncRequestAt: Date?
         var totalBytes: Int = 0
+        var hasRSRFragment: Bool = false
+        var rsrResponder: PeerID? = nil
     }
 
     private var fragmentsByKey: [BLEFragmentKey: [Int: Data]] = [:]
@@ -149,15 +175,22 @@ struct BLEFragmentAssemblyBuffer {
         if isNewIndex {
             metadataByKey[header.key]?.lastFragmentAt = now
         }
+        if header.isRSR {
+            metadataByKey[header.key]?.hasRSRFragment = true
+            if let responder = header.rsrResponder {
+                metadataByKey[header.key]?.rsrResponder = responder
+            }
+        }
 
         guard let fragments = fragmentsByKey[header.key],
-              fragments.count == metadata.total else {
+              let updatedMetadata = metadataByKey[header.key],
+              fragments.count == updatedMetadata.total else {
             return .stored(header: header, started: started)
         }
 
         var reassembled = Data()
         reassembled.reserveCapacity(projectedSize)
-        for index in 0..<metadata.total {
+        for index in 0..<updatedMetadata.total {
             guard let fragment = fragments[index] else {
                 return .stored(header: header, started: started)
             }
@@ -167,7 +200,18 @@ struct BLEFragmentAssemblyBuffer {
         fragmentsByKey.removeValue(forKey: header.key)
         metadataByKey.removeValue(forKey: header.key)
 
-        return .complete(header: header, reassembledData: reassembled, started: started)
+        let completedHeader = BLEFragmentHeader(
+            key: header.key,
+            index: header.index,
+            total: header.total,
+            originalType: header.originalType,
+            fragmentData: header.fragmentData,
+            isBroadcastFragment: header.isBroadcastFragment,
+            isRSR: updatedMetadata.hasRSRFragment || header.isRSR,
+            rsrResponder: header.rsrResponder ?? updatedMetadata.rsrResponder
+        )
+
+        return .complete(header: completedHeader, reassembledData: reassembled, started: started)
     }
 
     private mutating func startAssemblyIfNeeded(
@@ -189,7 +233,9 @@ struct BLEFragmentAssemblyBuffer {
             originalType: header.originalType,
             timestamp: now,
             isBroadcast: header.isBroadcastFragment,
-            lastFragmentAt: now
+            lastFragmentAt: now,
+            hasRSRFragment: header.isRSR,
+            rsrResponder: header.rsrResponder
         )
         return true
     }
