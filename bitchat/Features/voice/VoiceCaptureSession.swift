@@ -93,6 +93,7 @@ extension PTTCaptureEngine: PTTCapturing {}
 @MainActor
 final class PTTLiveVoiceSession: VoiceCaptureSession {
     let burstID: Data
+    let groupID: Data?
 
     private let sendPacket: (Data) -> Void
     private let capture: any PTTCapturing
@@ -102,8 +103,8 @@ final class PTTLiveVoiceSession: VoiceCaptureSession {
     private final class StreamState {
         var packetizer: VoiceBurstPacketizer
         var sentStart = false
-        init(burstID: Data) {
-            packetizer = VoiceBurstPacketizer(burstID: burstID)
+        init(burstID: Data, groupID: Data?) {
+            packetizer = VoiceBurstPacketizer(burstID: burstID, groupID: groupID)
         }
     }
     private let stream: StreamState
@@ -117,19 +118,21 @@ final class PTTLiveVoiceSession: VoiceCaptureSession {
     }
 
     /// - Parameter sendPacket: delivers one encoded `VoiceBurstPacket` to the
-    ///   target peer; must be safe to call from any queue (BLEService hops to
-    ///   its own message queue internally).
+    ///   target peer (or group member fan-out); must be safe to call from any
+    ///   queue (BLEService hops to its own message queue internally).
     init(
         sendPacket: @escaping (Data) -> Void,
         capture: (any PTTCapturing)? = nil,
         now: @escaping () -> Date = Date.init,
-        burstID: Data? = nil
+        burstID: Data? = nil,
+        groupID: Data? = nil
     ) {
         self.burstID = burstID ?? VoiceBurstPacket.makeBurstID()
+        self.groupID = groupID
         self.sendPacket = sendPacket
         self.capture = capture ?? PTTCaptureEngine()
         self.now = now
-        self.stream = StreamState(burstID: self.burstID)
+        self.stream = StreamState(burstID: self.burstID, groupID: groupID)
     }
 
     func requestPermission() async -> Bool {
@@ -146,7 +149,8 @@ final class PTTLiveVoiceSession: VoiceCaptureSession {
                 if let start = VoiceBurstPacket(
                     burstID: stream.packetizer.burstID,
                     seq: 0,
-                    kind: .start(codec: .aacLC16kMono)
+                    kind: .start(codec: .aacLC16kMono),
+                    groupID: stream.packetizer.groupID
                 ) {
                     sendPacket(start.encode())
                 }
@@ -243,7 +247,7 @@ final class PTTLiveVoiceSession: VoiceCaptureSession {
     }
 
     private func sendControlPacket(_ kind: VoiceBurstPacket.Kind) {
-        guard let packet = VoiceBurstPacket(burstID: burstID, seq: stream.packetizer.nextSeq, kind: kind) else { return }
+        guard let packet = VoiceBurstPacket(burstID: burstID, seq: stream.packetizer.nextSeq, kind: kind, groupID: groupID) else { return }
         sendPacket(packet.encode())
     }
 

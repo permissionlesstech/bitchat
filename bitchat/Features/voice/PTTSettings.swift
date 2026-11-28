@@ -20,9 +20,42 @@ import AppKit
 /// Off by default: live mode sends audio to other people before the hold is
 /// released and plays strangers' voices out of the speaker unprompted. Both
 /// are consequences someone must opt into, not discover.
+/// Per-conversation live voice speaker auto-play override.
+enum PTTAutoListenPolicy: String, CaseIterable, Identifiable {
+    case automatic
+    case always
+    case never
+
+    var id: String { rawValue }
+
+    var displayName: String {
+        switch self {
+        case .automatic:
+            return String(localized: "walkie.autolisten.automatic", defaultValue: "Automatic", comment: "Per-chat auto-listen option using default rules")
+        case .always:
+            return String(localized: "walkie.autolisten.always", defaultValue: "Always Auto-Play", comment: "Per-chat auto-listen option to always play incoming live voice aloud")
+        case .never:
+            return String(localized: "walkie.autolisten.never", defaultValue: "Tap to Play Only", comment: "Per-chat auto-listen option disabling automatic speaker playback")
+        }
+    }
+
+    var shortLabel: String {
+        switch self {
+        case .automatic:
+            return String(localized: "walkie.autolisten.short.automatic", defaultValue: "Auto", comment: "Short label for automatic per-chat auto-listen")
+        case .always:
+            return String(localized: "walkie.autolisten.short.always", defaultValue: "Always", comment: "Short label for always per-chat auto-listen")
+        case .never:
+            return String(localized: "walkie.autolisten.short.never", defaultValue: "Manual", comment: "Short label for manual tap-to-play per-chat auto-listen")
+        }
+    }
+}
+
 enum PTTSettings {
     static let liveVoiceEnabledKey = "ptt.liveVoiceEnabled"
     static let toneCuesEnabledKey = "ptt.toneCuesEnabled"
+    static let publicAutoPlayEnabledKey = "ptt.publicAutoPlayEnabled"
+    static let chatAutoListenPoliciesKey = "ptt.chatAutoListenPolicies"
     static let liveVoiceDidChangeNotification = Notification.Name("chat.bitchat.ptt.liveVoiceDidChange")
 
     static var liveVoiceEnabled: Bool {
@@ -33,6 +66,14 @@ enum PTTSettings {
     static var toneCuesEnabled: Bool {
         get { toneCuesEnabled(in: .standard) }
         set { setToneCuesEnabled(newValue, in: .standard) }
+    }
+
+    /// Controls whether unprompted incoming live bursts in public Nearby (`#mesh`)
+    /// auto-play aloud when Live Voice is enabled. Off by default so trusted DMs
+    /// and groups can auto-play without strangers' voices playing out loud in public.
+    static var publicAutoPlayEnabled: Bool {
+        get { publicAutoPlayEnabled(in: .standard) }
+        set { setPublicAutoPlayEnabled(newValue, in: .standard) }
     }
 
     /// Store-injecting forms, so tests can assert the default and both settings
@@ -59,6 +100,69 @@ enum PTTSettings {
         }
     }
 
+    static func publicAutoPlayEnabled(in defaults: UserDefaults) -> Bool {
+        defaults.object(forKey: publicAutoPlayEnabledKey) as? Bool ?? false
+    }
+
+    static func setPublicAutoPlayEnabled(_ enabled: Bool, in defaults: UserDefaults) {
+        defaults.set(enabled, forKey: publicAutoPlayEnabledKey)
+        if defaults === UserDefaults.standard {
+            NotificationCenter.default.post(name: liveVoiceDidChangeNotification, object: nil)
+        }
+    }
+
+    static func chatAutoListenPolicy(for key: String, in defaults: UserDefaults = .standard) -> PTTAutoListenPolicy {
+        guard let map = defaults.dictionary(forKey: chatAutoListenPoliciesKey) as? [String: String],
+              let raw = map[key],
+              let policy = PTTAutoListenPolicy(rawValue: raw) else {
+            return .automatic
+        }
+        return policy
+    }
+
+    static func setChatAutoListenPolicy(_ policy: PTTAutoListenPolicy, for key: String, in defaults: UserDefaults = .standard) {
+        var map = (defaults.dictionary(forKey: chatAutoListenPoliciesKey) as? [String: String]) ?? [:]
+        if policy == .automatic {
+            map.removeValue(forKey: key)
+        } else {
+            map[key] = policy.rawValue
+        }
+        if map.isEmpty {
+            defaults.removeObject(forKey: chatAutoListenPoliciesKey)
+        } else {
+            defaults.set(map, forKey: chatAutoListenPoliciesKey)
+        }
+        if defaults === UserDefaults.standard {
+            NotificationCenter.default.post(name: liveVoiceDidChangeNotification, object: nil)
+        }
+    }
+
+    /// Evaluates whether an inbound live burst should auto-play aloud given
+    /// global settings, speaker mute state, scope, and per-chat override.
+    static func shouldAutoPlayInbound(
+        isPublicMesh: Bool,
+        chatKey: String?,
+        isChatMuted: Bool,
+        liveEnabled: Bool = PTTSettings.liveVoiceEnabled,
+        publicAutoPlay: Bool = PTTSettings.publicAutoPlayEnabled,
+        isSpeakerMuted: Bool,
+        defaults: UserDefaults = .standard
+    ) -> Bool {
+        guard liveEnabled, !isSpeakerMuted else { return false }
+        if isPublicMesh {
+            return publicAutoPlay
+        }
+        let policy = chatKey.map { chatAutoListenPolicy(for: $0, in: defaults) } ?? .automatic
+        switch policy {
+        case .always:
+            return true
+        case .never:
+            return false
+        case .automatic:
+            return !isChatMuted
+        }
+    }
+
     /// Session-only mute for incoming live speaker autoplay. Lets users silence
     /// incoming live voices with one tap without turning off live sending.
     @MainActor
@@ -75,6 +179,8 @@ enum PTTSettings {
     static func reset(in defaults: UserDefaults = .standard) {
         defaults.removeObject(forKey: liveVoiceEnabledKey)
         defaults.removeObject(forKey: toneCuesEnabledKey)
+        defaults.removeObject(forKey: publicAutoPlayEnabledKey)
+        defaults.removeObject(forKey: chatAutoListenPoliciesKey)
         if defaults === UserDefaults.standard {
             if Thread.isMainThread {
                 MainActor.assumeIsolated {
@@ -111,13 +217,16 @@ final class PTTPreferences: ObservableObject {
 
     @Published private(set) var liveVoiceEnabled: Bool
     @Published private(set) var toneCuesEnabled: Bool
+    @Published private(set) var publicAutoPlayEnabled: Bool
     @Published private(set) var isAutoListenMuted: Bool
+    @Published private(set) var policyRevision: UInt64 = 0
 
     private var observer: NSObjectProtocol?
 
     private init() {
         self.liveVoiceEnabled = PTTSettings.liveVoiceEnabled
         self.toneCuesEnabled = PTTSettings.toneCuesEnabled
+        self.publicAutoPlayEnabled = PTTSettings.publicAutoPlayEnabled
         self.isAutoListenMuted = PTTSettings.isAutoListenMuted
         observer = NotificationCenter.default.addObserver(
             forName: PTTSettings.liveVoiceDidChangeNotification,
@@ -146,6 +255,11 @@ final class PTTPreferences: ObservableObject {
         syncFromSettings()
     }
 
+    func setPublicAutoPlayEnabled(_ enabled: Bool) {
+        PTTSettings.publicAutoPlayEnabled = enabled
+        syncFromSettings()
+    }
+
     func setAutoListenMuted(_ muted: Bool) {
         PTTSettings.isAutoListenMuted = muted
         syncFromSettings()
@@ -155,12 +269,24 @@ final class PTTPreferences: ObservableObject {
         setAutoListenMuted(!isAutoListenMuted)
     }
 
+    func chatAutoListenPolicy(for key: String) -> PTTAutoListenPolicy {
+        PTTSettings.chatAutoListenPolicy(for: key)
+    }
+
+    func setChatAutoListenPolicy(_ policy: PTTAutoListenPolicy, for key: String) {
+        PTTSettings.setChatAutoListenPolicy(policy, for: key)
+        policyRevision &+= 1
+        syncFromSettings()
+    }
+
     private func syncFromSettings() {
         let live = PTTSettings.liveVoiceEnabled
         let tones = PTTSettings.toneCuesEnabled
+        let publicAuto = PTTSettings.publicAutoPlayEnabled
         let muted = PTTSettings.isAutoListenMuted
         if liveVoiceEnabled != live { liveVoiceEnabled = live }
         if toneCuesEnabled != tones { toneCuesEnabled = tones }
+        if publicAutoPlayEnabled != publicAuto { publicAutoPlayEnabled = publicAuto }
         if isAutoListenMuted != muted { isAutoListenMuted = muted }
     }
 }

@@ -23,6 +23,7 @@ struct WalkieTalkieSheetView: View {
     @EnvironmentObject private var peerListModel: PeerListModel
     @ObservedObject var voiceRecordingVM: VoiceRecordingViewModel
     @ObservedObject private var pttPreferences = PTTPreferences.shared
+    @ObservedObject private var systemPTT = SystemPTTChannelManager.shared
     @Environment(\.dismiss) private var dismiss
     @ThemedPalette private var palette
 
@@ -42,15 +43,22 @@ struct WalkieTalkieSheetView: View {
         return .publicMesh
     }
 
+    private var currentChannelKey: String {
+        if let peerID = privateConversationModel.selectedPeerID {
+            return privateConversationModel.autoListenPolicyKey(for: peerID)
+        }
+        return "mesh.public"
+    }
+
     private var availability: ChatViewModel.LiveVoiceAvailability {
         conversationUIModel.currentLiveVoiceAvailability()
     }
 
     private var isLiveReady: Bool {
         switch availability {
-        case .liveReadyPublic, .liveReadyDM:
+        case .liveReadyPublic, .liveReadyDM, .liveReadyGroup:
             return true
-        case .disabledByUser, .dmHandshaking, .dmOutOfRadioRange, .unsupported:
+        case .disabledByUser, .dmHandshaking, .dmOutOfRadioRange, .groupNoReachableMembers, .unsupported:
             return false
         }
     }
@@ -63,7 +71,7 @@ struct WalkieTalkieSheetView: View {
 
     private var currentChannelName: String {
         if let header = privateConversationModel.selectedHeaderState {
-            return "@\(header.displayName)"
+            return header.isGroupConversation ? header.displayName : "@\(header.displayName)"
         }
         return String(localized: "walkie.channel.nearby", defaultValue: "Nearby (#mesh)", comment: "Channel name for public Nearby mesh in the walkie-talkie deck")
     }
@@ -102,6 +110,30 @@ struct WalkieTalkieSheetView: View {
                     ),
                     locale: .current,
                     name
+                )
+            )
+        case .liveReadyGroup(let reachableCount):
+            return (
+                palette.accent,
+                "person.3.fill",
+                String(
+                    format: String(
+                        localized: "walkie.status.live_group",
+                        defaultValue: "Live · Streaming encrypted to %lld nearby group members",
+                        comment: "Status caption in the walkie-talkie deck when live encrypted mesh group streaming is ready"
+                    ),
+                    locale: .current,
+                    reachableCount
+                )
+            )
+        case .groupNoReachableMembers:
+            return (
+                Color.orange,
+                "person.3",
+                String(
+                    localized: "walkie.status.group_none_nearby",
+                    defaultValue: "No group members in Bluetooth range · Saves local voice note",
+                    comment: "Status caption when no members of a mesh group are currently reachable over Bluetooth"
                 )
             )
         case .dmHandshaking:
@@ -250,6 +282,29 @@ struct WalkieTalkieSheetView: View {
                             }
                         }
                     }
+
+                    if !peerListModel.groupRows.isEmpty {
+                        Section(
+                            String(
+                                localized: "walkie.channel.groups",
+                                defaultValue: "Groups",
+                                comment: "Menu section listing mesh groups in the walkie-talkie channel picker"
+                            )
+                        ) {
+                            ForEach(peerListModel.groupRows) { group in
+                                Button {
+                                    privateConversationModel.openConversation(for: group.peerID)
+                                } label: {
+                                    HStack {
+                                        Text("#\(group.name)")
+                                        if privateConversationModel.selectedPeerID == group.peerID {
+                                            Image(systemName: "checkmark")
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
                 } label: {
                     HStack(spacing: 6) {
                         Image(systemName: "radio")
@@ -365,6 +420,61 @@ struct WalkieTalkieSheetView: View {
                     .bitchatFont(size: 11, weight: .medium)
                     .foregroundColor(palette.secondary)
                     .lineLimit(2)
+                Spacer(minLength: 4)
+                if pttPreferences.liveVoiceEnabled {
+                    if privateConversationModel.selectedPeerID == nil {
+                        Button {
+                            pttPreferences.setPublicAutoPlayEnabled(!pttPreferences.publicAutoPlayEnabled)
+                            WalkieFeedback.detent()
+                        } label: {
+                            Text(
+                                pttPreferences.publicAutoPlayEnabled
+                                ? String(localized: "walkie.public_autoplay.on", defaultValue: "Public Auto-Play On", comment: "Compact pill when public Nearby speaker autoplay is enabled")
+                                : String(localized: "walkie.public_autoplay.off", defaultValue: "Public Auto-Play Off", comment: "Compact pill when public Nearby speaker autoplay is disabled")
+                            )
+                            .bitchatFont(size: 10, weight: .semibold)
+                            .foregroundColor(pttPreferences.publicAutoPlayEnabled ? palette.accent : palette.secondary)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 4)
+                            .background(
+                                Capsule().fill(
+                                    pttPreferences.publicAutoPlayEnabled
+                                    ? palette.accent.opacity(0.14)
+                                    : palette.secondary.opacity(0.14)
+                                )
+                            )
+                        }
+                        .buttonStyle(.plain)
+                    } else if let peerID = privateConversationModel.selectedPeerID {
+                        let policy = privateConversationModel.autoListenPolicy(for: peerID)
+                        Menu {
+                            ForEach(PTTAutoListenPolicy.allCases) { option in
+                                Button {
+                                    privateConversationModel.setAutoListenPolicy(option, for: peerID)
+                                } label: {
+                                    HStack {
+                                        Text(option.displayName)
+                                        if policy == option {
+                                            Image(systemName: "checkmark")
+                                        }
+                                    }
+                                }
+                            }
+                        } label: {
+                            HStack(spacing: 3) {
+                                Text(policy.shortLabel)
+                                    .bitchatFont(size: 10, weight: .semibold)
+                                Image(systemName: "chevron.down")
+                                    .font(.system(size: 8, weight: .semibold))
+                            }
+                            .foregroundColor(policy == .never ? palette.secondary : palette.accent)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 4)
+                            .background(Capsule().fill(palette.accent.opacity(0.12)))
+                        }
+                        .menuStyle(.borderlessButton)
+                    }
+                }
             }
         }
         .padding(12)
@@ -432,7 +542,7 @@ struct WalkieTalkieSheetView: View {
     }
 
     private var pttCenterPad: some View {
-        let canTalk = conversationUIModel.canSendMediaInCurrentContext && availability != .unsupported
+        let canTalk = conversationUIModel.canSendVoiceInCurrentContext && availability != .unsupported
         return VStack(spacing: 14) {
             ZStack {
                 // Voice-reactive outer halo ring
@@ -632,34 +742,117 @@ struct WalkieTalkieSheetView: View {
     // MARK: - Bottom Quick Controls
 
     private var bottomControlsRow: some View {
-        HStack(spacing: 10) {
+        VStack(spacing: 8) {
+            HStack(spacing: 10) {
+                Button {
+                    pttPreferences.toggleAutoListenMuted()
+                    if pttPreferences.isAutoListenMuted {
+                        conversationUIModel.muteActiveLiveVoicePlayback()
+                    }
+                    WalkieFeedback.detent()
+                } label: {
+                    HStack(spacing: 6) {
+                        Image(systemName: pttPreferences.isAutoListenMuted ? "speaker.slash.fill" : "speaker.wave.2.fill")
+                            .font(.system(size: 13, weight: .semibold))
+                        Text(
+                            pttPreferences.isAutoListenMuted
+                            ? String(localized: "walkie.control.speaker_muted", defaultValue: "Speaker muted", comment: "Walkie-talkie control pill when incoming live audio is muted")
+                            : String(localized: "walkie.control.listening", defaultValue: "Listening aloud", comment: "Walkie-talkie control pill when incoming live audio will play aloud")
+                        )
+                        .bitchatFont(size: 12, weight: .semibold)
+                        .lineLimit(1)
+                    }
+                    .foregroundColor(pttPreferences.isAutoListenMuted ? palette.secondary : palette.primary)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 10)
+                    .padding(.horizontal, 12)
+                    .background(palette.cardBackground)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 12, style: .continuous)
+                            .stroke(
+                                pttPreferences.isAutoListenMuted ? palette.cardBorder : palette.accent.opacity(0.4),
+                                lineWidth: 1
+                            )
+                    )
+                    .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                }
+                .buttonStyle(.plain)
+
+                Button {
+                    pttPreferences.setToneCuesEnabled(!pttPreferences.toneCuesEnabled)
+                    WalkieFeedback.detent()
+                } label: {
+                    HStack(spacing: 6) {
+                        Image(systemName: pttPreferences.toneCuesEnabled ? "bell.badge.fill" : "bell.slash")
+                            .font(.system(size: 13, weight: .semibold))
+                        Text(
+                            pttPreferences.toneCuesEnabled
+                            ? String(localized: "walkie.control.chirp_on", defaultValue: "Cue tones on", comment: "Walkie-talkie control pill when mic-key cue tones are enabled")
+                            : String(localized: "walkie.control.chirp_off", defaultValue: "Cue tones off", comment: "Walkie-talkie control pill when mic-key cue tones are disabled")
+                        )
+                        .bitchatFont(size: 12, weight: .semibold)
+                        .lineLimit(1)
+                    }
+                    .foregroundColor(pttPreferences.toneCuesEnabled ? palette.primary : palette.secondary)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 10)
+                    .padding(.horizontal, 12)
+                    .background(palette.cardBackground)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 12, style: .continuous)
+                            .stroke(palette.cardBorder, lineWidth: 1)
+                    )
+                    .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                }
+                .buttonStyle(.plain)
+            }
+
+            #if os(iOS)
+            systemPTTControlRow
+            #endif
+        }
+    }
+
+    #if os(iOS)
+    private var systemPTTControlRow: some View {
+        VStack(spacing: 4) {
             Button {
-                pttPreferences.toggleAutoListenMuted()
-                if pttPreferences.isAutoListenMuted {
-                    conversationUIModel.muteActiveLiveVoicePlayback()
+                if systemPTT.isActive {
+                    systemPTT.leaveCurrentChannel()
+                } else {
+                    if !pttPreferences.liveVoiceEnabled {
+                        pttPreferences.setLiveVoiceEnabled(true)
+                    }
+                    systemPTT.joinChannel(
+                        SystemPTTChannelInfo(
+                            channelKey: currentChannelKey,
+                            displayName: currentChannelName,
+                            target: currentTarget
+                        )
+                    )
                 }
                 WalkieFeedback.detent()
             } label: {
                 HStack(spacing: 6) {
-                    Image(systemName: pttPreferences.isAutoListenMuted ? "speaker.slash.fill" : "speaker.wave.2.fill")
+                    Image(systemName: systemPTT.isActive ? "lock.open.display" : "iphone.radiowaves.left.and.right")
                         .font(.system(size: 13, weight: .semibold))
                     Text(
-                        pttPreferences.isAutoListenMuted
-                        ? String(localized: "walkie.control.speaker_muted", defaultValue: "Speaker muted", comment: "Walkie-talkie control pill when incoming live audio is muted")
-                        : String(localized: "walkie.control.listening", defaultValue: "Listening aloud", comment: "Walkie-talkie control pill when incoming live audio will play aloud")
+                        systemPTT.isActive
+                        ? String(localized: "walkie.system_ptt.active", defaultValue: "Lock-Screen PTT Active · Tap to Leave", comment: "Button when iOS PushToTalk channel is active on Lock Screen and Dynamic Island")
+                        : String(localized: "walkie.system_ptt.join", defaultValue: "Pin to Lock Screen & Dynamic Island", comment: "Button to join iOS system PushToTalk channel")
                     )
                     .bitchatFont(size: 12, weight: .semibold)
                     .lineLimit(1)
                 }
-                .foregroundColor(pttPreferences.isAutoListenMuted ? palette.secondary : palette.primary)
+                .foregroundColor(systemPTT.isActive ? palette.accent : palette.secondary)
                 .frame(maxWidth: .infinity)
-                .padding(.vertical, 10)
+                .padding(.vertical, 9)
                 .padding(.horizontal, 12)
                 .background(palette.cardBackground)
                 .overlay(
                     RoundedRectangle(cornerRadius: 12, style: .continuous)
                         .stroke(
-                            pttPreferences.isAutoListenMuted ? palette.cardBorder : palette.accent.opacity(0.4),
+                            systemPTT.isActive ? palette.accent.opacity(0.5) : palette.cardBorder,
                             lineWidth: 1
                         )
                 )
@@ -667,33 +860,14 @@ struct WalkieTalkieSheetView: View {
             }
             .buttonStyle(.plain)
 
-            Button {
-                pttPreferences.setToneCuesEnabled(!pttPreferences.toneCuesEnabled)
-                WalkieFeedback.detent()
-            } label: {
-                HStack(spacing: 6) {
-                    Image(systemName: pttPreferences.toneCuesEnabled ? "bell.badge.fill" : "bell.slash")
-                        .font(.system(size: 13, weight: .semibold))
-                    Text(
-                        pttPreferences.toneCuesEnabled
-                        ? String(localized: "walkie.control.chirp_on", defaultValue: "Cue tones on", comment: "Walkie-talkie control pill when mic-key cue tones are enabled")
-                        : String(localized: "walkie.control.chirp_off", defaultValue: "Cue tones off", comment: "Walkie-talkie control pill when mic-key cue tones are disabled")
-                    )
-                    .bitchatFont(size: 12, weight: .semibold)
-                    .lineLimit(1)
-                }
-                .foregroundColor(pttPreferences.toneCuesEnabled ? palette.primary : palette.secondary)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 10)
-                .padding(.horizontal, 12)
-                .background(palette.cardBackground)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .stroke(palette.cardBorder, lineWidth: 1)
-                )
-                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+            if case .unavailable(let reason) = systemPTT.status {
+                Text(verbatim: reason)
+                    .bitchatFont(size: 10)
+                    .foregroundColor(palette.secondary)
+                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
             }
-            .buttonStyle(.plain)
         }
     }
+    #endif
 }

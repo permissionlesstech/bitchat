@@ -341,7 +341,16 @@ struct ContentView: View {
                 voiceRecordingVM.sessionProvider = { [weak uiModel] in
                     uiModel?.makeVoiceCaptureSession() ?? VoiceNoteCaptureSession()
                 }
+                SystemPTTChannelManager.shared.onSystemTransmitBegan = { [weak voiceRecordingVM, weak uiModel] target in
+                    guard let voiceRecordingVM, let uiModel else { return }
+                    voiceRecordingVM.start(shouldShow: uiModel.canSendVoiceInCurrentContext, target: target)
+                }
+                SystemPTTChannelManager.shared.onSystemTransmitEnded = { [weak voiceRecordingVM, weak uiModel] in
+                    guard let voiceRecordingVM, let uiModel else { return }
+                    voiceRecordingVM.finish(completion: uiModel.sendVoiceNote(at:target:))
+                }
                 appChromeModel.setPanicPreparation { [weak voiceRecordingVM, weak draftModel] in
+                    SystemPTTChannelManager.shared.leaveCurrentChannel()
                     voiceRecordingVM?.panicWipe()
                     // Drop in-memory composer text before ChatViewModel resets
                     // persisted drafts — otherwise the next inactive/background

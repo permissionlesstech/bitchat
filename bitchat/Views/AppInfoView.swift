@@ -562,6 +562,17 @@ struct AppInfoView: View {
                     Divider().opacity(0.35)
 
                     settingToggle(
+                        title: Text(String(localized: "app_info.voice.public_autoplay.title", defaultValue: "Auto-play in Nearby (#mesh)", comment: "Settings toggle title for automatic speaker playback in public Nearby mesh")),
+                        subtitle: Text(String(localized: "app_info.voice.public_autoplay.description", defaultValue: "Off by default. Play incoming live voices aloud in public Nearby; trusted DMs and groups always auto-play unless muted.", comment: "Settings toggle description for public Nearby live voice auto-play")),
+                        isOn: Binding(
+                            get: { pttPreferences.publicAutoPlayEnabled },
+                            set: { pttPreferences.setPublicAutoPlayEnabled($0) }
+                        )
+                    )
+
+                    Divider().opacity(0.35)
+
+                    settingToggle(
                         title: Text(String(localized: "app_info.voice.cues.title", defaultValue: "Walkie-talkie cue tones", comment: "Settings toggle title for subtle walkie-talkie start/stop audio cues")),
                         subtitle: Text(String(localized: "app_info.voice.cues.description", defaultValue: "Play a brief tone and haptic tap when your live mic opens and closes.", comment: "Settings toggle description for walkie-talkie cue tones")),
                         isOn: Binding(

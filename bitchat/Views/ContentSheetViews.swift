@@ -470,7 +470,7 @@ private struct ContentPrivateChatSheetView: View {
                         )
                     }
                 } trailing: {
-                    if !headerState.isGroupConversation && !headerState.conversationPeerID.isGeoDM {
+                    if !headerState.conversationPeerID.isGeoDM {
                         let someoneSpeaking = conversationUIModel.activeTalkerInCurrentContext(
                             selectedPeerID: headerState.conversationPeerID
                         ) != nil

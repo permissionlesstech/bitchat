@@ -478,7 +478,7 @@ private extension ContentComposerView {
     @ViewBuilder
     var sendOrMicButton: some View {
         let hasText = draftModel.messageText.hasNonWhitespaceContent
-        if conversationUIModel.canSendMediaInCurrentContext {
+        if conversationUIModel.canSendVoiceInCurrentContext {
             ZStack {
                 micButtonView
                     .opacity(hasText ? 0 : 1)
@@ -546,7 +546,7 @@ private extension ContentComposerView {
                         .onChanged { value in
                             if !voiceRecordingVM.state.isActive && voiceRecordingVM.state == .idle {
                                 voiceRecordingVM.start(
-                                    shouldShow: conversationUIModel.canSendMediaInCurrentContext,
+                                    shouldShow: conversationUIModel.canSendVoiceInCurrentContext,
                                     target: currentVoiceNoteTarget
                                 )
                             }
@@ -589,7 +589,7 @@ private extension ContentComposerView {
                 voiceRecordingVM.finish(completion: conversationUIModel.sendVoiceNote(at:target:))
             } else {
                 voiceRecordingVM.start(
-                    shouldShow: conversationUIModel.canSendMediaInCurrentContext,
+                    shouldShow: conversationUIModel.canSendVoiceInCurrentContext,
                     target: currentVoiceNoteTarget
                 )
             }

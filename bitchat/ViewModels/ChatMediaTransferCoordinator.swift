@@ -519,7 +519,19 @@ final class ChatMediaTransferCoordinator {
         let targetPeer: PeerID?
         switch target {
         case .privateChat(let peerID):
-            guard !peerID.isGeoDM, !peerID.isGeoChat, !peerID.isGroup else {
+            if peerID.isGroup {
+                // Mesh group walkie-talkie streams live encrypted bursts directly to
+                // nearby members; keep the local finalized .m4a replayable in the group
+                // timeline without sending an untagged 1:1 file transfer into DMs.
+                let message = enqueueMediaMessage(
+                    content: "\(MimeType.Category.audio.messagePrefix)\(url.lastPathComponent)",
+                    targetPeer: peerID,
+                    messageID: nil
+                )
+                context.updateMessageDeliveryStatus(message.id, status: .sent)
+                return
+            }
+            guard !peerID.isGeoDM, !peerID.isGeoChat else {
                 SecureLogger.info("Voice note blocked outside mesh/private context", category: .session)
                 try? FileManager.default.removeItem(at: url)
                 context.addSystemMessage(String(localized: "Voice notes are only available in mesh chats.", comment: "System message when a voice note is attempted outside mesh chats"))
@@ -529,6 +541,15 @@ final class ChatMediaTransferCoordinator {
         case .publicMesh:
             targetPeer = nil
         case nil:
+            if let selected = context.selectedPrivateChatPeer, selected.isGroup {
+                let message = enqueueMediaMessage(
+                    content: "\(MimeType.Category.audio.messagePrefix)\(url.lastPathComponent)",
+                    targetPeer: selected,
+                    messageID: nil
+                )
+                context.updateMessageDeliveryStatus(message.id, status: .sent)
+                return
+            }
             guard context.canSendMediaInCurrentContext else {
                 SecureLogger.info("Voice note blocked outside mesh/private context", category: .session)
                 try? FileManager.default.removeItem(at: url)

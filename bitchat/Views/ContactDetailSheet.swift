@@ -347,6 +347,54 @@ struct ContactDetailSheet: View {
                     .menuStyle(.borderlessButton)
                 }
                 .padding(.vertical, 4)
+
+                if !conversationPeerID.isGeoDM {
+                    Divider().background(palette.divider).padding(.vertical, 8)
+
+                    let autoListen = privateConversationModel.autoListenPolicy(for: conversationPeerID)
+                    HStack(spacing: 12) {
+                        Image(systemName: autoListen == .never ? "speaker.slash.fill" : "radio")
+                            .font(.system(size: 15, weight: .medium))
+                            .foregroundColor(autoListen == .always ? palette.accent : palette.secondary)
+                            .frame(width: 22)
+
+                        Text(String(localized: "contact.detail.walkie_autolisten", defaultValue: "Walkie-Talkie Auto-Play", comment: "Row label for per-chat live voice auto-play setting"))
+                            .bitchatFont(size: 14, weight: .medium)
+                            .foregroundColor(palette.primary)
+
+                        Spacer()
+
+                        Menu {
+                            ForEach(PTTAutoListenPolicy.allCases) { option in
+                                Button {
+                                    privateConversationModel.setAutoListenPolicy(option, for: conversationPeerID)
+                                } label: {
+                                    HStack {
+                                        Text(option.displayName)
+                                        if autoListen == option {
+                                            Image(systemName: "checkmark")
+                                        }
+                                    }
+                                }
+                            }
+                        } label: {
+                            HStack(spacing: 4) {
+                                Text(autoListen.shortLabel)
+                                    .bitchatFont(size: 13, weight: .semibold)
+                                    .foregroundColor(autoListen == .automatic ? palette.secondary : palette.accent)
+                                Image(systemName: "chevron.up.chevron.down")
+                                    .font(.system(size: 10, weight: .semibold))
+                                    .foregroundColor(palette.secondary)
+                            }
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 4)
+                            .background(palette.background)
+                            .clipShape(Capsule())
+                        }
+                        .menuStyle(.borderlessButton)
+                    }
+                    .padding(.vertical, 4)
+                }
             }
         }
     }

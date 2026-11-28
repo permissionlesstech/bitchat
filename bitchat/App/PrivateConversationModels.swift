@@ -236,13 +236,24 @@ final class PrivateConversationModel: ObservableObject {
     }
 
     func toggleMute(for peerID: PeerID) {
-        let key: String
-        if peerID.isGroup {
-            key = peerID.id
-        } else {
-            key = chatViewModel.getFingerprint(for: peerID) ?? peerID.id
-        }
+        let key = autoListenPolicyKey(for: peerID)
         InboxMutedChats.toggle(key)
+        objectWillChange.send()
+    }
+
+    func autoListenPolicyKey(for peerID: PeerID) -> String {
+        if peerID.isGroup {
+            return peerID.id
+        }
+        return chatViewModel.getFingerprint(for: peerID) ?? peerID.id
+    }
+
+    func autoListenPolicy(for peerID: PeerID) -> PTTAutoListenPolicy {
+        PTTPreferences.shared.chatAutoListenPolicy(for: autoListenPolicyKey(for: peerID))
+    }
+
+    func setAutoListenPolicy(_ policy: PTTAutoListenPolicy, for peerID: PeerID) {
+        PTTPreferences.shared.setChatAutoListenPolicy(policy, for: autoListenPolicyKey(for: peerID))
         objectWillChange.send()
     }
 
