@@ -207,6 +207,9 @@ enum BLEFanoutSelector {
             && packetType != MessageType.fragment.rawValue
             && packetType != MessageType.announce.rawValue
             && packetType != MessageType.requestSync.rawValue
+            // Live PTT audio is never gossip-synced, so dropping a subset of
+            // links behind a hub causes permanent frame loss for listeners.
+            && packetType != MessageType.voiceFrame.rawValue
     }
 
     private static func subsetSize(for count: Int) -> Int {

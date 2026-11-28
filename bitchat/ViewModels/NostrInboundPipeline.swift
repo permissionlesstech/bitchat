@@ -36,10 +36,7 @@ protocol NostrInboundPipelineContext: AnyObject {
     func recordGeoParticipant(pubkeyHex: String, seenAt: Date) -> Bool
 
     // MARK: Inbound public messages
-    /// `powBits` is the validated NIP-13 difficulty of the source event
-    /// (`NostrPoW.validatedDifficulty`); it relaxes the per-sender rate limit
-    /// downstream.
-    func handlePublicMessage(_ message: BitchatMessage, powBits: Int)
+    func handlePublicMessage(_ message: BitchatMessage)
     func checkForMentions(_ message: BitchatMessage)
     func sendHapticFeedback(for message: BitchatMessage)
     func parseMentions(from content: String) -> [String]
@@ -165,13 +162,11 @@ final class NostrInboundPipeline {
         }
         context.recordProcessedEphemeralNostrEvent(event.id)
 
-        let powBits = NostrPoW.validatedDifficulty(idHex: event.id, tags: event.tags)
-
         // Sampled: fires for every geo event and floods dev logs in busy geohashes.
         geoEventLogCount += 1
         if geoEventLogCount == 1 || geoEventLogCount.isMultiple(of: TransportConfig.nostrInboundEventLogInterval) {
             SecureLogger.debug(
-                "GeoTeleport: recv #\(geoEventLogCount) pub=\(event.pubkey.prefix(8))… pow=\(powBits) tagCount=\(event.tags.count)",
+                "GeoTeleport: recv #\(geoEventLogCount) pub=\(event.pubkey.prefix(8))… tagCount=\(event.tags.count)",
                 category: .session
             )
         }
@@ -237,7 +232,7 @@ final class NostrInboundPipeline {
             mentions: mentions.isEmpty ? nil : mentions
         )
 
-        context.handlePublicMessage(message, powBits: powBits)
+        context.handlePublicMessage(message)
         context.checkForMentions(message)
         context.sendHapticFeedback(for: message)
     }

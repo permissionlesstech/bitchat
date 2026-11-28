@@ -24,7 +24,13 @@ enum BLEIngressRejection: Error, Equatable {
 }
 
 struct BLEIngressLinkRegistry {
+    private struct AdditionalIngress {
+        var links: Set<BLEIngressLinkID> = []
+        var peerIDs: Set<PeerID> = []
+    }
+
     private var ingressByMessageID: [String: BLEIngressLinkRecord] = [:]
+    private var additionalByMessageID: [String: AdditionalIngress] = [:]
 
     var isEmpty: Bool {
         ingressByMessageID.isEmpty
@@ -32,6 +38,7 @@ struct BLEIngressLinkRegistry {
 
     mutating func removeAll() {
         ingressByMessageID.removeAll()
+        additionalByMessageID.removeAll()
     }
 
     func record(for packet: BitchatPacket) -> BLEIngressLinkRecord? {
@@ -50,6 +57,33 @@ struct BLEIngressLinkRegistry {
         record(for: packet)?.peerID
     }
 
+    /// Every ingress link that has delivered this packet within its tracking
+    /// window (primary arrival plus any secondary copies). Relays exclude all
+    /// of them so a copy arriving during the jitter window is not echoed back.
+    func allLinks(for packet: BitchatPacket) -> Set<BLEIngressLinkID> {
+        allLinks(forMessageID: Self.messageID(for: packet))
+    }
+
+    func allLinks(forMessageID messageID: String) -> Set<BLEIngressLinkID> {
+        guard let primary = ingressByMessageID[messageID] else { return [] }
+        var links = additionalByMessageID[messageID]?.links ?? []
+        links.insert(primary.link)
+        return links
+    }
+
+    /// Every peer that has delivered this packet within its tracking window.
+    func allPeerIDs(for packet: BitchatPacket) -> Set<PeerID> {
+        allPeerIDs(forMessageID: Self.messageID(for: packet))
+    }
+
+    func allPeerIDs(forMessageID messageID: String) -> Set<PeerID> {
+        guard let primary = ingressByMessageID[messageID] else { return [] }
+        var peers = additionalByMessageID[messageID]?.peerIDs ?? []
+        peers.insert(primary.peerID)
+        return peers
+    }
+
+    @discardableResult
     mutating func recordIfNew(
         _ packet: BitchatPacket,
         link: BLEIngressLinkID,
@@ -66,6 +100,7 @@ struct BLEIngressLinkRegistry {
         )
     }
 
+    @discardableResult
     mutating func recordIfNew(
         messageID: String,
         link: BLEIngressLinkID,
@@ -75,15 +110,23 @@ struct BLEIngressLinkRegistry {
     ) -> Bool {
         if let existing = ingressByMessageID[messageID],
            now.timeIntervalSince(existing.timestamp) <= lifetime {
+            var additional = additionalByMessageID[messageID] ?? AdditionalIngress()
+            additional.links.insert(link)
+            additional.peerIDs.insert(peerID)
+            additionalByMessageID[messageID] = additional
             return false
         }
 
         ingressByMessageID[messageID] = BLEIngressLinkRecord(link: link, peerID: peerID, timestamp: now)
+        additionalByMessageID.removeValue(forKey: messageID)
         return true
     }
 
     mutating func prune(before cutoff: Date) {
         ingressByMessageID = ingressByMessageID.filter { $0.value.timestamp >= cutoff }
+        if !additionalByMessageID.isEmpty {
+            additionalByMessageID = additionalByMessageID.filter { ingressByMessageID[$0.key] != nil }
+        }
     }
 
     static func packetContext(

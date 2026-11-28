@@ -220,25 +220,77 @@ final class GossipSyncManager {
         queue.asyncAfter(deadline: .now() + delaySeconds) { [weak self] in
             guard let self = self else { return }
 
-            var types: SyncTypeFlags = .publicMessages
+            var coreTypes: SyncTypeFlags = .publicMessages
             if self.config.groupMessageCapacity > 0 {
-                types.formUnion(.groupMessage)
-            }
-            if self.config.fragmentCapacity > 0 && self.config.fragmentSyncIntervalSeconds > 0 {
-                types.formUnion(.fragment)
-            }
-            if self.config.fileTransferCapacity > 0 && self.config.fileTransferSyncIntervalSeconds > 0 {
-                types.formUnion(.fileTransfer)
+                coreTypes.formUnion(.groupMessage)
             }
             if self.config.prekeyBundleCapacity > 0 && self.config.prekeyBundleSyncIntervalSeconds > 0 {
-                types.formUnion(.prekeyBundle)
+                coreTypes.formUnion(.prekeyBundle)
             }
             if self.config.boardCapacity > 0 && self.config.boardSyncIntervalSeconds > 0 && self.boardPacketsProvider != nil {
-                types.formUnion(.board)
+                coreTypes.formUnion(.board)
             }
-            let payload = self.buildGcsPayload(for: types)
-            self.sendRequestSync(to: peerID, payload: payload)
+
+            var mediaTypes: SyncTypeFlags = []
+            if self.config.fragmentCapacity > 0 && self.config.fragmentSyncIntervalSeconds > 0 {
+                mediaTypes.formUnion(.fragment)
+            }
+            if self.config.fileTransferCapacity > 0 && self.config.fileTransferSyncIntervalSeconds > 0 {
+                mediaTypes.formUnion(.fileTransfer)
+            }
+
+            if self.shouldSplitInitialSync(coreTypes: coreTypes, mediaTypes: mediaTypes) {
+                // Separate text/presence/boards/prekeys from high-volume media
+                // fragments when combining them would overflow the GCS filter
+                // budget and pull the `sinceTimestamp` cursor past older chat.
+                let corePayload = self.buildGcsPayload(for: coreTypes)
+                self.sendRequestSync(to: peerID, payload: corePayload)
+                let mediaPayload = self.buildGcsPayload(for: mediaTypes)
+                self.sendRequestSync(to: peerID, payload: mediaPayload)
+            } else {
+                let allTypes = coreTypes.union(mediaTypes)
+                let payload = self.buildGcsPayload(for: allTypes)
+                self.sendRequestSync(to: peerID, payload: payload)
+            }
         }
+    }
+
+    private func shouldSplitInitialSync(coreTypes: SyncTypeFlags, mediaTypes: SyncTypeFlags) -> Bool {
+        guard !mediaTypes.isEmpty else { return false }
+        let nowMs = UInt64(Date().timeIntervalSince1970 * 1000)
+        func isFresh(_ pkt: BitchatPacket) -> Bool {
+            isPacketFresh(pkt, nowMs: nowMs)
+        }
+        var mediaCount = 0
+        if mediaTypes.contains(.fragment) {
+            mediaCount += fragments.allEntries(isFresh: isFresh).count
+        }
+        if mediaTypes.contains(.fileTransfer) {
+            mediaCount += fileTransfers.allEntries(isFresh: isFresh).count
+        }
+        guard mediaCount > 0 else { return false }
+
+        var coreCount = 0
+        if coreTypes.contains(.announce) {
+            coreCount += latestAnnouncementByPeer.values.filter { isFresh($0.packet) }.count
+        }
+        if coreTypes.contains(.message) {
+            coreCount += messages.allEntries(isFresh: isFresh).count
+        }
+        if coreTypes.contains(.groupMessage) {
+            coreCount += groupMessages.allEntries(isFresh: isFresh).count
+        }
+        if coreTypes.contains(.prekeyBundle) {
+            coreCount += latestPrekeyBundleByPeer.values.filter { isFresh($0.packet) }.count
+        }
+        if coreTypes.contains(.boardPost) {
+            coreCount += (boardPacketsProvider?() ?? []).count
+        }
+
+        let p = GCSFilter.deriveP(targetFpr: config.gcsTargetFpr)
+        let nMax = GCSFilter.estimateMaxElements(sizeBytes: config.gcsMaxBytes, p: p)
+        let cap = max(1, config.seenCapacity)
+        return (coreCount + mediaCount) > min(nMax, cap)
     }
 
     func onPublicPacketSeen(_ packet: BitchatPacket) {
@@ -368,6 +420,8 @@ final class GossipSyncManager {
     }
 
     private func sendRequestSync(payload: Data) {
+        requestSyncManager.registerBroadcastRequest()
+
         let pkt = BitchatPacket(
             type: MessageType.requestSync.rawValue,
             senderID: mySenderIDData,

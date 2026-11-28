@@ -39,6 +39,13 @@ final class MinimalDistancePalette {
     }
 
     @MainActor
+    func reset() {
+        currentSeeds.removeAll(keepingCapacity: false)
+        entries.removeAll(keepingCapacity: false)
+        previousEntries.removeAll(keepingCapacity: false)
+    }
+
+    @MainActor
     func ensurePalette(for seeds: [String: String]) {
         guard seeds != currentSeeds || entries.count != seeds.count else { return }
         previousEntries = entries

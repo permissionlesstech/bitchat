@@ -124,7 +124,7 @@ struct BlockRevealImageView: View {
             Button(Strings.delete, role: .destructive) {
                 onDelete?()
             }
-            Button("common.cancel", role: .cancel) {}
+            Button(String(localized: "common.cancel"), role: .cancel) {}
         } message: {
             Text(verbatim: Strings.deleteConfirmMessage)
         }

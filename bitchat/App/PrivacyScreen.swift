@@ -24,7 +24,7 @@ import UIKit
 final class PrivacyScreen {
     static let shared = PrivacyScreen()
 
-    private var cover: UIView?
+    private var covers: [ObjectIdentifier: UIView] = [:]
     private var observers: [NSObjectProtocol] = []
 
     private init() {}
@@ -58,43 +58,43 @@ final class PrivacyScreen {
     }
 
     private func show() {
-        guard cover == nil, let window = Self.activeWindow() else { return }
+        for window in Self.allWindows() {
+            let key = ObjectIdentifier(window)
+            guard covers[key] == nil else { continue }
 
-        // Opaque rather than a blur: blurred large text can stay partly
-        // legible, and the snapshot is stored on disk.
-        let view = UIView(frame: window.bounds)
-        view.backgroundColor = .systemBackground
-        view.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+            // Opaque rather than a blur: blurred large text can stay partly
+            // legible, and the snapshot is stored on disk.
+            let view = UIView(frame: window.bounds)
+            view.backgroundColor = .systemBackground
+            view.autoresizingMask = [.flexibleWidth, .flexibleHeight]
 
-        let label = UILabel()
-        label.text = "bitchat"
-        label.font = .monospacedSystemFont(ofSize: 22, weight: .medium)
-        label.textColor = .secondaryLabel
-        label.translatesAutoresizingMaskIntoConstraints = false
-        view.addSubview(label)
-        NSLayoutConstraint.activate([
-            label.centerXAnchor.constraint(equalTo: view.centerXAnchor),
-            label.centerYAnchor.constraint(equalTo: view.centerYAnchor)
-        ])
+            let label = UILabel()
+            label.text = "bitchat"
+            label.font = .monospacedSystemFont(ofSize: 22, weight: .medium)
+            label.textColor = .secondaryLabel
+            label.translatesAutoresizingMaskIntoConstraints = false
+            view.addSubview(label)
+            NSLayoutConstraint.activate([
+                label.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+                label.centerYAnchor.constraint(equalTo: view.centerYAnchor)
+            ])
 
-        window.addSubview(view)
-        cover = view
+            window.addSubview(view)
+            covers[key] = view
+        }
     }
 
     private func hide() {
-        cover?.removeFromSuperview()
-        cover = nil
+        for view in covers.values {
+            view.removeFromSuperview()
+        }
+        covers.removeAll()
     }
 
-    private static func activeWindow() -> UIWindow? {
+    private static func allWindows() -> [UIWindow] {
         UIApplication.shared.connectedScenes
             .compactMap { $0 as? UIWindowScene }
             .flatMap(\.windows)
-            .first { $0.isKeyWindow } ??
-        UIApplication.shared.connectedScenes
-            .compactMap { $0 as? UIWindowScene }
-            .flatMap(\.windows)
-            .first
     }
 }
 #endif

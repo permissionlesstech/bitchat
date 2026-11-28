@@ -508,18 +508,23 @@ final class NoiseSymmetricState {
     }
 
     /// BCH-01-010: Securely clear sensitive cryptographic state
-    /// Called after split() to clear chaining key and hash per Noise spec
+    /// Called after split() to clear chaining key and hash per Noise spec.
+    /// Zeroizes the existing buffers in place with `memset_s` rather than
+    /// reassigning fresh `Data` allocations (which would leave key material
+    /// intact on the heap).
     func clearSensitiveData() {
-        // Clear chaining key by overwriting with zeros
-        let chainingKeyCount = chainingKey.count
-        chainingKey = Data(repeating: 0, count: chainingKeyCount)
-
-        // Clear hash by overwriting with zeros
-        let hashCount = hash.count
-        hash = Data(repeating: 0, count: hashCount)
-
-        // Clear the internal cipher state
+        Self.zeroize(&chainingKey)
+        Self.zeroize(&hash)
         cipherState.clearSensitiveData()
+    }
+
+    private static func zeroize(_ data: inout Data) {
+        if !data.isEmpty {
+            _ = data.withUnsafeMutableBytes { bytes in
+                memset_s(bytes.baseAddress, bytes.count, 0, bytes.count)
+            }
+        }
+        data = Data()
     }
 
     deinit {

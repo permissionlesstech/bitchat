@@ -61,6 +61,7 @@ public final class SecureLogger {
     
     // MARK: - Timestamp Formatter
     
+    private static let timestampFormatterLock = NSLock()
     private static let timestampFormatter: DateFormatter = {
         let formatter = DateFormatter()
         formatter.dateFormat = "HH:mm:ss.SSS"
@@ -267,7 +268,9 @@ private extension SecureLogger {
     /// Format location information for logging
     static func formatLocation(file: String, line: Int, function: String) -> String {
         let fileName = (file as NSString).lastPathComponent
+        timestampFormatterLock.lock()
         let timestamp = timestampFormatter.string(from: Date())
+        timestampFormatterLock.unlock()
         return "[\(timestamp)] [\(fileName):\(line) \(function)]"
     }
 }

@@ -275,4 +275,22 @@ struct BLEFanoutSelectorTests {
         #expect(selection.peripheralIDs == Set(["p1", "p2"]))
         #expect(selection.centralIDs == Set(["c1", "c2"]))
     }
+
+    @Test
+    func voiceFramesAreNotSubsettedInDenseTopologies() {
+        let peripherals = (1...8).map { "p\($0)" }
+        let centrals = (1...8).map { "c\($0)" }
+
+        let selection = BLEFanoutSelector.selectLinks(
+            peripheralIDs: peripherals,
+            centralIDs: centrals,
+            ingressLink: .peripheral("p1"),
+            directedPeerHint: nil,
+            packetType: MessageType.voiceFrame.rawValue,
+            messageID: "voice-1"
+        )
+
+        #expect(selection.peripheralIDs == Set(peripherals.dropFirst()))
+        #expect(selection.centralIDs == Set(centrals))
+    }
 }

@@ -399,7 +399,7 @@ enum TransportConfig {
     // the receive-side acceptance window (BLEPublicMessagePolicy uses this
     // same constant) or served packets would be dropped as stale.
     static let syncPublicMessageMaxAgeSeconds: TimeInterval = 6 * 60 * 60
-    static let syncMaintenanceIntervalSeconds: TimeInterval = 30.0
+    static let syncMaintenanceIntervalSeconds: TimeInterval = 15.0
     static let syncStalePeerCleanupIntervalSeconds: TimeInterval = 60.0
     static let syncStalePeerTimeoutSeconds: TimeInterval = 60.0
     static let syncFragmentCapacity: Int = 600

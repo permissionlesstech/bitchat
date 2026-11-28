@@ -18,10 +18,10 @@ enum AppTheme: String, CaseIterable, Identifiable {
     /// UserDefaults key backing the theme selection.
     static let storageKey = "appTheme"
 
-    var displayNameKey: LocalizedStringKey {
+    var displayNameKey: String {
         switch self {
-        case .matrix: return "app_info.appearance.matrix"
-        case .liquidGlass: return "app_info.appearance.liquid_glass"
+        case .matrix: return String(localized: "app_info.appearance.matrix")
+        case .liquidGlass: return String(localized: "app_info.appearance.liquid_glass")
         }
     }
 

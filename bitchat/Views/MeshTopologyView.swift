@@ -63,7 +63,7 @@ struct MeshTopologyView: View {
         VStack(spacing: 12) {
             if model.nodes.count <= 1 {
                 Spacer()
-                Text("topology.empty")
+                Text(String(localized: "topology.empty"))
                     .bitchatFont(size: 14)
                     .foregroundColor(palette.secondary)
                     .multilineTextAlignment(.center)
@@ -78,7 +78,7 @@ struct MeshTopologyView: View {
                 Text(summaryText)
                     .bitchatFont(size: 13, weight: .semibold)
                     .foregroundColor(palette.primary)
-                Text("topology.caption")
+                Text(String(localized: "topology.caption"))
                     .bitchatFont(size: 11)
                     .foregroundColor(palette.secondary)
                     .multilineTextAlignment(.center)

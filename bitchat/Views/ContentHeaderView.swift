@@ -252,10 +252,10 @@ struct ContentHeaderView: View {
         .onChange(of: locationChannelsModel.permissionState) { _ in
             locationChannelsModel.refreshMeshChannelsIfNeeded()
         }
-        .alert("content.alert.screenshot.title", isPresented: $appChromeModel.showScreenshotPrivacyWarning) {
-            Button("common.ok", role: .cancel) {}
+        .alert(String(localized: "content.alert.screenshot.title"), isPresented: $appChromeModel.showScreenshotPrivacyWarning) {
+            Button(String(localized: "common.ok"), role: .cancel) {}
         } message: {
-            Text("content.alert.screenshot.message")
+            Text(String(localized: "content.alert.screenshot.message"))
         }
         .confirmationDialog(
             String(localized: "channel.share.precision_warning.title", defaultValue: "share a precise location channel?", comment: "Title of the confirmation before sharing a neighborhood-or-finer geohash invite"),
@@ -268,7 +268,7 @@ struct ContentHeaderView: View {
                 }
                 pendingShareGeohash = nil
             }
-            Button("common.cancel", role: .cancel) {
+            Button(String(localized: "common.cancel"), role: .cancel) {
                 pendingShareGeohash = nil
             }
         } message: {

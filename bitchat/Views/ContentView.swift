@@ -126,9 +126,9 @@ extension View {
                 Text(String(localized: "voice.error.title", defaultValue: "recording error", comment: "Title of the voice recording error alert")),
                 isPresented: isVoiceAlertPresented,
                 actions: {
-                    Button("common.ok", role: .cancel) {}
+                    Button(String(localized: "common.ok"), role: .cancel) {}
                     if voiceRecordingVM.state == .permissionDenied {
-                        Button("location_channels.action.open_settings") {
+                        Button(String(localized: "location_channels.action.open_settings")) {
                             SystemSettings.microphone.open()
                         }
                     }
@@ -137,14 +137,14 @@ extension View {
                     Text(voiceRecordingVM.state.alertMessage)
                 }
             )
-            .alert("content.alert.bluetooth_required.title", isPresented: isBluetoothAlertPresented) {
-                Button("content.alert.bluetooth_required.settings") {
+            .alert(String(localized: "content.alert.bluetooth_required.title"), isPresented: isBluetoothAlertPresented) {
+                Button(String(localized: "content.alert.bluetooth_required.settings")) {
                     // Powered-off needs the radio controls, not the privacy pane.
                     (appChromeModel.bluetoothState == .poweredOff
                         ? SystemSettings.bluetoothPower
                         : SystemSettings.bluetooth).open()
                 }
-                Button("common.ok", role: .cancel) {}
+                Button(String(localized: "common.ok"), role: .cancel) {}
             } message: {
                 Text(appChromeModel.bluetoothAlertMessage)
             }
@@ -583,10 +583,10 @@ struct ContentView: View {
             ),
             presenting: sharedContentImportModel.offer
         ) { _ in
-            Button("common.cancel", role: .cancel) {
+            Button(String(localized: "common.cancel"), role: .cancel) {
                 sharedContentImportModel.cancel(destination: sharedContentDestination)
             }
-            Button("share_import.review.use_in_composer") {
+            Button(String(localized: "share_import.review.use_in_composer")) {
                 guard let importedText = sharedContentImportModel.confirm(
                     destination: sharedContentDestination
                 ) else { return }

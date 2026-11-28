@@ -282,6 +282,14 @@ extension BLEService {
         #endif
         sendPendingMessagesAfterHandshake(for: peerID)
         sendPendingNoisePayloadsAfterHandshake(for: peerID)
+        if !courierStore.isEmpty,
+           hasCurrentNoiseAuthenticatedLink(to: peerID),
+           let noiseKey = noiseService.getPeerPublicKeyData(peerID)
+                ?? peerRegistry.info(for: peerID)?.noisePublicKey {
+            let isVerifiedPeer = peerRegistry.info(for: peerID)?.isVerifiedNickname ?? false
+            deliverCourierMail(to: peerID, noiseKey: noiseKey)
+            sprayCourierMail(to: peerID, noiseKey: noiseKey, isVerifiedPeer: isVerifiedPeer)
+        }
         if sendInitialStateAndAnnounce {
             sendAnnounce(forceSend: true)
         }

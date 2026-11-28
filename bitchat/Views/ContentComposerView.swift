@@ -465,7 +465,7 @@ private extension ContentComposerView {
             .accessibilityAddTraits(.isButton)
             // The long-press → camera path is unreachable for VoiceOver users;
             // mirror it as a named action.
-            .accessibilityAction(named: Text("content.accessibility.take_photo", comment: "Accessibility action name for taking a photo with the camera")) {
+            .accessibilityAction(named: Text(String(localized: "content.accessibility.take_photo", comment: "Accessibility action name for taking a photo with the camera"))) {
                 mediaPickerMode = .camera
             }
         #else

@@ -371,6 +371,104 @@ struct SimulatedMeshTests {
         #expect(a.service._test_centralBinding(bobLinkOnAlice) == newBobID)
         #expect(a.service.getConnectedPeers().contains(newBobID))
     }
+
+    @Test
+    func sourceRoutingActivatesFromVerifiedAnnouncesAndTraceComputesPath() throws {
+        let mesh = SimulatedMesh()
+        let a = mesh.addNode(nickname: "alice")
+        let b = mesh.addNode(nickname: "bob")
+        let c = mesh.addNode(nickname: "carol")
+        mesh.connect(0, 1)
+        mesh.connect(1, 2)
+
+        mesh.announceAll()
+        mesh.advanceTime(by: 2)
+        // Force a second announce round after every node has learned its direct
+        // neighbors so both sides of each edge (A<->B and B<->C) advertise
+        // mutual directNeighbors and capabilities TLVs.
+        for node in [a, b, c] {
+            node.service._test_resetAnnounceThrottle()
+        }
+        mesh.announceAll()
+        mesh.advanceTime(by: 2)
+
+        let tracePath = a.service.computeMeshPath(to: c.service.myPeerID)
+        #expect(tracePath == [b.service.myPeerID])
+
+        let sourceRoute = a.service.computeRoute(to: c.service.myPeerID)
+        let bobRoutingData = try #require(b.service.myPeerID.routingData)
+        #expect(sourceRoute == [bobRoutingData])
+    }
+
+    @Test
+    func denseGraphBroadcastDuplicateFromDistinctPeerCancelsScheduledRelay() {
+        let mesh = SimulatedMesh()
+        let hub = mesh.addNode(nickname: "hub")
+        let alice = mesh.addNode(nickname: "alice")
+        let carol = mesh.addNode(nickname: "carol")
+        _ = mesh.addNode(nickname: "dave")
+        mesh.connect(0, 1)
+        mesh.connect(0, 2)
+        mesh.connect(0, 3)
+
+        mesh.announceAll()
+        mesh.advanceTime(by: 2)
+        #expect(hub.service.getConnectedPeers().count == 3)
+
+        // Silence hub's outbound forwarding during injection so we can deliver
+        // a controlled pair of frames on Alice's and Carol's links before hub's
+        // relay jitter timer fires.
+        let nowMs = UInt64(Date().timeIntervalSince1970 * 1000)
+        let msg1 = BitchatPacket(
+            type: MessageType.message.rawValue,
+            senderID: Data(hexString: alice.service.myPeerID.id) ?? Data(),
+            recipientID: nil,
+            timestamp: nowMs,
+            payload: Data("cancel-me".utf8),
+            signature: nil,
+            ttl: 5
+        )
+        let signedMsg1 = alice.service.signPacketForBroadcast(msg1)
+
+        let aliceLinkOnHub = BLEIngressLinkID.central(mesh.linkUUID(from: 1, at: 0))
+        let carolLinkOnHub = BLEIngressLinkID.central(mesh.linkUUID(from: 2, at: 0))
+
+        hub.service._test_ingestFrame(signedMsg1, link: aliceLinkOnHub)
+        mesh.pump()
+        // Before hub's jitter timer expires, Carol delivers the same broadcast.
+        hub.service._test_ingestFrame(signedMsg1, link: carolLinkOnHub)
+        mesh.pump()
+        mesh.advanceTime(by: 2)
+
+        let afterDistinctDup = mesh.emittedPackets(from: 0).filter {
+            $0.type == MessageType.message.rawValue && $0.payload == signedMsg1.payload
+        }
+        #expect(afterDistinctDup.count == 0)
+
+        // Control: a duplicate arriving from the SAME peer (Alice) does not
+        // cancel hub's scheduled relay.
+        let msg2 = BitchatPacket(
+            type: MessageType.message.rawValue,
+            senderID: Data(hexString: alice.service.myPeerID.id) ?? Data(),
+            recipientID: nil,
+            timestamp: nowMs + 1,
+            payload: Data("keep-relaying".utf8),
+            signature: nil,
+            ttl: 5
+        )
+        let signedMsg2 = alice.service.signPacketForBroadcast(msg2)
+        hub.service._test_ingestFrame(signedMsg2, link: aliceLinkOnHub)
+        mesh.pump()
+        hub.service._test_ingestFrame(signedMsg2, link: aliceLinkOnHub)
+        mesh.pump()
+        mesh.advanceTime(by: 2)
+
+        let afterSamePeerDup = mesh.emittedPackets(from: 0).filter {
+            $0.type == MessageType.message.rawValue && $0.payload == signedMsg2.payload
+        }
+        #expect(afterSamePeerDup.count == 1)
+        _ = carol
+    }
 }
 
 /// Captures `.publicMessageReceived` transport events. Delivery crosses the main

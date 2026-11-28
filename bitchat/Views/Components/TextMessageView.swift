@@ -125,7 +125,7 @@ struct TextMessageView: View, Equatable {
             // Expand/Collapse for very long messages
             if scan.isLongForDisplay {
                 let isExpanded = expandedMessageIDs.contains(message.id)
-                let labelKey = isExpanded ? LocalizedStringKey("content.message.show_less") : LocalizedStringKey("content.message.show_more")
+                let labelKey = isExpanded ? String(localized: "content.message.show_less") : String(localized: "content.message.show_more")
                 Button(labelKey) {
                     if isExpanded { expandedMessageIDs.remove(message.id) }
                     else { expandedMessageIDs.insert(message.id) }
