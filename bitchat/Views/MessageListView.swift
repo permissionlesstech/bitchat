@@ -227,6 +227,7 @@ private struct MessageListContentView: View {
     @State private var quoteHighlightMessageID: String?
     @State private var quoteHighlightTask: Task<Void, Never>?
 
+    @Environment(\.appTheme) private var theme
     @ThemedPalette private var palette
 
     var body: some View {
@@ -580,7 +581,6 @@ private extension MessageListContentView {
                         channel.geohash
                     )
                 )
-                emptyStateLine(String(localized: "content.empty.switch_hint", comment: "Empty timeline hint pointing at the channel switcher and the help screen"))
             }
         }
         .padding(.horizontal, 12)
@@ -589,9 +589,8 @@ private extension MessageListContentView {
     }
 
     func emptyStateLine(_ text: String) -> some View {
-        // Non-breaking space before the closing asterisk so a tight wrap
-        // can't orphan a lone "*" onto its own line.
-        Text(verbatim: "* \(text)\u{00A0}*")
+        let formatted = theme.usesGlassChrome ? text : "* \(text)\u{00A0}*"
+        return Text(verbatim: formatted)
             .bitchatFont(size: 13)
             .foregroundColor(palette.secondary.opacity(0.9))
             .fixedSize(horizontal: false, vertical: true)

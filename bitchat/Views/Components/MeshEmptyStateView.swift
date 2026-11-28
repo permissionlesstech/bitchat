@@ -2,8 +2,9 @@
 // MeshEmptyStateView.swift
 // bitchat
 //
-// The empty mesh timeline: shows concise guidance and the liveliest nearby
-// geohash conversation one tap away.
+// The empty mesh timeline: shows a quiet status-aware line when no one is in
+// Bluetooth range yet (and stays blank once peers are nearby), plus the
+// liveliest nearby geohash conversation one tap away when active.
 // This is free and unencumbered software released into the public domain.
 //
 
@@ -13,14 +14,16 @@ import SwiftUI
 struct MeshEmptyStateView: View {
     /// Visible chat height to fill. Zero (previews) keeps a compact layout.
     var fillHeight: CGFloat = 0
-    /// Ambient-footer mode, appended below archived echoes: skips the
-    /// intro/help narration (the timeline isn't empty), keeping live hints visible.
+    /// Ambient-footer mode, appended below archived echoes: skips the empty
+    /// status line (the timeline isn't empty), keeping live hints visible.
     var compact: Bool = false
 
     @EnvironmentObject private var locationChannelsModel: LocationChannelsModel
+    @EnvironmentObject private var peerListModel: PeerListModel
     @ObservedObject private var activityTracker = GeohashChatActivityTracker.shared
 
     @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.appTheme) private var theme
     @ThemedPalette private var palette
 
     /// The activity window is evaluated at render time; without new events
@@ -37,8 +40,11 @@ struct MeshEmptyStateView: View {
     }()
 
     private enum Strings {
-        static let meshIntro = String(localized: "content.empty.mesh_intro", comment: "First line of the empty mesh timeline explaining what the mesh channel is")
-        static let switchHint = String(localized: "content.empty.switch_hint", comment: "Empty timeline hint pointing at the channel switcher and the help screen")
+        static let noPeersNearby = String(
+            localized: "content.empty.no_peers_nearby",
+            defaultValue: "No one in Bluetooth range yet.",
+            comment: "Empty Nearby mesh timeline status when no peers are currently in Bluetooth range"
+        )
 
         static func activityOne(_ geohash: String) -> String {
             String(
@@ -57,18 +63,17 @@ struct MeshEmptyStateView: View {
         }
     }
 
+    private var hasNearbyPeers: Bool {
+        peerListModel.connectedMeshPeerCount > 0 || peerListModel.reachableMeshPeerCount > 0
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            if compact {
-                if let conversation = nearbyConversation {
-                    conversationHint(conversation)
-                }
-            } else {
-                narrationLine(Strings.meshIntro)
-                narrationLine(Strings.switchHint)
-                if let conversation = nearbyConversation {
-                    conversationHint(conversation)
-                }
+            if !compact && !hasNearbyPeers {
+                narrationLine(Strings.noPeersNearby)
+            }
+            if let conversation = nearbyConversation {
+                conversationHint(conversation)
             }
         }
         .frame(minHeight: compact ? 0 : fillHeight, alignment: .top)
@@ -123,9 +128,8 @@ private extension MeshEmptyStateView {
     }
 
     func emptyStateLine(_ text: String, color: Color) -> some View {
-        // Non-breaking space before the closing asterisk so a tight wrap
-        // can't orphan a lone "*" onto its own line.
-        Text(verbatim: "* \(text)\u{00A0}*")
+        let formatted = theme.usesGlassChrome ? text : "* \(text)\u{00A0}*"
+        return Text(verbatim: formatted)
             .bitchatFont(size: 13)
             .foregroundColor(color)
             .fixedSize(horizontal: false, vertical: true)
