@@ -400,17 +400,19 @@ private extension ContentComposerView {
                     // Live streaming means audio is heard as you speak — the HUD
                     // must make that unmistakable, not just show a timer.
                     if voiceRecordingVM.isLiveStreaming {
-                        Text(
-                            "live \(voiceRecordingVM.formattedDuration(for: context.date))",
-                            comment: "Recording HUD label while a voice message streams live to the recipient"
-                        )
+                        Text(String(
+                            format: String(localized: "live %@", defaultValue: "live %@", comment: "Recording HUD label while a voice message streams live to the recipient"),
+                            locale: .current,
+                            voiceRecordingVM.formattedDuration(for: context.date)
+                        ))
                         .bitchatFont(size: 13, weight: .bold)
                         .foregroundColor(.red)
                     } else {
-                        Text(
-                            "recording \(voiceRecordingVM.formattedDuration(for: context.date))",
-                            comment: "Voice note recording duration indicator"
-                        )
+                        Text(String(
+                            format: String(localized: "recording %@", defaultValue: "recording %@", comment: "Voice note recording duration indicator"),
+                            locale: .current,
+                            voiceRecordingVM.formattedDuration(for: context.date)
+                        ))
                         .bitchatFont(size: 13)
                         .foregroundColor(.red)
                     }

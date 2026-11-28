@@ -432,7 +432,10 @@ struct AppInfoView: View {
                             Text(verbatim: "@")
                                 .bitchatFont(size: 15, weight: .semibold)
                                 .foregroundColor(secondaryTextColor)
-                            TextField("content.input.nickname_placeholder", text: nicknameBinding)
+                            TextField(
+                                String(localized: "content.input.nickname_placeholder", defaultValue: "Nickname", comment: "Placeholder in the settings field where the user edits their nickname"),
+                                text: nicknameBinding
+                            )
                                 .textFieldStyle(.plain)
                                 .bitchatFont(size: 15, weight: .medium)
                                 .foregroundColor(textColor)
