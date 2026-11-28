@@ -379,6 +379,7 @@ private struct MessageListContentView: View {
                     }
                 }
             }
+            .scrollDismissesKeyboard(.interactively)
             .modifier(ScrollChromeInsetsModifier(top: topContentInset, bottom: bottomContentInset))
             .background {
                 if isEmptyPublic {

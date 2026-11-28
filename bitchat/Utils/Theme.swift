@@ -297,35 +297,42 @@ private struct ThemedChromePanelModifier: ViewModifier {
     }
 }
 
-/// Edge-to-edge slim bottom tab bar surface matching `ThemedChromePanelModifier`
-/// so top bars, composers, sheet headers, and bottom navigation speak one
-/// cohesive visual language in both Liquid Glass and Matrix themes.
+/// Floating Liquid Glass bubble for the slim bottom tab bar in Liquid Glass
+/// mode, and a crisp flat hairline bar in Matrix mode.
 private struct ThemedBottomBarSurfaceModifier: ViewModifier {
     @Environment(\.appTheme) private var theme
     @ThemedPalette private var palette
 
     @ViewBuilder
     func body(content: Content) -> some View {
-        VStack(spacing: 0) {
-            Rectangle()
-                .fill(palette.divider)
-                .frame(height: theme.usesGlassChrome ? 0.5 : 1)
-
+        if theme.usesGlassChrome {
             content
-                .padding(.horizontal, 8)
-                .padding(.top, 3)
+                .padding(.horizontal, 6)
+                .padding(.vertical, 3)
+                .modifier(GlassPanel(shape: Capsule()))
+                .padding(.horizontal, 14)
+                .padding(.top, 4)
                 #if os(macOS)
-                .padding(.bottom, 5)
+                .padding(.bottom, 8)
                 #else
                 .padding(.bottom, 2)
                 #endif
-        }
-        .background {
-            if theme.usesGlassChrome {
+        } else {
+            VStack(spacing: 0) {
                 Rectangle()
-                    .fill(.ultraThinMaterial)
-                    .ignoresSafeArea(edges: .bottom)
-            } else {
+                    .fill(palette.divider)
+                    .frame(height: 1)
+
+                content
+                    .padding(.horizontal, 8)
+                    .padding(.top, 3)
+                    #if os(macOS)
+                    .padding(.bottom, 5)
+                    #else
+                    .padding(.bottom, 2)
+                    #endif
+            }
+            .background {
                 palette.background.opacity(0.97)
                     .ignoresSafeArea(edges: .bottom)
             }

@@ -530,15 +530,7 @@ struct ContentView: View {
     }
 
     private var showBottomBar: Bool {
-        if selectedTab == .places && activePlaceChannel != nil {
-            return false
-        }
-        #if os(iOS)
-        if isTextFieldFocused {
-            return false
-        }
-        #endif
-        return true
+        !(selectedTab == .places && activePlaceChannel != nil)
     }
 
     private var rootTabItems: [SlimTabItem<AppRootTab>] {
@@ -626,6 +618,7 @@ struct ContentView: View {
                     selection: $selectedTab,
                     items: rootTabItems,
                     onSelect: { tab in
+                        isTextFieldFocused = false
                         if tab == .settings {
                             AppInfoView.setSelectedPane(.settings)
                         }
