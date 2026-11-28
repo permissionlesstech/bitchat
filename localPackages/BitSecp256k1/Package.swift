@@ -20,7 +20,7 @@ let package = Package(
                 "COPYING"
             ],
             sources: [
-                "src/secp256k1.c",
+                "secp256k1_wrapper.c",
                 "src/precomputed_ecmult.c",
                 "src/precomputed_ecmult_gen.c"
             ],
