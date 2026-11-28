@@ -91,6 +91,42 @@ struct NostrFilter: Encodable {
         return filter
     }
 
+    // For Place Feed: kind-1 notes/replies and kind-7 NIP-25 reactions on one
+    // For Place Feed: fetches kind-1 notes/replies, kind-7 NIP-25 reactions,
+    // and kind-5 NIP-09 deletions in one per-place relay subscription (avoids
+    // opening extra sockets/REQs over Tor).
+    static func geohashFeed(_ geohashes: [String], since: Date? = nil, limit: Int = 200) -> NostrFilter {
+        var filter = NostrFilter()
+        filter.kinds = [
+            NostrProtocol.EventKind.textNote.rawValue,
+            NostrProtocol.EventKind.reaction.rawValue,
+            NostrProtocol.EventKind.deletion.rawValue
+        ]
+        filter.since = since?.timeIntervalSince1970.toInt()
+        filter.tagFilters = ["g": geohashes]
+        filter.limit = limit
+        return filter
+    }
+
+    // For Following Home Feed: kind-1 notes from followed pubkeys on default relays.
+    static func authorNotes(_ pubkeys: [String], since: Date? = nil, limit: Int = 150) -> NostrFilter {
+        var filter = NostrFilter()
+        filter.kinds = [NostrProtocol.EventKind.textNote.rawValue]
+        filter.authors = pubkeys
+        filter.since = since?.timeIntervalSince1970.toInt()
+        filter.limit = limit
+        return filter
+    }
+
+    // For NIP-01 kind-0 profile metadata batch lookups.
+    static func authorProfiles(_ pubkeys: [String], limit: Int? = nil) -> NostrFilter {
+        var filter = NostrFilter()
+        filter.kinds = [NostrProtocol.EventKind.metadata.rawValue]
+        filter.authors = pubkeys
+        filter.limit = limit ?? max(pubkeys.count * 2, 20)
+        return filter
+    }
+
     // For the mesh bridge: rendezvous messages (kind 20000) and presence
     // (kind 20001) tagged `#r` with one or more cells (own + neighbors).
     static func bridgeRendezvous(_ cells: [String], since: Date? = nil, limit: Int = 200) -> NostrFilter {

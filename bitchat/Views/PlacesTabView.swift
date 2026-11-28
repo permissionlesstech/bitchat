@@ -35,7 +35,10 @@ struct PlacesTabView<RoomContent: View>: View {
     @State private var showSharePrecisionWarning = false
     @State private var activeSharePayload: ChannelSharePayload?
     @State private var showLocalPlaceNotes = false
+    @State private var tabMode: PlacesTabMode = .explore
+    @State private var showPublicProfileSheet = false
     @ObservedObject private var nearbyNotes = NearbyNotesCounter.shared
+    @ObservedObject private var profileStore = NostrProfileStore.shared
 
     var body: some View {
         Group {
@@ -93,6 +96,9 @@ struct PlacesTabView<RoomContent: View>: View {
             )
             .environmentObject(locationChannelsModel)
         }
+        .sheet(isPresented: $showPublicProfileSheet) {
+            PublicProfileSheet(defaultNickname: appChromeModel.nickname)
+        }
         #if os(iOS)
         .fullScreenCover(isPresented: $showGlobePicker, onDismiss: applyPickedGeohash) {
             globePicker
@@ -112,42 +118,81 @@ struct PlacesTabView<RoomContent: View>: View {
                 onSelect: onSelectTab
             )
         } trailing: {
-            EmptyView()
+            placesTabModeToggle
+
+            TopBarIconButton(
+                systemImage: profileStore.isPublicHandleEnabled ? "person.crop.circle.fill" : "person.crop.circle",
+                accessibilityLabel: String(localized: "public_profile.title", defaultValue: "Identity & Following", comment: "Button opening the Public Handle and Private Following sheet"),
+                color: profileStore.isPublicHandleEnabled ? palette.accent : palette.secondary,
+                action: { showPublicProfileSheet = true }
+            )
         }
         .stealthTripleTapPanicWipe {
             appChromeModel.requestPanicWipe()
         }
 
-        let scrollBody = ScrollView {
-            VStack(alignment: .leading, spacing: 20) {
-                if appChromeModel.torBlocked {
-                    ConnectivityStatusBanner(issue: .torBlocked)
+        let scrollBody = Group {
+            if tabMode == .feed {
+                HomeFeedView(
+                    senderNickname: appChromeModel.nickname,
+                    topContentInset: ChromeMetrics.barHeight + 10,
+                    usesOverlayChrome: theme.usesGlassChrome,
+                    onSelectPlace: { gh, title in
+                        let level = GeohashCoverage.level(forLength: gh.count)
+                        let channel = GeohashChannel(level: level, geohash: gh)
+                        let inRegional = locationChannelsModel.availableChannels.contains { $0.geohash == gh }
+                        locationChannelsModel.markTeleported(for: gh, !inRegional && !locationChannelsModel.availableChannels.isEmpty)
+                        activeLocationTitle = title
+                        activeLocationChannel = channel
+                        locationChannelsModel.select(.location(channel))
+                    },
+                    onExplorePlaces: {
+                        withAnimation(.easeInOut(duration: 0.16)) {
+                            tabMode = .explore
+                        }
+                    },
+                    onOpenProfileSheet: {
+                        showPublicProfileSheet = true
+                    }
+                )
+            } else {
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 20) {
+                        if appChromeModel.torBlocked {
+                            ConnectivityStatusBanner(issue: .torBlocked)
+                        }
+
+                        locationPermissionCard
+                        localPlaceNotesCard
+                        nearbyPlacesSection
+
+                        if let suggestion = QuickJoinSuggestion.current() {
+                            quickJoinCard(suggestion)
+                        }
+
+                        if !locationChannelsModel.bookmarks.isEmpty {
+                            bookmarksSection(locationChannelsModel.bookmarks)
+                        }
+
+                        teleportSection
+                    }
+                    .padding(16)
                 }
-
-                locationPermissionCard
-                localPlaceNotesCard
-                nearbyPlacesSection
-
-                if let suggestion = QuickJoinSuggestion.current() {
-                    quickJoinCard(suggestion)
-                }
-
-                if !locationChannelsModel.bookmarks.isEmpty {
-                    bookmarksSection(locationChannelsModel.bookmarks)
-                }
-
-                teleportSection
             }
-            .padding(16)
         }
 
         return Group {
             if theme.usesGlassChrome {
                 if #available(iOS 17.0, macOS 14.0, *) {
-                    scrollBody
-                        .contentMargins(.top, ChromeMetrics.barHeight + 10, for: .scrollContent)
-                        .contentMargins(.top, ChromeMetrics.barHeight + 10, for: .scrollIndicators)
-                        .overlay(alignment: .top) { topBar }
+                    if tabMode == .feed {
+                        scrollBody
+                            .overlay(alignment: .top) { topBar }
+                    } else {
+                        scrollBody
+                            .contentMargins(.top, ChromeMetrics.barHeight + 10, for: .scrollContent)
+                            .contentMargins(.top, ChromeMetrics.barHeight + 10, for: .scrollIndicators)
+                            .overlay(alignment: .top) { topBar }
+                    }
                 } else {
                     VStack(spacing: 0) {
                         topBar
@@ -163,6 +208,39 @@ struct PlacesTabView<RoomContent: View>: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(ThemedRootBackground())
+    }
+
+    private var placesTabModeToggle: some View {
+        HStack(spacing: 2) {
+            ForEach(PlacesTabMode.allCases) { mode in
+                let isSelected = tabMode == mode
+                Button {
+                    withAnimation(.easeInOut(duration: 0.16)) {
+                        tabMode = mode
+                    }
+                } label: {
+                    Text(
+                        mode == .explore
+                            ? String(localized: "places.mode.explore", defaultValue: "Explore", comment: "Segment label for Places directory and globe")
+                            : String(localized: "place_feed.mode.feed", defaultValue: "Feed", comment: "Segment label for Home Feed")
+                    )
+                    .bitchatFont(size: 12, weight: isSelected ? .semibold : .medium)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(isSelected ? palette.accent : Color.clear)
+                    .foregroundColor(isSelected ? palette.accentForeground : palette.secondary)
+                    .clipShape(Capsule())
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(2)
+        .background(palette.cardBackground)
+        .overlay(
+            Capsule().stroke(palette.cardBorder, lineWidth: 1)
+        )
+        .clipShape(Capsule())
     }
 
     @ViewBuilder
@@ -558,9 +636,15 @@ struct PlacesTabView<RoomContent: View>: View {
             }
             return customGeohash.trimmed.lowercased()
         }()
+        let beacons = GlobeActivityBeacon.buildBeacons(
+            chatCounts: GeohashChatActivityTracker.shared.activeGeohashCounts(),
+            noteCounts: LocationNotesPool.shared.activeNoteCounts(),
+            bookmarks: locationChannelsModel.bookmarks
+        )
         return GeohashPickerView(
             initialGeohash: initial,
             nearbyGeohashes: locationChannelsModel.availableChannels.map(\.geohash),
+            activityBeacons: beacons,
             onSelect: { geohash in
                 pickedGeohash = geohash
                 showGlobePicker = false

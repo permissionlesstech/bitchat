@@ -206,6 +206,7 @@ struct ContentView: View {
     @State private var selectedTab: AppRootTab
     @State private var activePlaceChannel: GeohashChannel? = nil
     @State private var activePlaceTitle: String? = nil
+    @State private var activePlaceMode: PlaceRoomMode = .chat
     @State private var showAddFriendSheet = false
     @State private var showCreateGroupSheet = false
     @State private var showOnboardingSheet = false
@@ -711,7 +712,7 @@ struct ContentView: View {
                 )
 
             case .nearby:
-                mainContent(onBack: nil, placeTitle: nil)
+                mainContent(onBack: nil, placeTitle: nil, placeChannel: nil)
 
             case .places:
                 PlacesTabView(
@@ -726,11 +727,16 @@ struct ContentView: View {
                     )
                     mainContent(
                         onBack: {
+                            activePlaceMode = .chat
                             activePlaceChannel = nil
                             activePlaceTitle = nil
                         },
-                        placeTitle: placeName
+                        placeTitle: placeName,
+                        placeChannel: channel
                     )
+                }
+                .onChange(of: activePlaceChannel) { _ in
+                    activePlaceMode = .chat
                 }
 
             case .settings:
@@ -760,53 +766,101 @@ struct ContentView: View {
     /// Older OS versions without `.contentMargins` keep single-level
     /// `.safeAreaInset` so programmatic `scrollTo` targets still clear the bar.
     @ViewBuilder
-    private func mainContent(onBack: (() -> Void)?, placeTitle: String?) -> some View {
+    private func mainContent(
+        onBack: (() -> Void)?,
+        placeTitle: String?,
+        placeChannel: GeohashChannel?
+    ) -> some View {
+        let isShowingPlaceFeed = placeChannel != nil && activePlaceMode == .feed
+        let modeBinding: Binding<PlaceRoomMode>? = placeChannel != nil ? $activePlaceMode : nil
+
         if usesGlassLayout {
             if #available(iOS 17.0, macOS 14.0, *) {
-                publicMessageList
-                    .overlay(alignment: .top) {
-                        headerView(onBack: onBack, placeTitle: placeTitle)
+                Group {
+                    if let placeChannel, isShowingPlaceFeed {
+                        PlaceFeedView(
+                            channel: placeChannel,
+                            senderNickname: appChromeModel.nickname,
+                            board: appChromeModel.boardManager,
+                            isTeleported: locationChannelsModel.teleported,
+                            searchQuery: isPublicSearchPresented ? publicSearchQuery : "",
+                            topContentInset: glassTopContentInset,
+                            usesOverlayChrome: true
+                        )
+                    } else {
+                        publicMessageList
+                    }
+                }
+                .overlay(alignment: .top) {
+                    headerView(onBack: onBack, placeTitle: placeTitle, placeMode: modeBinding)
+                        .onGeometryChange(for: CGFloat.self) { proxy in
+                            proxy.size.height
+                        } action: { height in
+                            if abs(topChromeHeight - height) > 0.5 {
+                                topChromeHeight = height
+                            }
+                        }
+                }
+                .overlay(alignment: .bottom) {
+                    if selectedPrivatePeerID == nil && !isShowingPlaceFeed {
+                        composerView
                             .onGeometryChange(for: CGFloat.self) { proxy in
                                 proxy.size.height
                             } action: { height in
-                                if abs(topChromeHeight - height) > 0.5 {
-                                    topChromeHeight = height
+                                if abs(bottomChromeHeight - height) > 0.5 {
+                                    bottomChromeHeight = height
                                 }
                             }
                     }
-                    .overlay(alignment: .bottom) {
-                        if selectedPrivatePeerID == nil {
-                            composerView
-                                .onGeometryChange(for: CGFloat.self) { proxy in
-                                    proxy.size.height
-                                } action: { height in
-                                    if abs(bottomChromeHeight - height) > 0.5 {
-                                        bottomChromeHeight = height
-                                    }
-                                }
-                        }
-                    }
+                }
             } else {
-                publicMessageList
-                    .safeAreaInset(edge: .top, spacing: 0) {
-                        headerView(onBack: onBack, placeTitle: placeTitle)
+                Group {
+                    if let placeChannel, isShowingPlaceFeed {
+                        PlaceFeedView(
+                            channel: placeChannel,
+                            senderNickname: appChromeModel.nickname,
+                            board: appChromeModel.boardManager,
+                            isTeleported: locationChannelsModel.teleported,
+                            searchQuery: isPublicSearchPresented ? publicSearchQuery : "",
+                            topContentInset: 0,
+                            usesOverlayChrome: false
+                        )
+                    } else {
+                        publicMessageList
                     }
-                    .safeAreaInset(edge: .bottom, spacing: 0) {
-                        if selectedPrivatePeerID == nil {
-                            composerView
-                        }
+                }
+                .safeAreaInset(edge: .top, spacing: 0) {
+                    headerView(onBack: onBack, placeTitle: placeTitle, placeMode: modeBinding)
+                }
+                .safeAreaInset(edge: .bottom, spacing: 0) {
+                    if selectedPrivatePeerID == nil && !isShowingPlaceFeed {
+                        composerView
                     }
+                }
             }
         } else {
             VStack(spacing: 0) {
-                headerView(onBack: onBack, placeTitle: placeTitle)
+                headerView(onBack: onBack, placeTitle: placeTitle, placeMode: modeBinding)
 
-                publicMessageList
-                    .background(palette.background)
+                if let placeChannel, isShowingPlaceFeed {
+                    PlaceFeedView(
+                        channel: placeChannel,
+                        senderNickname: appChromeModel.nickname,
+                        board: appChromeModel.boardManager,
+                        isTeleported: locationChannelsModel.teleported,
+                        searchQuery: isPublicSearchPresented ? publicSearchQuery : "",
+                        topContentInset: 0,
+                        usesOverlayChrome: false
+                    )
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else {
+                    publicMessageList
+                        .background(palette.background)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
 
-                if selectedPrivatePeerID == nil {
-                    composerView
+                    if selectedPrivatePeerID == nil {
+                        composerView
+                    }
                 }
             }
         }
@@ -826,7 +880,11 @@ struct ContentView: View {
         return matches[idx]
     }
 
-    private func headerView(onBack: (() -> Void)?, placeTitle: String?) -> some View {
+    private func headerView(
+        onBack: (() -> Void)?,
+        placeTitle: String?,
+        placeMode: Binding<PlaceRoomMode>?
+    ) -> some View {
         let matches = publicSearchMatches
         return VStack(spacing: 0) {
             ContentHeaderView(
@@ -835,6 +893,7 @@ struct ContentView: View {
                 onSelectTab: selectRootTab,
                 onBack: onBack,
                 placeTitle: placeTitle,
+                placeMode: placeMode,
                 isSearchActive: isPublicSearchPresented,
                 onToggleSearch: {
                     withAnimation(.easeInOut(duration: 0.18)) {

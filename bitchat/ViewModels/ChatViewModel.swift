@@ -2142,8 +2142,12 @@ final class ChatViewModel: ObservableObject, SynchronousMessageTransportEventDel
         // wiped device comes back with it off, like a fresh install.
         PTTSettings.reset()
         NearbyNotesCounter.shared.resetForPanic()
+        HomeFeedManager.shared.resetForPanic()
         LocationNotesPool.shared.resetForPanic()
         LocationNotesDependencies.clearCachedIdentitiesForPanic()
+        NostrFollowsStore.shared.resetForPanic()
+        NostrProfileStore.shared.resetForPanic()
+        BlossomMediaService.shared.resetForPanic()
         WaveformCache.shared.resetForPanic()
         ImageDownsampler.resetForPanic()
         CashuTokenDecoder.resetForPanic()

@@ -89,7 +89,7 @@ struct LocationNotesManagerTests {
         let deps = LocationNotesDependencies(
             relayLookup: { _, _ in ["wss://relay.one"] },
             subscribe: { filter, id, relays, handler, eose in
-                #expect(filter.kinds == [1])
+                #expect(filter.kinds == [1, 7, 5])
                 #expect(!id.isEmpty)
                 relaysCaptured = relays
                 storedHandler = handler

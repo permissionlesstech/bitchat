@@ -27,6 +27,7 @@ struct ContentHeaderView: View {
     var onSelectTab: ((AppRootTab) -> Void)? = nil
     var onBack: (() -> Void)? = nil
     var placeTitle: String? = nil
+    var placeMode: Binding<PlaceRoomMode>? = nil
     var isSearchActive: Bool = false
     var onToggleSearch: (() -> Void)? = nil
     var onOpenWalkieTalkie: (() -> Void)? = nil
@@ -145,6 +146,10 @@ struct ContentHeaderView: View {
                 .modifier(PulsingOpacityModifier(active: someoneSpeaking))
             }
 
+            if let placeMode {
+                placeModeToggle(selection: placeMode)
+            }
+
             if let onToggleSearch {
                 TopBarIconButton(
                     systemImage: "magnifyingglass",
@@ -155,39 +160,75 @@ struct ContentHeaderView: View {
             }
 
             if case .location(let channel) = locationChannelsModel.selectedChannel {
-                TopBarIconButton(
-                    systemImage: locationChannelsModel.isBookmarked(channel.geohash) ? "bookmark.fill" : "bookmark",
-                    accessibilityLabel: String(
-                        format: String(localized: "content.accessibility.toggle_bookmark", comment: "Accessibility label for toggling a geohash bookmark"),
-                        locale: .current,
-                        channel.geohash
-                    ),
-                    color: locationChannelsModel.isBookmarked(channel.geohash) ? palette.locationAccent : palette.secondary,
-                    action: { locationChannelsModel.toggleBookmark(channel.geohash) }
-                )
+                if placeMode != nil {
+                    Menu {
+                        Button {
+                            locationChannelsModel.toggleBookmark(channel.geohash)
+                        } label: {
+                            Label(
+                                String(
+                                    format: String(localized: "content.accessibility.toggle_bookmark", comment: "Accessibility label for toggling a geohash bookmark"),
+                                    locale: .current,
+                                    channel.geohash
+                                ),
+                                systemImage: locationChannelsModel.isBookmarked(channel.geohash) ? "bookmark.fill" : "bookmark"
+                            )
+                        }
+                        Button {
+                            requestHeaderShare(forGeohash: channel.geohash)
+                        } label: {
+                            Label(
+                                String(localized: "channel.share.action", defaultValue: "share channel", comment: "Accessibility label for sharing the active location channel"),
+                                systemImage: "square.and.arrow.up"
+                            )
+                        }
+                    } label: {
+                        Image(systemName: "ellipsis")
+                            .font(.system(size: ChromeMetrics.iconSize, weight: .medium))
+                            .foregroundColor(locationChannelsModel.isBookmarked(channel.geohash) ? palette.locationAccent : palette.secondary)
+                            .frame(width: ChromeMetrics.iconTapSize, height: ChromeMetrics.iconTapSize)
+                            .contentShape(Rectangle())
+                    }
+                    .menuStyle(.borderlessButton)
+                    .menuIndicator(.hidden)
+                    .buttonStyle(.plain)
+                } else {
+                    TopBarIconButton(
+                        systemImage: locationChannelsModel.isBookmarked(channel.geohash) ? "bookmark.fill" : "bookmark",
+                        accessibilityLabel: String(
+                            format: String(localized: "content.accessibility.toggle_bookmark", comment: "Accessibility label for toggling a geohash bookmark"),
+                            locale: .current,
+                            channel.geohash
+                        ),
+                        color: locationChannelsModel.isBookmarked(channel.geohash) ? palette.locationAccent : palette.secondary,
+                        action: { locationChannelsModel.toggleBookmark(channel.geohash) }
+                    )
 
-                TopBarIconButton(
-                    systemImage: "square.and.arrow.up",
-                    accessibilityLabel: String(localized: "channel.share.action", defaultValue: "share channel", comment: "Accessibility label for sharing the active location channel"),
-                    color: palette.secondary,
-                    action: { requestHeaderShare(forGeohash: channel.geohash) }
-                )
+                    TopBarIconButton(
+                        systemImage: "square.and.arrow.up",
+                        accessibilityLabel: String(localized: "channel.share.action", defaultValue: "share channel", comment: "Accessibility label for sharing the active location channel"),
+                        color: palette.secondary,
+                        action: { requestHeaderShare(forGeohash: channel.geohash) }
+                    )
+                }
             }
 
-            TopBarIconButton(
-                systemImage: scopeHasNotices || unseenNoticesCount > 0 ? "pin.fill" : "pin",
-                accessibilityLabel: String(localized: "content.accessibility.notices", defaultValue: "Notices", comment: "Accessibility label for the notices button"),
-                color: scopeHasNotices || unseenNoticesCount > 0 ? Color.orange : palette.secondary,
-                badgeCount: unseenNoticesCount,
-                action: {
-                    if case .location(let channel) = locationChannelsModel.selectedChannel {
-                        boardAlertsModel.markSeen(forScopes: [channel.geohash])
-                    } else {
-                        boardAlertsModel.markSeen(forScopes: [""])
+            if placeMode == nil {
+                TopBarIconButton(
+                    systemImage: scopeHasNotices || unseenNoticesCount > 0 ? "pin.fill" : "pin",
+                    accessibilityLabel: String(localized: "content.accessibility.notices", defaultValue: "Notices", comment: "Accessibility label for the notices button"),
+                    color: scopeHasNotices || unseenNoticesCount > 0 ? Color.orange : palette.secondary,
+                    badgeCount: unseenNoticesCount,
+                    action: {
+                        if case .location(let channel) = locationChannelsModel.selectedChannel {
+                            boardAlertsModel.markSeen(forScopes: [channel.geohash])
+                        } else {
+                            boardAlertsModel.markSeen(forScopes: [""])
+                        }
+                        appChromeModel.presentNotices()
                     }
-                    appChromeModel.presentNotices()
-                }
-            )
+                )
+            }
 
             if case .location = locationChannelsModel.selectedChannel {
                 Button {
@@ -275,6 +316,41 @@ struct ContentHeaderView: View {
         .stealthTripleTapPanicWipe {
             appChromeModel.requestPanicWipe()
         }
+    }
+
+    private func placeModeToggle(selection: Binding<PlaceRoomMode>) -> some View {
+        HStack(spacing: 2) {
+            ForEach(PlaceRoomMode.allCases) { mode in
+                let isSelected = selection.wrappedValue == mode
+                Button {
+                    withAnimation(.easeInOut(duration: 0.16)) {
+                        selection.wrappedValue = mode
+                    }
+                } label: {
+                    Text(
+                        mode == .chat
+                            ? String(localized: "place_feed.mode.chat", defaultValue: "Chat", comment: "Segment label for real-time chat inside a Place room")
+                            : String(localized: "place_feed.mode.feed", defaultValue: "Feed", comment: "Segment label for the persistent Place Feed inside a Place room")
+                    )
+                    .bitchatFont(size: 12, weight: isSelected ? .semibold : .medium)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(isSelected ? palette.accent : Color.clear)
+                    .foregroundColor(isSelected ? palette.accentForeground : palette.secondary)
+                    .clipShape(Capsule())
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(2)
+        .background(palette.cardBackground)
+        .overlay(
+            Capsule().stroke(palette.cardBorder, lineWidth: 1)
+        )
+        .clipShape(Capsule())
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel(String(localized: "place_feed.accessibility.mode_picker", defaultValue: "Place view mode", comment: "Accessibility label for the Chat / Feed mode switcher in a Place room"))
     }
 
     private func requestHeaderShare(forGeohash geohash: String) {
