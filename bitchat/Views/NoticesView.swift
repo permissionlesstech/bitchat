@@ -44,6 +44,12 @@ struct NoticesView: View {
 
     /// Injected notes manager for tests; live use derives one per geohash.
     private let notesManager: LocationNotesManager?
+    /// When set, locks the sheet to a single scope (Mesh Notices from Nearby,
+    /// or Place Notes from Places) and hides the redundant Geo/Mesh switcher.
+    private let lockedScope: Tab?
+    /// When true, the geo scope always targets the device's current building
+    /// cell instead of any previously selected remote location channel.
+    private let prefersDeviceLocation: Bool
     /// Pooled manager held by the sheet so the composer can post pure Nostr
     /// notes (∞ expiry has no mesh-board copy) and the list can render them.
     /// Acquired from `LocationNotesPool` (shared with the nearby-notes
@@ -58,13 +64,18 @@ struct NoticesView: View {
         senderNickname: String,
         board: BoardManager,
         initialTab: Tab,
-        notesManager: LocationNotesManager? = nil
+        notesManager: LocationNotesManager? = nil,
+        lockedScope: Tab? = nil,
+        prefersDeviceLocation: Bool = false
     ) {
         self.senderNickname = senderNickname
         self.board = board
         self.notesManager = notesManager
-        _tab = State(initialValue: initialTab)
-        _expiryDays = State(initialValue: initialTab == .geo ? Self.permanentExpiry : 7)
+        self.lockedScope = lockedScope
+        self.prefersDeviceLocation = prefersDeviceLocation
+        let resolvedTab = lockedScope ?? initialTab
+        _tab = State(initialValue: resolvedTab)
+        _expiryDays = State(initialValue: resolvedTab == .geo ? Self.permanentExpiry : 7)
     }
 
     private var activeNotesManager: LocationNotesManager? {
@@ -211,7 +222,7 @@ struct NoticesView: View {
     /// The geohash the geo tab is scoped to: the selected location channel,
     /// or the device's building geohash when chatting on mesh.
     private var geoGeohash: String? {
-        if case .location(let channel) = locationChannelsModel.selectedChannel {
+        if !prefersDeviceLocation, case .location(let channel) = locationChannelsModel.selectedChannel {
             return channel.geohash
         }
         guard locationChannelsModel.permissionState == .authorized else {
@@ -221,8 +232,9 @@ struct NoticesView: View {
     }
 
     /// The geo scope comes from device location only when no location channel
-    /// is selected; that's the case that needs the location machinery.
+    /// is selected (or when explicitly opened for the user's current spot).
     private var geoTabNeedsDeviceLocation: Bool {
+        if prefersDeviceLocation { return true }
         if case .location = locationChannelsModel.selectedChannel { return false }
         return true
     }
@@ -313,6 +325,10 @@ struct NoticesView: View {
         #endif
         .themedSheetBackground()
         .onAppear {
+            if tab == .geo && geoTabNeedsDeviceLocation,
+               Self.revealsNearbyNotes(onSwitchingTo: .geo, geoGeohash: geoGeohash) {
+                NearbyNotesCounter.shared.reveal()
+            }
             reconcileGeoSession()
         }
         .onChange(of: tab) { newTab in
@@ -358,28 +374,39 @@ struct NoticesView: View {
         }
     }
 
+    private var sheetTitle: String {
+        switch lockedScope {
+        case .geo:
+            return String(localized: "app_info.location.notes.title", defaultValue: "Location Notes", comment: "Title for place-scoped notes sheet").capitalized
+        case .mesh, .none:
+            return Strings.title.capitalized
+        }
+    }
+
     private var headerSection: some View {
         VStack(alignment: .leading, spacing: 0) {
             ThemedSheetHeader(
-                title: Strings.title.capitalized,
+                title: sheetTitle,
                 subtitle: scopeSubtitle,
                 onClose: { dismiss() }
             )
 
             VStack(alignment: .leading, spacing: 8) {
-                Picker(Strings.scopePicker, selection: $tab) {
-                    Text(Strings.geoTab.capitalized).tag(Tab.geo)
-                    Text(Strings.meshTab.capitalized).tag(Tab.mesh)
+                if lockedScope == nil {
+                    Picker(Strings.scopePicker, selection: $tab) {
+                        Text(Strings.geoTab.capitalized).tag(Tab.geo)
+                        Text(Strings.meshTab.capitalized).tag(Tab.mesh)
+                    }
+                    .pickerStyle(.segmented)
+                    .accessibilityLabel(Strings.scopePicker)
                 }
-                .pickerStyle(.segmented)
-                .accessibilityLabel(Strings.scopePicker)
                 Text(tab == .geo ? Strings.geoDescription : Strings.meshDescription)
                     .bitchatFont(size: 12)
                     .foregroundColor(palette.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
             .padding(.horizontal, 16)
-            .padding(.vertical, 12)
+            .padding(.vertical, 10)
             .themedSurface()
         }
     }

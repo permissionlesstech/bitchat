@@ -32,6 +32,8 @@ struct PlacesTabView<RoomContent: View>: View {
     @State private var pendingShareGeohash: String?
     @State private var showSharePrecisionWarning = false
     @State private var activeSharePayload: ChannelSharePayload?
+    @State private var showLocalPlaceNotes = false
+    @ObservedObject private var nearbyNotes = NearbyNotesCounter.shared
 
     var body: some View {
         Group {
@@ -79,6 +81,16 @@ struct PlacesTabView<RoomContent: View>: View {
         .sheet(item: $activeSharePayload) { payload in
             ShareActivityView(text: payload.text)
         }
+        .sheet(isPresented: $showLocalPlaceNotes) {
+            NoticesView(
+                senderNickname: appChromeModel.nickname,
+                board: appChromeModel.boardManager,
+                initialTab: .geo,
+                lockedScope: .geo,
+                prefersDeviceLocation: true
+            )
+            .environmentObject(locationChannelsModel)
+        }
         #if os(iOS)
         .fullScreenCover(isPresented: $showGlobePicker, onDismiss: applyPickedGeohash) {
             globePicker
@@ -108,6 +120,7 @@ struct PlacesTabView<RoomContent: View>: View {
                 VStack(alignment: .leading, spacing: 20) {
                     locationPermissionCard
                     nearbyPlacesSection
+                    localPlaceNotesCard
 
                     if let suggestion = QuickJoinSuggestion.current() {
                         quickJoinCard(suggestion)
@@ -212,6 +225,75 @@ struct PlacesTabView<RoomContent: View>: View {
                         .foregroundColor(palette.secondary)
                 }
             }
+        }
+    }
+
+    @ViewBuilder
+    private var localPlaceNotesCard: some View {
+        if locationChannelsModel.permissionState == .authorized,
+           LocationNotesSettings.enabled {
+            let count = nearbyNotes.noteCount
+            let subtitle: String = {
+                if count == 1 {
+                    return String(localized: "content.empty.notes_one", comment: "Hint when exactly one note was left at this place")
+                } else if count > 1 {
+                    return String(
+                        format: String(localized: "content.empty.notes_many", comment: "Hint counting notes left at this place"),
+                        locale: .current,
+                        count
+                    )
+                }
+                return String(localized: "location_notes.description", comment: "Explainer for notes pinned to a place")
+            }()
+
+            Button {
+                showLocalPlaceNotes = true
+            } label: {
+                ThemedCard {
+                    HStack(spacing: 12) {
+                        Image(systemName: count > 0 ? "pin.fill" : "pin")
+                            .font(.system(size: 16, weight: .semibold))
+                            .foregroundColor(count > 0 ? Color.orange : palette.locationAccent)
+                            .frame(width: 28, height: 28)
+                            .background((count > 0 ? Color.orange : palette.locationAccent).opacity(0.14))
+                            .clipShape(Circle())
+
+                        VStack(alignment: .leading, spacing: 2) {
+                            HStack(spacing: 6) {
+                                Text(String(localized: "app_info.location.notes.title", defaultValue: "Location Notes", comment: "Title for the place notes card in Places tab").capitalized)
+                                    .bitchatFont(size: 15, weight: .semibold)
+                                    .foregroundColor(palette.primary)
+                                if let building = locationChannelsModel.currentBuildingGeohash {
+                                    Text(verbatim: "#\(building)")
+                                        .bitchatFont(size: 11)
+                                        .foregroundColor(palette.locationAccent)
+                                }
+                            }
+                            Text(subtitle)
+                                .bitchatFont(size: 12)
+                                .foregroundColor(palette.secondary)
+                                .lineLimit(2)
+                        }
+
+                        Spacer()
+
+                        if count > 0 {
+                            Text(verbatim: "\(count)")
+                                .bitchatFont(size: 11, weight: .semibold)
+                                .foregroundColor(.white)
+                                .padding(.horizontal, 7)
+                                .padding(.vertical, 2)
+                                .background(Color.orange)
+                                .clipShape(Capsule())
+                        }
+
+                        Image(systemName: "chevron.right")
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundColor(palette.secondary)
+                    }
+                }
+            }
+            .buttonStyle(.plain)
         }
     }
 

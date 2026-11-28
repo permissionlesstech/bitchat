@@ -177,11 +177,11 @@ struct ContentHeaderView: View {
                 color: scopeHasNotices || unseenNoticesCount > 0 ? Color.orange : palette.secondary,
                 badgeCount: unseenNoticesCount,
                 action: {
-                    var scopes: Set<String> = [""]
-                    if let geoScope = noticesGeoScope {
-                        scopes.insert(geoScope)
+                    if case .location(let channel) = locationChannelsModel.selectedChannel {
+                        boardAlertsModel.markSeen(forScopes: [channel.geohash])
+                    } else {
+                        boardAlertsModel.markSeen(forScopes: [""])
                     }
-                    boardAlertsModel.markSeen(forScopes: scopes)
                     appChromeModel.presentNotices()
                 }
             )
@@ -201,7 +201,8 @@ struct ContentHeaderView: View {
             NoticesView(
                 senderNickname: appChromeModel.nickname,
                 board: appChromeModel.boardManager,
-                initialTab: initialNoticesTab
+                initialTab: initialNoticesTab,
+                lockedScope: initialNoticesTab
             )
             .environmentObject(locationChannelsModel)
         }
@@ -270,14 +271,19 @@ private extension ContentHeaderView {
     }
 
     var scopeHasNotices: Bool {
-        boardPosts.contains { $0.geohash.isEmpty || $0.geohash == noticesGeoScope }
-            || nearbyNotes.noteCount > 0
+        if case .location(let channel) = locationChannelsModel.selectedChannel {
+            let isCurrentBuilding = channel.geohash == locationChannelsModel.currentBuildingGeohash
+            return boardPosts.contains { $0.geohash == channel.geohash }
+                || (isCurrentBuilding && nearbyNotes.noteCount > 0)
+        }
+        return boardPosts.contains { $0.geohash.isEmpty }
     }
 
     var unseenNoticesCount: Int {
-        let meshCount = boardAlertsModel.unseenCount(forGeohash: "")
-        let geoCount = noticesGeoScope.map { boardAlertsModel.unseenCount(forGeohash: $0) } ?? 0
-        return meshCount + geoCount
+        if case .location(let channel) = locationChannelsModel.selectedChannel {
+            return boardAlertsModel.unseenCount(forGeohash: channel.geohash)
+        }
+        return boardAlertsModel.unseenCount(forGeohash: "")
     }
 
     var headerPeersReachable: Bool {

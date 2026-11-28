@@ -180,7 +180,7 @@ struct ContentView: View {
     @Environment(\.colorScheme) var colorScheme
     @Environment(\.appTheme) private var appTheme
     @Environment(\.scenePhase) private var scenePhase
-    @State private var selectedTab: AppRootTab = .chats
+    @State private var selectedTab: AppRootTab
     @State private var activePlaceChannel: GeohashChannel? = nil
     @State private var activePlaceTitle: String? = nil
     @State private var showAddFriendSheet = false
@@ -198,8 +198,12 @@ struct ContentView: View {
     @ScaledMetric(relativeTo: .subheadline) private var headerPeerCountFontSize: CGFloat = 12
     @State private var windowCountPublic: Int = TransportConfig.uiWindowInitialCountPublic
     @State private var windowCountPrivate: [PeerID: Int] = [:]
-    @State private var topChromeHeight: CGFloat = 0
-    @State private var bottomChromeHeight: CGFloat = 0
+    @State private var topChromeHeight: CGFloat = ChromeMetrics.barHeight
+    @State private var bottomChromeHeight: CGFloat = 54
+
+    init(initialTab: AppRootTab = .chats) {
+        _selectedTab = State(initialValue: initialTab)
+    }
 
     @ThemedPalette private var palette
 
@@ -709,8 +713,6 @@ struct ContentView: View {
             ) {
                 ConnectivityStatusBanner(issue: issue)
             }
-
-            NearbyNotesStripView()
         }
         // Hosted here rather than on the logo Text so the pending dialog
         // survives whatever happens to the header chrome.
