@@ -2,10 +2,9 @@
 // MeshEmptyStateView.swift
 // bitchat
 //
-// The empty mesh timeline, upgraded from a dead end into a live surface:
-// a sonar shows the radio scanning, the daily sightings tally proves the
-// spot isn't dead, the liveliest nearby geohash conversation is one tap
-// away, and notes left at this place surface when there are any.
+// The empty mesh timeline: shows concise guidance, the daily sightings tally
+// when peers were seen nearby today, and the liveliest nearby geohash
+// conversation one tap away.
 // This is free and unencumbered software released into the public domain.
 //
 
@@ -92,28 +91,20 @@ struct MeshEmptyStateView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             if compact {
-                if isSearchingForPeers {
-                    radarBlock
+                if isSearchingForPeers, sightingsTracker.todayCount > 0 {
+                    narrationLine(sightingsText)
                 }
                 if let conversation = nearbyConversation {
                     conversationHint(conversation)
                 }
             } else {
-                // The radar + tally already say "scanning, nobody yet", so
-                // the narration stays to two lines with the live hint after
-                // them, not wedged in between.
                 narrationLine(Strings.meshIntro)
                 narrationLine(Strings.switchHint)
+                if isSearchingForPeers, sightingsTracker.todayCount > 0 {
+                    narrationLine(sightingsText)
+                }
                 if let conversation = nearbyConversation {
                     conversationHint(conversation)
-                }
-
-                // The radar centers in whatever space is left below the
-                // text — the flexible spacers split it evenly.
-                if isSearchingForPeers {
-                    Spacer(minLength: 24)
-                    radarBlock
-                    Spacer(minLength: 12)
                 }
             }
         }
@@ -124,20 +115,6 @@ struct MeshEmptyStateView: View {
             // Roll the tally over if the local day changed while idle.
             sightingsTracker.refreshForDisplay()
         }
-    }
-
-    /// The radar with today's tally as its caption — the stat belongs to
-    /// the scanning visual, not the narration lines.
-    private var radarBlock: some View {
-        VStack(spacing: 4) {
-            MeshRadarView(height: compact ? 44 : 72)
-            if sightingsTracker.todayCount > 0 {
-                Text(verbatim: sightingsText)
-                    .bitchatFont(size: 11)
-                    .foregroundColor(palette.secondary.opacity(0.8))
-            }
-        }
-        .frame(maxWidth: .infinity)
     }
 }
 
