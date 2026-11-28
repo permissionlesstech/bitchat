@@ -681,13 +681,9 @@ struct ContentView: View {
             VStack(spacing: 0) {
                 headerView(onBack: onBack, placeTitle: placeTitle)
 
-                Divider()
-
                 publicMessageList
                     .background(palette.background)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
-
-                Divider()
 
                 if selectedPrivatePeerID == nil {
                     composerView

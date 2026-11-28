@@ -37,56 +37,25 @@ struct MeshTopologyView: View {
     @State private var model: MeshTopologyDisplayModel = .empty
 
     var body: some View {
-        #if os(macOS)
         VStack(spacing: 0) {
-            HStack {
-                Text("topology.title")
-                    .bitchatFont(size: 16, weight: .bold)
-                    .foregroundColor(palette.primary)
-                Spacer()
-                refreshButton
-                Button("app_info.done") {
-                    dismiss()
-                }
-                .buttonStyle(.plain)
-                .foregroundColor(palette.primary)
-            }
-            .padding()
-            .themedSurface(opacity: 0.95)
+            ThemedSheetHeader(
+                title: String(localized: "topology.title", defaultValue: "Mesh Topology", comment: "Title for mesh topology sheet"),
+                trailing: {
+                    TopBarIconButton(
+                        systemImage: "arrow.clockwise",
+                        accessibilityLabel: String(localized: "topology.refresh", defaultValue: "Refresh", comment: "Refresh mesh topology"),
+                        action: { model = provider() }
+                    )
+                },
+                onClose: { dismiss() }
+            )
 
             content
         }
+        #if os(macOS)
         .frame(width: 500, height: 520)
-        .themedSheetBackground()
-        #else
-        NavigationView {
-            content
-                .themedSheetBackground()
-                .navigationTitle(Text("topology.title"))
-                .navigationBarTitleDisplayMode(.inline)
-                .toolbar {
-                    ToolbarItem(placement: .navigationBarLeading) {
-                        refreshButton
-                    }
-                    ToolbarItem(placement: .navigationBarTrailing) {
-                        SheetCloseButton { dismiss() }
-                            .foregroundColor(palette.primary)
-                    }
-                }
-        }
         #endif
-    }
-
-    private var refreshButton: some View {
-        Button {
-            model = provider()
-        } label: {
-            Image(systemName: "arrow.clockwise")
-                .font(.bitchatSystem(size: 14))
-                .foregroundColor(palette.primary)
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel(Text("topology.refresh"))
+        .themedSheetBackground()
     }
 
     @ViewBuilder

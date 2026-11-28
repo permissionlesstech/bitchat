@@ -152,8 +152,8 @@ struct TopBarIconButton: View {
     }
 }
 
-/// Unified sheet header: title (and optional subtitle) on the left, optional
-/// trailing accessories, and `SheetCloseButton` consistently on the top-right.
+/// Unified sheet header: same height, surface, and hairline as `AppTopBar` so
+/// modal sheets seamlessly match root tabs with zero corner collision.
 struct ThemedSheetHeader<Trailing: View>: View {
     let title: String
     var subtitle: String? = nil
@@ -161,6 +161,7 @@ struct ThemedSheetHeader<Trailing: View>: View {
     let onClose: () -> Void
 
     @ThemedPalette private var palette
+    @ScaledMetric(relativeTo: .body) private var barHeight: CGFloat = ChromeMetrics.barHeight
 
     init(
         title: String,
@@ -175,34 +176,28 @@ struct ThemedSheetHeader<Trailing: View>: View {
     }
 
     var body: some View {
-        VStack(spacing: 0) {
-            HStack(spacing: 10) {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(title)
-                        .bitchatFont(size: 18, weight: .semibold)
-                        .foregroundColor(palette.primary)
-                        .lineLimit(1)
-                    if let subtitle, !subtitle.isEmpty {
-                        Text(subtitle)
-                            .bitchatFont(size: 12)
-                            .foregroundColor(palette.secondary)
-                            .lineLimit(1)
-                    }
-                }
-                Spacer(minLength: 8)
-                trailing()
-                SheetCloseButton(action: onClose)
+        HStack(spacing: 8) {
+            VStack(alignment: .leading, spacing: 1) {
+                Text(title)
+                    .bitchatFont(size: 18, weight: .semibold)
                     .foregroundColor(palette.primary)
+                    .lineLimit(1)
+                if let subtitle, !subtitle.isEmpty {
+                    Text(subtitle)
+                        .bitchatFont(size: 12)
+                        .foregroundColor(palette.secondary)
+                        .lineLimit(1)
+                }
             }
-            .padding(.horizontal, 16)
-            .padding(.top, 14)
-            .padding(.bottom, 12)
-            .themedSurface()
-
-            Rectangle()
-                .fill(palette.divider)
-                .frame(height: 1)
+            Spacer(minLength: 8)
+            trailing()
+            SheetCloseButton(action: onClose)
+                .foregroundColor(palette.primary)
         }
+        .frame(minHeight: barHeight)
+        .padding(.horizontal, 14)
+        .padding(.vertical, 4)
+        .themedChromePanel(edge: .top)
     }
 }
 

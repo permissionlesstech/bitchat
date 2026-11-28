@@ -106,8 +106,8 @@ struct ContentComposerView: View {
                     // dismissed keyboard, so it stays out of this.
                     isTextFieldFocused.wrappedValue = true
                 }
-                .padding(.vertical, theme.usesGlassChrome ? 8 : 4)
-                .padding(.horizontal, 6)
+                .padding(.vertical, theme.usesGlassChrome ? 8 : 6)
+                .padding(.horizontal, 12)
                 .themedInputBackground()
                 .modifier(FocusEffectDisabledModifier())
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -128,8 +128,8 @@ struct ContentComposerView: View {
                 }
             }
         }
-        .padding(.horizontal, 6)
-        .padding(.top, theme.usesGlassChrome ? 8 : 6)
+        .padding(.horizontal, 12)
+        .padding(.top, 8)
         .padding(.bottom, 8)
         .themedChromePanel(edge: .bottom)
         .onDisappear {
@@ -197,10 +197,11 @@ private extension ContentComposerView {
     /// user never has to guess who can read what they're typing.
     var placeholderText: String {
         if let header = privateConversationModel.selectedHeaderState {
-            // A geohash-DM display name already carries its own "#geohash/@name"
-            // form, so it must not get another "@" prefix; a mesh nickname does.
+            // Geohash-DM ("#geohash/@name") and group ("#Name (n)") display
+            // names already carry their own prefix, so only 1:1 mesh nicknames
+            // get an "@" prefix.
             let isGeoDM = privateConversationModel.selectedPeerID?.isGeoDM == true
-            let target = isGeoDM ? header.displayName : "@\(header.displayName)"
+            let target = (isGeoDM || header.isGroupConversation) ? header.displayName : "@\(header.displayName)"
             return String(format: Strings.placeholderPrivateFormat, locale: .current, target)
         }
         switch locationChannelsModel.selectedChannel {

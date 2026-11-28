@@ -100,12 +100,6 @@ struct PlacesTabView<RoomContent: View>: View {
                 EmptyView()
             }
 
-            if !theme.usesGlassChrome {
-                Rectangle()
-                    .fill(palette.divider)
-                    .frame(height: 1)
-            }
-
             if appChromeModel.torBlocked {
                 ConnectivityStatusBanner(issue: .torBlocked)
             }

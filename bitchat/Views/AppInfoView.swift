@@ -306,12 +306,6 @@ struct AppInfoView: View {
                 .frame(width: 156)
             }
 
-            if !theme.usesGlassChrome {
-                Rectangle()
-                    .fill(palette.divider)
-                    .frame(height: 1)
-            }
-
             ScrollView {
                 paneContent
             }

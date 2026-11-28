@@ -65,21 +65,14 @@ struct FingerprintView: View {
     var body: some View {
         let fingerprintState = verificationModel.fingerprintPresentation(for: peerID)
 
-        VStack(spacing: 20) {
-            // Header
-            HStack {
-                Text(Strings.title)
-                    .bitchatFont(size: 16, weight: .bold)
-                    .foregroundColor(textColor)
-                
-                Spacer()
-                
-                SheetCloseButton { dismiss() }
-                    .foregroundColor(textColor)
-            }
-            .padding()
-            
-            VStack(alignment: .leading, spacing: 16) {
+        VStack(spacing: 0) {
+            ThemedSheetHeader(
+                title: String(localized: "fingerprint.title", defaultValue: "Security Verification", comment: "Title for fingerprint verification sheet"),
+                onClose: { dismiss() }
+            )
+
+            ScrollView {
+                VStack(alignment: .leading, spacing: 16) {
                 HStack {
                     if let icon = fingerprintState.encryptionStatus.icon {
                         Image(systemName: icon)
@@ -266,13 +259,12 @@ struct FingerprintView: View {
                     .padding(.top)
                     .frame(maxWidth: .infinity)
                 }
+                }
+                .padding(16)
+                .frame(maxWidth: 500)
+                .frame(maxWidth: .infinity)
             }
-            .padding()
-            .frame(maxWidth: 500) // Constrain max width for better readability
-            
-            Spacer()
         }
-        .padding()
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .themedSheetBackground()
         .onAppear {

@@ -36,12 +36,6 @@ struct ChatsInboxView: View {
         VStack(spacing: 0) {
             topBar
 
-            if !theme.usesGlassChrome {
-                Rectangle()
-                    .fill(palette.divider)
-                    .frame(height: 1)
-            }
-
             if appChromeModel.panicWipeBlocked {
                 ConnectivityStatusBanner(issue: .panicWipeBlocked)
             }

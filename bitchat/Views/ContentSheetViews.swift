@@ -404,98 +404,73 @@ private struct ContentPrivateChatSheetView: View {
     var body: some View {
         VStack(spacing: 0) {
             if let headerState = privateConversationModel.selectedHeaderState {
-                HStack(spacing: 12) {
-                    Button(action: {
-                        withAnimation(.easeInOut(duration: TransportConfig.uiAnimationMediumSeconds)) {
-                            privateConversationModel.endConversation()
+                AppTopBar {
+                    HStack(spacing: 6) {
+                        Button(action: {
+                            withAnimation(.easeInOut(duration: TransportConfig.uiAnimationMediumSeconds)) {
+                                privateConversationModel.endConversation()
+                            }
+                        }) {
+                            Image(systemName: "chevron.left")
+                                .font(.system(size: 15, weight: .semibold))
+                                .foregroundColor(palette.primary)
+                                .frame(width: 32, height: ChromeMetrics.iconTapSize)
+                                .contentShape(Rectangle())
                         }
-                    }) {
-                        Image(systemName: "chevron.left")
-                            .font(.bitchatSystem(size: 12))
-                            .foregroundColor(palette.primary)
-                            .frame(width: 44, height: 44)
-                            .contentShape(Rectangle())
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel(
-                        String(localized: "content.accessibility.back_to_main_chat", comment: "Accessibility label for returning to main chat")
-                    )
+                        .buttonStyle(.plain)
+                        .accessibilityLabel(
+                            String(localized: "content.accessibility.back_to_main_chat", comment: "Accessibility label for returning to main chat")
+                        )
 
-                    Spacer(minLength: 0)
-
-                    HStack(spacing: 8) {
                         ContentPrivateHeaderInfoButton(
                             headerState: headerState,
                             headerHeight: headerHeight,
                             onShowGroupInfo: { showGroupInfoSheet = true }
                         )
-
-                        let activeTimer = privateConversationModel.disappearingTimer(for: headerState.conversationPeerID)
-                        Menu {
-                            ForEach(DisappearingTimer.allCases) { option in
-                                Button {
-                                    privateConversationModel.setDisappearingTimer(
-                                        option,
-                                        for: headerState.conversationPeerID
-                                    )
-                                } label: {
-                                    HStack {
-                                        Text(option.displayName)
-                                        if activeTimer == option {
-                                            Image(systemName: "checkmark")
-                                        }
+                    }
+                } trailing: {
+                    let activeTimer = privateConversationModel.disappearingTimer(for: headerState.conversationPeerID)
+                    Menu {
+                        ForEach(DisappearingTimer.allCases) { option in
+                            Button {
+                                privateConversationModel.setDisappearingTimer(
+                                    option,
+                                    for: headerState.conversationPeerID
+                                )
+                            } label: {
+                                HStack {
+                                    Text(option.displayName)
+                                    if activeTimer == option {
+                                        Image(systemName: "checkmark")
                                     }
                                 }
                             }
-                        } label: {
-                            Image(systemName: activeTimer.iconName)
-                                .font(.bitchatSystem(size: 14))
-                                .foregroundColor(activeTimer == .off ? palette.secondary : Color.orange)
-                                .frame(width: 32, height: 32)
-                                .contentShape(Rectangle().inset(by: -6))
                         }
-                        .menuStyle(.borderlessButton)
-                        .accessibilityLabel(
-                            String(localized: "chat.timer.label", defaultValue: "Disappearing messages", comment: "Accessibility label for disappearing messages menu")
-                        )
-
-                        if headerState.supportsFavoriteToggle {
-                            Button(action: {
-                                privateConversationModel.toggleFavoriteForSelectedConversation()
-                            }) {
-                                Image(systemName: headerState.isFavorite ? "star.fill" : "star")
-                                    .font(.bitchatSystem(size: 14))
-                                    .foregroundColor(headerState.isFavorite ? Color.yellow : palette.primary)
-                                    // Same visual box + 44pt hit target as SheetCloseButton.
-                                    .frame(width: 32, height: 32)
-                                    .contentShape(Rectangle().inset(by: -6))
-                            }
-                            .buttonStyle(.plain)
-                            .accessibilityLabel(
-                                headerState.isFavorite
-                                ? String(localized: "content.accessibility.remove_favorite", comment: "Accessibility label to remove a favorite")
-                                : String(localized: "content.accessibility.add_favorite", comment: "Accessibility label to add a favorite")
-                            )
-                        }
+                    } label: {
+                        Image(systemName: activeTimer.iconName)
+                            .font(.system(size: ChromeMetrics.iconSize, weight: .medium))
+                            .foregroundColor(activeTimer == .off ? palette.secondary : Color.orange)
+                            .frame(width: ChromeMetrics.iconTapSize, height: ChromeMetrics.iconTapSize)
+                            .contentShape(Rectangle())
                     }
-                    .frame(maxWidth: .infinity)
+                    .menuStyle(.borderlessButton)
+                    .accessibilityLabel(
+                        String(localized: "chat.timer.label", defaultValue: "Disappearing messages", comment: "Accessibility label for disappearing messages menu")
+                    )
 
-                    Spacer(minLength: 0)
-
-                    SheetCloseButton {
-                        withAnimation(.easeInOut(duration: TransportConfig.uiAnimationMediumSeconds)) {
-                            showSidebar = false
-                            privateConversationModel.endConversation()
-                        }
+                    if headerState.supportsFavoriteToggle {
+                        TopBarIconButton(
+                            systemImage: headerState.isFavorite ? "star.fill" : "star",
+                            accessibilityLabel: headerState.isFavorite
+                                ? String(localized: "content.accessibility.remove_favorite", comment: "Accessibility label to remove a favorite")
+                                : String(localized: "content.accessibility.add_favorite", comment: "Accessibility label to add a favorite"),
+                            color: headerState.isFavorite ? Color.yellow : palette.secondary,
+                            action: {
+                                privateConversationModel.toggleFavoriteForSelectedConversation()
+                            }
+                        )
                     }
                 }
-                // minHeight so scaled text at accessibility sizes grows the
-                // bar instead of clipping inside it.
-                .frame(minHeight: headerHeight)
-                .padding(.horizontal, 16)
-                .padding(.top, 10)
-                .padding(.bottom, 12)
-                .modifier(PrivateHeaderChrome())
             }
 
             PrivateMessageListView(
@@ -515,10 +490,6 @@ private struct ContentPrivateChatSheetView: View {
             // gesture (a high-priority ancestor drag cancels child gestures
             // within milliseconds — same starvation as the image-reveal bug).
             .highPriorityGesture(swipeToLeaveGesture)
-
-            if !theme.usesGlassChrome {
-                Divider()
-            }
 
             privacyCaption
 
@@ -561,18 +532,14 @@ private struct ContentPrivateChatSheetView: View {
         HStack(spacing: 5) {
             Image(systemName: "lock.fill")
                 .font(.bitchatSystem(size: 9))
-                // Optical centering: lock.fill's ink is bottom-heavy, so
-                // geometric centering reads low next to the caption text.
-                .offset(y: -1)
+                .foregroundColor(Color.orange.opacity(0.85))
+                .offset(y: -0.5)
             Text(verbatim: privacyCaptionText)
                 .bitchatFont(size: 11, weight: .medium)
+                .foregroundColor(palette.secondary)
         }
-        .foregroundColor(Color.orange)
         .frame(maxWidth: .infinity)
         .padding(.vertical, 4)
-        // The orange text is signature enough; a tinted band here reads as a
-        // stray strip against the untinted composer chrome below it, so the
-        // caption sits on the same surface as the rest of the bottom chrome.
         .themedSurface()
         .accessibilityElement(children: .combine)
     }
@@ -600,28 +567,6 @@ private struct ContentPrivateChatSheetView: View {
             return String(localized: "content.private.caption_encrypted", comment: "Caption above the private chat composer once the session is end-to-end encrypted")
         }
         return String(localized: "content.private.caption", comment: "Caption above the private chat composer before encryption is established")
-    }
-}
-
-/// Chrome for the private-chat header. Matrix keeps its orange privacy wash
-/// over an opaque themed surface. Glass gets the same floating panel as the
-/// main header instead: an orange wash over the backdrop gradient reads as a
-/// muddy gray-beige band, and the DM signature is already carried by the
-/// orange lock, caption, and composer accents.
-private struct PrivateHeaderChrome: ViewModifier {
-    @Environment(\.appTheme) private var theme
-
-    @ViewBuilder
-    func body(content: Content) -> some View {
-        if theme.usesGlassChrome {
-            content.themedChromePanel(edge: .top)
-        } else {
-            // Orange tint before themedSurface so it layers in front of the
-            // opaque themed background rather than behind it.
-            content
-                .background(Color.orange.opacity(0.06))
-                .themedSurface()
-        }
     }
 }
 
