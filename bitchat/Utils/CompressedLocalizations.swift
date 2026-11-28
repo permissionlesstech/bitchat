@@ -89,14 +89,14 @@ extension String {
     /// Resolves literal localization keys from `CompressedLocalizations` when
     /// running in the Xcode app bundle, falling back to `LocalizablePlurals`
     /// (native CLDR plural/substitution keys) and `Bundle.main`'s default table.
-    init(localized key: StaticString, comment: StaticString? = nil) {
+    init(localized key: StaticString, comment _: StaticString? = nil) {
         self = Self.resolveCompressedLocalization(key: key, defaultValue: nil)
     }
 
     init(
         localized key: StaticString,
         defaultValue: StaticString,
-        comment: StaticString? = nil
+        comment _: StaticString? = nil
     ) {
         self = Self.resolveCompressedLocalization(key: key, defaultValue: defaultValue)
     }
