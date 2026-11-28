@@ -267,102 +267,107 @@ private struct MessageListContentView: View {
 
         ScrollViewReader { proxy in
             ScrollView {
-                if isEmptyPublic {
-                    publicEmptyState(
-                        fillHeight: max(0, emptyStateViewportHeight - topContentInset - bottomContentInset)
-                    )
-                } else {
-                    VStack(alignment: .leading, spacing: 0) {
-                        LazyVStack(alignment: .leading, spacing: 0) {
-                            ForEach(messageItems) { item in
-                                let message = item.message
-                                MessageRowView(
-                                    message: message,
-                                    deliveryStatus: message.deliveryStatus,
-                                    privatePeer: privatePeer,
-                                    reactions: reactionSummary.reactionsByMessageID[message.id] ?? [],
-                                    isHighlighted: activeHighlightID == message.id,
-                                    imagePreviewURL: $imagePreviewURL,
-                                    showSidebar: $showSidebar,
-                                    onInsertMention: insertMention,
-                                    onReply: { target in
-                                        appEnvironmentModels?.composerDraftModel.setReplyTarget(target)
-                                        isTextFieldFocused.wrappedValue = true
-                                    },
-                                    onReact: { emoji in
-                                        let payload = MessageInteractionCodec.encodeReaction(
-                                            emoji: emoji,
-                                            toMessageID: message.id
-                                        )
-                                        conversationUIModel.sendMessage(payload)
-                                    },
-                                    onTapQuote: { quotedSender, quotedSnippet in
-                                        jumpToQuotedMessage(
-                                            sender: quotedSender,
-                                            snippet: quotedSnippet,
-                                            beforeMessageID: message.id,
-                                            proxy: proxy
-                                        )
-                                    }
-                                )
-                                .equatable()
-                                .onAppear {
-                                    // Callbacks lag a timeline switch: the new
-                                    // rows appear before the old ones disappear,
-                                    // each with its own render's view of which row
-                                    // was last. Only rows of the timeline the list
-                                    // has landed in may move its state, checked
-                                    // against live state rather than the render's.
-                                    guard isLandedRow(item.id) else { return }
-                                    if item.id == newestRowID(for: privatePeer) {
-                                        isAtBottom = true
-                                        unseenCount = 0
-                                        if bottomRowID != item.id {
-                                            bottomRowID = item.id
+                Group {
+                    if isEmptyPublic {
+                        publicEmptyState(
+                            fillHeight: max(0, emptyStateViewportHeight - topContentInset - bottomContentInset)
+                        )
+                    } else {
+                        VStack(alignment: .leading, spacing: 0) {
+                            LazyVStack(alignment: .leading, spacing: 0) {
+                                ForEach(messageItems) { item in
+                                    let message = item.message
+                                    MessageRowView(
+                                        message: message,
+                                        deliveryStatus: message.deliveryStatus,
+                                        privatePeer: privatePeer,
+                                        reactions: reactionSummary.reactionsByMessageID[message.id] ?? [],
+                                        isHighlighted: activeHighlightID == message.id,
+                                        imagePreviewURL: $imagePreviewURL,
+                                        showSidebar: $showSidebar,
+                                        onInsertMention: insertMention,
+                                        onReply: { target in
+                                            appEnvironmentModels?.composerDraftModel.setReplyTarget(target)
+                                            isTextFieldFocused.wrappedValue = true
+                                        },
+                                        onReact: { emoji in
+                                            let payload = MessageInteractionCodec.encodeReaction(
+                                                emoji: emoji,
+                                                toMessageID: message.id
+                                            )
+                                            conversationUIModel.sendMessage(payload)
+                                        },
+                                        onTapQuote: { quotedSender, quotedSnippet in
+                                            jumpToQuotedMessage(
+                                                sender: quotedSender,
+                                                snippet: quotedSnippet,
+                                                beforeMessageID: message.id,
+                                                proxy: proxy
+                                            )
                                         }
-                                        if bottomSettledContextKey != contextKey {
-                                            bottomSettledContextKey = contextKey
+                                    )
+                                    .equatable()
+                                    .onAppear {
+                                        // Callbacks lag a timeline switch: the new
+                                        // rows appear before the old ones disappear,
+                                        // each with its own render's view of which row
+                                        // was last. Only rows of the timeline the list
+                                        // has landed in may move its state, checked
+                                        // against live state rather than the render's.
+                                        guard isLandedRow(item.id) else { return }
+                                        if item.id == newestRowID(for: privatePeer) {
+                                            isAtBottom = true
+                                            unseenCount = 0
+                                            if bottomRowID != item.id {
+                                                bottomRowID = item.id
+                                            }
+                                            if bottomSettledContextKey != contextKey {
+                                                bottomSettledContextKey = contextKey
+                                            }
+                                            returnWindowToInitialSize(for: privatePeer, contextKey: contextKey, messages: messages)
                                         }
-                                        returnWindowToInitialSize(for: privatePeer, contextKey: contextKey, messages: messages)
+                                        if item.id == firstRowID, hasEarlierMessages {
+                                            expandWindow(
+                                                ifNeededFor: message,
+                                                allMessages: messages,
+                                                privatePeer: privatePeer,
+                                                proxy: proxy
+                                            )
+                                        }
                                     }
-                                    if item.id == firstRowID, hasEarlierMessages {
-                                        expandWindow(
-                                            ifNeededFor: message,
-                                            allMessages: messages,
-                                            privatePeer: privatePeer,
-                                            proxy: proxy
-                                        )
-                                    }
-                                }
-                                .onDisappear {
-                                    // A row of the landed timeline shares this
-                                    // closure's peer, so newestRowID is live here.
-                                    guard isLandedRow(item.id) else { return }
-                                    if item.id == newestRowID(for: privatePeer) || item.id == bottomRowID {
-                                        isAtBottom = false
-                                        bottomRowID = nil
-                                        // Leaving the bottom drops a follow-scroll
-                                        // still waiting on the throttle: it would
-                                        // yank the reader back down.
-                                        cancelFollowScroll()
+                                    .onDisappear {
+                                        // A row of the landed timeline shares this
+                                        // closure's peer, so newestRowID is live here.
+                                        guard isLandedRow(item.id) else { return }
+                                        if item.id == newestRowID(for: privatePeer) || item.id == bottomRowID {
+                                            isAtBottom = false
+                                            bottomRowID = nil
+                                            // Leaving the bottom drops a follow-scroll
+                                            // still waiting on the throttle: it would
+                                            // yank the reader back down.
+                                            cancelFollowScroll()
+                                        }
                                     }
                                 }
                             }
-                        }
-                        .padding(.top, 8)
-                        .padding(.bottom, 2)
+                            .padding(.top, 8)
+                            .padding(.bottom, 2)
 
-                        // Only carried history on screen: the ambient layer (radar,
-                        // sightings, live hints) stays visible below it instead of
-                        // vanishing the moment echoes exist.
-                        if privatePeer == nil, showsAmbientFooter(messageItems: messageItems) {
-                            MeshEmptyStateView(compact: true)
-                                .padding(.horizontal, 12)
-                                .padding(.top, 20)
-                                .padding(.bottom, 8)
+                            // Only carried history on screen: the ambient layer (radar,
+                            // sightings, live hints) stays visible below it instead of
+                            // vanishing the moment echoes exist.
+                            if privatePeer == nil, showsAmbientFooter(messageItems: messageItems) {
+                                MeshEmptyStateView(compact: true)
+                                    .padding(.horizontal, 12)
+                                    .padding(.top, 20)
+                                    .padding(.bottom, 8)
+                            }
                         }
                     }
                 }
+                #if os(iOS)
+                .background(ScrollViewOffsetClamper())
+                #endif
             }
             .scrollDismissesKeyboard(.interactively)
             .modifier(ScrollChromeInsetsModifier(top: topContentInset, bottom: bottomContentInset))
@@ -1104,6 +1109,114 @@ private struct ScrollChromeInsetsModifier: ViewModifier {
         }
     }
 }
+
+#if os(iOS)
+/// Guards the SwiftUI-backed `UIScrollView` against programmatic overscroll
+/// past `-adjustedContentInset.top` or beyond the bottom bound when
+/// `.contentMargins` or keyboard safe-area insets change on a short timeline.
+/// Never touches `scrollView.delegate` and never interferes while the user is
+/// tracking, dragging, or decelerating.
+private struct ScrollViewOffsetClamper: UIViewRepresentable {
+    func makeCoordinator() -> Coordinator {
+        Coordinator()
+    }
+
+    func makeUIView(context: Context) -> ClamperAnchorView {
+        let view = ClamperAnchorView()
+        view.backgroundColor = .clear
+        view.isUserInteractionEnabled = false
+        view.onMoveToWindow = { [weak coordinator = context.coordinator] anchor in
+            coordinator?.attachIfNeeded(from: anchor)
+        }
+        return view
+    }
+
+    func updateUIView(_ uiView: ClamperAnchorView, context: Context) {
+        context.coordinator.attachIfNeeded(from: uiView)
+        context.coordinator.clampIfNeeded()
+    }
+
+    final class ClamperAnchorView: UIView {
+        var onMoveToWindow: ((UIView) -> Void)?
+
+        override func didMoveToWindow() {
+            super.didMoveToWindow()
+            onMoveToWindow?(self)
+        }
+    }
+
+    @MainActor
+    final class Coordinator {
+        private weak var scrollView: UIScrollView?
+        private var observations: [NSKeyValueObservation] = []
+        private var isClamping = false
+
+        deinit {
+            observations.removeAll()
+        }
+
+        func attachIfNeeded(from anchor: UIView) {
+            var current = anchor.superview
+            var found: UIScrollView?
+            while let view = current {
+                if let sv = view as? UIScrollView {
+                    found = sv
+                    break
+                }
+                current = view.superview
+            }
+            guard let found, found !== scrollView else { return }
+            observations.removeAll()
+            scrollView = found
+
+            observations.append(found.observe(\.contentOffset, options: [.new]) { [weak self] _, _ in
+                MainActor.assumeIsolated {
+                    self?.clampIfNeeded()
+                }
+            })
+            observations.append(found.observe(\.adjustedContentInset, options: [.new]) { [weak self] _, _ in
+                MainActor.assumeIsolated {
+                    self?.clampIfNeeded()
+                    self?.scheduleDeferredClamp()
+                }
+            })
+            observations.append(found.observe(\.contentSize, options: [.new]) { [weak self] _, _ in
+                MainActor.assumeIsolated {
+                    self?.clampIfNeeded()
+                    self?.scheduleDeferredClamp()
+                }
+            })
+            clampIfNeeded()
+        }
+
+        func clampIfNeeded() {
+            guard !isClamping,
+                  let sv = scrollView,
+                  sv.window != nil,
+                  sv.bounds.height > 0,
+                  !sv.isTracking,
+                  !sv.isDragging,
+                  !sv.isDecelerating else { return }
+
+            let minY = -sv.adjustedContentInset.top
+            let maxY = max(minY, sv.contentSize.height - sv.bounds.height + sv.adjustedContentInset.bottom)
+            let currentY = sv.contentOffset.y
+            let clampedY = min(max(currentY, minY), maxY)
+            guard abs(currentY - clampedY) > 0.5 else { return }
+
+            isClamping = true
+            sv.contentOffset.y = clampedY
+            isClamping = false
+        }
+
+        private func scheduleDeferredClamp() {
+            DispatchQueue.main.async { [weak self] in
+                self?.clampIfNeeded()
+            }
+        }
+    }
+}
+#endif
 
 private extension ChannelID {
     var contextKey: String {

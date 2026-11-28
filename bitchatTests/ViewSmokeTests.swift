@@ -955,6 +955,114 @@ struct ViewSmokeTests {
         assertSingleTopInset(for: meshHost, label: "fresh #mesh after banner dismissal + 1 message + keyboard")
         window.isHidden = true
     }
+
+    @Test("Liquid Glass short #mesh timeline stays anchored under header after voice note and chrome resize")
+    func liquidGlassMessageList_shortTimelineAfterVoiceNoteAndChromeChanges() async {
+        let (viewModel, _, _) = makeSmokeViewModel()
+        let featureModels = makeSmokeFeatureModels(for: viewModel)
+
+        // Reproduce the exact #mesh state from field testing:
+        // 1 system header + 6 archived echoes, then append a taller voice-note-sized message.
+        var archived: [BitchatMessage] = [
+            BitchatMessage(
+                id: "hdr-1",
+                sender: "system",
+                content: "Heard here earlier · last 6h",
+                timestamp: Date(timeIntervalSince1970: 1_700_000_000),
+                isRelay: false
+            )
+        ]
+        for i in 0..<6 {
+            archived.append(
+                BitchatMessage(
+                    id: "echo-\(i)",
+                    sender: "anon6990",
+                    content: "echo line \(i)",
+                    timestamp: Date(timeIntervalSince1970: 1_700_000_001 + Double(i)),
+                    isRelay: false
+                )
+            )
+        }
+        viewModel.conversations.appendBatch(archived, to: .mesh)
+
+        let host = UIHostingController(rootView: installSmokeEnvironment(
+            ContentView(initialTab: .nearby).environment(\.appTheme, .liquidGlass),
+            featureModels: featureModels
+        ))
+        let windowScene = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first
+        let window = windowScene.map { UIWindow(windowScene: $0) } ?? UIWindow(frame: CGRect(x: 0, y: 0, width: 393, height: 852))
+        if let windowScene {
+            window.frame = windowScene.coordinateSpace.bounds
+        }
+        window.rootViewController = host
+        window.makeKeyAndVisible()
+        host.view.frame = window.bounds
+        host.view.setNeedsLayout()
+        host.view.layoutIfNeeded()
+        try? await Task.sleep(nanoseconds: 150_000_000)
+
+        func findScrollView(in view: UIView) -> UIScrollView? {
+            if let sv = view as? UIScrollView { return sv }
+            for subview in view.subviews {
+                if let found = findScrollView(in: subview) { return found }
+            }
+            return nil
+        }
+
+        func assertPinnedUnderHeader(_ label: String, maxExtraTop: CGFloat = 80) {
+            host.view.setNeedsLayout()
+            host.view.layoutIfNeeded()
+            guard let sv = findScrollView(in: host.view) else {
+                Issue.record("\(label): expected UIScrollView")
+                return
+            }
+            let contentZeroY = sv.convert(CGPoint.zero, to: window).y
+            let safeTop = host.view.safeAreaInsets.top
+            #expect(
+                contentZeroY >= safeTop + 40 && contentZeroY <= safeTop + maxExtraTop,
+                "\(label): First message drifted to \(contentZeroY) (safeTop=\(safeTop), offset=\(sv.contentOffset), adjInset=\(sv.adjustedContentInset), size=\(sv.contentSize))"
+            )
+            #expect(
+                sv.contentOffset.y >= -sv.adjustedContentInset.top - 0.5,
+                "\(label): ScrollView overscrolled past top (offset=\(sv.contentOffset), adjInset=\(sv.adjustedContentInset))"
+            )
+        }
+
+        assertPinnedUnderHeader("initial-7-archived")
+
+        // 1. Trigger a top banner (BT off -> on) like startup/foreground transitions
+        viewModel.bluetoothState = .poweredOff
+        try? await Task.sleep(nanoseconds: 100_000_000)
+        assertPinnedUnderHeader("bt-banner-shown", maxExtraTop: 120)
+
+        viewModel.bluetoothState = .poweredOn
+        try? await Task.sleep(nanoseconds: 100_000_000)
+        assertPinnedUnderHeader("bt-banner-dismissed")
+
+        // 2. Append a live message (removes showsAmbientFooter and triggers followToBottom)
+        viewModel.conversations.append(
+            BitchatMessage(
+                id: "live-1",
+                sender: "bob",
+                content: "Line 1\nLine 2\nLine 3\nLine 4",
+                timestamp: Date(timeIntervalSince1970: 1_700_000_100),
+                isRelay: false
+            ),
+            to: .mesh
+        )
+        try? await Task.sleep(nanoseconds: 150_000_000)
+        assertPinnedUnderHeader("after-live-append")
+
+        // 3. Simulate keyboard up then down (regression: previously overscrolled contentOffset.y to -215.67)
+        host.additionalSafeAreaInsets = UIEdgeInsets(top: 0, left: 0, bottom: 330, right: 0)
+        try? await Task.sleep(nanoseconds: 100_000_000)
+        assertPinnedUnderHeader("keyboard-up")
+
+        host.additionalSafeAreaInsets = .zero
+        try? await Task.sleep(nanoseconds: 150_000_000)
+        assertPinnedUnderHeader("keyboard-down")
+        window.isHidden = true
+    }
     #endif
 
     @Test("Message list external URL allowlist permits only safe schemes")

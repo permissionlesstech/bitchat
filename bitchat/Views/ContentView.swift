@@ -765,22 +765,24 @@ struct ContentView: View {
                 publicMessageList
                     .overlay(alignment: .top) {
                         headerView(onBack: onBack, placeTitle: placeTitle)
-                            .background(ChromeHeightReader(edge: .top))
+                            .onGeometryChange(for: CGFloat.self) { proxy in
+                                proxy.size.height
+                            } action: { height in
+                                if abs(topChromeHeight - height) > 0.5 {
+                                    topChromeHeight = height
+                                }
+                            }
                     }
                     .overlay(alignment: .bottom) {
                         if selectedPrivatePeerID == nil {
                             composerView
-                                .background(ChromeHeightReader(edge: .bottom))
-                        }
-                    }
-                    .onPreferenceChange(TopChromeHeightKey.self) { height in
-                        if abs(topChromeHeight - height) > 0.5 {
-                            topChromeHeight = height
-                        }
-                    }
-                    .onPreferenceChange(BottomChromeHeightKey.self) { height in
-                        if abs(bottomChromeHeight - height) > 0.5 {
-                            bottomChromeHeight = height
+                                .onGeometryChange(for: CGFloat.self) { proxy in
+                                    proxy.size.height
+                                } action: { height in
+                                    if abs(bottomChromeHeight - height) > 0.5 {
+                                        bottomChromeHeight = height
+                                    }
+                                }
                         }
                     }
             } else {
@@ -956,35 +958,6 @@ struct ContentView: View {
 
         DispatchQueue.main.async {
             uiModel?.sendMessage(trimmed)
-        }
-    }
-}
-
-private struct TopChromeHeightKey: PreferenceKey {
-    static let defaultValue: CGFloat = 0
-    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
-        value = max(value, nextValue())
-    }
-}
-
-private struct BottomChromeHeightKey: PreferenceKey {
-    static let defaultValue: CGFloat = 0
-    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
-        value = max(value, nextValue())
-    }
-}
-
-private struct ChromeHeightReader: View {
-    let edge: VerticalEdge
-
-    var body: some View {
-        GeometryReader { proxy in
-            switch edge {
-            case .top:
-                Color.clear.preference(key: TopChromeHeightKey.self, value: proxy.size.height)
-            case .bottom:
-                Color.clear.preference(key: BottomChromeHeightKey.self, value: proxy.size.height)
-            }
         }
     }
 }
