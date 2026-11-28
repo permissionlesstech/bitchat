@@ -41,7 +41,12 @@ struct NostrInboundPipelineTimestampTests {
 
     @Test("Far-future and over-age outer gift wraps are rejected")
     func rejectsImplausibleGiftWrapTimestamps() {
-        #expect(!NostrInboundPipeline.isAcceptableGiftWrapTimestamp(nowSeconds + skew + 60, now: now))
+        let legacyJitter = Int(TransportConfig.nostrGiftWrapLegacyFutureJitterSeconds)
+        // Clock skew plus the old ±15 minute envelope jitter is still in range.
+        #expect(NostrInboundPipeline.isAcceptableGiftWrapTimestamp(nowSeconds + skew + legacyJitter - 60, now: now))
+        #expect(!NostrInboundPipeline.isAcceptableGiftWrapTimestamp(nowSeconds + skew + legacyJitter + 60, now: now))
+        #expect(NostrInboundPipeline.giftWrapTimestampVerdict(nowSeconds + skew + legacyJitter + 60, now: now) == .tooFarFuture)
+        #expect(NostrInboundPipeline.giftWrapTimestampVerdict(nowSeconds - giftWrapMaxAge - 60, now: now) == .tooOld)
         #expect(!NostrInboundPipeline.isAcceptableGiftWrapTimestamp(nowSeconds - giftWrapMaxAge - 60, now: now))
         // A wrap older than 24h but inside 48h+skew must still pass — that is
         // the Android→iOS delivery gap this gate exists to keep open.
@@ -71,7 +76,8 @@ struct NostrInboundPipelineTimestampTests {
         // A freshly rewrapped envelope cannot revive an expired inner rumor.
         #expect(NostrInboundPipeline.isAcceptableGiftWrapTimestamp(nowSeconds, now: now))
         #expect(!NostrInboundPipeline.isPlausibleRumorTimestamp(1_699_912_699, now: now))
-        #expect(!NostrInboundPipeline.isAcceptableGiftWrapTimestamp(1_700_000_901, now: now))
+        let futureLimit = nowSeconds + skew + Int(TransportConfig.nostrGiftWrapLegacyFutureJitterSeconds)
+        #expect(!NostrInboundPipeline.isAcceptableGiftWrapTimestamp(futureLimit + 1, now: now))
     }
 
 }
@@ -97,9 +103,12 @@ struct NostrEnvelopeTimestampRandomizationTests {
         let now = Date(timeIntervalSince1970: 1_700_000_000)
         let lookback = TransportConfig.nostrDMSubscribeLookbackSeconds
         let maxPast = TransportConfig.nostrGiftWrapTimestampRandomizationSeconds
-        // Match Android's 22h draw (two-hour margin under the 24h subscribe).
-        #expect(maxPast == 79_200)
-        #expect(maxPast < lookback - TransportConfig.nostrDMMaxClockSkewSeconds)
+        // 12h draw: a legacy `since: now − 24h` filter still returns the wrap
+        // when the recipient cold-launches 12h after send.
+        #expect(maxPast == 43_200)
+        let coldLaunch = now.addingTimeInterval(12 * 60 * 60)
+        let oldestSend = now.addingTimeInterval(-maxPast)
+        #expect(oldestSend >= coldLaunch.addingTimeInterval(-lookback))
         for _ in 0..<200 {
             let ts = NostrProtocol.randomizedEnvelopeTimestamp(now: now)
             #expect(ts <= now)

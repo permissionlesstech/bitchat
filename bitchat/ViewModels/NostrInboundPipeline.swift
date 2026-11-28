@@ -288,7 +288,15 @@ final class NostrInboundPipeline {
                 return nil
             }
             if context.hasProcessedNostrEvent(giftWrap.id) { return nil }
-            context.recordProcessedNostrEvent(giftWrap.id)
+            // A wrap that is only slightly in the future can become valid
+            // once the clock catches up. Recording it now would drop the
+            // redelivery. Ancient wraps are recorded so they are not retried.
+            switch Self.giftWrapTimestampVerdict(giftWrap.created_at) {
+            case .tooFarFuture:
+                return nil
+            case .tooOld, .acceptable:
+                context.recordProcessedNostrEvent(giftWrap.id)
+            }
             guard let identity = geohashIdentity ?? context.currentNostrIdentity() else { return nil }
             return (identity, initialWipeGeneration ?? self.wipeGeneration)
         }
@@ -296,7 +304,7 @@ final class NostrInboundPipeline {
 
         // Cheap outer-wrap gate before the NIP-17 unwrap. Android may stamp
         // wraps up to 48h into the past; a wrap past the skew is never legitimate.
-        guard Self.isAcceptableGiftWrapTimestamp(giftWrap.created_at) else {
+        guard Self.giftWrapTimestampVerdict(giftWrap.created_at) == .acceptable else {
             let label = isGeohashDM ? "GeoDM: dropping gift-wrap" : "Dropping Nostr DM"
             SecureLogger.warning("\(label) with implausible outer timestamp id=\(giftWrap.id.prefix(8))…", category: .session)
             return
@@ -418,10 +426,23 @@ extension NostrInboundPipeline {
     /// window and clock skew. Checked before decrypt so a hostile relay
     /// cannot force ECDH work with
     /// ancient or far-future wraps.
-    static func isAcceptableGiftWrapTimestamp(_ createdAt: Int, now: Date = Date()) -> Bool {
+    enum GiftWrapTimestampVerdict: Equatable {
+        case acceptable
+        case tooOld
+        case tooFarFuture
+    }
+
+    static func giftWrapTimestampVerdict(_ createdAt: Int, now: Date = Date()) -> GiftWrapTimestampVerdict {
         let age = now.timeIntervalSince1970 - TimeInterval(createdAt)
-        return age >= -TransportConfig.nostrDMMaxClockSkewSeconds
-            && age <= TransportConfig.nostrGiftWrapMaxAgeSeconds
+        let futureAllowance = TransportConfig.nostrDMMaxClockSkewSeconds
+            + TransportConfig.nostrGiftWrapLegacyFutureJitterSeconds
+        if age < -futureAllowance { return .tooFarFuture }
+        if age > TransportConfig.nostrGiftWrapMaxAgeSeconds { return .tooOld }
+        return .acceptable
+    }
+
+    static func isAcceptableGiftWrapTimestamp(_ createdAt: Int, now: Date = Date()) -> Bool {
+        giftWrapTimestampVerdict(createdAt, now: now) == .acceptable
     }
 }
 
