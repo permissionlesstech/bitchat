@@ -498,6 +498,17 @@ final class PanicWipeCoverageTests: XCTestCase {
         XCTAssertFalse(CashuTokenDecoder.hasCachedDecode(for: huge))
     }
 
+    func test_peerColorCache_clearPeerColorCache_evictsCachedSeed() {
+        let seed = "panic-peer-seed-\(UUID().uuidString)"
+
+        _ = Color(peerSeed: seed, isDark: true)
+        XCTAssertTrue(Color.hasCachedPeerColor(for: seed, isDark: true))
+
+        Color.clearPeerColorCache()
+
+        XCTAssertFalse(Color.hasCachedPeerColor(for: seed, isDark: true))
+    }
+
     func test_bleService_courierDepositAndSpray_fencedAcrossPanicLifecycle() async throws {
         func makeIsolatedBLEService() -> BLEService {
             let keychain = MockKeychain()

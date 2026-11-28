@@ -147,6 +147,11 @@ extension BLEService {
         gossipSyncManager?._hasPrekeyBundle(for: peerID) ?? false
     }
 
+    /// Number of prekey bundles that wait for a Noise-authenticated signing key.
+    var _test_pendingPrekeyBundleCount: Int {
+        onEngine { pendingPrekeyBundles.count }
+    }
+
     func _test_acceptsIngress(packet: BitchatPacket, boundPeerID: PeerID?) -> Bool {
         let claimedSenderID = PeerID(hexData: packet.senderID)
         guard case .success = BLEIngressLinkRegistry.packetContext(

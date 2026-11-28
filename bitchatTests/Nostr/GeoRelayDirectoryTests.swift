@@ -642,6 +642,44 @@ final class GeoRelayDirectoryTests: XCTestCase {
         XCTAssertNil(harness.dependencies.userDefaults.object(forKey: "georelay.lastFetchAt"))
     }
 
+    func test_resetForPanic_cancelsFetchAfterRequestStarted() async {
+        let (started, startedContinuation) = AsyncStream<Void>.makeStream()
+        let (release, releaseContinuation) = AsyncStream<Void>.makeStream()
+        let (observed, observedContinuation) = AsyncStream<Bool>.makeStream()
+
+        let harness = makeHarness(
+            bundleCSV: """
+            relay url,lat,lon
+            bundle.example,37.77,-122.41
+            """,
+            fetchCSV: """
+            relay url,lat,lon
+            remote.example,37.77,-122.41
+            """,
+            fetchObserver: {
+                // Tor is ready and the request stage runs.
+                startedContinuation.yield()
+                for await _ in release { break }
+                observedContinuation.yield(Task.isCancelled)
+            }
+        )
+        let directory = GeoRelayDirectory(dependencies: harness.dependencies)
+
+        directory.prefetchIfNeeded(force: true)
+        for await _ in started { break }
+
+        // Panic runs while the request is in flight.
+        directory.resetForPanic()
+        releaseContinuation.yield()
+
+        var requestSawCancellation: Bool?
+        for await value in observed {
+            requestSawCancellation = value
+            break
+        }
+        XCTAssertEqual(requestSawCancellation, true, "resetForPanic() must cancel a request that has started")
+    }
+
     private func makeHarness(
         cacheCSV: String? = nil,
         bundleCSV: String? = nil,

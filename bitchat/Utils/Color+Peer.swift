@@ -85,8 +85,18 @@ extension Color {
         peerColorCache.reset()
     }
 
+    private static func peerColorCacheKey(_ peerSeed: String, isDark: Bool) -> String {
+        peerSeed + (isDark ? "|dark" : "|light")
+    }
+
+    #if DEBUG
+    static func hasCachedPeerColor(for peerSeed: String, isDark: Bool) -> Bool {
+        peerColorCache.lookup(peerColorCacheKey(peerSeed, isDark: isDark)).color != nil
+    }
+    #endif
+
     init(peerSeed: String, isDark: Bool) {
-        let cacheKey = peerSeed + (isDark ? "|dark" : "|light")
+        let cacheKey = Self.peerColorCacheKey(peerSeed, isDark: isDark)
         let lookup = Self.peerColorCache.lookup(cacheKey)
         if let cached = lookup.color {
             self = cached

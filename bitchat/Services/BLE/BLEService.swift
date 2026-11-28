@@ -782,6 +782,9 @@ final class BLEService: NSObject {
             pendingDirectedRelays.removeAll()
             ingressLinks.removeAll()
             verifiedDirectAnnounceOwners.removeAll()
+            // Bundles deferred before the wipe name pre-panic peers. A later
+            // Noise authentication must not ingest them into the fresh store.
+            pendingPrekeyBundles.removeAll()
             recentTrafficTracker.removeAll()
             scheduledRelays.cancelAll()
             // Proofs and revalidation epochs die with the identity; the
