@@ -70,7 +70,6 @@ protocol ChatPrivateConversationContext: ChatIdentityContext, ChatDirectMessageS
     func noisePublicKey(for peerID: PeerID) -> Data?
     /// Resolves the ephemeral (short) peer ID for a known Noise public key, if connected.
     func ephemeralPeerID(forNoiseKey noiseKey: Data) -> PeerID?
-    func getPeerIDForNickname(_ nickname: String) -> PeerID?
     func getFingerprint(for peerID: PeerID) -> String?
     func storedFingerprint(for peerID: PeerID) -> String?
     func clearStoredFingerprint(for peerID: PeerID)
@@ -717,9 +716,9 @@ final class ChatPrivateConversationCoordinator {
 
     func handlePrivateMessage(_ message: BitchatMessage) {
         SecureLogger.debug("📥 handlePrivateMessage called for message from \(message.sender)", category: .session)
-        let senderPeerID = message.senderPeerID ?? context.getPeerIDForNickname(message.sender)
-
-        guard var peerID = senderPeerID else {
+        // Every inbound path stamps the sender ID. A nickname is self-chosen
+        // and not unique, so it never stands in for a missing ID.
+        guard var peerID = message.senderPeerID else {
             SecureLogger.warning("⚠️ Could not get peer ID for sender \(message.sender)", category: .session)
             return
         }
@@ -1030,7 +1029,7 @@ final class ChatPrivateConversationCoordinator {
     }
 
     func isMessageBlocked(_ message: BitchatMessage) -> Bool {
-        if let peerID = message.senderPeerID ?? context.getPeerIDForNickname(message.sender) {
+        if let peerID = message.senderPeerID {
             if context.isPeerBlocked(peerID) { return true }
             if peerID.isGeoChat || peerID.isGeoDM,
                let full = context.nostrKeyMapping[peerID]?.lowercased(),
