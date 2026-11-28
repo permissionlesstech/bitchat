@@ -16,7 +16,9 @@ struct ContentHeaderView: View {
     @EnvironmentObject private var locationChannelsModel: LocationChannelsModel
     @EnvironmentObject private var peerListModel: PeerListModel
     @EnvironmentObject private var boardAlertsModel: BoardAlertsModel
+    @EnvironmentObject private var conversationUIModel: ConversationUIModel
     @ObservedObject private var bridgeService = BridgeService.shared
+    @ObservedObject private var pttPreferences = PTTPreferences.shared
     @Environment(\.appTheme) private var theme
     @ThemedPalette private var palette
 
@@ -32,6 +34,7 @@ struct ContentHeaderView: View {
     var placeTitle: String? = nil
     var isSearchActive: Bool = false
     var onToggleSearch: (() -> Void)? = nil
+    var onOpenWalkieTalkie: (() -> Void)? = nil
 
     @State private var boardPosts: [BoardPostPacket] = []
     @ObservedObject private var nearbyNotes = NearbyNotesCounter.shared
@@ -135,6 +138,18 @@ struct ContentHeaderView: View {
                 }
             }
         } trailing: {
+            if let onOpenWalkieTalkie,
+               case .mesh = locationChannelsModel.selectedChannel {
+                let someoneSpeaking = conversationUIModel.activeLiveVoiceTalker != nil
+                TopBarIconButton(
+                    systemImage: "radio",
+                    accessibilityLabel: String(localized: "walkie.accessibility.open", defaultValue: "Open walkie-talkie", comment: "Accessibility label for the header walkie-talkie button"),
+                    color: someoneSpeaking ? Color.red : (pttPreferences.liveVoiceEnabled ? palette.accent : palette.secondary),
+                    action: onOpenWalkieTalkie
+                )
+                .modifier(PulsingOpacityModifier(active: someoneSpeaking))
+            }
+
             if let onToggleSearch {
                 TopBarIconButton(
                     systemImage: "magnifyingglass",

@@ -244,6 +244,8 @@ final class ChatViewModel: ObservableObject, SynchronousMessageTransportEventDel
     /// Nickname of whoever is talking live in the public mesh channel right
     /// now (floor-courtesy indicator on the composer mic), nil when nobody.
     @Published var activePublicVoiceTalker: String?
+    /// Peer currently talking live in a direct message, nil when nobody.
+    @Published var activeDirectVoiceTalker: LiveVoiceTalker?
 
     /// Read-only derived view of all direct conversations in the
     /// `ConversationStore`, keyed by routing peer ID. Serves the coordinator

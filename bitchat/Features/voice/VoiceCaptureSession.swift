@@ -20,6 +20,8 @@ protocol VoiceCaptureSession: AnyObject {
     /// Whether audio is leaving the device in real time while recording —
     /// drives the composer's LIVE treatment.
     var isLive: Bool { get }
+    /// Optional live normalized input level (`0...1`) callback for voice rings.
+    var onAudioLevel: (@Sendable (Float) -> Void)? { get set }
     func requestPermission() async -> Bool
     func start() async throws
     /// Stops capture and returns the finalized voice-note file, or nil when
@@ -28,6 +30,13 @@ protocol VoiceCaptureSession: AnyObject {
     func cancel() async
     /// Stops capture and suppresses every later send before returning.
     func panicCancelSynchronously()
+}
+
+extension VoiceCaptureSession {
+    var onAudioLevel: (@Sendable (Float) -> Void)? {
+        get { nil }
+        set {}
+    }
 }
 
 /// The classic record-then-send backend, wrapping the shared `VoiceRecorder`.
@@ -102,6 +111,10 @@ final class PTTLiveVoiceSession: VoiceCaptureSession {
     private var completed = false
 
     var isLive: Bool { true }
+    var onAudioLevel: (@Sendable (Float) -> Void)? {
+        get { (capture as? PTTCaptureEngine)?.onAudioLevel }
+        set { (capture as? PTTCaptureEngine)?.onAudioLevel = newValue }
+    }
 
     /// - Parameter sendPacket: delivers one encoded `VoiceBurstPacket` to the
     ///   target peer; must be safe to call from any queue (BLEService hops to

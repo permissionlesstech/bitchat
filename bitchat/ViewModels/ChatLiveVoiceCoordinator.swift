@@ -2,6 +2,12 @@ import BitFoundation
 import BitLogger
 import Foundation
 
+/// Remote peer currently streaming a live voice burst in a DM.
+struct LiveVoiceTalker: Equatable {
+    let peerID: PeerID
+    let nickname: String
+}
+
 /// The narrow surface `ChatLiveVoiceCoordinator` needs from its owner.
 ///
 /// Follows the `ChatDeliveryContext` exemplar: the coordinator depends on the
@@ -42,6 +48,12 @@ protocol ChatLiveVoiceContext: AnyObject {
     /// Publishes who is currently talking live in the public mesh channel
     /// (floor-courtesy indicator on the composer mic), nil when nobody is.
     func setActivePublicVoiceTalker(_ nickname: String?)
+    /// Publishes who is currently talking live in a direct message, nil when nobody is.
+    func setActiveDirectVoiceTalker(_ talker: LiveVoiceTalker?)
+}
+
+extension ChatLiveVoiceContext {
+    func setActiveDirectVoiceTalker(_ talker: LiveVoiceTalker?) {}
 }
 
 extension ChatViewModel: ChatLiveVoiceContext {
@@ -60,6 +72,12 @@ extension ChatViewModel: ChatLiveVoiceContext {
     func setActivePublicVoiceTalker(_ nickname: String?) {
         if activePublicVoiceTalker != nickname {
             activePublicVoiceTalker = nickname
+        }
+    }
+
+    func setActiveDirectVoiceTalker(_ talker: LiveVoiceTalker?) {
+        if activeDirectVoiceTalker != talker {
+            activeDirectVoiceTalker = talker
         }
     }
 }
@@ -313,6 +331,19 @@ final class ChatLiveVoiceCoordinator {
         assemblies.values.contains { $0.messageID == message.id }
     }
 
+    /// Stops any live speaker playback immediately (when the user taps Mute)
+    /// while continuing to record the inbound stream into its replayable bubble.
+    func muteActivePlayback() {
+        for assembly in assemblies.values {
+            assembly.player?.stop()
+            assembly.player = nil
+        }
+        for player in drainingPlayers.values {
+            player.stop()
+        }
+        drainingPlayers.removeAll(keepingCapacity: false)
+    }
+
     /// Stop every live file handle/player before the panic media directory is
     /// removed. This prevents an in-flight assembly from continuing to write
     /// through an unlinked file after the wipe returns.
@@ -488,24 +519,34 @@ final class ChatLiveVoiceCoordinator {
         }
 
         // Live playback only when the user is looking at this conversation
-        // with the app frontmost and live voice enabled.
+        // with the app frontmost, live voice enabled, and speaker not muted.
         let isViewing = switch scope {
-        case .directMessage: context.selectedPrivateChatPeer == peerID
+        case .directMessage: context.selectedPrivateChatPeer?.toShort() == peerID.toShort()
         case .publicMesh: context.isViewingPublicMeshTimeline
         }
-        if liveVoiceEnabled(), PTTSettings.isAppActive, isViewing {
+        if liveVoiceEnabled(), !PTTSettings.isAutoListenMuted, PTTSettings.isAppActive, isViewing {
             assembly.player = PTTBurstPlayer()
+            if assembly.player != nil {
+                WalkieFeedback.incomingBurstStarted()
+            }
         }
 
         SecureLogger.debug("PTT: burst \(burstID.hexEncodedString()) started from \(peerID.id.prefix(8))…", category: .session)
         return assembly
     }
 
-    /// Keeps the composer's floor-courtesy indicator pointing at whoever is
-    /// currently talking live in the public mesh channel.
+    /// Keeps the floor-courtesy and live-talker indicators pointing at whoever
+    /// is currently talking live in the public mesh channel or a DM.
     private func updatePublicTalkerIndicator() {
-        let talker = assemblies.values.first { $0.scope == .publicMesh }?.nickname
-        context.setActivePublicVoiceTalker(talker)
+        let publicTalker = assemblies.values.first { $0.scope == .publicMesh }?.nickname
+        context.setActivePublicVoiceTalker(publicTalker)
+
+        let directAssembly = assemblies.values.first { assembly in
+            assembly.scope == .directMessage
+                && context.selectedPrivateChatPeer?.toShort() == assembly.peerID.toShort()
+        } ?? assemblies.values.first { $0.scope == .directMessage }
+        let directTalker = directAssembly.map { LiveVoiceTalker(peerID: $0.peerID, nickname: $0.nickname) }
+        context.setActiveDirectVoiceTalker(directTalker)
     }
 
     private func apply(_ packet: VoiceBurstPacket, payloadByteCount: Int, to assembly: Assembly) {

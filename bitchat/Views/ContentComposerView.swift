@@ -12,6 +12,7 @@ struct ContentComposerView: View {
     @EnvironmentObject private var privateConversationModel: PrivateConversationModel
     @EnvironmentObject private var locationChannelsModel: LocationChannelsModel
     @ObservedObject private var bridgeService = BridgeService.shared
+    @ObservedObject private var pttPreferences = PTTPreferences.shared
     @Environment(\.appTheme) private var theme
     @ThemedPalette private var palette
 
@@ -21,6 +22,9 @@ struct ContentComposerView: View {
 
     let onSendMessage: () -> Void
     @Binding var mediaPickerMode: MediaPickerMode?
+
+    @State private var isSlideCanceling = false
+    @State private var micDragOffsetX: CGFloat = 0
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
@@ -57,8 +61,14 @@ struct ContentComposerView: View {
                 CommandSuggestionsView(messageText: $draftModel.messageText)
             }
 
+            if let talker = activeTalkerInCurrentContext {
+                liveTalkerBanner(nickname: talker)
+            }
+
             if voiceRecordingVM.state.isActive {
                 recordingIndicator
+            } else if let hint = voiceRecordingVM.briefHint {
+                briefVoiceHintPill(hint)
             }
 
             if let reply = draftModel.replyTarget {
@@ -266,44 +276,165 @@ private extension ContentComposerView {
         .padding(.horizontal, 4)
     }
 
+    var activeTalkerInCurrentContext: String? {
+        conversationUIModel.activeTalkerInCurrentContext(
+            selectedPeerID: privateConversationModel.selectedPeerID
+        )
+    }
+
+    var isLiveVoiceReadyNow: Bool {
+        pttPreferences.liveVoiceEnabled && conversationUIModel.canStreamLiveVoiceNow
+    }
+
+    func liveTalkerBanner(nickname: String) -> some View {
+        HStack(spacing: 8) {
+            Circle()
+                .fill(Color.red)
+                .frame(width: 8, height: 8)
+                .modifier(PulsingOpacityModifier(active: true))
+
+            Text(
+                String(
+                    format: String(
+                        localized: "walkie.banner.speaking",
+                        defaultValue: "@%@ is talking live",
+                        comment: "Banner above the composer announcing who is streaming live voice right now"
+                    ),
+                    locale: .current,
+                    nickname
+                )
+            )
+            .bitchatFont(size: 12, weight: .semibold)
+            .foregroundColor(palette.primary)
+            .lineLimit(1)
+
+            Spacer(minLength: 4)
+
+            Button {
+                pttPreferences.toggleAutoListenMuted()
+                if pttPreferences.isAutoListenMuted {
+                    conversationUIModel.muteActiveLiveVoicePlayback()
+                }
+            } label: {
+                HStack(spacing: 4) {
+                    Image(systemName: pttPreferences.isAutoListenMuted ? "speaker.slash.fill" : "speaker.wave.2.fill")
+                        .font(.system(size: 11, weight: .semibold))
+                    Text(
+                        pttPreferences.isAutoListenMuted
+                        ? String(localized: "walkie.action.muted", defaultValue: "Muted", comment: "Label when live voice speaker autoplay is muted")
+                        : String(localized: "walkie.action.mute", defaultValue: "Mute", comment: "Button to mute live voice speaker playback")
+                    )
+                    .bitchatFont(size: 11, weight: .semibold)
+                }
+                .foregroundColor(pttPreferences.isAutoListenMuted ? palette.secondary : Color.red)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+                .background(
+                    Capsule().fill(
+                        pttPreferences.isAutoListenMuted
+                        ? palette.secondary.opacity(0.14)
+                        : Color.red.opacity(0.14)
+                    )
+                )
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 7)
+        .background(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .fill(Color.red.opacity(0.1))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .stroke(Color.red.opacity(0.25), lineWidth: 1)
+        )
+    }
+
+    func briefVoiceHintPill(_ message: String) -> some View {
+        HStack(spacing: 6) {
+            Image(systemName: isLiveVoiceReadyNow ? "dot.radiowaves.left.and.right" : "mic.fill")
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundColor(composerAccentColor)
+            Text(verbatim: message)
+                .bitchatFont(size: 12, weight: .medium)
+                .foregroundColor(palette.primary)
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 6)
+        .background(
+            Capsule().fill(palette.cardBackground)
+        )
+        .overlay(
+            Capsule().stroke(palette.cardBorder, lineWidth: 1)
+        )
+        .frame(maxWidth: .infinity, alignment: .trailing)
+        .transition(.opacity.combined(with: .move(edge: .bottom)))
+    }
+
     var recordingIndicator: some View {
-        HStack(spacing: 12) {
-            Image(systemName: voiceRecordingVM.isLiveStreaming ? "dot.radiowaves.left.and.right" : "waveform.circle.fill")
-                .foregroundColor(.red)
+        let tint: Color = isSlideCanceling ? .orange : .red
+        return HStack(spacing: 10) {
+            Image(systemName: isSlideCanceling ? "trash.fill" : (voiceRecordingVM.isLiveStreaming ? "dot.radiowaves.left.and.right" : "waveform.circle.fill"))
+                .foregroundColor(tint)
                 .font(.bitchatSystem(size: 20))
-                .modifier(PulsingOpacityModifier(active: voiceRecordingVM.isLiveStreaming))
-            TimelineView(.periodic(from: .now, by: 0.05)) { context in
-                // Live streaming means audio is heard as you speak — the HUD
-                // must make that unmistakable, not just show a timer.
-                if voiceRecordingVM.isLiveStreaming {
-                    Text(
-                        "live \(voiceRecordingVM.formattedDuration(for: context.date))",
-                        comment: "Recording HUD label while a voice message streams live to the recipient"
+                .modifier(PulsingOpacityModifier(active: voiceRecordingVM.isLiveStreaming && !isSlideCanceling))
+            if isSlideCanceling {
+                Text(
+                    String(
+                        localized: "walkie.hud.release_to_cancel",
+                        defaultValue: "Release to cancel",
+                        comment: "Recording HUD prompt when user has slid left past the cancel threshold"
                     )
-                    .bitchatFont(size: 13, weight: .bold)
-                    .foregroundColor(.red)
-                } else {
-                    Text(
-                        "recording \(voiceRecordingVM.formattedDuration(for: context.date))",
-                        comment: "Voice note recording duration indicator"
-                    )
-                    .bitchatFont(size: 13)
-                    .foregroundColor(.red)
+                )
+                .bitchatFont(size: 13, weight: .bold)
+                .foregroundColor(.orange)
+            } else {
+                TimelineView(.periodic(from: .now, by: 0.05)) { context in
+                    // Live streaming means audio is heard as you speak — the HUD
+                    // must make that unmistakable, not just show a timer.
+                    if voiceRecordingVM.isLiveStreaming {
+                        Text(
+                            "live \(voiceRecordingVM.formattedDuration(for: context.date))",
+                            comment: "Recording HUD label while a voice message streams live to the recipient"
+                        )
+                        .bitchatFont(size: 13, weight: .bold)
+                        .foregroundColor(.red)
+                    } else {
+                        Text(
+                            "recording \(voiceRecordingVM.formattedDuration(for: context.date))",
+                            comment: "Voice note recording duration indicator"
+                        )
+                        .bitchatFont(size: 13)
+                        .foregroundColor(.red)
+                    }
                 }
             }
-            Spacer()
+            Spacer(minLength: 4)
+            if !isSlideCanceling {
+                Text(
+                    String(
+                        localized: "walkie.hud.slide_to_cancel",
+                        defaultValue: "← Slide to cancel",
+                        comment: "Subtle hint inside the recording HUD showing one-handed slide-to-cancel"
+                    )
+                )
+                .bitchatFont(size: 11)
+                .foregroundColor(palette.secondary)
+                .lineLimit(1)
+            }
             Button(action: voiceRecordingVM.cancel) {
                 Label(Strings.cancel, systemImage: "xmark.circle")
                     .labelStyle(.iconOnly)
                     .font(.bitchatSystem(size: 18))
-                    .foregroundColor(.red)
+                    .foregroundColor(tint)
             }
             .buttonStyle(.plain)
         }
         .padding(10)
         .background(
             RoundedRectangle(cornerRadius: 12)
-                .fill(Color.red.opacity(0.15))
+                .fill(tint.opacity(0.15))
         )
     }
 
@@ -388,50 +519,81 @@ private extension ContentComposerView {
     }
 
     var micButtonView: some View {
-        Image(systemName: "mic.circle.fill")
-            .font(.bitchatSystem(size: 24))
-            .foregroundColor(micColor)
-            .modifier(PulsingOpacityModifier(active: busyTalker != nil && !voiceRecordingVM.state.isActive))
-            .modifier(ComposerActionFrame())
-            .contentShape(Circle())
-            .overlay(
-                Color.clear
-                    .contentShape(Circle())
-                    .gesture(
-                        DragGesture(minimumDistance: 0)
-                            .onChanged { _ in
+        ZStack(alignment: .topTrailing) {
+            Image(systemName: "mic.circle.fill")
+                .font(.bitchatSystem(size: 24))
+                .foregroundColor(isSlideCanceling ? .orange : micColor)
+                .scaleEffect(voiceRecordingVM.state.isActive ? 1.15 : 1.0)
+                .offset(x: max(-24, micDragOffsetX * 0.35))
+                .animation(.easeOut(duration: 0.12), value: voiceRecordingVM.state.isActive)
+                .modifier(PulsingOpacityModifier(active: busyTalker != nil && !voiceRecordingVM.state.isActive))
+                .modifier(ComposerActionFrame())
+
+            if isLiveVoiceReadyNow && !voiceRecordingVM.state.isActive {
+                Circle()
+                    .fill(Color.red)
+                    .frame(width: 8, height: 8)
+                    .overlay(Circle().stroke(palette.background, lineWidth: 1.5))
+                    .offset(x: -3, y: 3)
+            }
+        }
+        .contentShape(Circle())
+        .overlay(
+            Color.clear
+                .contentShape(Circle())
+                .gesture(
+                    DragGesture(minimumDistance: 0)
+                        .onChanged { value in
+                            if !voiceRecordingVM.state.isActive && voiceRecordingVM.state == .idle {
                                 voiceRecordingVM.start(
                                     shouldShow: conversationUIModel.canSendMediaInCurrentContext,
                                     target: currentVoiceNoteTarget
                                 )
                             }
-                            .onEnded { _ in
+                            if voiceRecordingVM.state.isActive {
+                                let clampedX = min(0, value.translation.width)
+                                micDragOffsetX = clampedX
+                                let shouldCancel = clampedX <= -68
+                                if shouldCancel != isSlideCanceling {
+                                    isSlideCanceling = shouldCancel
+                                    WalkieFeedback.detent()
+                                }
+                            }
+                        }
+                        .onEnded { _ in
+                            let cancelNow = isSlideCanceling
+                            isSlideCanceling = false
+                            micDragOffsetX = 0
+                            if cancelNow {
+                                voiceRecordingVM.cancel()
+                            } else {
                                 voiceRecordingVM.finish(completion: conversationUIModel.sendVoiceNote(at:target:))
                             }
-                    )
-            )
-            .accessibilityLabel(Strings.recordVoice)
-            .accessibilityValue(
-                voiceRecordingVM.state.isActive
-                ? Strings.recording
-                : busyTalker.map {
-                    String(format: Strings.someoneSpeakingFormat, locale: .current, $0)
-                } ?? ""
-            )
-            .accessibilityHint(Strings.recordVoiceHint)
-            .accessibilityAddTraits(.isButton)
-            // Press-and-hold drag gestures can't be activated by VoiceOver;
-            // give it a start/stop toggle as the default action.
-            .accessibilityAction {
-                if voiceRecordingVM.state.isActive {
-                    voiceRecordingVM.finish(completion: conversationUIModel.sendVoiceNote(at:target:))
-                } else {
-                    voiceRecordingVM.start(
-                        shouldShow: conversationUIModel.canSendMediaInCurrentContext,
-                        target: currentVoiceNoteTarget
-                    )
-                }
+                        }
+                )
+        )
+        .accessibilityLabel(Strings.recordVoice)
+        .accessibilityValue(
+            voiceRecordingVM.state.isActive
+            ? Strings.recording
+            : busyTalker.map {
+                String(format: Strings.someoneSpeakingFormat, locale: .current, $0)
+            } ?? ""
+        )
+        .accessibilityHint(Strings.recordVoiceHint)
+        .accessibilityAddTraits(.isButton)
+        // Press-and-hold drag gestures can't be activated by VoiceOver;
+        // give it a start/stop toggle as the default action.
+        .accessibilityAction {
+            if voiceRecordingVM.state.isActive {
+                voiceRecordingVM.finish(completion: conversationUIModel.sendVoiceNote(at:target:))
+            } else {
+                voiceRecordingVM.start(
+                    shouldShow: conversationUIModel.canSendMediaInCurrentContext,
+                    target: currentVoiceNoteTarget
+                )
             }
+        }
     }
 
     func sendButtonView(enabled: Bool) -> some View {

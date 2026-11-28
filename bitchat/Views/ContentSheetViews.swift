@@ -12,6 +12,7 @@ struct ContentPeopleSheetModalPresentationState {
     var legacyPrivateMediaConsentRequest: LegacyPrivateMediaConsentRequest? = nil
     var isVoiceAlertPresented = false
     var isMediaPickerPresented = false
+    var isWalkieTalkiePresented = false
 
     var hasPresentation: Bool {
         isImagePreviewPresented
@@ -19,6 +20,7 @@ struct ContentPeopleSheetModalPresentationState {
             || legacyPrivateMediaConsentRequest != nil
             || isVoiceAlertPresented
             || isMediaPickerPresented
+            || isWalkieTalkiePresented
     }
 }
 
@@ -39,6 +41,7 @@ struct ContentPeopleSheetView: View {
     var isTextFieldFocused: FocusState<Bool>.Binding
     @ObservedObject var voiceRecordingVM: VoiceRecordingViewModel
     @State private var showVerifySheet = false
+    @State private var showWalkieTalkieSheet = false
     @ThemedPalette private var palette
 
     let headerHeight: CGFloat
@@ -54,7 +57,8 @@ struct ContentPeopleSheetView: View {
             legacyPrivateMediaConsentRequest:
                 conversationUIModel.legacyPrivateMediaConsentRequest,
             isVoiceAlertPresented: includingVoiceAlert && voiceRecordingVM.showAlert,
-            isMediaPickerPresented: mediaPickerMode != nil
+            isMediaPickerPresented: mediaPickerMode != nil,
+            isWalkieTalkiePresented: showWalkieTalkieSheet
         )
     }
 
@@ -123,6 +127,7 @@ struct ContentPeopleSheetView: View {
                         isAtBottomPrivate: $isAtBottomPrivate,
                         isTextFieldFocused: isTextFieldFocused,
                         voiceRecordingVM: voiceRecordingVM,
+                        showWalkieTalkieSheet: $showWalkieTalkieSheet,
                         headerHeight: headerHeight,
                         onSendMessage: onSendMessage,
                         mediaPickerMode: $mediaPickerMode
@@ -397,6 +402,9 @@ private struct ContentPrivateChatSheetView: View {
     @EnvironmentObject private var privateConversationModel: PrivateConversationModel
     @EnvironmentObject private var privateInboxModel: PrivateInboxModel
     @EnvironmentObject private var peerListModel: PeerListModel
+    @EnvironmentObject private var conversationUIModel: ConversationUIModel
+    @Environment(\.appEnvironmentModels) private var appEnvironmentModels
+    @ObservedObject private var pttPreferences = PTTPreferences.shared
 
     @Binding var showSidebar: Bool
     let draftModel: ComposerDraftModel
@@ -407,6 +415,7 @@ private struct ContentPrivateChatSheetView: View {
     @Binding var isAtBottomPrivate: Bool
     var isTextFieldFocused: FocusState<Bool>.Binding
     @ObservedObject var voiceRecordingVM: VoiceRecordingViewModel
+    @Binding var showWalkieTalkieSheet: Bool
     @Environment(\.appTheme) private var theme
     @ThemedPalette private var palette
     @State private var showGroupInfoSheet = false
@@ -461,6 +470,22 @@ private struct ContentPrivateChatSheetView: View {
                         )
                     }
                 } trailing: {
+                    if !headerState.isGroupConversation && !headerState.conversationPeerID.isGeoDM {
+                        let someoneSpeaking = conversationUIModel.activeTalkerInCurrentContext(
+                            selectedPeerID: headerState.conversationPeerID
+                        ) != nil
+                        TopBarIconButton(
+                            systemImage: "radio",
+                            accessibilityLabel: String(localized: "walkie.accessibility.open", defaultValue: "Open walkie-talkie", comment: "Accessibility label for the header walkie-talkie button"),
+                            color: someoneSpeaking ? Color.red : (pttPreferences.liveVoiceEnabled ? palette.accent : palette.secondary),
+                            action: {
+                                isTextFieldFocused.wrappedValue = false
+                                showWalkieTalkieSheet = true
+                            }
+                        )
+                        .modifier(PulsingOpacityModifier(active: someoneSpeaking))
+                    }
+
                     TopBarIconButton(
                         systemImage: "magnifyingglass",
                         accessibilityLabel: String(localized: "chat.search.accessibility", defaultValue: "Search in chat", comment: "Accessibility label for in-chat search toggle button"),
@@ -600,6 +625,19 @@ private struct ContentPrivateChatSheetView: View {
                 GroupInfoSheet(groupPeerID: peerID)
                     .environmentObject(privateConversationModel)
                     .environmentObject(peerListModel)
+            }
+        }
+        .sheet(isPresented: $showWalkieTalkieSheet) {
+            if let models = appEnvironmentModels {
+                WalkieTalkieSheetView(
+                    voiceRecordingVM: voiceRecordingVM,
+                    allowsChannelSwitching: false
+                )
+                .installAppEnvironment(models)
+                #if os(iOS)
+                .presentationDetents([.medium, .large])
+                .presentationDragIndicator(.visible)
+                #endif
             }
         }
         .onChange(of: privateConversationModel.selectedPeerID) { _ in

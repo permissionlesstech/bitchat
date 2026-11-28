@@ -13,6 +13,8 @@ final class ConversationUIModel: ObservableObject {
     /// Who is talking live in the public mesh channel right now (floor
     /// courtesy: the composer mic tints "busy" while someone holds the floor).
     @Published private(set) var activeLiveVoiceTalker: String?
+    /// Peer talking live in a direct message right now, if any.
+    @Published private(set) var activeDirectLiveVoiceTalker: LiveVoiceTalker?
 
     private let chatViewModel: ChatViewModel
     private let privateConversationModel: PrivateConversationModel
@@ -41,6 +43,7 @@ final class ConversationUIModel: ObservableObject {
         self.currentNickname = chatViewModel.nickname
         self.canSendMediaInCurrentContext = chatViewModel.canSendMediaInCurrentContext
         self.activeLiveVoiceTalker = chatViewModel.activePublicVoiceTalker
+        self.activeDirectLiveVoiceTalker = chatViewModel.activeDirectVoiceTalker
         self.legacyPrivateMediaConsentRequest = chatViewModel.legacyPrivateMediaConsentRequest
 
         bind()
@@ -217,6 +220,39 @@ final class ConversationUIModel: ObservableObject {
         chatViewModel.liveVoiceCoordinator.isLiveVoiceMessage(message)
     }
 
+    /// Availability of live push-to-talk for the currently active conversation.
+    func currentLiveVoiceAvailability() -> ChatViewModel.LiveVoiceAvailability {
+        chatViewModel.currentLiveVoiceAvailability()
+    }
+
+    var canStreamLiveVoiceNow: Bool {
+        switch currentLiveVoiceAvailability() {
+        case .liveReadyPublic, .liveReadyDM:
+            return true
+        case .disabledByUser, .dmHandshaking, .dmOutOfRadioRange, .unsupported:
+            return false
+        }
+    }
+
+    /// Name of the active live talker in whichever conversation is currently
+    /// open (public `#mesh` or the selected DM), or `nil` if nobody is talking.
+    func activeTalkerInCurrentContext(selectedPeerID: PeerID?) -> String? {
+        if let selectedPeerID {
+            guard let direct = activeDirectLiveVoiceTalker,
+                  direct.peerID.toShort() == selectedPeerID.toShort() else {
+                return nil
+            }
+            return direct.nickname
+        }
+        guard activeChannel == .mesh else { return nil }
+        return activeLiveVoiceTalker
+    }
+
+    /// Stops active live speaker playback immediately without disabling live capture.
+    func muteActiveLiveVoicePlayback() {
+        chatViewModel.liveVoiceCoordinator.muteActivePlayback()
+    }
+
     func cancelMediaSend(messageID: String) {
         chatViewModel.cancelMediaSend(messageID: messageID)
     }
@@ -239,6 +275,12 @@ final class ConversationUIModel: ObservableObject {
             .dropFirst()
             .receive(on: DispatchQueue.main)
             .assign(to: &$activeLiveVoiceTalker)
+
+        chatViewModel.$activeDirectVoiceTalker
+            .removeDuplicates()
+            .dropFirst()
+            .receive(on: DispatchQueue.main)
+            .assign(to: &$activeDirectLiveVoiceTalker)
 
         chatViewModel.$legacyPrivateMediaConsentRequest
             .removeDuplicates()

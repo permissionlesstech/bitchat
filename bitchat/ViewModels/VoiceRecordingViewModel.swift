@@ -67,6 +67,13 @@ final class VoiceRecordingViewModel: ObservableObject {
     /// True while the active session streams audio live (push-to-talk); the
     /// composer switches its recording HUD to the LIVE treatment.
     @Published private(set) var isLiveStreaming = false
+    /// Live normalized microphone level (`0...1`) while transmitting, used by
+    /// the walkie-talkie deck's pulsing halo ring.
+    @Published private(set) var audioLevel: Float = 0
+    /// True when the user slid up in the walkie-talkie deck to latch hands-free.
+    @Published private(set) var isLockedRecording = false
+    /// Brief non-modal hint shown above the composer on a quick tap (e.g., "Hold to talk").
+    @Published private(set) var briefHint: String? = nil
 
     /// Supplies the capture backend per press. `ChatViewModel` swaps in a
     /// live push-to-talk session when the current DM peer can hear it now.
@@ -78,6 +85,7 @@ final class VoiceRecordingViewModel: ObservableObject {
     /// older hold may still deliver its file, but it must never mutate the UI
     /// state of a newer hold.
     private var holdGeneration: UInt64 = 0
+    private var hintDismissTask: Task<Void, Never>?
 
     func formattedDuration(for date: Date) -> String {
         let clamped = max(0, state.duration(for: date))
@@ -90,12 +98,23 @@ final class VoiceRecordingViewModel: ObservableObject {
 
     func start(shouldShow: Bool, target: VoiceNoteTarget? = nil) {
         guard shouldShow, state == .idle else { return }
+        clearBriefHint()
         holdGeneration &+= 1
         let generation = holdGeneration
         let session = sessionProvider()
+        session.onAudioLevel = { [weak self] level in
+            Task { @MainActor [weak self] in
+                guard let self,
+                      self.holdGeneration == generation,
+                      self.state.isActive else { return }
+                self.audioLevel = level
+            }
+        }
         SecureLogger.info("PTT: mic hold began (backend: \(session.isLive ? "live" : "classic"))", category: .session)
         activeSession = session
         capturedTarget = target
+        isLockedRecording = false
+        audioLevel = 0
         state = .requestingPermission
         Task {
             let granted = await session.requestPermission()
@@ -120,6 +139,7 @@ final class VoiceRecordingViewModel: ObservableObject {
                 }
                 state = .recording(startDate: Date())
                 isLiveStreaming = session.isLive
+                WalkieFeedback.micArmed(isLive: session.isLive)
             } catch VoiceRecorder.RecorderError.recordingInProgress {
                 // The previous classic hold may still be in its intentional
                 // finalize-padding window. This press owns no recorder, so
@@ -160,6 +180,7 @@ final class VoiceRecordingViewModel: ObservableObject {
                         SecureLogger.warning("PTT: live capture failed — fell back to classic voice note", category: .session)
                         state = .recording(startDate: Date())
                         isLiveStreaming = false
+                        WalkieFeedback.micArmed(isLive: false)
                         return
                     } catch {
                         SecureLogger.error("Voice recording fallback failed to start: \(error)", category: .session)
@@ -173,8 +194,20 @@ final class VoiceRecordingViewModel: ObservableObject {
         }
     }
 
+    func lockRecording() {
+        guard state.isActive, !isLockedRecording else { return }
+        isLockedRecording = true
+        WalkieFeedback.detent()
+    }
+
+    func stopLockedRecording(completion: ((URL, VoiceNoteTarget?) -> Void)?) {
+        isLockedRecording = false
+        finish(completion: completion)
+    }
+
     func finish(completion: ((URL, VoiceNoteTarget?) -> Void)?) {
         let previousState = state
+        let wasLive = isLiveStreaming
 
         switch previousState {
         case .permissionDenied, .error:
@@ -185,6 +218,8 @@ final class VoiceRecordingViewModel: ObservableObject {
 
         state = .idle
         isLiveStreaming = false
+        isLockedRecording = false
+        audioLevel = 0
         let session = activeSession
         let target = capturedTarget
         let generation = holdGeneration
@@ -192,13 +227,23 @@ final class VoiceRecordingViewModel: ObservableObject {
         capturedTarget = nil
 
         guard case .recording(let startDate) = previousState, let completion, let session else {
-            // A quick press releases before the recorder spins up; that has
-            // always been a silent no-op for voice notes — log it so field
-            // tests can tell "tapped" apart from "capture broke".
+            // A quick press releases before the recorder spins up; show a subtle
+            // non-modal hint instead of failing silently so users know to hold.
             SecureLogger.info("PTT: mic released before recording started (state was \(previousState)) — hold longer to record", category: .session)
+            if completion != nil, previousState == .requestingPermission || previousState == .preparing {
+                showBriefHint(
+                    session?.isLive == true
+                    ? String(localized: "walkie.hint.hold_live", defaultValue: "Hold to talk live", comment: "Brief hint shown when the user taps instead of holding the mic while live voice is armed")
+                    : String(localized: "walkie.hint.hold_to_talk", defaultValue: "Hold to talk", comment: "Brief hint shown when the user taps instead of holding the mic button")
+                )
+            } else if completion == nil, case .recording = previousState {
+                WalkieFeedback.canceled()
+            }
             Task { await session?.cancel() }
             return
         }
+
+        WalkieFeedback.micReleased(isLive: wasLive)
 
         Task {
             let finalDuration = Date().timeIntervalSince(startDate)
@@ -241,12 +286,33 @@ final class VoiceRecordingViewModel: ObservableObject {
     /// down an active microphone before the panic transaction continues.
     func panicWipe() {
         holdGeneration &+= 1
+        clearBriefHint()
         let session = activeSession
         activeSession = nil
         capturedTarget = nil
         state = .idle
         isLiveStreaming = false
+        isLockedRecording = false
+        audioLevel = 0
         session?.panicCancelSynchronously()
+    }
+
+    private func showBriefHint(_ message: String) {
+        hintDismissTask?.cancel()
+        briefHint = message
+        hintDismissTask = Task { @MainActor [weak self] in
+            try? await Task.sleep(nanoseconds: 2_200_000_000)
+            guard !Task.isCancelled else { return }
+            self?.briefHint = nil
+        }
+    }
+
+    private func clearBriefHint() {
+        hintDismissTask?.cancel()
+        hintDismissTask = nil
+        if briefHint != nil {
+            briefHint = nil
+        }
     }
 
     private func isValidRecording(at url: URL, duration: TimeInterval) -> Bool {

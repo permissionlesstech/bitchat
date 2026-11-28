@@ -25,6 +25,7 @@ struct ContentRootModalPresentationState {
     var isScreenshotPrivacyAlertPresented = false
     var isMediaPickerPresented = false
     var isOnboardingPresented = false
+    var isWalkieTalkiePresented = false
 
     var hasPresentation: Bool {
         isPeopleSheetPresented
@@ -37,6 +38,7 @@ struct ContentRootModalPresentationState {
             || isScreenshotPrivacyAlertPresented
             || isMediaPickerPresented
             || isOnboardingPresented
+            || isWalkieTalkiePresented
     }
 }
 
@@ -48,7 +50,8 @@ extension ContentRootModalPresentationState {
         isImagePreviewPresented: Bool = false,
         isVoiceAlertPresented: Bool = false,
         isMediaPickerPresented: Bool = false,
-        isOnboardingPresented: Bool = false
+        isOnboardingPresented: Bool = false,
+        isWalkieTalkiePresented: Bool = false
     ) {
         self.init(
             isPeopleSheetPresented: isPeopleSheetPresented,
@@ -64,7 +67,8 @@ extension ContentRootModalPresentationState {
             isScreenshotPrivacyAlertPresented:
                 appChromeModel.showScreenshotPrivacyWarning,
             isMediaPickerPresented: isMediaPickerPresented,
-            isOnboardingPresented: isOnboardingPresented
+            isOnboardingPresented: isOnboardingPresented,
+            isWalkieTalkiePresented: isWalkieTalkiePresented
         )
     }
 }
@@ -204,6 +208,7 @@ struct ContentView: View {
     @State private var showAddFriendSheet = false
     @State private var showCreateGroupSheet = false
     @State private var showOnboardingSheet = false
+    @State private var showWalkieTalkieSheet = false
     @State private var showSidebar = false
     @State private var selectedMessageSender: String?
     @State private var selectedMessageSenderID: PeerID?
@@ -248,7 +253,7 @@ struct ContentView: View {
     private var usesGlassLayout: Bool { appTheme.usesGlassChrome }
 
     private var isPeopleSheetPresented: Bool {
-        showSidebar || selectedPrivatePeerID != nil
+        !showWalkieTalkieSheet && (showSidebar || selectedPrivatePeerID != nil)
     }
 
     private func rootModalPresentationState(
@@ -260,7 +265,8 @@ struct ContentView: View {
             isImagePreviewPresented: imagePreviewURL != nil,
             isVoiceAlertPresented: includingVoiceAlert && voiceRecordingVM.showAlert,
             isMediaPickerPresented: mediaPickerMode != nil,
-            isOnboardingPresented: showOnboardingSheet
+            isOnboardingPresented: showOnboardingSheet,
+            isWalkieTalkiePresented: showWalkieTalkieSheet
         )
     }
 
@@ -512,6 +518,16 @@ struct ContentView: View {
                 onGroupCreated: { selectedTab = .chats }
             )
             .environmentObject(peerListModel)
+        }
+        .sheet(isPresented: $showWalkieTalkieSheet) {
+            if let models = appEnvironmentModels {
+                WalkieTalkieSheetView(voiceRecordingVM: voiceRecordingVM)
+                    .installAppEnvironment(models)
+                    #if os(iOS)
+                    .presentationDetents([.medium, .large])
+                    .presentationDragIndicator(.visible)
+                    #endif
+            }
         }
         .sheet(isPresented: Binding(
             get: { appChromeModel.showingFingerprintFor != nil && !showSidebar && selectedPrivatePeerID == nil },
@@ -785,6 +801,10 @@ struct ContentView: View {
                             publicSearchMatchIndex = nil
                         }
                     }
+                },
+                onOpenWalkieTalkie: {
+                    isTextFieldFocused = false
+                    showWalkieTalkieSheet = true
                 }
             )
 

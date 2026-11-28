@@ -33,7 +33,7 @@ struct AppInfoView: View {
     @State private var showTopology = false
     @State private var privacyMode = PrivacyModeSettings.mode
     @State private var persistPrivateHistory = PrivacyModeSettings.persistPrivateHistory
-    @State private var liveVoiceEnabled = PTTSettings.liveVoiceEnabled
+    @ObservedObject private var pttPreferences = PTTPreferences.shared
     @State private var locationNotesEnabled = LocationNotesSettings.enabled
     @State private var hideMessagePreviews = NotificationPrivacySettings.hideMessagePreviews
     @State private var customRelays = NostrRelaySettings.customRelays()
@@ -554,11 +554,19 @@ struct AppInfoView: View {
                         title: Text("app_info.voice.live.title"),
                         subtitle: Text("app_info.voice.live.description"),
                         isOn: Binding(
-                            get: { liveVoiceEnabled },
-                            set: { newValue in
-                                liveVoiceEnabled = newValue
-                                PTTSettings.liveVoiceEnabled = newValue
-                            }
+                            get: { pttPreferences.liveVoiceEnabled },
+                            set: { pttPreferences.setLiveVoiceEnabled($0) }
+                        )
+                    )
+
+                    Divider().opacity(0.35)
+
+                    settingToggle(
+                        title: Text(String(localized: "app_info.voice.cues.title", defaultValue: "Walkie-talkie cue tones", comment: "Settings toggle title for subtle walkie-talkie start/stop audio cues")),
+                        subtitle: Text(String(localized: "app_info.voice.cues.description", defaultValue: "Play a brief tone and haptic tap when your live mic opens and closes.", comment: "Settings toggle description for walkie-talkie cue tones")),
+                        isOn: Binding(
+                            get: { pttPreferences.toneCuesEnabled },
+                            set: { pttPreferences.setToneCuesEnabled($0) }
                         )
                     )
                 }

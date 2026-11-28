@@ -60,6 +60,36 @@ extension ChatViewModel {
         mediaTransferCoordinator.sendVoiceNote(at: url, target: target)
     }
 
+    /// Describes whether pressing and holding talk right now will stream live
+    /// over Bluetooth mesh or fall back to a classic voice note.
+    enum LiveVoiceAvailability: Equatable {
+        case liveReadyPublic
+        case liveReadyDM
+        case disabledByUser
+        case dmHandshaking
+        case dmOutOfRadioRange
+        case unsupported
+    }
+
+    @MainActor
+    func currentLiveVoiceAvailability() -> LiveVoiceAvailability {
+        if let selectedPeer = selectedPrivateChatPeer {
+            guard !selectedPeer.isGeoDM, !selectedPeer.isGeoChat, !selectedPeer.isGroup else {
+                return .unsupported
+            }
+            guard liveVoiceCoordinator.liveVoiceEnabled() else { return .disabledByUser }
+            let peerID = selectedPeer.toShort()
+            guard meshService.isPeerReachable(peerID) else { return .dmOutOfRadioRange }
+            guard case .established = meshService.getNoiseSessionState(for: peerID) else {
+                return .dmHandshaking
+            }
+            return .liveReadyDM
+        }
+
+        guard activeChannel == .mesh else { return .unsupported }
+        return liveVoiceCoordinator.liveVoiceEnabled() ? .liveReadyPublic : .disabledByUser
+    }
+
     /// Where a live burst would stream right now, or nil when the hold would
     /// fall back to a classic voice note.
     private enum LiveVoiceTarget {
