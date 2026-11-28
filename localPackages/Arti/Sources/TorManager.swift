@@ -358,31 +358,22 @@ public final class TorManager: ObservableObject {
     nonisolated private func bootstrapPollLoop(generation: Int) async {
         let deadline = Date().addingTimeInterval(75)
         var didComplete = false
-        var lastPublishedProgress: Int?
 
         while Date() < deadline {
             let progress = Int(arti_bootstrap_progress())
 
-            if progress != lastPublishedProgress || progress >= 100 {
-                lastPublishedProgress = progress
-                let stillCurrent: Bool = await MainActor.run {
-                    guard generation == self.bootstrapGeneration else { return false }
-                    if self.bootstrapProgress != progress {
-                        self.bootstrapProgress = progress
-                    }
-                    if progress >= 100, self.isStarting {
-                        self.isStarting = false
-                    }
-                    self.recomputeReady()
-                    return true
+            let stillCurrent: Bool = await MainActor.run {
+                guard generation == self.bootstrapGeneration else { return false }
+                if self.bootstrapProgress != progress {
+                    self.bootstrapProgress = progress
                 }
-                guard stillCurrent else { return }
-            } else {
-                let stillCurrent: Bool = await MainActor.run {
-                    generation == self.bootstrapGeneration
+                if progress >= 100, self.isStarting {
+                    self.isStarting = false
                 }
-                guard stillCurrent else { return }
+                self.recomputeReady()
+                return true
             }
+            guard stillCurrent else { return }
 
             if progress >= 100 {
                 didComplete = true

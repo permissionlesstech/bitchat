@@ -1901,6 +1901,180 @@ final class NostrRelayManagerTests: XCTestCase {
         XCTAssertTrue(context.manager.relays.contains { $0.url == "wss://nos.lol" })
     }
 
+    func test_verificationFingerprint_distinguishesUnicodeNormalizedContentAndTagsAndMatchesBridgedNSString() throws {
+        let identity = try NostrIdentity.generate()
+        let genuine = try NostrEvent(
+            pubkey: identity.publicKeyHex,
+            createdAt: Date(),
+            kind: .textNote,
+            tags: [["t", "\u{00E9}"]],
+            content: "caf\u{00E9}"
+        ).sign(with: identity.schnorrSigningKey())
+
+        let nfdContent = try makeEventCopy(from: genuine, content: "cafe\u{0301}")
+        let nfdTag = try makeEventCopy(from: genuine, tags: [["t", "e\u{0301}"]])
+        let bridged = try makeEventCopy(
+            from: genuine,
+            content: ("caf\u{00E9}" as NSString) as String,
+            tags: [[("t" as NSString) as String, ("\u{00E9}" as NSString) as String]]
+        )
+        let nilSig = try makeEventCopy(from: genuine, sig: .some(nil))
+        let emptySig = try makeEventCopy(from: genuine, sig: .some(""))
+
+        // Swift String equality considers NFC and NFD equal, whereas Nostr event IDs hash UTF-8 bytes.
+        XCTAssertEqual(genuine.content, nfdContent.content)
+        XCTAssertNotEqual(
+            InboundFrameRouter.VerificationFingerprint(event: genuine),
+            InboundFrameRouter.VerificationFingerprint(event: nfdContent)
+        )
+        XCTAssertNotEqual(
+            InboundFrameRouter.VerificationFingerprint(event: genuine),
+            InboundFrameRouter.VerificationFingerprint(event: nfdTag)
+        )
+        XCTAssertNotEqual(
+            InboundFrameRouter.VerificationFingerprint(event: nilSig),
+            InboundFrameRouter.VerificationFingerprint(event: emptySig)
+        )
+
+        let fpGenuine = InboundFrameRouter.VerificationFingerprint(event: genuine)
+        let fpBridged = InboundFrameRouter.VerificationFingerprint(event: bridged)
+        XCTAssertEqual(fpGenuine, fpBridged)
+        XCTAssertEqual(fpGenuine.hashValue, fpBridged.hashValue)
+    }
+
+    func test_verifySignatureCoalesced_doesNotCoalesceUnicodeNormalizedForgedCopyWithGenuineEvent() async throws {
+        let identity = try NostrIdentity.generate()
+        let genuine = try NostrEvent(
+            pubkey: identity.publicKeyHex,
+            createdAt: Date(),
+            kind: .textNote,
+            tags: [["t", "\u{00E9}"]],
+            content: "caf\u{00E9}"
+        ).sign(with: identity.schnorrSigningKey())
+        let forgedNFD = try makeEventCopy(from: genuine, content: "cafe\u{0301}")
+
+        // Case A: genuine NFC enters first and holds in-flight while forged NFD arrives.
+        do {
+            let router = InboundFrameRouter()
+            let counter = VerificationCallCounter()
+            let firstEntered = DispatchSemaphore(value: 0)
+            let releaseFirst = DispatchSemaphore(value: 0)
+
+            let firstTask = Task.detached(priority: .userInitiated) {
+                await router.verifySignatureCoalesced(genuine) { event in
+                    counter.increment()
+                    firstEntered.signal()
+                    _ = releaseFirst.wait(timeout: .now() + 2)
+                    return event.isValidSignature()
+                }
+            }
+            XCTAssertEqual(firstEntered.wait(timeout: .now() + 2), .success)
+
+            let secondTask = Task.detached(priority: .userInitiated) {
+                await router.verifySignatureCoalesced(forgedNFD) { event in
+                    counter.increment()
+                    return event.isValidSignature()
+                }
+            }
+
+            let secondResult = await secondTask.value
+            releaseFirst.signal()
+            let firstResult = await firstTask.value
+
+            XCTAssertTrue(firstResult)
+            XCTAssertFalse(secondResult)
+            XCTAssertEqual(counter.count, 2)
+        }
+
+        // Case B: forged NFD enters first and holds in-flight while genuine NFC arrives.
+        do {
+            let router = InboundFrameRouter()
+            let counter = VerificationCallCounter()
+            let firstEntered = DispatchSemaphore(value: 0)
+            let releaseFirst = DispatchSemaphore(value: 0)
+
+            let firstTask = Task.detached(priority: .userInitiated) {
+                await router.verifySignatureCoalesced(forgedNFD) { event in
+                    counter.increment()
+                    firstEntered.signal()
+                    _ = releaseFirst.wait(timeout: .now() + 2)
+                    return event.isValidSignature()
+                }
+            }
+            XCTAssertEqual(firstEntered.wait(timeout: .now() + 2), .success)
+
+            let secondTask = Task.detached(priority: .userInitiated) {
+                await router.verifySignatureCoalesced(genuine) { event in
+                    counter.increment()
+                    return event.isValidSignature()
+                }
+            }
+
+            let secondResult = await secondTask.value
+            releaseFirst.signal()
+            let firstResult = await firstTask.value
+
+            XCTAssertFalse(firstResult)
+            XCTAssertTrue(secondResult)
+            XCTAssertEqual(counter.count, 2)
+        }
+    }
+
+    func test_verifySignatureCoalesced_coalescesByteIdenticalConcurrentDeliveries() async throws {
+        let genuine = try makeSignedEvent(content: "coalesce-me")
+        let duplicate = try makeEventCopy(from: genuine)
+        let router = InboundFrameRouter()
+        let counter = VerificationCallCounter()
+        let firstEntered = DispatchSemaphore(value: 0)
+        let releaseFirst = DispatchSemaphore(value: 0)
+
+        let firstTask = Task.detached(priority: .userInitiated) {
+            await router.verifySignatureCoalesced(genuine) { event in
+                counter.increment()
+                firstEntered.signal()
+                _ = releaseFirst.wait(timeout: .now() + 2)
+                return event.isValidSignature()
+            }
+        }
+        XCTAssertEqual(firstEntered.wait(timeout: .now() + 2), .success)
+
+        let secondTask = Task.detached(priority: .userInitiated) {
+            await router.verifySignatureCoalesced(duplicate) { event in
+                counter.increment()
+                return event.isValidSignature()
+            }
+        }
+        try? await Task.sleep(nanoseconds: 50_000_000)
+        releaseFirst.signal()
+
+        let firstResult = await firstTask.value
+        let secondResult = await secondTask.value
+        XCTAssertTrue(firstResult)
+        XCTAssertTrue(secondResult)
+        XCTAssertEqual(counter.count, 1)
+    }
+
+    private func makeEventCopy(
+        from base: NostrEvent,
+        content: String? = nil,
+        tags: [[String]]? = nil,
+        sig: String?? = nil
+    ) throws -> NostrEvent {
+        var dict: [String: Any] = [
+            "id": base.id,
+            "pubkey": base.pubkey,
+            "created_at": base.created_at,
+            "kind": base.kind,
+            "tags": tags ?? base.tags,
+            "content": content ?? base.content
+        ]
+        let resolvedSig = sig ?? base.sig
+        if let resolvedSig {
+            dict["sig"] = resolvedSig
+        }
+        return try NostrEvent(from: dict)
+    }
+
     private func makeContext(
         permission: LocationChannelManager.PermissionState,
         favorites: Set<Data> = [],
@@ -2222,5 +2396,22 @@ private final class MockRelayConnection: NostrRelayConnectionProtocol {
         } else {
             pendingResults.append(result)
         }
+    }
+}
+
+private final class VerificationCallCounter: @unchecked Sendable {
+    private let lock = NSLock()
+    private var value = 0
+
+    var count: Int {
+        lock.lock()
+        defer { lock.unlock() }
+        return value
+    }
+
+    func increment() {
+        lock.lock()
+        value += 1
+        lock.unlock()
     }
 }

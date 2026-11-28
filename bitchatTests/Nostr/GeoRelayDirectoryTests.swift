@@ -642,6 +642,199 @@ final class GeoRelayDirectoryTests: XCTestCase {
         XCTAssertNil(harness.dependencies.userDefaults.object(forKey: "georelay.lastFetchAt"))
     }
 
+    func test_boundedHTTPDataReader_readsChunkedResponseWithinLimit() async throws {
+        let url = makeStubURL()
+        let session = makeStubSession()
+        defer {
+            session.invalidateAndCancel()
+            BoundedReaderStubURLProtocol.unregister(url: url)
+        }
+
+        let part1 = Data("relay url,lat,lon\n".utf8)
+        let part2 = Data("relay.example,10,20\n".utf8)
+        let expected = part1 + part2
+        BoundedReaderStubURLProtocol.register(
+            url: url,
+            behavior: .chunks(statusCode: 200, expectedContentLength: Int64(expected.count), chunks: [part1, part2])
+        )
+
+        let data = try await BoundedHTTPDataReader.fetch(
+            request: URLRequest(url: url),
+            using: session,
+            maximumBytes: expected.count
+        )
+        XCTAssertEqual(data, expected)
+    }
+
+    func test_boundedHTTPDataReader_rejectsExpectedContentLengthOverLimit() async {
+        let url = makeStubURL()
+        let session = makeStubSession()
+        defer {
+            session.invalidateAndCancel()
+            BoundedReaderStubURLProtocol.unregister(url: url)
+        }
+
+        BoundedReaderStubURLProtocol.register(
+            url: url,
+            behavior: .chunks(statusCode: 200, expectedContentLength: 100, chunks: [Data("small".utf8)])
+        )
+
+        do {
+            _ = try await BoundedHTTPDataReader.fetch(
+                request: URLRequest(url: url),
+                using: session,
+                maximumBytes: 50
+            )
+            XCTFail("Expected URLError(.dataLengthExceedsMaximum)")
+        } catch let error as URLError {
+            XCTAssertEqual(error.code, .dataLengthExceedsMaximum)
+        } catch {
+            XCTFail("Unexpected error: \(error)")
+        }
+    }
+
+    func test_boundedHTTPDataReader_rejectsStreamingChunksOverLimitWithoutContentLength() async {
+        let url = makeStubURL()
+        let session = makeStubSession()
+        defer {
+            session.invalidateAndCancel()
+            BoundedReaderStubURLProtocol.unregister(url: url)
+        }
+
+        BoundedReaderStubURLProtocol.register(
+            url: url,
+            behavior: .chunks(
+                statusCode: 200,
+                expectedContentLength: nil,
+                chunks: [Data(repeating: 0x41, count: 6), Data(repeating: 0x42, count: 6)]
+            )
+        )
+
+        do {
+            _ = try await BoundedHTTPDataReader.fetch(
+                request: URLRequest(url: url),
+                using: session,
+                maximumBytes: 10
+            )
+            XCTFail("Expected URLError(.dataLengthExceedsMaximum)")
+        } catch let error as URLError {
+            XCTAssertEqual(error.code, .dataLengthExceedsMaximum)
+        } catch {
+            XCTFail("Unexpected error: \(error)")
+        }
+    }
+
+    func test_boundedHTTPDataReader_rejectsNon2xxStatus() async {
+        let url = makeStubURL()
+        let session = makeStubSession()
+        defer {
+            session.invalidateAndCancel()
+            BoundedReaderStubURLProtocol.unregister(url: url)
+        }
+
+        BoundedReaderStubURLProtocol.register(
+            url: url,
+            behavior: .chunks(statusCode: 500, expectedContentLength: 0, chunks: [])
+        )
+
+        do {
+            _ = try await BoundedHTTPDataReader.fetch(
+                request: URLRequest(url: url),
+                using: session,
+                maximumBytes: 1024
+            )
+            XCTFail("Expected URLError(.badServerResponse)")
+        } catch let error as URLError {
+            XCTAssertEqual(error.code, .badServerResponse)
+        } catch {
+            XCTFail("Unexpected error: \(error)")
+        }
+    }
+
+    func test_boundedHTTPDataReader_refusesRedirectWithoutFollowingTarget() async {
+        let url = makeStubURL()
+        let redirectTarget = makeStubURL()
+        let session = makeStubSession()
+        defer {
+            session.invalidateAndCancel()
+            BoundedReaderStubURLProtocol.unregister(url: url)
+            BoundedReaderStubURLProtocol.unregister(url: redirectTarget)
+        }
+
+        BoundedReaderStubURLProtocol.register(url: url, behavior: .redirect(statusCode: 302, targetURL: redirectTarget))
+        BoundedReaderStubURLProtocol.register(
+            url: redirectTarget,
+            behavior: .chunks(statusCode: 200, expectedContentLength: 2, chunks: [Data("ok".utf8)])
+        )
+
+        do {
+            _ = try await BoundedHTTPDataReader.fetch(
+                request: URLRequest(url: url),
+                using: session,
+                maximumBytes: 1024
+            )
+            XCTFail("Expected URLError(.badServerResponse)")
+        } catch let error as URLError {
+            XCTAssertEqual(error.code, .badServerResponse)
+        } catch {
+            XCTFail("Unexpected error: \(error)")
+        }
+
+        XCTAssertEqual(BoundedReaderStubURLProtocol.requestCount(for: url), 1)
+        XCTAssertEqual(BoundedReaderStubURLProtocol.requestCount(for: redirectTarget), 0)
+    }
+
+    func test_boundedHTTPDataReader_propagatesTaskCancellation() async {
+        let url = makeStubURL()
+        let session = makeStubSession()
+        defer {
+            session.invalidateAndCancel()
+            BoundedReaderStubURLProtocol.unregister(url: url)
+        }
+
+        let started = StubSignal()
+        let stopped = StubSignal()
+        BoundedReaderStubURLProtocol.register(
+            url: url,
+            behavior: .hangUntilCancelled(started: started, stopped: stopped)
+        )
+
+        let fetchTask = Task.detached {
+            try await BoundedHTTPDataReader.fetch(
+                request: URLRequest(url: url),
+                using: session,
+                maximumBytes: 1024
+            )
+        }
+
+        let didStart = await started.wait()
+        XCTAssertTrue(didStart)
+        fetchTask.cancel()
+
+        do {
+            _ = try await fetchTask.value
+            XCTFail("Expected CancellationError")
+        } catch is CancellationError {
+            let didStop = await stopped.wait()
+            XCTAssertTrue(didStop)
+            XCTAssertGreaterThanOrEqual(BoundedReaderStubURLProtocol.stopCount(for: url), 1)
+        } catch let error as URLError where error.code == .cancelled {
+            XCTFail("Expected CancellationError rather than URLError.cancelled")
+        } catch {
+            XCTFail("Unexpected error: \(error)")
+        }
+    }
+
+    private func makeStubURL() -> URL {
+        URL(string: "https://geo-reader-test.example/\(UUID().uuidString)/relays.csv")!
+    }
+
+    private func makeStubSession() -> URLSession {
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [BoundedReaderStubURLProtocol.self]
+        return URLSession(configuration: configuration)
+    }
+
     private func makeHarness(
         cacheCSV: String? = nil,
         bundleCSV: String? = nil,
@@ -856,4 +1049,189 @@ private enum GeoRelayTestError: Error {
 
 private func isExecutingOnMainThread() -> Bool {
     Thread.isMainThread
+}
+
+private final class StubSignal: @unchecked Sendable {
+    private let lock = NSLock()
+    private var signaled = false
+    private var continuation: CheckedContinuation<Bool, Never>?
+
+    func signal() {
+        let pending: CheckedContinuation<Bool, Never>? = lock.withLock {
+            signaled = true
+            let cont = continuation
+            continuation = nil
+            return cont
+        }
+        pending?.resume(returning: true)
+    }
+
+    func wait(timeoutNanoseconds: UInt64 = 2_000_000_000) async -> Bool {
+        await withCheckedContinuation { cont in
+            let resumeImmediately: Bool = lock.withLock {
+                if signaled {
+                    return true
+                }
+                continuation = cont
+                return false
+            }
+            if resumeImmediately {
+                cont.resume(returning: true)
+                return
+            }
+            Task.detached { [weak self] in
+                try? await Task.sleep(nanoseconds: timeoutNanoseconds)
+                guard let self else { return }
+                let timedOut: CheckedContinuation<Bool, Never>? = self.lock.withLock {
+                    guard !self.signaled, let pending = self.continuation else { return nil }
+                    self.continuation = nil
+                    return pending
+                }
+                timedOut?.resume(returning: false)
+            }
+        }
+    }
+}
+
+private final class BoundedReaderStubURLProtocol: URLProtocol, @unchecked Sendable {
+    enum StubBehavior: @unchecked Sendable {
+        case chunks(statusCode: Int, expectedContentLength: Int64?, chunks: [Data])
+        case redirect(statusCode: Int, targetURL: URL)
+        case hangUntilCancelled(started: StubSignal, stopped: StubSignal)
+    }
+
+    private static let lock = NSLock()
+    private static var behaviorsByURL: [URL: StubBehavior] = [:]
+    private static var requestsByURL: [URL: Int] = [:]
+    private static var stopCountsByURL: [URL: Int] = [:]
+
+    private let stateLock = NSLock()
+    private var stopped = false
+    private var stopSignal: StubSignal?
+
+    static func register(url: URL, behavior: StubBehavior) {
+        lock.lock()
+        behaviorsByURL[url] = behavior
+        requestsByURL[url] = 0
+        stopCountsByURL[url] = 0
+        lock.unlock()
+    }
+
+    static func unregister(url: URL) {
+        lock.lock()
+        behaviorsByURL.removeValue(forKey: url)
+        requestsByURL.removeValue(forKey: url)
+        stopCountsByURL.removeValue(forKey: url)
+        lock.unlock()
+    }
+
+    static func requestCount(for url: URL) -> Int {
+        lock.lock()
+        defer { lock.unlock() }
+        return requestsByURL[url] ?? 0
+    }
+
+    static func stopCount(for url: URL) -> Int {
+        lock.lock()
+        defer { lock.unlock() }
+        return stopCountsByURL[url] ?? 0
+    }
+
+    override class func canInit(with request: URLRequest) -> Bool {
+        guard let url = request.url else { return false }
+        lock.lock()
+        let registered = behaviorsByURL[url] != nil
+        lock.unlock()
+        return registered
+    }
+
+    override class func canonicalRequest(for request: URLRequest) -> URLRequest {
+        request
+    }
+
+    override func startLoading() {
+        guard let url = request.url else {
+            client?.urlProtocol(self, didFailWithError: URLError(.badURL))
+            return
+        }
+
+        let behavior: StubBehavior? = Self.lock.withLock {
+            Self.requestsByURL[url, default: 0] += 1
+            return Self.behaviorsByURL[url]
+        }
+
+        guard let behavior else {
+            client?.urlProtocol(self, didFailWithError: URLError(.unsupportedURL))
+            return
+        }
+
+        switch behavior {
+        case .chunks(let statusCode, let expectedContentLength, let chunks):
+            var headers: [String: String] = [:]
+            if let expectedContentLength {
+                headers["Content-Length"] = "\(expectedContentLength)"
+            }
+            let response = HTTPURLResponse(
+                url: url,
+                statusCode: statusCode,
+                httpVersion: "HTTP/1.1",
+                headerFields: headers.isEmpty ? nil : headers
+            )!
+            client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
+            for chunk in chunks {
+                if isStopped { return }
+                client?.urlProtocol(self, didLoad: chunk)
+            }
+            if !isStopped {
+                client?.urlProtocolDidFinishLoading(self)
+            }
+
+        case .redirect(let statusCode, let targetURL):
+            let response = HTTPURLResponse(
+                url: url,
+                statusCode: statusCode,
+                httpVersion: "HTTP/1.1",
+                headerFields: ["Location": targetURL.absoluteString]
+            )!
+            client?.urlProtocol(self, wasRedirectedTo: URLRequest(url: targetURL), redirectResponse: response)
+            if !isStopped {
+                client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
+            }
+            if !isStopped {
+                client?.urlProtocolDidFinishLoading(self)
+            }
+
+        case .hangUntilCancelled(let started, let stopped):
+            stateLock.withLock {
+                stopSignal = stopped
+            }
+            let response = HTTPURLResponse(
+                url: url,
+                statusCode: 200,
+                httpVersion: "HTTP/1.1",
+                headerFields: nil
+            )!
+            client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
+            started.signal()
+        }
+    }
+
+    override func stopLoading() {
+        let signalToFire: StubSignal? = stateLock.withLock {
+            stopped = true
+            let signal = stopSignal
+            stopSignal = nil
+            return signal
+        }
+        if let url = request.url {
+            Self.lock.withLock {
+                Self.stopCountsByURL[url, default: 0] += 1
+            }
+        }
+        signalToFire?.signal()
+    }
+
+    private var isStopped: Bool {
+        stateLock.withLock { stopped }
+    }
 }

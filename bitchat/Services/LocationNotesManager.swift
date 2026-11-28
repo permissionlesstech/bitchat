@@ -335,7 +335,7 @@ final class LocationNotesManager: ObservableObject {
     }
 
     /// Inserts a note in descending `createdAt` order via binary search
-    /// ($O(\log N)$ compare instead of re-sorting the entire array per note).
+    /// (O(log N) comparisons instead of re-sorting the entire array per note).
     private func insertNoteSorted(_ note: Note) {
         var low = 0
         var high = notes.count
