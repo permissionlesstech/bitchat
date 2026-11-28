@@ -1886,7 +1886,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "add"
+            "value" : "Add"
           }
         },
         "es" : {
@@ -2072,7 +2072,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "built in"
+            "value" : "Built in"
           }
         },
         "es" : {
@@ -2258,7 +2258,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "that relay is already in the list."
+            "value" : "That relay is already in the list."
           }
         },
         "es" : {
@@ -2444,7 +2444,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "you can add up to %d relays."
+            "value" : "You can add up to %d relays."
           }
         },
         "es" : {
@@ -2630,7 +2630,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "that doesn't look like a relay address. try wss://host."
+            "value" : "That doesn’t look like a relay address. Try wss://host."
           }
         },
         "es" : {
@@ -3002,7 +3002,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "remove relay"
+            "value" : "Remove relay"
           }
         },
         "es" : {
@@ -3188,7 +3188,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "when the mesh can't reach someone, private messages travel through these relays. the built-in ones are well-known addresses that a network filter can block, so you can add your own."
+            "value" : "When the mesh can’t reach someone, private messages travel through these relays. Built-in relays are well-known addresses that a network filter can block, so you can add your own."
           }
         },
         "es" : {
@@ -3374,7 +3374,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "private message relays"
+            "value" : "Private Message Relays"
           }
         },
         "es" : {
@@ -3560,7 +3560,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "tor is off: every relay you connect to can see your IP address, including relays carrying your private messages."
+            "value" : "Tor is off: relays you connect to can see your IP address, including relays carrying your private messages."
           }
         },
         "es" : {
@@ -3746,7 +3746,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "sends internet traffic through tor, so relay operators see tor's address instead of yours. covers location channels and private messages delivered over the internet. recommended: on."
+            "value" : "Sends internet traffic through Tor so relay operators see Tor’s address instead of yours. Covers Places and private messages delivered over the internet."
           }
         },
         "es" : {
@@ -19368,7 +19368,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "liquid glass"
+            "value" : "Liquid Glass"
           }
         },
         "es" : {
@@ -19553,7 +19553,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "matrix"
+            "value" : "Matrix"
           }
         },
         "es" : {
@@ -19923,7 +19923,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "DONE"
+            "value" : "Done"
           }
         },
         "es" : {
@@ -20108,7 +20108,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "links nearby mesh islands through the internet so one crowd isn't split by radio range"
+            "value" : "Links nearby mesh islands through the internet so one crowd isn’t split by radio range."
           }
         },
         "es" : {
@@ -20293,7 +20293,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "mesh bridging"
+            "value" : "Mesh Bridging"
           }
         },
         "es" : {
@@ -20478,7 +20478,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "private messages encrypted with noise protocol"
+            "value" : "Private messages encrypted with the Noise protocol."
           }
         },
         "es" : {
@@ -20663,7 +20663,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "end-to-end encryption"
+            "value" : "End-to-End Encryption"
           }
         },
         "es" : {
@@ -20848,7 +20848,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "messages relay through peers, going the distance"
+            "value" : "Messages relay through peers, going the distance."
           }
         },
         "es" : {
@@ -21033,7 +21033,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "extended range"
+            "value" : "Extended Range"
           }
         },
         "es" : {
@@ -21218,7 +21218,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "get notified when your favorite people join"
+            "value" : "Get notified when your favorite people join."
           }
         },
         "es" : {
@@ -21403,7 +21403,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "favorites"
+            "value" : "Favorites"
           }
         },
         "es" : {
@@ -21588,7 +21588,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "geohash channels to chat with people in nearby regions over decentralized anonymous relays"
+            "value" : "Geohash channels to chat with people in nearby regions over decentralized relays."
           }
         },
         "es" : {
@@ -21773,7 +21773,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "local channels"
+            "value" : "Local Channels"
           }
         },
         "es" : {
@@ -21958,7 +21958,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "use @nickname to notify specific people"
+            "value" : "Use @nickname to notify specific people."
           }
         },
         "es" : {
@@ -22143,7 +22143,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "mentions"
+            "value" : "Mentions"
           }
         },
         "es" : {
@@ -22328,7 +22328,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "works without internet using Bluetooth low energy"
+            "value" : "Works without internet using Bluetooth Low Energy."
           }
         },
         "es" : {
@@ -22513,7 +22513,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "offline communication"
+            "value" : "Offline Communication"
           }
         },
         "es" : {
@@ -22883,7 +22883,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "• tap #mesh to change channels"
+            "value" : "• Switch sections from the top-left menu"
           }
         },
         "es" : {
@@ -23068,7 +23068,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "• triple-tap chat to clear"
+            "value" : "• Triple-tap a chat to clear it"
           }
         },
         "es" : {
@@ -23253,7 +23253,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "• type / for commands"
+            "value" : "• Type / for slash commands"
           }
         },
         "es" : {
@@ -23438,7 +23438,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "• tap people icon for list"
+            "value" : "• Tap the people count to view the roster"
           }
         },
         "es" : {
@@ -23623,7 +23623,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "• set your nickname by tapping it"
+            "value" : "• Edit your nickname in Settings"
           }
         },
         "es" : {
@@ -23808,7 +23808,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "• tap a person's name to start a DM"
+            "value" : "• Tap a person’s name to start a DM"
           }
         },
         "es" : {
@@ -24179,7 +24179,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "blocked"
+            "value" : "Blocked"
           }
         },
         "es" : {
@@ -24364,7 +24364,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "message arrived across a mesh bridge"
+            "value" : "Message arrived across a mesh bridge"
           }
         },
         "es" : {
@@ -24550,7 +24550,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "end-to-end encrypted session"
+            "value" : "End-to-end encrypted session"
           }
         },
         "es" : {
@@ -24736,7 +24736,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "encryption failed — messages not secured"
+            "value" : "Encryption failed — messages not secured"
           }
         },
         "es" : {
@@ -24922,7 +24922,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "favorite — enables offline messages via nostr when mutual"
+            "value" : "Favorite — enables offline messages via Nostr when mutual"
           }
         },
         "es" : {
@@ -25108,7 +25108,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "physically in this location channel's area"
+            "value" : "Physically in this location channel’s area"
           }
         },
         "es" : {
@@ -25294,7 +25294,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "connected directly over bluetooth"
+            "value" : "Connected directly over Bluetooth"
           }
         },
         "es" : {
@@ -25480,7 +25480,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "reachable through the mesh, relayed by others"
+            "value" : "Reachable through the mesh, relayed by others"
           }
         },
         "es" : {
@@ -25666,7 +25666,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "reachable over the internet (nostr) — mutual favorites only"
+            "value" : "Reachable over the internet (Nostr) — mutual favorites only"
           }
         },
         "es" : {
@@ -25852,7 +25852,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "offline — not currently reachable"
+            "value" : "Offline — not currently reachable"
           }
         },
         "es" : {
@@ -26038,7 +26038,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "teleported — joined the channel from somewhere else"
+            "value" : "Teleported — joined the channel from somewhere else"
           }
         },
         "es" : {
@@ -26410,7 +26410,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "unread private messages"
+            "value" : "Unread private messages"
           }
         },
         "es" : {
@@ -26596,7 +26596,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "identity verified"
+            "value" : "Identity verified"
           }
         },
         "es" : {
@@ -26782,7 +26782,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "pin notes to places with /drop, readable by anyone passing by for 24h. needs location."
+            "value" : "Pin notes to places with /drop, readable by anyone passing by for 24h. Needs location."
           }
         },
         "es" : {
@@ -26968,7 +26968,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "location notes"
+            "value" : "Location Notes"
           }
         },
         "es" : {
@@ -27340,7 +27340,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "map of peers and links learned from mesh announces"
+            "value" : "Map of peers and links learned from mesh announces."
           }
         },
         "es" : {
@@ -27526,7 +27526,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "opens the mesh topology map"
+            "value" : "Opens the mesh topology map"
           }
         },
         "es" : {
@@ -27712,7 +27712,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "mesh topology"
+            "value" : "Mesh Topology"
           }
         },
         "es" : {
@@ -27897,7 +27897,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "your identity is a keypair created on this device — panic wipe replaces it instantly"
+            "value" : "Your identity is a keypair created on this device — panic wipe replaces it instantly."
           }
         },
         "es" : {
@@ -28082,7 +28082,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "device-local identity"
+            "value" : "Device-Local Identity"
           }
         },
         "es" : {
@@ -28267,7 +28267,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "no accounts, no phone numbers, no data collection"
+            "value" : "No accounts, no phone numbers, no data collection."
           }
         },
         "es" : {
@@ -28452,7 +28452,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "no tracking"
+            "value" : "No Tracking"
           }
         },
         "es" : {
@@ -28637,7 +28637,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "triple-tap logo to wipe all data (asks to confirm)"
+            "value" : "Wipe all local data instantly from Settings (asks to confirm)."
           }
         },
         "es" : {
@@ -28822,7 +28822,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "panic mode"
+            "value" : "Panic Mode"
           }
         },
         "es" : {
@@ -29192,7 +29192,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "rendezvous cell: %@"
+            "value" : "Rendezvous cell: %@"
           }
         },
         "es" : {
@@ -29360,7 +29360,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "rendezvous cell: %1$@ · %2$#@people@"
+            "value" : "Rendezvous cell: %1$@ · %2$#@people@"
           },
           "substitutions" : {
             "people" : {
@@ -30247,7 +30247,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "no rendezvous cell yet — needs location access or a nearby bridge peer"
+            "value" : "No rendezvous cell yet — needs location access or a nearby bridge peer."
           }
         },
         "es" : {
@@ -30432,7 +30432,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "joins nearby mesh islands over the internet: what you say in the mesh channel also reaches people in your area beyond radio range, and their messages appear here marked with the network glyph. while you have internet, your device also carries bridge and location-channel traffic for phones around you that have none."
+            "value" : "Joins nearby mesh islands over the internet: what you say in Nearby also reaches people in your area beyond radio range, marked with the network glyph. While you have internet, your device also carries bridge and place traffic for nearby phones without it."
           }
         },
         "es" : {
@@ -30617,7 +30617,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "mesh bridge"
+            "value" : "Mesh Bridge"
           }
         },
         "es" : {
@@ -30987,7 +30987,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "panic wipe"
+            "value" : "Panic Wipe"
           }
         },
         "es" : {
@@ -31172,7 +31172,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "wipe everything"
+            "value" : "Wipe Everything"
           }
         },
         "es" : {
@@ -31357,7 +31357,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "wipe all data?"
+            "value" : "Wipe All Data?"
           }
         },
         "es" : {
@@ -31542,7 +31542,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "erases all messages, keys, and identity. triple-tapping the bitchat/ logo does the same."
+            "value" : "Erases all messages, keys, and identity from this device."
           }
         },
         "es" : {
@@ -31913,7 +31913,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "notifications say that something arrived without showing the message, who sent it, or which location channel it came from. anyone holding your locked phone learns nothing from the lock screen. on by default."
+            "value" : "Notifications say something arrived without showing the message, sender, or place. Anyone holding your locked phone learns nothing from the lock screen. On by default."
           }
         },
         "es" : {
@@ -32099,7 +32099,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "hide message previews"
+            "value" : "Hide Message Previews"
           }
         },
         "es" : {
@@ -32470,7 +32470,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "info"
+            "value" : "Info"
           }
         },
         "es" : {
@@ -32655,7 +32655,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "view"
+            "value" : "View"
           }
         },
         "es" : {
@@ -32840,7 +32840,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "settings"
+            "value" : "Settings"
           }
         },
         "es" : {
@@ -33025,7 +33025,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "sidegroupchat"
+            "value" : "Sidegroupchat"
           }
         },
         "es" : {
@@ -33210,7 +33210,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "off by default. when on, your voice streams to people as you speak — before you release — and incoming live voice plays out loud automatically."
+            "value" : "Off by default. When on, your voice streams to people as you speak — before you release — and incoming live voice plays out loud automatically."
           }
         },
         "es" : {
@@ -33395,7 +33395,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "live voice messages"
+            "value" : "Live Voice Messages"
           }
         },
         "es" : {
@@ -35252,7 +35252,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "cancel"
+            "value" : "Cancel"
           }
         },
         "es" : {
@@ -36178,7 +36178,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "off"
+            "value" : "Off"
           }
         },
         "es" : {
@@ -36363,7 +36363,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "on"
+            "value" : "On"
           }
         },
         "es" : {
@@ -70431,7 +70431,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "open settings"
+            "value" : "Open Settings"
           }
         },
         "es" : {
@@ -70616,7 +70616,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "remove location access"
+            "value" : "Remove Location Access"
           }
         },
         "es" : {
@@ -70801,7 +70801,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "get location and my geohashes"
+            "value" : "Enable Location Access"
           }
         },
         "es" : {
@@ -72282,7 +72282,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "location permission denied. enable in settings to use location channels."
+            "value" : "Location permission denied. Enable it in Settings to use Places."
           }
         },
         "es" : {
@@ -73613,7 +73613,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "tor routing"
+            "value" : "Tor Routing"
           }
         },
         "es" : {
@@ -97723,7 +97723,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "app language"
+            "value" : "App Language"
           }
         },
         "es" : {
@@ -97909,7 +97909,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "system default"
+            "value" : "System Default"
           }
         },
         "es" : {
@@ -98095,7 +98095,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "restart bitchat to apply the new language"
+            "value" : "Restart bitchat to apply the new language."
           }
         },
         "es" : {
@@ -99396,7 +99396,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "keeps your private DMs and group chats across restarts, sealed with a device Keychain key. public channels are never saved. automatically off in Stealth Mode."
+            "value" : "Keeps your private DMs and group chats across restarts, sealed with a device Keychain key. Public channels are never saved. Automatically off in Stealth Mode."
           }
         },
         "es" : {
@@ -99582,7 +99582,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "save encrypted chat history"
+            "value" : "Save Encrypted Chat History"
           }
         },
         "es" : {
