@@ -151,7 +151,24 @@ struct ContentHeaderView: View {
                     color: palette.secondary,
                     action: { requestHeaderShare(forGeohash: channel.geohash) }
                 )
+            }
 
+            TopBarIconButton(
+                systemImage: scopeHasNotices || unseenNoticesCount > 0 ? "pin.fill" : "pin",
+                accessibilityLabel: String(localized: "content.accessibility.notices", defaultValue: "Notices", comment: "Accessibility label for the notices button"),
+                color: scopeHasNotices || unseenNoticesCount > 0 ? Color.orange : palette.secondary,
+                badgeCount: unseenNoticesCount,
+                action: {
+                    if case .location(let channel) = locationChannelsModel.selectedChannel {
+                        boardAlertsModel.markSeen(forScopes: [channel.geohash])
+                    } else {
+                        boardAlertsModel.markSeen(forScopes: [""])
+                    }
+                    appChromeModel.presentNotices()
+                }
+            )
+
+            if case .location = locationChannelsModel.selectedChannel {
                 Button {
                     withAnimation(.easeInOut(duration: TransportConfig.uiAnimationMediumSeconds)) {
                         showSidebar.toggle()
@@ -170,6 +187,7 @@ struct ContentHeaderView: View {
                     .clipShape(Capsule())
                 }
                 .buttonStyle(.plain)
+                .padding(.leading, 2)
                 .accessibilityLabel(
                     String(
                         format: String(localized: "content.accessibility.people_count", comment: "Accessibility label announcing number of people in header"),
@@ -178,21 +196,6 @@ struct ContentHeaderView: View {
                     )
                 )
             }
-
-            TopBarIconButton(
-                systemImage: scopeHasNotices || unseenNoticesCount > 0 ? "pin.fill" : "pin",
-                accessibilityLabel: String(localized: "content.accessibility.notices", defaultValue: "Notices", comment: "Accessibility label for the notices button"),
-                color: scopeHasNotices || unseenNoticesCount > 0 ? Color.orange : palette.secondary,
-                badgeCount: unseenNoticesCount,
-                action: {
-                    if case .location(let channel) = locationChannelsModel.selectedChannel {
-                        boardAlertsModel.markSeen(forScopes: [channel.geohash])
-                    } else {
-                        boardAlertsModel.markSeen(forScopes: [""])
-                    }
-                    appChromeModel.presentNotices()
-                }
-            )
         }
         .onReceive(BoardStore.shared.$postsSnapshot) { posts in
             boardPosts = posts
