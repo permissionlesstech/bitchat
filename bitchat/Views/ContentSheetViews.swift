@@ -149,12 +149,16 @@ struct ContentPeopleSheetView: View {
                 }
             )) {
                 if let peerID = appChromeModel.showingFingerprintFor,
-                   let verificationModel = appEnvironmentModels?.verificationModel {
-                    FingerprintView(peerID: peerID)
-                        .environmentObject(verificationModel)
-                        #if os(iOS)
-                        .toolbar(.hidden, for: .navigationBar)
-                        #endif
+                   let models = appEnvironmentModels {
+                    ContactDetailSheet(
+                        peerID: peerID,
+                        conversationPeerID: privateConversationModel.selectedPeerID ?? peerID,
+                        imagePreviewURL: $imagePreviewURL
+                    )
+                    .installAppEnvironment(models)
+                    #if os(iOS)
+                    .toolbar(.hidden, for: .navigationBar)
+                    #endif
                 }
             }
             // This sheet covers the root header where the connectivity
@@ -391,6 +395,7 @@ private extension ContentPeopleListView {
 
 private struct ContentPrivateChatSheetView: View {
     @EnvironmentObject private var privateConversationModel: PrivateConversationModel
+    @EnvironmentObject private var privateInboxModel: PrivateInboxModel
     @EnvironmentObject private var peerListModel: PeerListModel
 
     @Binding var showSidebar: Bool
@@ -405,10 +410,28 @@ private struct ContentPrivateChatSheetView: View {
     @Environment(\.appTheme) private var theme
     @ThemedPalette private var palette
     @State private var showGroupInfoSheet = false
+    @State private var isSearchPresented = false
+    @State private var searchQuery = ""
+    @State private var searchMatchIndex: Int? = nil
+    @State private var searchJumpNonce = 0
 
     let headerHeight: CGFloat
     let onSendMessage: () -> Void
     @Binding var mediaPickerMode: MediaPickerMode?
+
+    private var privateSearchMatches: [String] {
+        guard isSearchPresented, let peer = privateConversationModel.selectedPeerID else { return [] }
+        return MessageInteractionCodec.matchingMessageIDs(
+            in: privateInboxModel.messages(for: peer),
+            query: searchQuery
+        )
+    }
+
+    private var activePrivateSearchMessageID: String? {
+        let matches = privateSearchMatches
+        guard let idx = searchMatchIndex, matches.indices.contains(idx) else { return nil }
+        return matches[idx]
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -438,6 +461,21 @@ private struct ContentPrivateChatSheetView: View {
                         )
                     }
                 } trailing: {
+                    TopBarIconButton(
+                        systemImage: "magnifyingglass",
+                        accessibilityLabel: String(localized: "chat.search.accessibility", defaultValue: "Search in chat", comment: "Accessibility label for in-chat search toggle button"),
+                        color: isSearchPresented ? palette.accent : palette.secondary,
+                        action: {
+                            withAnimation(.easeInOut(duration: 0.18)) {
+                                isSearchPresented.toggle()
+                                if !isSearchPresented {
+                                    searchQuery = ""
+                                    searchMatchIndex = nil
+                                }
+                            }
+                        }
+                    )
+
                     let activeTimer = privateConversationModel.disappearingTimer(for: headerState.conversationPeerID)
                     Menu {
                         ForEach(DisappearingTimer.allCases) { option in
@@ -482,6 +520,49 @@ private struct ContentPrivateChatSheetView: View {
                 }
             }
 
+            if isSearchPresented {
+                let matches = privateSearchMatches
+                ChatSearchBar(
+                    query: $searchQuery,
+                    matchCount: matches.count,
+                    activeMatchIndex: searchMatchIndex,
+                    onPrevious: {
+                        guard !matches.isEmpty else { return }
+                        if let current = searchMatchIndex {
+                            searchMatchIndex = (current - 1 + matches.count) % matches.count
+                        } else {
+                            searchMatchIndex = matches.count - 1
+                        }
+                        searchJumpNonce &+= 1
+                    },
+                    onNext: {
+                        guard !matches.isEmpty else { return }
+                        if let current = searchMatchIndex {
+                            searchMatchIndex = (current + 1) % matches.count
+                        } else {
+                            searchMatchIndex = 0
+                        }
+                        searchJumpNonce &+= 1
+                    },
+                    onClose: {
+                        withAnimation(.easeInOut(duration: 0.18)) {
+                            isSearchPresented = false
+                            searchQuery = ""
+                            searchMatchIndex = nil
+                        }
+                    }
+                )
+                .onChange(of: searchQuery) { newQuery in
+                    let peer = privateConversationModel.selectedPeerID
+                    let latest = MessageInteractionCodec.matchingMessageIDs(
+                        in: privateInboxModel.messages(for: peer),
+                        query: newQuery
+                    )
+                    searchMatchIndex = latest.isEmpty ? nil : latest.count - 1
+                    searchJumpNonce &+= 1
+                }
+            }
+
             PrivateMessageListView(
                 privatePeer: privateConversationModel.selectedPeerID,
                 isAtBottom: $isAtBottomPrivate,
@@ -490,7 +571,9 @@ private struct ContentPrivateChatSheetView: View {
                 imagePreviewURL: $imagePreviewURL,
                 windowCountPrivate: $windowCountPrivate,
                 showSidebar: $showSidebar,
-                isTextFieldFocused: isTextFieldFocused
+                isTextFieldFocused: isTextFieldFocused,
+                highlightedMessageID: activePrivateSearchMessageID,
+                jumpRequestID: searchJumpNonce
             )
             .themedSurface()
             .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -518,6 +601,11 @@ private struct ContentPrivateChatSheetView: View {
                     .environmentObject(privateConversationModel)
                     .environmentObject(peerListModel)
             }
+        }
+        .onChange(of: privateConversationModel.selectedPeerID) { _ in
+            isSearchPresented = false
+            searchQuery = ""
+            searchMatchIndex = nil
         }
     }
 

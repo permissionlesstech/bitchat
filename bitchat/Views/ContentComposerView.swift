@@ -61,6 +61,10 @@ struct ContentComposerView: View {
                 recordingIndicator
             }
 
+            if let reply = draftModel.replyTarget {
+                replyBanner(for: reply)
+            }
+
             HStack(alignment: .center, spacing: 4) {
                 TextField(
                     "",
@@ -210,6 +214,56 @@ private extension ContentComposerView {
         case .location(let channel):
             return String(format: Strings.placeholderLocationFormat, locale: .current, channel.geohash)
         }
+    }
+
+    func replyBanner(for target: MessageReplyTarget) -> some View {
+        HStack(spacing: 8) {
+            Capsule()
+                .fill(palette.accent)
+                .frame(width: 3, height: 28)
+
+            VStack(alignment: .leading, spacing: 1) {
+                Text(
+                    String(
+                        format: String(localized: "composer.replying_to", defaultValue: "Replying to @%@", comment: "Header label in the reply preview banner above the composer"),
+                        locale: .current,
+                        target.sender
+                    )
+                )
+                .bitchatFont(size: 11, weight: .semibold)
+                .foregroundColor(palette.accent)
+                .lineLimit(1)
+
+                Text(verbatim: target.snippet)
+                    .bitchatFont(size: 12)
+                    .foregroundColor(palette.secondary)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+            }
+
+            Spacer(minLength: 4)
+
+            Button {
+                draftModel.clearReplyTarget()
+            } label: {
+                Image(systemName: "xmark.circle.fill")
+                    .font(.system(size: 16))
+                    .foregroundColor(palette.secondary)
+                    .frame(width: 28, height: 28)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(String(localized: "composer.reply.cancel", defaultValue: "Cancel reply", comment: "Button to cancel replying to a message"))
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 6)
+        .background(palette.cardBackground)
+        .overlay(
+            RoundedRectangle(cornerRadius: palette.buttonRadius, style: .continuous)
+                .stroke(palette.cardBorder, lineWidth: 1)
+        )
+        .clipShape(RoundedRectangle(cornerRadius: palette.buttonRadius, style: .continuous))
+        .padding(.horizontal, 4)
     }
 
     var recordingIndicator: some View {

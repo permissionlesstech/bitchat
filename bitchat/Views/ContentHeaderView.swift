@@ -30,6 +30,8 @@ struct ContentHeaderView: View {
     var onSelectTab: ((AppRootTab) -> Void)? = nil
     var onBack: (() -> Void)? = nil
     var placeTitle: String? = nil
+    var isSearchActive: Bool = false
+    var onToggleSearch: (() -> Void)? = nil
 
     @State private var boardPosts: [BoardPostPacket] = []
     @ObservedObject private var nearbyNotes = NearbyNotesCounter.shared
@@ -133,6 +135,15 @@ struct ContentHeaderView: View {
                 }
             }
         } trailing: {
+            if let onToggleSearch {
+                TopBarIconButton(
+                    systemImage: "magnifyingglass",
+                    accessibilityLabel: String(localized: "chat.search.accessibility", defaultValue: "Search in chat", comment: "Accessibility label for the in-chat search toggle button"),
+                    color: isSearchActive ? palette.accent : palette.secondary,
+                    action: onToggleSearch
+                )
+            }
+
             if case .location(let channel) = locationChannelsModel.selectedChannel {
                 TopBarIconButton(
                     systemImage: locationChannelsModel.isBookmarked(channel.geohash) ? "bookmark.fill" : "bookmark",

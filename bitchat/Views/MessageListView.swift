@@ -58,6 +58,8 @@ struct PublicMessageListView: View {
     var isTextFieldFocused: FocusState<Bool>.Binding
     var topContentInset: CGFloat = 0
     var bottomContentInset: CGFloat = 0
+    var highlightedMessageID: String? = nil
+    var jumpRequestID: Int = 0
 
     /// Whether this instance holds the nearby-notes counter active (mesh
     /// public timeline only); balanced against activate/deactivate.
@@ -72,6 +74,8 @@ struct PublicMessageListView: View {
             bluetoothCanScan: bluetoothCanScan,
             topContentInset: topContentInset,
             bottomContentInset: bottomContentInset,
+            highlightedMessageID: highlightedMessageID,
+            jumpRequestID: jumpRequestID,
             liveMessages: { _ in publicChatModel.messages },
             liveContextKey: { _ in publicChatModel.activeChannel.contextKey },
             liveWindowCount: { _ in windowCountPublic },
@@ -178,6 +182,8 @@ struct PrivateMessageListView: View {
     @Binding var windowCountPrivate: [PeerID: Int]
     @Binding var showSidebar: Bool
     var isTextFieldFocused: FocusState<Bool>.Binding
+    var highlightedMessageID: String? = nil
+    var jumpRequestID: Int = 0
 
     var body: some View {
         MessageListContentView(
@@ -188,6 +194,8 @@ struct PrivateMessageListView: View {
             bluetoothCanScan: false,
             topContentInset: 0,
             bottomContentInset: 0,
+            highlightedMessageID: highlightedMessageID,
+            jumpRequestID: jumpRequestID,
             liveMessages: { peer in privateInboxModel.messages(for: peer) },
             liveContextKey: { peer in Self.contextKey(for: peer) },
             liveWindowCount: { peer in
@@ -231,6 +239,8 @@ private struct MessageListContentView: View {
     let bluetoothCanScan: Bool
     let topContentInset: CGFloat
     let bottomContentInset: CGFloat
+    let highlightedMessageID: String?
+    let jumpRequestID: Int
     let liveMessages: (PeerID?) -> [BitchatMessage]
     let liveContextKey: (PeerID?) -> String
     let liveWindowCount: (PeerID?) -> Int
@@ -272,11 +282,18 @@ private struct MessageListContentView: View {
     /// out from around ScrollView prevents double top safe-area insets under
     /// Liquid Glass's `.safeAreaInset` chrome.
     @State private var emptyStateViewportHeight: CGFloat = 0
+    @State private var quoteHighlightMessageID: String?
+    @State private var quoteHighlightTask: Task<Void, Never>?
 
     @ThemedPalette private var palette
 
     var body: some View {
         let currentWindowCount = liveWindowCount(privatePeer)
+        let reactionSummary = MessageInteractionCodec.aggregateReactions(
+            in: messages,
+            isCurrentUser: { conversationUIModel.isSentByCurrentUser($0) }
+        )
+        let activeHighlightID = highlightedMessageID ?? quoteHighlightMessageID
 
         // While the reader is scrolled up, messages landing below the
         // window's first row widen the window in this same render instead of
@@ -293,7 +310,10 @@ private struct MessageListContentView: View {
         let windowedSlice = messages.suffix(renderedWindowCount)
 
         let messageItems: [MessageDisplayItem] = windowedSlice.compactMap { message in
-            guard message.content.hasNonWhitespaceContent else { return nil }
+            guard message.content.hasNonWhitespaceContent,
+                  !reactionSummary.consumedControlMessageIDs.contains(message.id) else {
+                return nil
+            }
             return MessageDisplayItem(id: "\(contextKey)|\(message.id)", message: message)
         }
         let hasEarlierMessages = messages.count > windowedSlice.count
@@ -317,9 +337,30 @@ private struct MessageListContentView: View {
                                     message: message,
                                     deliveryStatus: message.deliveryStatus,
                                     privatePeer: privatePeer,
+                                    reactions: reactionSummary.reactionsByMessageID[message.id] ?? [],
+                                    isHighlighted: activeHighlightID == message.id,
                                     imagePreviewURL: $imagePreviewURL,
                                     showSidebar: $showSidebar,
-                                    onInsertMention: insertMention
+                                    onInsertMention: insertMention,
+                                    onReply: { target in
+                                        appEnvironmentModels?.composerDraftModel.setReplyTarget(target)
+                                        isTextFieldFocused.wrappedValue = true
+                                    },
+                                    onReact: { emoji in
+                                        let payload = MessageInteractionCodec.encodeReaction(
+                                            emoji: emoji,
+                                            toMessageID: message.id
+                                        )
+                                        conversationUIModel.sendMessage(payload)
+                                    },
+                                    onTapQuote: { quotedSender, quotedSnippet in
+                                        jumpToQuotedMessage(
+                                            sender: quotedSender,
+                                            snippet: quotedSnippet,
+                                            beforeMessageID: message.id,
+                                            proxy: proxy
+                                        )
+                                    }
                                 )
                                 .equatable()
                                 .onAppear {
@@ -434,6 +475,16 @@ private struct MessageListContentView: View {
             .onChange(of: TimelineSignature(privatePeer: privatePeer, contextKey: contextKey, messages: messages)) { signature in
                 onTimelineChange(signature, proxy: proxy)
             }
+            .onChange(of: jumpRequestID) { _ in
+                if let targetID = highlightedMessageID {
+                    jumpToMessage(id: targetID, proxy: proxy)
+                }
+            }
+            .onChange(of: highlightedMessageID) { targetID in
+                if let targetID {
+                    jumpToMessage(id: targetID, proxy: proxy)
+                }
+            }
             .confirmationDialog(
                 selectedMessageSender.map { "@\($0)" } ?? String(localized: "content.actions.title", comment: "Fallback title for the message action sheet"),
                 isPresented: $showMessageActions,
@@ -490,6 +541,8 @@ private struct MessageListContentView: View {
             }
             .onDisappear {
                 cancelFollowScroll()
+                quoteHighlightTask?.cancel()
+                quoteHighlightTask = nil
             }
         }
         // Reset UIScrollView state when switching channels or DMs so a deep
@@ -861,6 +914,54 @@ private extension MessageListContentView {
         timer.invalidate()
         scrollThrottleTimer = nil
     }
+
+    func jumpToMessage(id targetID: String, proxy: ScrollViewProxy) {
+        let all = liveMessages(privatePeer)
+        guard let index = all.firstIndex(where: { $0.id == targetID }) else { return }
+        let neededCount = all.count - index + 5
+        if neededCount > liveWindowCount(privatePeer) {
+            setWindowCount(neededCount, privatePeer)
+        }
+        cancelFollowScroll()
+        let rowID = "\(liveContextKey(privatePeer))|\(targetID)"
+        DispatchQueue.main.async {
+            withAnimation(.easeInOut(duration: 0.25)) {
+                proxy.scrollTo(rowID, anchor: .center)
+            }
+        }
+    }
+
+    func jumpToQuotedMessage(
+        sender: String,
+        snippet: String,
+        beforeMessageID: String,
+        proxy: ScrollViewProxy
+    ) {
+        let all = liveMessages(privatePeer)
+        let searchLimit = all.firstIndex(where: { $0.id == beforeMessageID }) ?? all.count
+        let prefix = all.prefix(searchLimit)
+        let needle = snippet.hasSuffix("…") ? String(snippet.dropLast()) : snippet
+        guard let match = prefix.last(where: { candidate in
+            guard candidate.sender != "system",
+                  MessageInteractionCodec.parseReaction(from: candidate.content) == nil else {
+                return false
+            }
+            let candidateBody = MessageInteractionCodec.parseReply(from: candidate.content)?.body ?? candidate.content
+            return candidate.sender.caseInsensitiveCompare(sender) == .orderedSame
+                && candidateBody.localizedCaseInsensitiveContains(needle)
+        }) else { return }
+
+        quoteHighlightTask?.cancel()
+        quoteHighlightMessageID = match.id
+        jumpToMessage(id: match.id, proxy: proxy)
+        quoteHighlightTask = Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 1_800_000_000)
+            guard !Task.isCancelled else { return }
+            if quoteHighlightMessageID == match.id {
+                quoteHighlightMessageID = nil
+            }
+        }
+    }
 }
 
 private struct MessageRowView: View, Equatable {
@@ -874,31 +975,48 @@ private struct MessageRowView: View, Equatable {
     private let messageIdentity: ObjectIdentifier
     let deliveryStatus: DeliveryStatus
     let privatePeer: PeerID?
+    let reactions: [AggregatedReaction]
+    let isHighlighted: Bool
     @Binding var imagePreviewURL: URL?
     @Binding var showSidebar: Bool
     let onInsertMention: (String) -> Void
+    let onReply: (MessageReplyTarget) -> Void
+    let onReact: (String) -> Void
+    let onTapQuote: (String, String) -> Void
 
     init(
         message: BitchatMessage,
         deliveryStatus: DeliveryStatus,
         privatePeer: PeerID?,
+        reactions: [AggregatedReaction],
+        isHighlighted: Bool,
         imagePreviewURL: Binding<URL?>,
         showSidebar: Binding<Bool>,
-        onInsertMention: @escaping (String) -> Void
+        onInsertMention: @escaping (String) -> Void,
+        onReply: @escaping (MessageReplyTarget) -> Void,
+        onReact: @escaping (String) -> Void,
+        onTapQuote: @escaping (String, String) -> Void
     ) {
         self.message = message
         self.messageIdentity = ObjectIdentifier(message)
         self.deliveryStatus = deliveryStatus
         self.privatePeer = privatePeer
+        self.reactions = reactions
+        self.isHighlighted = isHighlighted
         self._imagePreviewURL = imagePreviewURL
         self._showSidebar = showSidebar
         self.onInsertMention = onInsertMention
+        self.onReply = onReply
+        self.onReact = onReact
+        self.onTapQuote = onTapQuote
     }
 
     nonisolated static func == (lhs: MessageRowView, rhs: MessageRowView) -> Bool {
         lhs.messageIdentity == rhs.messageIdentity
             && lhs.deliveryStatus == rhs.deliveryStatus
             && lhs.privatePeer == rhs.privatePeer
+            && lhs.reactions == rhs.reactions
+            && lhs.isHighlighted == rhs.isHighlighted
     }
 
     var body: some View {
@@ -908,7 +1026,37 @@ private struct MessageRowView: View, Equatable {
             .opacity(message.isArchivedEcho ? 0.55 : 1)
             .contentShape(Rectangle())
             .contextMenu {
-                let showsUserActions = message.sender != "system" && !conversationUIModel.isSentByCurrentUser(message)
+                let isRegularMessage = message.sender != "system"
+                let showsUserActions = isRegularMessage && !conversationUIModel.isSentByCurrentUser(message)
+                if isRegularMessage {
+                    Button {
+                        onReply(
+                            MessageReplyTarget(
+                                messageID: message.id,
+                                sender: message.sender,
+                                content: message.content
+                            )
+                        )
+                    } label: {
+                        Label(
+                            String(localized: "content.actions.reply", defaultValue: "Reply", comment: "Context menu action to quote-reply to a message"),
+                            systemImage: "arrowshape.turn.up.left"
+                        )
+                    }
+
+                    Menu {
+                        ForEach(MessageInteractionCodec.quickReactionPalette, id: \.self) { emoji in
+                            Button(emoji) {
+                                onReact(emoji)
+                            }
+                        }
+                    } label: {
+                        Label(
+                            String(localized: "content.actions.react", defaultValue: "React", comment: "Context menu submenu to add an emoji reaction to a message"),
+                            systemImage: "face.smiling"
+                        )
+                    }
+                }
                 if showsUserActions {
                     // Mention and DM are redundant inside a 1:1 conversation:
                     // mentioning the only other participant is noise, and "DM"
@@ -934,7 +1082,8 @@ private struct MessageRowView: View, Equatable {
                     }
                 }
                 Button("content.message.copy") {
-                    ClipboardHelper.copy(message.content)
+                    let copyText = MessageInteractionCodec.parseReply(from: message.content)?.body ?? message.content
+                    ClipboardHelper.copy(copyText)
                 }
                 if isResendableFailedMessage(message) {
                     Button("content.actions.resend") {
@@ -958,10 +1107,29 @@ private struct MessageRowView: View, Equatable {
                 .fixedSize(horizontal: false, vertical: true)
                 .frame(maxWidth: .infinity, alignment: .leading)
         } else if let media = conversationUIModel.mediaAttachment(for: message) {
-            MediaMessageView(message: message, media: media, imagePreviewURL: $imagePreviewURL)
+            VStack(alignment: .leading, spacing: 4) {
+                MediaMessageView(message: message, media: media, imagePreviewURL: $imagePreviewURL)
+                if !reactions.isEmpty {
+                    MessageReactionChipsView(reactions: reactions, onToggleReaction: onReact)
+                }
+            }
+            .padding(.vertical, isHighlighted ? 4 : 0)
+            .padding(.horizontal, isHighlighted ? 6 : 0)
+            .background(
+                isHighlighted
+                    ? RoundedRectangle(cornerRadius: 8, style: .continuous)
+                        .fill(palette.accent.opacity(0.16))
+                    : nil
+            )
         } else {
-            TextMessageView(message: message)
-                .equatable()
+            TextMessageView(
+                message: message,
+                reactions: reactions,
+                isHighlighted: isHighlighted,
+                onToggleReaction: onReact,
+                onTapQuote: onTapQuote
+            )
+            .equatable()
         }
     }
 

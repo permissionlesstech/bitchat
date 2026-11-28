@@ -219,6 +219,10 @@ struct ContentView: View {
     @State private var windowCountPrivate: [PeerID: Int] = [:]
     @State private var topChromeHeight: CGFloat = ChromeMetrics.barHeight + 4
     @State private var bottomChromeHeight: CGFloat = 54
+    @State private var isPublicSearchPresented = false
+    @State private var publicSearchQuery = ""
+    @State private var publicSearchMatchIndex: Int? = nil
+    @State private var publicSearchJumpNonce = 0
 
     private let shouldPersistSelection: Bool
 
@@ -376,6 +380,9 @@ struct ContentView: View {
             ))
         }
         .onChange(of: locationChannelsModel.selectedChannel) { newChannel in
+            isPublicSearchPresented = false
+            publicSearchQuery = ""
+            publicSearchMatchIndex = nil
             sharedContentImportModel.updateDestination(sharedContentDestination)
             switch newChannel {
             case .mesh:
@@ -406,6 +413,9 @@ struct ContentView: View {
             }
         }
         .onChange(of: selectedTab) { newTab in
+            isPublicSearchPresented = false
+            publicSearchQuery = ""
+            publicSearchMatchIndex = nil
             if shouldPersistSelection {
                 AppRootTab.persist(newTab)
             }
@@ -739,8 +749,23 @@ struct ContentView: View {
         }
     }
 
+    private var publicSearchMatches: [String] {
+        guard isPublicSearchPresented,
+              let publicMessages = appEnvironmentModels?.publicChatModel.messages else {
+            return []
+        }
+        return MessageInteractionCodec.matchingMessageIDs(in: publicMessages, query: publicSearchQuery)
+    }
+
+    private var activePublicSearchMessageID: String? {
+        let matches = publicSearchMatches
+        guard let idx = publicSearchMatchIndex, matches.indices.contains(idx) else { return nil }
+        return matches[idx]
+    }
+
     private func headerView(onBack: (() -> Void)?, placeTitle: String?) -> some View {
-        VStack(spacing: 0) {
+        let matches = publicSearchMatches
+        return VStack(spacing: 0) {
             ContentHeaderView(
                 showSidebar: $showSidebar,
                 isNicknameFieldFocused: $isNicknameFieldFocused,
@@ -750,8 +775,58 @@ struct ContentView: View {
                 navItems: rootNavItems,
                 onSelectTab: selectRootTab,
                 onBack: onBack,
-                placeTitle: placeTitle
+                placeTitle: placeTitle,
+                isSearchActive: isPublicSearchPresented,
+                onToggleSearch: {
+                    withAnimation(.easeInOut(duration: 0.18)) {
+                        isPublicSearchPresented.toggle()
+                        if !isPublicSearchPresented {
+                            publicSearchQuery = ""
+                            publicSearchMatchIndex = nil
+                        }
+                    }
+                }
             )
+
+            if isPublicSearchPresented {
+                ChatSearchBar(
+                    query: $publicSearchQuery,
+                    matchCount: matches.count,
+                    activeMatchIndex: publicSearchMatchIndex,
+                    onPrevious: {
+                        guard !matches.isEmpty else { return }
+                        if let current = publicSearchMatchIndex {
+                            publicSearchMatchIndex = (current - 1 + matches.count) % matches.count
+                        } else {
+                            publicSearchMatchIndex = matches.count - 1
+                        }
+                        publicSearchJumpNonce &+= 1
+                    },
+                    onNext: {
+                        guard !matches.isEmpty else { return }
+                        if let current = publicSearchMatchIndex {
+                            publicSearchMatchIndex = (current + 1) % matches.count
+                        } else {
+                            publicSearchMatchIndex = 0
+                        }
+                        publicSearchJumpNonce &+= 1
+                    },
+                    onClose: {
+                        withAnimation(.easeInOut(duration: 0.18)) {
+                            isPublicSearchPresented = false
+                            publicSearchQuery = ""
+                            publicSearchMatchIndex = nil
+                        }
+                    }
+                )
+                .onChange(of: publicSearchQuery) { newQuery in
+                    let latest = appEnvironmentModels.map {
+                        MessageInteractionCodec.matchingMessageIDs(in: $0.publicChatModel.messages, query: newQuery)
+                    } ?? []
+                    publicSearchMatchIndex = latest.isEmpty ? nil : latest.count - 1
+                    publicSearchJumpNonce &+= 1
+                }
+            }
 
             // Failed-wipe outranks connectivity: "your data may still be
             // here" matters more than "the radio is off".
@@ -814,7 +889,9 @@ struct ContentView: View {
             showSidebar: $showSidebar,
             isTextFieldFocused: $isTextFieldFocused,
             topContentInset: glassTopContentInset,
-            bottomContentInset: glassBottomContentInset
+            bottomContentInset: glassBottomContentInset,
+            highlightedMessageID: activePublicSearchMessageID,
+            jumpRequestID: publicSearchJumpNonce
         )
     }
 

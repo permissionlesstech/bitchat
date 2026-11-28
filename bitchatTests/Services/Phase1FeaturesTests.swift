@@ -528,4 +528,110 @@ final class InboxPinnedChatsTests: XCTestCase {
         PrivacyModeSettings.setMode(.everyday, in: defaults)
         XCTAssertFalse(NotificationPrivacySettings.hideMessagePreviews(in: defaults))
     }
+
+    func test_quotedReplyRoundTripAndNestedSnippetStripping() {
+        let original = MessageReplyTarget(
+            messageID: "msg-12345678",
+            sender: "alice",
+            content: "Meet at the north gate at 5pm\nBring jackets"
+        )
+        let encoded = MessageInteractionCodec.encodeReply(to: original, body: "On my way!")
+        XCTAssertEqual(encoded, "> @alice: Meet at the north gate at 5pm Bring jackets\nOn my way!")
+
+        let parsed = MessageInteractionCodec.parseReply(from: encoded)
+        XCTAssertEqual(parsed?.quotedSender, "alice")
+        XCTAssertEqual(parsed?.quotedSnippet, "Meet at the north gate at 5pm Bring jackets")
+        XCTAssertEqual(parsed?.body, "On my way!")
+
+        // Replying to a reply quotes only the inner body, not nested `>` lines.
+        let nested = MessageReplyTarget(messageID: "msg-2", sender: "bob", content: encoded)
+        XCTAssertEqual(nested.snippet, "On my way!")
+    }
+
+    func test_reactionAggregationToggleAndOrphanSuppression() {
+        let alice = PeerID(str: "1111111111111111")
+        let bob = PeerID(str: "2222222222222222")
+        let target = BitchatMessage(
+            id: "abcd1234-full-id",
+            sender: "alice",
+            content: "Dinner at 7?",
+            timestamp: Date(),
+            isRelay: false,
+            isPrivate: true,
+            senderPeerID: alice
+        )
+        let bobThumbs = BitchatMessage(
+            id: "r1",
+            sender: "bob",
+            content: MessageInteractionCodec.encodeReaction(emoji: "👍", toMessageID: target.id),
+            timestamp: Date().addingTimeInterval(1),
+            isRelay: false,
+            isPrivate: true,
+            senderPeerID: bob
+        )
+        let myThumbs = BitchatMessage(
+            id: "r2",
+            sender: "me",
+            content: MessageInteractionCodec.encodeReaction(emoji: "👍", toMessageID: target.id),
+            timestamp: Date().addingTimeInterval(2),
+            isRelay: false,
+            isPrivate: true,
+            senderPeerID: alice
+        )
+        let myHeartAdd = BitchatMessage(
+            id: "r3",
+            sender: "me",
+            content: MessageInteractionCodec.encodeReaction(emoji: "❤️", toMessageID: target.id),
+            timestamp: Date().addingTimeInterval(3),
+            isRelay: false,
+            isPrivate: true,
+            senderPeerID: alice
+        )
+        let myHeartRemove = BitchatMessage(
+            id: "r4",
+            sender: "me",
+            content: MessageInteractionCodec.encodeReaction(emoji: "❤️", toMessageID: target.id),
+            timestamp: Date().addingTimeInterval(4),
+            isRelay: false,
+            isPrivate: true,
+            senderPeerID: alice
+        )
+        let orphan = BitchatMessage(
+            id: "r5",
+            sender: "bob",
+            content: "[react:deadbeef:🔥]",
+            timestamp: Date().addingTimeInterval(5),
+            isRelay: false,
+            isPrivate: true,
+            senderPeerID: bob
+        )
+
+        let summary = MessageInteractionCodec.aggregateReactions(
+            in: [target, bobThumbs, myThumbs, myHeartAdd, myHeartRemove, orphan],
+            isCurrentUser: { $0.sender == "me" }
+        )
+
+        XCTAssertEqual(summary.consumedControlMessageIDs, Set(["r1", "r2", "r3", "r4", "r5"]))
+        XCTAssertEqual(summary.reactionsByMessageID[target.id], [
+            AggregatedReaction(emoji: "👍", count: 2, includesCurrentUser: true)
+        ])
+    }
+
+    func test_inChatSearchSkipsSystemAndReactionControlMessages() {
+        let m1 = BitchatMessage(id: "m1", sender: "alice", content: "Coffee at Blue Bottle", timestamp: Date(), isRelay: false, isPrivate: true)
+        let sys = BitchatMessage(id: "sys", sender: "system", content: "Coffee system line", timestamp: Date(), isRelay: false, isPrivate: false)
+        let react = BitchatMessage(id: "r1", sender: "bob", content: "[react:m1:☕️]", timestamp: Date(), isRelay: false, isPrivate: true)
+        let m2 = BitchatMessage(
+            id: "m2",
+            sender: "bob",
+            content: "> @alice: Coffee at Blue Bottle\nSounds great!",
+            timestamp: Date(),
+            isRelay: false,
+            isPrivate: true
+        )
+
+        XCTAssertEqual(MessageInteractionCodec.matchingMessageIDs(in: [m1, sys, react, m2], query: "coffee"), ["m1"])
+        XCTAssertEqual(MessageInteractionCodec.matchingMessageIDs(in: [m1, sys, react, m2], query: "sounds"), ["m2"])
+        XCTAssertEqual(MessageInteractionCodec.matchingMessageIDs(in: [m1, sys, react, m2], query: "alice"), ["m1"])
+    }
 }

@@ -222,6 +222,64 @@ final class PrivateConversationModel: ObservableObject {
         return result
     }
 
+    // MARK: - Contact Detail Helpers
+
+    func sharedGroups(for peerID: PeerID) -> [BitchatGroup] {
+        guard let fingerprint = chatViewModel.getFingerprint(for: peerID) else { return [] }
+        return chatViewModel.groupStore.groups.filter { group in
+            group.members.contains(where: { $0.fingerprint == fingerprint })
+        }
+    }
+
+    func isMuted(for peerID: PeerID) -> Bool {
+        chatViewModel.isConversationMuted(for: peerID)
+    }
+
+    func toggleMute(for peerID: PeerID) {
+        let key: String
+        if peerID.isGroup {
+            key = peerID.id
+        } else {
+            key = chatViewModel.getFingerprint(for: peerID) ?? peerID.id
+        }
+        InboxMutedChats.toggle(key)
+        objectWillChange.send()
+    }
+
+    func isBlocked(peerID: PeerID) -> Bool {
+        if peerID.isGeoDM || peerID.isGeoChat,
+           let hex = chatViewModel.fullNostrHex(forSenderPeerID: peerID) {
+            return chatViewModel.isGeohashUserBlocked(pubkeyHexLowercased: hex)
+        }
+        return chatViewModel.isPeerBlocked(peerID)
+    }
+
+    func toggleBlock(for peerID: PeerID, displayName: String) {
+        if isBlocked(peerID: peerID) {
+            if peerID.isGeoDM || peerID.isGeoChat,
+               let hex = chatViewModel.fullNostrHex(forSenderPeerID: peerID) {
+                chatViewModel.unblockGeohashUser(pubkeyHexLowercased: hex, displayName: displayName)
+            } else {
+                chatViewModel.unblockMeshPeer(peerID: peerID, displayName: displayName)
+            }
+        } else {
+            if peerID.isGeoDM || peerID.isGeoChat,
+               let hex = chatViewModel.fullNostrHex(forSenderPeerID: peerID) {
+                chatViewModel.blockGeohashUser(pubkeyHexLowercased: hex, displayName: displayName)
+            } else {
+                chatViewModel.blockMeshPeer(peerID: peerID, displayName: displayName)
+            }
+        }
+        refreshSelectedConversation()
+        objectWillChange.send()
+    }
+
+    func clearHistory(for peerID: PeerID) {
+        conversations.clear(.directPeer(peerID))
+        chatViewModel.flushPersistedPrivateHistorySynchronously()
+        objectWillChange.send()
+    }
+
     private func bind() {
         conversations.$selectedPrivatePeerID
             .receive(on: DispatchQueue.main)

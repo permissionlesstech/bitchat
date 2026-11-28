@@ -87,7 +87,7 @@ final class ChatMessageFormatter {
             }
             result.append(AttributedString("> ").mergingAttributes(senderStyle))
 
-            let content = message.content
+            let content = MessageInteractionCodec.parseReply(from: message.content)?.body ?? message.content
 
             if content.isOversizedForRichFormatting() {
                 var plainStyle = AttributeContainer()
