@@ -101,10 +101,7 @@ struct TextMessageView: View, Equatable {
             // the first text line rather than hanging below its visual center.
             HStack(alignment: .firstTextBaseline, spacing: 0) {
                 let isExpanded = expandedMessageIDs.contains(message.id)
-                MessageLeadingBadges(
-                    showsVerifiedSeal: conversationUIModel.showsVerifiedSeal(for: message),
-                    isBridged: message.isBridged
-                )
+                MessageLeadingBadges(isBridged: message.isBridged)
                 Text(conversationUIModel.formatMessage(message, colorScheme: colorScheme, theme: theme))
                     .fixedSize(horizontal: false, vertical: true)
                     .lineLimit(scan.isLongForDisplay && !isExpanded ? TransportConfig.uiLongMessageLineLimit : nil)

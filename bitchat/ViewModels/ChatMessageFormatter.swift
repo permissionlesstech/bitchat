@@ -90,9 +90,8 @@ final class ChatMessageFormatter {
                 suffixStyle.foregroundColor = baseColor.opacity(0.6)
                 result.append(AttributedString(suffix).mergingAttributes(suffixStyle))
             }
-            // Private rows render a filled SF Symbol seal as a leading badge
-            // (TextMessageView / MediaMessageView); skip the in-string ✓ there
-            // so verified DMs don't show two markers.
+            // Verification for 1:1 DMs lives in the chat header rather than
+            // repeating a seal on every private message row.
             if isVerifiedSender, !message.isPrivate {
                 appendVerifiedSeal(to: &result, baseColor: baseColor, design: design)
             }
