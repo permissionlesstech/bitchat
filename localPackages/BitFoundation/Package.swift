@@ -23,7 +23,10 @@ let package = Package(
             dependencies: [
                 .product(name: "BitLogger", package: "BitLogger")
             ],
-            path: "Sources"
+            path: "Sources",
+            swiftSettings: [
+                .unsafeFlags(["-Osize"], .when(configuration: .release))
+            ]
         ),
         .testTarget(
             name: "BitFoundationTests",

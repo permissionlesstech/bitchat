@@ -766,16 +766,31 @@
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = "$(IPHONEOS_DEPLOYMENT_TARGET)";
-				LLVM_LTO = YES_THIN;
+				LLVM_LTO = YES;
 				MACOSX_DEPLOYMENT_TARGET = "$(MACOSX_DEPLOYMENT_TARGET)";
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
+				OTHER_LDFLAGS = (
+					"$(inherited)",
+					"-Wl,-mllvm,-enable-machine-outliner=always",
+					"-Wl,-mllvm,-machine-outliner-reruns=2",
+					"-Wl,-dead_strip_dylibs",
+					"-Wl,-objc_relative_method_lists",
+				);
+				OTHER_SWIFT_FLAGS = (
+					"$(inherited)",
+					"-Xfrontend",
+					"-internalize-at-link",
+					"-Xfrontend",
+					"-mergeable-traps",
+				);
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = NO;
 				STRIP_INSTALLED_PRODUCT = YES;
 				STRIP_STYLE = all;
 				STRIP_SWIFT_SYMBOLS = YES;
 				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_LTO = YES;
 				SWIFT_OPTIMIZATION_LEVEL = "-Osize";
 				SWIFT_REFLECTION_METADATA_LEVEL = "without-names";
 				SWIFT_VERSION = "$(SWIFT_VERSION)";

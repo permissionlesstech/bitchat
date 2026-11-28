@@ -31,6 +31,9 @@ let package = Package(
                 "TorURLSession.swift",
                 "TorNotifications.swift"
             ],
+            swiftSettings: [
+                .unsafeFlags(["-Osize"], .when(configuration: .release))
+            ],
             linkerSettings: [
                 .linkedLibrary("resolv"),
                 .linkedLibrary("z"),

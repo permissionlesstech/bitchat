@@ -17,7 +17,10 @@ let package = Package(
     targets: [
         .target(
             name: "BitLogger",
-            path: "Sources"
+            path: "Sources",
+            swiftSettings: [
+                .unsafeFlags(["-Osize"], .when(configuration: .release))
+            ]
         ),
         .testTarget(
             name: "BitLoggerTests",
