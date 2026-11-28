@@ -248,22 +248,34 @@ final class AppRuntime: ObservableObject {
             guard chatViewModel.networkActivationAllowed else { return }
             chatViewModel.meshService.startServices()
             TorManager.shared.setAppForeground(true)
-            let shouldRefreshNostrConnections = didHandleInitialActive && didEnterBackground
 
-            if didHandleInitialActive && didEnterBackground {
-                if TorManager.shared.isAutoStartAllowed() && !TorManager.shared.isReady {
-                    TorManager.shared.ensureRunningOnForeground()
-                }
-            } else {
-                didHandleInitialActive = true
-            }
-
+            let reconnectAction = Self.resolveForegroundNostrReconnectAction(
+                didEnterBackground: didEnterBackground,
+                activationAllowed: NetworkActivationService.shared.activationAllowed,
+                userTorEnabled: NetworkActivationService.shared.userTorEnabled,
+                torAutoStartAllowed: TorManager.shared.isAutoStartAllowed()
+            )
+            didHandleInitialActive = true
             didEnterBackground = false
 
-            if shouldRefreshNostrConnections && TorManager.shared.isAutoStartAllowed() {
-                Task.detached {
-                    let _ = await TorManager.shared.awaitReady(timeout: 60)
+            switch reconnectAction {
+            case .none:
+                break
+            case .reconnectDirect:
+                TorURLSession.shared.rebuild()
+                NostrRelayManager.shared.resetAllConnections()
+            case .awaitTorAndReconnect:
+                if !TorManager.shared.isReady {
+                    TorManager.shared.ensureRunningOnForeground()
+                }
+                Task.detached { [weak self] in
+                    let ready = await TorManager.shared.awaitReady(timeout: 60)
+                    guard ready else { return }
                     await MainActor.run {
+                        guard let self,
+                              self.chatViewModel.networkActivationAllowed,
+                              NetworkActivationService.shared.activationAllowed,
+                              NetworkActivationService.shared.userTorEnabled else { return }
                         TorURLSession.shared.rebuild()
                         NostrRelayManager.shared.resetAllConnections()
                     }
@@ -337,8 +349,11 @@ private extension AppRuntime {
             .removeDuplicates()
             .receive(on: DispatchQueue.main)
             .sink { [weak self] allowed in
-                guard allowed, self?.chatViewModel.networkActivationAllowed == true else { return }
+                guard allowed, let self, self.chatViewModel.networkActivationAllowed else { return }
                 GeoRelayDirectory.shared.prefetchIfNeeded()
+                // Recover any active location channel whose subscribe() was
+                // dropped while offline or during the teleport activation race.
+                self.chatViewModel.ensureCurrentGeohashSubscribed()
             }
             .store(in: &cancellables)
 
@@ -439,7 +454,15 @@ private extension AppRuntime {
             chatViewModel.nostrHandlersSetup = true
         }
 
-        guard !isInitialConnection else { return }
+        if isInitialConnection {
+            // If the app launched offline (or teleported before activation
+            // opened), the active geohash subscription and sampling were
+            // dropped before relays came up. Ensure they are registered now
+            // without disturbing an already-subscribed online launch.
+            chatViewModel.ensureCurrentGeohashSubscribed()
+            chatViewModel.geoChannelCoordinator?.refreshSampling()
+            return
+        }
 
         chatViewModel.resubscribeCurrentGeohash()
         chatViewModel.geoChannelCoordinator?.refreshSampling()
@@ -525,5 +548,31 @@ extension AppRuntime {
         // uses.
         if !hasPrivateChatOpen, isLocationChannelActive { return .warnLocally }
         return .forwardToChat
+    }
+}
+
+// MARK: - Foreground Nostr reconnection
+
+extension AppRuntime {
+    enum ForegroundNostrReconnectAction: Equatable {
+        case none
+        case reconnectDirect
+        case awaitTorAndReconnect
+    }
+
+    /// Pure decision table for foreground Nostr recovery after `.background`
+    /// disconnected relay sockets. Everyday Mode (Tor off) must reconnect
+    /// directly instead of gating on `TorManager.isAutoStartAllowed()`.
+    nonisolated static func resolveForegroundNostrReconnectAction(
+        didEnterBackground: Bool,
+        activationAllowed: Bool,
+        userTorEnabled: Bool,
+        torAutoStartAllowed: Bool
+    ) -> ForegroundNostrReconnectAction {
+        guard didEnterBackground, activationAllowed else { return .none }
+        if userTorEnabled {
+            return torAutoStartAllowed ? .awaitTorAndReconnect : .none
+        }
+        return .reconnectDirect
     }
 }

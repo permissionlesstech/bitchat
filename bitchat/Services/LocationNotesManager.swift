@@ -17,6 +17,12 @@ struct LocationNotesDependencies {
     var now: () -> Date
     // Fires when the geo relay directory refreshes; used to retry after "no relays".
     var relayDirectoryUpdates: AnyPublisher<Void, Never> = Empty(completeImmediately: false).eraseToAnyPublisher()
+    /// Fires when Nostr relay connectivity comes back online so notes opened
+    /// while offline (`.connecting`) refresh immediately without waiting for
+    /// geo relays that were never added while activation was disallowed.
+    var networkBecameAvailable: @MainActor () -> AnyPublisher<Void, Never> = {
+        Empty(completeImmediately: false).eraseToAnyPublisher()
+    }
     /// Whether any of the target relays has a live connection — distinguishes
     /// "loaded, empty" from "still connecting (Tor warming up)" when EOSE
     /// fires without data. Defaults to true so tests keep legacy behavior.
@@ -58,6 +64,18 @@ struct LocationNotesDependencies {
             .publisher(for: .geoRelayDirectoryDidRefresh)
             .map { _ in () }
             .eraseToAnyPublisher(),
+        networkBecameAvailable: {
+            Publishers.Merge(
+                NostrRelayManager.shared.$isConnected
+                    .removeDuplicates()
+                    .filter { $0 }
+                    .map { _ in () },
+                NetworkActivationService.shared.$activationAllowed
+                    .removeDuplicates()
+                    .filter { $0 }
+                    .map { _ in () }
+            ).eraseToAnyPublisher()
+        },
         anyRelayConnected: { relayUrls in
             NostrRelayManager.shared.isAnyRelayConnected(among: relayUrls)
         }
@@ -132,6 +150,7 @@ final class LocationNotesManager: ObservableObject {
     private var subscriptionID: String?
     private var noteIDs = Set<String>() // O(1) duplicate detection
     private var directoryUpdateCancellable: AnyCancellable?
+    private var networkAvailableCancellable: AnyCancellable?
     private var expiryPruneTimer: Timer?
     private var connectivityRetryTimer: Timer?
     private let dependencies: LocationNotesDependencies
@@ -165,6 +184,13 @@ final class LocationNotesManager: ObservableObject {
                 Task { @MainActor [weak self] in
                     guard let self, self.state == .noRelays else { return }
                     self.subscribe()
+                }
+            }
+        networkAvailableCancellable = dependencies.networkBecameAvailable()
+            .sink { [weak self] in
+                Task { @MainActor [weak self] in
+                    guard let self, self.state == .connecting else { return }
+                    self.refresh()
                 }
             }
         // NIP-40 notes can expire while displayed (a 24h dead drop crossing
@@ -528,6 +554,7 @@ final class LocationNotesManager: ObservableObject {
         expiryPruneTimer?.invalidate()
         expiryPruneTimer = nil
         directoryUpdateCancellable = nil
+        networkAvailableCancellable = nil
         notes.removeAll(keepingCapacity: false)
         noteIDs.removeAll(keepingCapacity: false)
         ownPubkey = nil

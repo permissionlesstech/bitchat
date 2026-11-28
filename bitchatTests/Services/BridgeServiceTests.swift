@@ -188,6 +188,26 @@ struct BridgeServiceTests {
         #expect(fixture.service.subscribedCells.count == 9)
     }
 
+    @Test func ensureSubscriptionOpenReopensOnlyWhenDroppedOffline() {
+        let fixture = Fixture(enabled: true)
+        var registered = false
+        fixture.service.isSubscriptionRegistered = { registered }
+
+        // Enabled while offline: activeCell is set, initial subscribe dropped by gate.
+        fixture.service.refreshRendezvous()
+        #expect(fixture.service.activeCell == Self.cell)
+        #expect(fixture.openedSubscriptions.count == 1)
+
+        // Relays come back online with no registered subscription -> reopens.
+        fixture.service.ensureSubscriptionOpen()
+        #expect(fixture.openedSubscriptions.count == 2)
+
+        // Once registered, ensureSubscriptionOpen is a no-op.
+        registered = true
+        fixture.service.ensureSubscriptionOpen()
+        #expect(fixture.openedSubscriptions.count == 2)
+    }
+
     @Test func missingCellRequestsALocationFix() {
         // Field bug: the bridge waited passively for availableChannels,
         // which only flow while some other feature pumps location. Bridging

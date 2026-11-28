@@ -144,6 +144,24 @@ private extension ChatViewModelBootstrapper {
                 viewModel.conversations.setDeliveryStatus(.carried, forMessageID: messageID)
             }
         }
+        // When a queued/offline DM flushes onto a newly available transport
+        // (BLE reconnect or Nostr relay recovery), advance `.sending` → `.sent`
+        // (ConversationStore's no-downgrade rule protects `.carried`/`.delivered`/`.read`).
+        viewModel.messageRouter.onMessageSent = { [weak viewModel] messageID, _ in
+            guard let viewModel else { return }
+            _ = viewModel.conversations.setDeliveryStatus(.sent, forMessageID: messageID)
+        }
+        // Offline → online DM handoff: flush retained outbox messages, retry
+        // bridge courier drops, and emit any deferred read receipts for the
+        // currently viewed chat the moment a DM-capable Nostr relay connects.
+        viewModel.messageRouter.nostrTransport?.onRelayConnectivityChanged = { [weak viewModel] connected in
+            guard let viewModel, connected else { return }
+            viewModel.messageRouter.flushAllOutbox()
+            viewModel.messageRouter.retryBridgeCourierDeposits()
+            if let selectedPeer = viewModel.selectedPrivateChatPeer {
+                viewModel.markPrivateMessagesAsRead(from: selectedPeer)
+            }
+        }
         viewModel.commandProcessor.contextProvider = viewModel
         viewModel.commandProcessor.meshService = viewModel.meshService
         viewModel.participantTracker.configure(context: viewModel)
@@ -393,6 +411,7 @@ private extension ChatViewModelBootstrapper {
             .sink { connected in
                 if connected {
                     GatewayService.shared.flushQueuedUplinks()
+                    BridgeService.shared.ensureSubscriptionOpen()
                     BridgeService.shared.flushQueuedUplinks()
                     BridgeService.shared.publishPresence()
                 }
@@ -433,6 +452,9 @@ private extension ChatViewModelBootstrapper {
         }
         bridge.closeSubscription = {
             NostrRelayManager.shared.unsubscribe(id: Self.bridgeSubscriptionID)
+        }
+        bridge.isSubscriptionRegistered = {
+            NostrRelayManager.shared.hasRegisteredSubscription(id: Self.bridgeSubscriptionID)
         }
         bridge.relaysConnected = { NostrRelayManager.shared.isConnected }
         bridge.locationCell = { [weak viewModel] in

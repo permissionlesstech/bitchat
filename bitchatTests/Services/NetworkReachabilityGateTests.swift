@@ -162,6 +162,48 @@ final class NetworkReachabilityGateTests: XCTestCase {
         XCTAssertGreaterThanOrEqual(ctx.torController.shutdownCompletelyCallCount, 1)
     }
 
+    func test_monitor_interfaceSwitchAndShortBlipEmitPathDidChange() {
+        let clock = MutableDate(now: Date(timeIntervalSince1970: 1_784_000_000))
+        let monitor = NWPathReachabilityMonitor(debounceInterval: 2.5, now: { clock.now })
+        var pathChanges = 0
+        let cancellable = monitor.pathDidChangePublisher.sink { pathChanges += 1 }
+        defer { cancellable.cancel() }
+
+        let wifi = NetworkInterfaceSignature(usesWiFi: true)
+        let cellular = NetworkInterfaceSignature(usesCellular: true)
+
+        // Initial Wi-Fi observation establishes baseline (no spurious path change).
+        monitor.ingest(reachable: true, interfaceSignature: wifi)
+        XCTAssertEqual(pathChanges, 0)
+
+        // Switching Wi-Fi → Cellular emits a path change while staying reachable.
+        monitor.ingest(reachable: true, interfaceSignature: cellular)
+        XCTAssertEqual(pathChanges, 1)
+        XCTAssertTrue(monitor.isReachable)
+
+        // A brief (<2.5s) unsatisfied blip that recovers also emits a path change.
+        monitor.ingest(reachable: false, interfaceSignature: nil)
+        clock.now = clock.now.addingTimeInterval(0.8)
+        monitor.ingest(reachable: true, interfaceSignature: cellular)
+        XCTAssertEqual(pathChanges, 2)
+        XCTAssertTrue(monitor.isReachable)
+    }
+
+    func test_reachabilityRecoveryAndPathChange_driveRelayRecoveryHooks() async {
+        let ctx = makeService(permission: .authorized, reachable: false)
+        ctx.service.start()
+        XCTAssertEqual(ctx.relayController.resetForNetworkRecoveryCallCount, 0)
+
+        ctx.reachability.set(true)
+        let resumed = await waitUntil { ctx.service.activationAllowed }
+        XCTAssertTrue(resumed)
+        XCTAssertEqual(ctx.relayController.resetForNetworkRecoveryCallCount, 1)
+
+        ctx.reachability.emitPathChange()
+        let recovered = await waitUntil { ctx.relayController.recoverFailedRelaysCallCount == 1 }
+        XCTAssertTrue(recovered)
+    }
+
     // MARK: - Harness
 
     private func makeService(
@@ -223,6 +265,7 @@ private struct Context {
 @MainActor
 private final class ControllableReachabilityMonitor: NetworkReachabilityMonitoring {
     private let subject: CurrentValueSubject<Bool, Never>
+    private let pathChangeSubject = PassthroughSubject<Void, Never>()
     private(set) var startCalled = false
 
     init(initial: Bool) {
@@ -233,9 +276,13 @@ private final class ControllableReachabilityMonitor: NetworkReachabilityMonitori
     var reachabilityPublisher: AnyPublisher<Bool, Never> {
         subject.removeDuplicates().dropFirst().eraseToAnyPublisher()
     }
+    var pathDidChangePublisher: AnyPublisher<Void, Never> {
+        pathChangeSubject.eraseToAnyPublisher()
+    }
     func start() { startCalled = true }
     func stop() { startCalled = false }
     func set(_ reachable: Bool) { subject.send(reachable) }
+    func emitPathChange() { pathChangeSubject.send(()) }
 }
 
 @MainActor
@@ -252,8 +299,17 @@ private final class GateMockTorController: NetworkActivationTorControlling {
 private final class GateMockRelayController: NetworkActivationRelayControlling {
     private(set) var connectCallCount = 0
     private(set) var disconnectCallCount = 0
+    private(set) var resetForNetworkRecoveryCallCount = 0
+    private(set) var recoverFailedRelaysCallCount = 0
     func connect() { connectCallCount += 1 }
     func disconnect() { disconnectCallCount += 1 }
+    func resetForNetworkRecovery() {
+        resetForNetworkRecoveryCallCount += 1
+        connectCallCount += 1
+    }
+    func recoverFailedRelays() {
+        recoverFailedRelaysCallCount += 1
+    }
 }
 
 private final class GateMockProxyController: NetworkActivationProxyControlling {

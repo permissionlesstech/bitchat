@@ -58,6 +58,10 @@ final class MockTransport: Transport, PrivateMediaDeletionPersisting,
 
     var connectedPeers: Set<PeerID> = []
     var reachablePeers: Set<PeerID> = []
+    /// Mirrors `NostrTransport.canDeliverPromptly`: when `false`, `reachablePeers`
+    /// still report reachable (known npub) while prompt delivery is unavailable
+    /// (relays down / offline).
+    var promptDelivery = true
     /// Peers with an established secure session. `nil` mirrors the protocol
     /// default (prompt delivery), so connected peers stay "secure" for tests
     /// that never care about the distinction.
@@ -107,6 +111,10 @@ final class MockTransport: Transport, PrivateMediaDeletionPersisting,
 
     func isPeerReachable(_ peerID: PeerID) -> Bool {
         reachablePeers.contains(peerID) || connectedPeers.contains(peerID)
+    }
+
+    func canDeliverPromptly(to peerID: PeerID) -> Bool {
+        isPeerReachable(peerID) && promptDelivery
     }
 
     func canDeliverSecurely(to peerID: PeerID) -> Bool {

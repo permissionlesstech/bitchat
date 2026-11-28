@@ -150,6 +150,25 @@ final class GeohashSubscriptionManager {
         subscribeToActiveGeohash(channel, subscriptionID: subID)
     }
 
+    /// Re-establishes the active geohash chat + DM subscriptions only when at
+    /// least one of them is not registered on the relay manager (e.g. the user
+    /// opened or teleported into a location channel while offline or before
+    /// `NetworkActivationService` opened the gate). Safe to call on initial
+    /// connection without tearing down an already-live subscription.
+    @MainActor
+    func ensureCurrentGeohashSubscribed() {
+        guard let context,
+              case .location(let channel) = context.activeChannel else { return }
+        let relayManager = context.nostrRelayManager ?? NostrRelayManager.shared
+        let subID = context.geoSubscriptionID ?? "geo-\(channel.geohash)"
+        let dmSubID = context.geoDmSubscriptionID ?? "geo-dm-\(channel.geohash)"
+        guard !relayManager.hasRegisteredSubscription(id: subID)
+            || !relayManager.hasRegisteredSubscription(id: dmSubID) else {
+            return
+        }
+        resubscribeCurrentGeohash()
+    }
+
     @MainActor
     func switchLocationChannel(to channel: ChannelID) {
         guard let context else { return }

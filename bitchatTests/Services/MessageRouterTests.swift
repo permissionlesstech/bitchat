@@ -1416,6 +1416,137 @@ struct MessageRouterTests {
 
         #expect(transport.sentPrivateMessages.map(\.messageID) == ["m1", "m2"])
     }
+
+    @Test @MainActor
+    func sendPrivate_offlineNostrDoesNotBurnAttemptsAndFlushesOnReconnect() {
+        let peerID = PeerID(str: "00000000000000f1")
+        let ble = MockTransport()
+        let nostr = MockTransport()
+        nostr.reachablePeers.insert(peerID)
+        nostr.promptDelivery = false // relays offline
+
+        let router = MessageRouter(transports: [ble, nostr])
+        var dropped: [String] = []
+        var sentNotifications: [String] = []
+        router.onMessageDropped = { id, _ in dropped.append(id) }
+        router.onMessageSent = { id, _ in sentNotifications.append(id) }
+
+        router.sendPrivate("Offline hello", to: peerID, recipientNickname: "Alice", messageID: "off-1")
+        nostr.resetRecordings()
+
+        // Repeated flushes while offline must NOT send or burn attempts to failure.
+        for _ in 0..<12 {
+            router.flushAllOutbox()
+        }
+        #expect(nostr.sentPrivateMessages.isEmpty)
+        #expect(dropped.isEmpty)
+        #expect(sentNotifications.isEmpty)
+
+        // Relays come online: flushing delivers immediately and notifies `.sent`.
+        nostr.promptDelivery = true
+        router.flushAllOutbox()
+        #expect(nostr.sentPrivateMessages.map(\.messageID) == ["off-1"])
+        #expect(sentNotifications == ["off-1"])
+        #expect(dropped.isEmpty)
+    }
+
+    @Test @MainActor
+    func sendPrivate_staleBLERetentionStillDeliversOverLiveNostr() {
+        let peerID = PeerID(str: "00000000000000f2")
+        let ble = MockTransport()
+        ble.reachablePeers.insert(peerID) // in 60s retention window, NOT connected
+        let nostr = MockTransport()
+        nostr.reachablePeers.insert(peerID)
+        nostr.promptDelivery = true // DM relay connected
+
+        let router = MessageRouter(transports: [ble, nostr])
+        router.sendPrivate("Crossing boundary", to: peerID, recipientNickname: "Alice", messageID: "edge-1")
+
+        #expect(ble.sentPrivateMessages.map(\.messageID) == ["edge-1"])
+        #expect(nostr.sentPrivateMessages.map(\.messageID) == ["edge-1"])
+    }
+
+    @Test @MainActor
+    func failOverOutboxAfterMeshDisconnect_deliversUnackedBLEMessageOverLiveNostr() {
+        let noiseKey = Data(repeating: 0xF3, count: 32)
+        let stableID = PeerID(hexData: noiseKey)
+        let shortID = PeerID(publicKey: noiseKey)
+        let ble = MockTransport()
+        ble.connectedPeers.insert(shortID)
+        ble.securePeers = [shortID]
+        let nostr = MockTransport()
+        nostr.reachablePeers.formUnion([shortID, stableID])
+        nostr.promptDelivery = true
+
+        let router = MessageRouter(transports: [ble, nostr])
+        var sentNotifications: [String] = []
+        router.onMessageSent = { id, _ in sentNotifications.append(id) }
+
+        // Sent while directly BLE-connected -> BLE only.
+        router.sendPrivate("Before drop", to: shortID, recipientNickname: "Alice", messageID: "ble-drop-1")
+        #expect(ble.sentPrivateMessages.map(\.messageID) == ["ble-drop-1"])
+        #expect(nostr.sentPrivateMessages.isEmpty)
+
+        // BLE disconnects (even if BLE still reports stale reachability retention).
+        ble.connectedPeers.remove(shortID)
+        ble.reachablePeers.insert(shortID)
+        router.failOverOutbox(for: [shortID, stableID], excluding: ble)
+
+        // Must immediately fail over to live Nostr without resending on BLE.
+        #expect(ble.sentPrivateMessages.count == 1)
+        #expect(nostr.sentPrivateMessages.map(\.messageID) == ["ble-drop-1"])
+        #expect(sentNotifications == ["ble-drop-1"])
+    }
+
+    @Test @MainActor
+    func flushOutbox_offlineMessageHandedToPreHandshakeBLEDoesNotDuplicateOnAuth() {
+        let noiseKey = Data(repeating: 0xF4, count: 32)
+        let stableID = PeerID(hexData: noiseKey)
+        let shortID = PeerID(publicKey: noiseKey)
+        let ble = MockTransport()
+
+        let router = MessageRouter(
+            transports: [ble],
+            courierDirectory: CourierDirectory(noiseKey: { _ in nil }, isTrustedCourier: { _ in false })
+        )
+
+        // Queued while completely offline (sendAttempts == 0).
+        router.sendPrivate("Wait for BLE", to: stableID, recipientNickname: "Bob", messageID: "pre-hs-1")
+        #expect(ble.sentPrivateMessages.isEmpty)
+
+        // Peer reconnects over BLE (not yet Noise-authenticated); outbox flushes
+        // into BLE's pre-handshake queue.
+        ble.connectedPeers.insert(shortID)
+        ble.securePeers = []
+        router.flushOutbox(for: shortID)
+        #expect(ble.sentPrivateMessages.map(\.messageID) == ["pre-hs-1"])
+
+        // Noise authentication completes: BLE drains its own queue, so the
+        // router's auth retry must NOT emit a duplicate copy.
+        ble.securePeers = [shortID]
+        router.retrySecurePrivateMessagesAfterAuthentication(for: [shortID, stableID])
+        #expect(ble.sentPrivateMessages.map(\.messageID) == ["pre-hs-1"])
+    }
+
+    @Test @MainActor
+    func sendReadReceipt_returnsFalseWhenOnlyOfflineNostrIsReachable() {
+        let peerID = PeerID(str: "00000000000000f5")
+        let ble = MockTransport()
+        let nostr = MockTransport()
+        nostr.reachablePeers.insert(peerID)
+        nostr.promptDelivery = false // relays offline
+
+        let router = MessageRouter(transports: [ble, nostr])
+        let receipt = ReadReceipt(originalMessageID: "rr-offline", readerID: ble.myPeerID, readerNickname: "Me")
+
+        #expect(router.sendReadReceipt(receipt, to: peerID) == false)
+        #expect(nostr.sentReadReceipts.isEmpty)
+
+        // Once relays come back online, the retry succeeds.
+        nostr.promptDelivery = true
+        #expect(router.sendReadReceipt(receipt, to: peerID) == true)
+        #expect(nostr.sentReadReceipts.map(\.receipt.originalMessageID) == ["rr-offline"])
+    }
 }
 
 /// Mutable wall clock injected into `MessageRouter` so TTL expiry is testable

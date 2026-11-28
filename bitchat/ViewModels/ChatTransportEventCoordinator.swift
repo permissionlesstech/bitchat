@@ -52,6 +52,13 @@ protocol ChatTransportEventContext: AnyObject {
 
     // MARK: Routing & acknowledgements
     func flushRouterOutbox(for peerID: PeerID)
+    /// Immediately fails over any unacked outbox entries for `peerIDAliases`
+    /// onto an alternate prompt transport (e.g. Nostr) when a mesh link drops.
+    func failOverRouterOutboxAfterMeshDisconnect(for peerIDAliases: [PeerID])
+    /// Re-runs the read-receipt pass if the user is actively viewing a direct
+    /// chat for one of `peerIDAliases`, so receipts deferred while offline
+    /// leave as soon as the peer reconnects.
+    func retryPendingReadReceiptsIfViewing(peerIDAliases: [PeerID])
     /// Offer queued mail for *other* peers to this newly connected courier.
     func retryCourierDeposits(via peerID: PeerID)
     func sendMeshDeliveryAck(for messageID: String, to peerID: PeerID)
@@ -81,6 +88,11 @@ protocol ChatTransportEventContext: AnyObject {
     func handleVouchPayload(from peerID: PeerID, payload: Data)
 }
 
+extension ChatTransportEventContext {
+    func failOverRouterOutboxAfterMeshDisconnect(for peerIDAliases: [PeerID]) {}
+    func retryPendingReadReceiptsIfViewing(peerIDAliases: [PeerID]) {}
+}
+
 extension ChatViewModel: ChatTransportEventContext {
     // `isConnected`, `nickname`, `myPeerID`, `privateMessages(for:)`,
     // `unreadPrivateMessages`, `selectedPrivateChatPeer`, `notifyUIChanged()`,
@@ -103,6 +115,19 @@ extension ChatViewModel: ChatTransportEventContext {
 
     func flushRouterOutbox(for peerID: PeerID) {
         messageRouter.flushOutbox(for: peerID)
+    }
+
+    func failOverRouterOutboxAfterMeshDisconnect(for peerIDAliases: [PeerID]) {
+        messageRouter.failOverOutbox(for: peerIDAliases, excluding: meshService)
+    }
+
+    func retryPendingReadReceiptsIfViewing(peerIDAliases: [PeerID]) {
+        guard isAppActive, let selected = selectedPrivateChatPeer else { return }
+        let aliasSet = Set(peerIDAliases)
+        let shortAliases = Set(peerIDAliases.map { $0.toShort() })
+        if aliasSet.contains(selected) || shortAliases.contains(selected.toShort()) {
+            markPrivateMessagesAsRead(from: selected)
+        }
     }
 
     func retryCourierDeposits(via peerID: PeerID) {
@@ -209,13 +234,18 @@ final class ChatTransportEventCoordinator {
     func didConnectToPeerSynchronously(_ peerID: PeerID) {
         SecureLogger.debug("🤝 Peer connected: \(peerID)", category: .session)
 
+        var aliases = [peerID]
         if let peer = context.unifiedPeer(for: peerID) {
             let stablePeerID = PeerID(hexData: peer.noisePublicKey)
             context.cacheStablePeerID(stablePeerID, for: peerID)
+            if stablePeerID != peerID {
+                aliases.append(stablePeerID)
+            }
         }
 
         context.flushRouterOutbox(for: peerID)
         context.retryCourierDeposits(via: peerID)
+        context.retryPendingReadReceiptsIfViewing(peerIDAliases: aliases)
     }
 
     @MainActor
@@ -254,6 +284,12 @@ final class ChatTransportEventCoordinator {
         if !recentReceiptIDs.isEmpty {
             context.unmarkReadReceiptsSent(recentReceiptIDs)
         }
+
+        var aliases = [peerID]
+        if let stablePeerID, stablePeerID != peerID {
+            aliases.append(stablePeerID)
+        }
+        context.failOverRouterOutboxAfterMeshDisconnect(for: aliases)
     }
 }
 

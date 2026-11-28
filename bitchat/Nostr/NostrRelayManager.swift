@@ -321,6 +321,64 @@ final class NostrRelayManager: ObservableObject {
         guard dependencies.activationAllowed() else { return }
         connectToRelays(relays.map(\.url), shouldLog: true)
     }
+
+    /// Reconnects after an offline → online transition or gate reopening.
+    /// Clears transient DNS and backoff failure state accumulated while the
+    /// network was dropping, ensures relays referenced by durable
+    /// subscriptions are present, and connects immediately.
+    func resetForNetworkRecovery() {
+        guard dependencies.activationAllowed() else { return }
+        for index in relays.indices {
+            relays[index].reconnectAttempts = 0
+            relays[index].nextReconnectTime = nil
+            relays[index].lastError = nil
+        }
+        var existing = Set(relays.map(\.url))
+        let requiredSubRelays = subscriptionRequestState.values.flatMap(\.relayURLs)
+        for url in allowedRelayList(from: requiredSubRelays) where !existing.contains(url) {
+            relays.append(Relay(url: url))
+            existing.insert(url)
+        }
+        connect()
+    }
+
+    /// Retries only disconnected relays that accumulated backoff or DNS
+    /// failures (e.g. during a brief Wi-Fi ↔ Cellular handoff) without
+    /// touching already-connected sockets.
+    func recoverFailedRelays() {
+        guard dependencies.activationAllowed() else { return }
+        var recoveredURLs: [String] = []
+        for index in relays.indices {
+            let url = relays[index].url
+            guard !relays[index].isConnected,
+                  connections[url] == nil,
+                  relays[index].reconnectAttempts > 0 || relays[index].lastError != nil else {
+                continue
+            }
+            relays[index].reconnectAttempts = 0
+            relays[index].nextReconnectTime = nil
+            relays[index].lastError = nil
+            recoveredURLs.append(url)
+        }
+        guard !recoveredURLs.isEmpty else { return }
+        SecureLogger.info(
+            "🌐 Recovering \(recoveredURLs.count) failed Nostr relay(s) after network path change",
+            category: .session
+        )
+        connectToRelays(recoveredURLs, shouldLog: true)
+    }
+
+    /// Whether a durable subscription with `id` is currently registered with
+    /// at least one target relay (active or pending). Used after offline →
+    /// online transitions to detect subscriptions that were dropped while the
+    /// network gate was closed.
+    func hasRegisteredSubscription(id: String) -> Bool {
+        guard messageHandlers[id] != nil,
+              let state = subscriptionRequestState[id] else {
+            return false
+        }
+        return !state.relayURLs.isEmpty
+    }
     
     /// Disconnect from all relays
     func disconnect() {
@@ -641,8 +699,13 @@ final class NostrRelayManager: ObservableObject {
         handler: @escaping (NostrEvent) -> Void,
         onEOSE: (() -> Void)? = nil
     ) {
-        // Global network policy gate
-        guard dependencies.activationAllowed() else { return }
+        // Global network policy gate. Always settle an EOSE waiter when
+        // disallowed so callers (e.g. LocationNotesManager) transition to
+        // their connecting/retry state instead of hanging in `.loading`.
+        guard dependencies.activationAllowed() else {
+            onEOSE?()
+            return
+        }
         // Coalesce rapid duplicate subscribe requests even while Tor readiness is pending.
         let now = dependencies.now()
         if let last = subscribeCoalesce[id], now.timeIntervalSince(last) < subscribeCoalesceInterval {

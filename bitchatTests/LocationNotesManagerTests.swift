@@ -447,6 +447,39 @@ struct LocationNotesManagerTests {
         #expect(manager.state == .loading)
     }
 
+    @Test @MainActor
+    func networkBecameAvailable_refreshesConnectingNotesImmediately() async {
+        var subscribeCount = 0
+        var storedEOSE: (() -> Void)?
+        let networkAvailable = PassthroughSubject<Void, Never>()
+        var deps = LocationNotesDependencies(
+            relayLookup: { _, _ in ["wss://relay.geo"] },
+            subscribe: { _, _, _, _, eose in
+                subscribeCount += 1
+                storedEOSE = eose
+            },
+            unsubscribe: { _ in },
+            sendEvent: { _, _ in },
+            deriveIdentity: { _ in throw TestError.shouldNotDerive },
+            now: { Date() }
+        )
+        deps.anyRelayConnected = { _ in false }
+        deps.networkBecameAvailable = { networkAvailable.eraseToAnyPublisher() }
+
+        let manager = LocationNotesManager(geohash: "u4pruydq", dependencies: deps)
+        #expect(subscribeCount == 1)
+        storedEOSE?()
+        #expect(manager.state == .connecting)
+
+        // Network returns online: manager refreshes immediately without waiting for poll.
+        networkAvailable.send(())
+        for _ in 0..<5 {
+            await Task.yield()
+        }
+        #expect(subscribeCount == 2)
+        #expect(manager.state == .loading)
+    }
+
     private enum TestError: Error {
         case shouldNotDerive
     }
