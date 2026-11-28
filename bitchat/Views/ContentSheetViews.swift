@@ -847,6 +847,18 @@ private struct ContentPrivateHeaderInfoButton: View {
                                 encryptionStatus.accessibilityDescription
                             )
                         )
+                } else if headerState.isGroupConversation {
+                    Image(systemName: "lock.fill")
+                        .font(.system(size: 13, weight: .medium))
+                        .offset(y: -0.5)
+                        .foregroundColor(palette.secondary)
+                        .accessibilityLabel(
+                            String(
+                                format: String(localized: "content.accessibility.encryption_status", comment: "Accessibility label announcing encryption status"),
+                                locale: .current,
+                                EncryptionStatus.noiseSecured.accessibilityDescription
+                            )
+                        )
                 }
 
             }

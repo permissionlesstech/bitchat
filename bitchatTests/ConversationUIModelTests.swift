@@ -271,15 +271,21 @@ struct ConversationUIModelTests {
     }
 
     @Test @MainActor
-    func verifiedNamesakeKeepsTheSealOnTheirDMs() {
+    func verifiedNamesakeGetsSealOnPublicMessagesButNotPrivateRows() {
         let (viewModel, transport) = makeChatViewModel(nickname: "alice")
         let uiModel = makeUIModel(for: viewModel)
         transport.peerFingerprints[Self.peerID] = "namesake-fingerprint"
         viewModel.peerIdentityStore.setVerified("namesake-fingerprint", verified: true)
 
-        // The seal is what tells a verified "alice" from an impersonator.
-        #expect(uiModel.showsVerifiedSeal(for: row("alice", Self.peerID, isPrivate: true)))
-        #expect(!uiModel.showsVerifiedSeal(for: row("alice", Self.myPeerID, isPrivate: true)))
+        // Public mesh rows mark a verified namesake with ✓ so they stay
+        // distinct from an impersonator; private rows omit per-row badges
+        // since verification is shown in the chat header.
+        let publicFromNamesake = String(uiModel.formatMessage(row("alice", Self.peerID, isPrivate: false), colorScheme: .dark, theme: .matrix).characters)
+        let publicFromMe = String(uiModel.formatMessage(row("alice", Self.myPeerID, isPrivate: false), colorScheme: .dark, theme: .matrix).characters)
+        let privateFromNamesake = String(uiModel.formatMessage(row("alice", Self.peerID, isPrivate: true), colorScheme: .dark, theme: .matrix).characters)
+        #expect(publicFromNamesake.contains("✓"))
+        #expect(!publicFromMe.contains("✓"))
+        #expect(!privateFromNamesake.contains("✓"))
     }
 
     @Test @MainActor

@@ -39,54 +39,45 @@ struct MediaMessageView: View {
             && conversationUIModel.isSentByCurrentUser(message)
             && deliveryStatus != .notSentYet
 
-        // Baseline alignment (via the header text inside the VStack) keeps the
-        // lock on the header line; a fixed top padding left its solid body
-        // hanging below the line's visual center.
-        HStack(alignment: .firstTextBaseline, spacing: 0) {
-            MessageLeadingBadges(
-                isPrivate: message.isPrivate,
-                showsVerifiedSeal: conversationUIModel.showsVerifiedSeal(for: message)
-            )
-            VStack(alignment: .leading, spacing: 2) {
-                HStack(alignment: .center, spacing: 4) {
-                    Text(conversationUIModel.formatMessageHeader(message, colorScheme: colorScheme, theme: theme))
-                        .fixedSize(horizontal: false, vertical: true)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                    if showsDeliveryStatus {
-                        MessageDeliveryStatusButton(status: deliveryStatus, showDetail: $showDeliveryDetail)
-                    }
-                }
-
+        VStack(alignment: .leading, spacing: 2) {
+            HStack(alignment: .center, spacing: 4) {
+                Text(conversationUIModel.formatMessageHeader(message, colorScheme: colorScheme, theme: theme))
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: .infinity, alignment: .leading)
                 if showsDeliveryStatus {
-                    MessageDeliveryDetailCaption(status: deliveryStatus, showDetail: showDeliveryDetail)
+                    MessageDeliveryStatusButton(status: deliveryStatus, showDetail: $showDeliveryDetail)
                 }
+            }
 
-                Group {
-                    switch media {
-                    case .voice(let url):
-                        VoiceNoteView(
-                            url: url,
-                            isSending: state.isSending,
-                            sendProgress: state.progress,
-                            isLive: conversationUIModel.isLiveVoiceMessage(message),
-                            onCancel: cancelAction
-                        )
-                    case .image(let url):
-                        BlockRevealImageView(
-                            url: url,
-                            revealProgress: state.progress,
-                            isSending: state.isSending,
-                            onCancel: cancelAction,
-                            initiallyBlurred: !isFromMe,
-                            onOpen: {
-                                if !state.isSending {
-                                    imagePreviewURL = url
-                                }
-                            },
-                            onDelete: !isFromMe ? { conversationUIModel.deleteMediaMessage(messageID: message.id) } : nil
-                        )
-                        .frame(maxWidth: 280)
-                    }
+            if showsDeliveryStatus {
+                MessageDeliveryDetailCaption(status: deliveryStatus, showDetail: showDeliveryDetail)
+            }
+
+            Group {
+                switch media {
+                case .voice(let url):
+                    VoiceNoteView(
+                        url: url,
+                        isSending: state.isSending,
+                        sendProgress: state.progress,
+                        isLive: conversationUIModel.isLiveVoiceMessage(message),
+                        onCancel: cancelAction
+                    )
+                case .image(let url):
+                    BlockRevealImageView(
+                        url: url,
+                        revealProgress: state.progress,
+                        isSending: state.isSending,
+                        onCancel: cancelAction,
+                        initiallyBlurred: !isFromMe,
+                        onOpen: {
+                            if !state.isSending {
+                                imagePreviewURL = url
+                            }
+                        },
+                        onDelete: !isFromMe ? { conversationUIModel.deleteMediaMessage(messageID: message.id) } : nil
+                    )
+                    .frame(maxWidth: 280)
                 }
             }
         }

@@ -141,29 +141,11 @@ struct DeliveryStatusView: View {
     }
 }
 
-/// Leading inline badges shared by text and media message rows.
+/// Leading inline badge for message rows that arrived across a mesh bridge.
 struct MessageLeadingBadges: View {
-    let isPrivate: Bool
-    let showsVerifiedSeal: Bool
     var isBridged: Bool = false
 
     var body: some View {
-        if isPrivate {
-            Image(systemName: "lock.fill")
-                .font(.bitchatSystem(size: 8))
-                .foregroundColor(Color.orange.opacity(0.75))
-                .padding(.trailing, 4)
-                .accessibilityHidden(true)
-        }
-        if showsVerifiedSeal {
-            Image(systemName: "checkmark.seal.fill")
-                .font(.bitchatSystem(size: 8))
-                .foregroundColor(Color.green.opacity(0.85))
-                .padding(.trailing, 4)
-                .accessibilityLabel(
-                    String(localized: "content.accessibility.verified_sender", defaultValue: "Verified sender", comment: "Accessibility label for the seal next to a verified peer's name on a private message")
-                )
-        }
         if isBridged {
             Image(systemName: "network")
                 .font(.bitchatSystem(size: 8))

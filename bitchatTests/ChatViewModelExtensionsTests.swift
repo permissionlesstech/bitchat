@@ -264,16 +264,8 @@ struct ChatViewModelPrivateChatExtensionTests {
         #expect(meshRowSender == shortPeerID)
 
         viewModel.peerIdentityStore.setVerified("fp-1", verified: true)
-        let privateModel = PrivateConversationModel(
-            chatViewModel: viewModel, conversations: viewModel.conversations,
-            locationChannelsModel: LocationChannelsModel(manager: viewModel.locationManager)
-        )
-        let uiModel = ConversationUIModel(
-            chatViewModel: viewModel, privateConversationModel: privateModel,
-            conversations: viewModel.conversations
-        )
-        let meshRow = joined.first { $0.id == "mesh-1" }
-        #expect(meshRow.map { uiModel.showsVerifiedSeal(for: $0) } == true)
+        #expect(meshRowSender.flatMap { viewModel.getFingerprint(for: $0) } == "fp-1")
+        #expect(meshRowSender.flatMap { viewModel.getFingerprint(for: $0) }.map { viewModel.peerIdentityStore.isVerified($0) } == true)
 
         // Blocking from the moved row reaches the peer's identity.
         if let meshRowSender {
