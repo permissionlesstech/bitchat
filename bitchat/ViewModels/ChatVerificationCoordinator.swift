@@ -139,7 +139,7 @@ extension ChatViewModel: ChatVerificationContext {
     }
 
     func postLocalNotification(title: String, body: String, identifier: String) {
-        NotificationService.shared.sendLocalNotification(title: title, body: body, identifier: identifier)
+        NotificationService.shared.sendVerificationNotification(title: title, body: body, identifier: identifier)
     }
 }
 

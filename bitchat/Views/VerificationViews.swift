@@ -18,7 +18,7 @@ struct MyQRView: View {
     private var boxColor: Color { palette.secondary.opacity(0.1) }
 
     private enum Strings {
-        static let title: LocalizedStringKey = "verification.my_qr.title"
+        static let title = String(localized: "verification.my_qr.title")
         static let accessibilityLabel = String(localized: "verification.my_qr.accessibility_label", comment: "Accessibility label describing the verification QR code")
     }
 
@@ -60,7 +60,7 @@ struct QRCodeImage: View {
     private let filter = CIFilter.qrCodeGenerator()
 
     private enum Strings {
-        static let unavailable: LocalizedStringKey = "verification.my_qr.unavailable"
+        static let unavailable = String(localized: "verification.my_qr.unavailable")
     }
 
     var body: some View {
@@ -108,8 +108,8 @@ struct QRScanView: View {
     @State private var cameraUnavailable = false
 
     private enum Strings {
-        static let pastePrompt: LocalizedStringKey = "verification.scan.paste_prompt"
-        static let validate: LocalizedStringKey = "verification.scan.validate"
+        static let pastePrompt = String(localized: "verification.scan.paste_prompt")
+        static let validate = String(localized: "verification.scan.validate")
         static let cameraUnavailable = String(
             localized: "verification.scan.camera_unavailable",
             defaultValue: "Camera unavailable — paste a QR below.",
@@ -397,29 +397,19 @@ struct VerificationSheetView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            // Top header (always at top)
-            HStack {
-                Text("verification.sheet.title")
-                    .bitchatFont(size: 14, weight: .bold)
-                    .foregroundColor(accentColor)
-                Spacer()
-                SheetCloseButton {
+            ThemedSheetHeader(
+                title: String(localized: "verification.sheet.title", defaultValue: "Verify Identity", comment: "Title for the verification QR sheet"),
+                onClose: {
                     showingScanner = false
                     isPresented = false
                 }
-                .foregroundColor(accentColor)
-            }
-            .padding(.horizontal, 16)
-            .padding(.top, 12)
-            .padding(.bottom, 8)
-
-            Divider()
+            )
 
             // Content area
             Group {
                 if showingScanner {
                     VStack(alignment: .leading, spacing: 12) {
-                        Text("verification.scan.prompt_friend")
+                        Text(String(localized: "verification.scan.prompt_friend"))
                             .bitchatFont(size: 16, weight: .bold)
                             .frame(maxWidth: .infinity)
                             .multilineTextAlignment(.center)

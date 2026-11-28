@@ -14,7 +14,7 @@ XCODE_PACKAGE_RESOLVED = (
     / "bitchat.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved"
 )
 
-SHA_PINNED_USES = re.compile(r"uses:\s*[\w.-]+/[\w.-]+@[0-9a-f]{40}\b")
+SHA_PINNED_USES = re.compile(r"uses:\s*[\w.-]+/[\w.-]+(?:/[\w.-]+)*@[0-9a-f]{40}\b")
 ANY_USES = re.compile(r"uses:\s*([^\s#]+)")
 
 
@@ -133,6 +133,25 @@ class BuildIosAndSwiftTestsHardeningTests(unittest.TestCase):
         self.assertNotRegex(script, r"\beval\b")
 
     def test_xcode_package_resolved_matches_root_package_resolved(self) -> None:
+        pbxproj = (REPOSITORY_ROOT / "bitchat.xcodeproj/project.pbxproj").read_text(
+            encoding="utf-8"
+        )
+        package_swift = (REPOSITORY_ROOT / "Package.swift").read_text(encoding="utf-8")
+        has_remote_packages = (
+            "XCRemoteSwiftPackageReference" in pbxproj
+            or ".package(url:" in package_swift
+        )
+        if not has_remote_packages:
+            self.assertFalse(
+                ROOT_PACKAGE_RESOLVED.exists(),
+                "Stale root Package.resolved should not remain when all packages are local",
+            )
+            self.assertFalse(
+                XCODE_PACKAGE_RESOLVED.exists(),
+                "Stale Xcode Package.resolved should not remain when all packages are local",
+            )
+            return
+
         self.assertTrue(
             XCODE_PACKAGE_RESOLVED.exists(),
             "Xcode SwiftPM Package.resolved must be committed to pin remote package revisions",

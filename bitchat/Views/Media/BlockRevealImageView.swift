@@ -9,6 +9,7 @@ private typealias PlatformImage = NSImage
 #endif
 
 struct BlockRevealImageView: View {
+    @Environment(\.colorScheme) private var colorScheme
     @ThemedPalette private var palette
     private let url: URL
     private let revealProgress: Double?
@@ -123,7 +124,7 @@ struct BlockRevealImageView: View {
             Button(Strings.delete, role: .destructive) {
                 onDelete?()
             }
-            Button("common.cancel", role: .cancel) {}
+            Button(String(localized: "common.cancel"), role: .cancel) {}
         } message: {
             Text(verbatim: Strings.deleteConfirmMessage)
         }
@@ -144,15 +145,17 @@ struct BlockRevealImageView: View {
 
     @ViewBuilder
     private var imageContent: some View {
+        let cardShape = RoundedRectangle(cornerRadius: 16, style: .continuous)
         if let image = platformImage {
+            // Blur the opaque rectangular image *before* clipping to the card
+            // shape: applying an unclipped default (`opaque: false`) blur
+            // after `.clipShape` bleeds a glowing halo outside the rounded
+            // frame and darkens the inner perimeter on dark backgrounds.
             let baseImage = Image(platformImage: image)
                 .resizable()
                 .aspectRatio(aspectRatio, contentMode: .fit)
-                .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 16, style: .continuous)
-                        .stroke(Color.gray.opacity(0.2), lineWidth: 1)
-                )
+                .background(palette.cardBackground)
+                .blur(radius: isBlurred ? 24 : 0, opaque: true)
             Group {
                 if fraction < 1 {
                     baseImage
@@ -168,26 +171,41 @@ struct BlockRevealImageView: View {
                     baseImage
                 }
             }
-            .blur(radius: isBlurred ? 20 : 0)
-                .overlay {
-                    if isBlurred {
-                        RoundedRectangle(cornerRadius: 16, style: .continuous)
-                            .fill(Color.black.opacity(0.35))
-                            .overlay(
-                                VStack(spacing: 6) {
-                                    Image(systemName: "eye.slash.fill")
-                                        .font(.bitchatSystem(size: 24, weight: .semibold))
-                                    Text(verbatim: Strings.tapToReveal)
-                                        // Themed: monospaced under matrix,
-                                        // system under liquid glass.
-                                        .bitchatFont(size: 12, weight: .medium)
-                                }
-                                .foregroundColor(.white.opacity(0.85))
-                            )
+            .overlay {
+                if isBlurred {
+                    ZStack {
+                        Color.black.opacity(colorScheme == .dark ? 0.45 : 0.24)
+                        VStack(spacing: 6) {
+                            Image(systemName: "eye.slash.fill")
+                                .font(.bitchatSystem(size: 20, weight: .semibold))
+                            Text(verbatim: Strings.tapToReveal)
+                                // Themed: monospaced under matrix,
+                                // system under liquid glass.
+                                .bitchatFont(size: 12, weight: .medium)
+                        }
+                        .foregroundColor(.white.opacity(0.92))
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 9)
+                        .background(
+                            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                .fill(Color.black.opacity(colorScheme == .dark ? 0.52 : 0.42))
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                        .strokeBorder(Color.white.opacity(0.14), lineWidth: 0.5)
+                                )
+                        )
                     }
+                    .transition(.opacity)
                 }
+            }
+            .clipShape(cardShape)
+            .overlay(
+                cardShape
+                    .strokeBorder(palette.cardBorder, lineWidth: 1)
+            )
+            .contentShape(cardShape)
         } else {
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
+            cardShape
                 .fill(palette.secondary.opacity(0.2))
                 .frame(height: 200)
                 .overlay {

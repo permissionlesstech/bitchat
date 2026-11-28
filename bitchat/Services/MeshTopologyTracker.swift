@@ -2,7 +2,9 @@ import Foundation
 
 /// Tracks observed mesh topology and computes hop-by-hop routes.
 final class MeshTopologyTracker {
-    private typealias RoutingID = Data
+    /// Fixed 8-byte routing identifier packed big-endian into a UInt64 to avoid
+    /// per-node `Data` allocations and byte-loop hashing during BFS routing.
+    private typealias RoutingID = UInt64
 
     private let queue = DispatchQueue(label: "mesh.topology", attributes: .concurrent)
     private let hopSize = 8
@@ -65,7 +67,18 @@ final class MeshTopologyTracker {
     /// Callers treat the claims as advisory: announces cap `directNeighbors`
     /// at 10, so an edge may be claimed by only one of its endpoints.
     func adjacencySnapshot() -> [Data: Set<Data>] {
-        queue.sync { claims }
+        queue.sync {
+            var snapshot: [Data: Set<Data>] = [:]
+            snapshot.reserveCapacity(claims.count)
+            for (node, neighbors) in claims {
+                var unpacked = Set<Data>(minimumCapacity: neighbors.count)
+                for neighbor in neighbors {
+                    unpacked.insert(unpack(neighbor))
+                }
+                snapshot[unpack(node)] = unpacked
+            }
+            return snapshot
+        }
     }
 
     #if DEBUG
@@ -107,18 +120,20 @@ final class MeshTopologyTracker {
                 return (observedVersions[peer]?.version ?? 1) >= requiringVersion
             }
 
-            // BFS
+            // BFS with flat (node, depth) queue and parent map to avoid
+            // copying full paths on every edge and O(n) Array.removeFirst().
             var visited: Set<RoutingID> = [source]
-            // Queue stores paths: [Start, Hop1, Hop2, ..., Current]
-            var queuePaths: [[RoutingID]] = [[source]]
+            var parent: [RoutingID: RoutingID] = [:]
+            var queueNodes: [(node: RoutingID, depth: Int)] = [(source, 0)]
+            var head = 0
 
-            while !queuePaths.isEmpty {
-                let path = queuePaths.removeFirst()
-                // Limit path length (path contains source + maxHops + target) -> maxHops intermediate
-                // If maxHops = 10, max edges = 11, max nodes = 12.
-                if path.count > maxHops + 1 { continue }
+            while head < queueNodes.count {
+                let (last, depth) = queueNodes[head]
+                head += 1
 
-                guard let last = path.last else { continue }
+                // Limit path length (source + maxHops intermediate + target)
+                // depth == 0 is source; depth == maxHops means next hop is maxHops + 1 edges (maxHops intermediates).
+                if depth > maxHops { continue }
 
                 // Get neighbors that 'last' claims to see
                 guard let neighbors = claims[last] else { continue }
@@ -148,17 +163,25 @@ final class MeshTopologyTracker {
                         continue // Skip edges to stale nodes
                     }
 
-                    var nextPath = path
-                    nextPath.append(neighbor)
-
                     if neighbor == target {
-                        // Return only intermediate hops
-                        // Path: [Source, I1, I2, Target] -> [I1, I2]
-                        return Array(nextPath.dropFirst().dropLast())
+                        // Reconstruct only intermediate hops: [I1, I2, ...]
+                        var hops: [Data] = []
+                        hops.reserveCapacity(depth)
+                        var current = last
+                        while current != source {
+                            hops.append(unpack(current))
+                            guard let prev = parent[current] else { break }
+                            current = prev
+                        }
+                        hops.reverse()
+                        return hops
                     }
 
                     visited.insert(neighbor)
-                    queuePaths.append(nextPath)
+                    if depth < maxHops {
+                        parent[neighbor] = last
+                        queueNodes.append((neighbor, depth + 1))
+                    }
                 }
             }
             return nil
@@ -167,13 +190,21 @@ final class MeshTopologyTracker {
 
     // MARK: - Helpers
 
-    private func sanitize(_ data: Data?) -> Data? {
-        guard var value = data, !value.isEmpty else { return nil }
-        if value.count > hopSize {
-            value = Data(value.prefix(hopSize))
-        } else if value.count < hopSize {
-            value.append(Data(repeating: 0, count: hopSize - value.count))
+    private func sanitize(_ data: Data?) -> RoutingID? {
+        guard let value = data, !value.isEmpty else { return nil }
+        var packed: UInt64 = 0
+        let count = min(value.count, hopSize)
+        value.withUnsafeBytes { raw in
+            let bytes = raw.bindMemory(to: UInt8.self)
+            for i in 0..<count {
+                packed |= UInt64(bytes[i]) << UInt64((hopSize - 1 - i) * 8)
+            }
         }
-        return value
+        return packed
+    }
+
+    private func unpack(_ id: RoutingID) -> Data {
+        var bigEndian = id.bigEndian
+        return withUnsafeBytes(of: &bigEndian) { Data($0) }
     }
 }

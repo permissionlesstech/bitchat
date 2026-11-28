@@ -201,6 +201,34 @@ struct BLEOutboundLinkPlannerTests {
         #expect(relayed.selectedLinks.peripheralIDs == Set(["p1"]))
     }
 
+    @Test
+    func broadcastSentinelRecipientDoesNotProduceDirectedPeerHint() {
+        let packet = BitchatPacket(
+            type: MessageType.message.rawValue,
+            senderID: Data(hexString: "8877665544332211") ?? Data(),
+            recipientID: Data(repeating: 0xFF, count: 8),
+            timestamp: 1234,
+            payload: Data([0x01, 0x02]),
+            signature: nil,
+            ttl: TransportConfig.messageTTLDefault
+        )
+
+        let plan = BLEOutboundLinkPlanner.plan(
+            packet: packet,
+            dataCount: 32,
+            peripheralIDs: [],
+            peripheralWriteLimits: [],
+            centralIDs: [],
+            centralNotifyLimits: [],
+            ingressRecord: nil,
+            excludedLinks: [],
+            directedOnlyPeer: nil
+        )
+
+        #expect(plan.directedPeerHint == nil)
+        #expect(!plan.shouldSpoolDirectedPacket)
+    }
+
     private func makePacket(
         type: MessageType,
         sender: PeerID = PeerID(str: "8877665544332211"),

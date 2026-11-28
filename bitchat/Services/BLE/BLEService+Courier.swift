@@ -67,7 +67,11 @@ extension BLEService {
             guard let self else { return }
             for courier in connected {
                 SecureLogger.debug("📦 Depositing courier envelope with \(courier.id.prefix(8))… id=\(messageID.prefix(8))…", category: .session)
-                self.sendPacketDirected(self.makeCourierPacket(payload, to: courier), to: courier)
+                self.sendPacketDirected(
+                    self.makeCourierPacket(payload, to: courier),
+                    to: courier,
+                    requireDirectPeerLink: true
+                )
             }
         }
         return true
@@ -284,13 +288,16 @@ extension BLEService {
         let isVerifiedPeer = depositorInfo?.isVerifiedNickname ?? false
         let store = courierStore
         let policy = courierDepositPolicy
+        guard let generation = capturePanicLifecycleGeneration() else { return }
         notifyUI { [weak self] in
             guard let self else { return }
             guard let tier = policy(depositorKey, isVerifiedPeer) else {
                 SecureLogger.debug("📦 Courier deposit from \(peerID.id.prefix(8))… rejected (neither favorite nor verified)", category: .session)
                 return
             }
-            self.messageQueue.async {
+            self.messageQueue.async { [weak self] in
+                guard let self,
+                      self.isCurrentPanicLifecycleGeneration(generation) else { return }
                 if store.deposit(envelope, from: depositorKey, tier: tier) {
                     SecureLogger.debug("📦 Carrying courier envelope deposited by \(peerID.id.prefix(8))… (\(tier.rawValue))", category: .session)
                 }
@@ -361,12 +368,15 @@ extension BLEService {
             }
         }
         let policy = courierDepositPolicy
+        guard let generation = capturePanicLifecycleGeneration() else { return }
         notifyUI { [weak self] in
             guard let self else { return }
             // Same trust gate as deposits: don't hand mail to a peer who
             // would reject it from us.
             guard policy(noiseKey, isVerifiedPeer) != nil else { return }
-            self.messageQueue.async {
+            self.messageQueue.async { [weak self] in
+                guard let self,
+                      self.isCurrentPanicLifecycleGeneration(generation) else { return }
                 sendSpray()
             }
         }

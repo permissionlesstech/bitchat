@@ -23,7 +23,7 @@ struct BLEFileTransferHandlerEnvironment {
     /// Tracks the broadcast file packet for gossip sync.
     let trackPacketSeen: (BitchatPacket) -> Void
     /// Enforces the incoming-media storage quota before saving (BCH-01-002).
-    let enforceStorageQuota: (_ reservingBytes: Int) -> Void
+    let enforceStorageQuota: (_ reservingBytes: Int, _ isPrivate: Bool) -> Void
     /// Persists the validated file to the incoming-media store; returns the destination URL.
     let saveIncomingFile: (
         _ data: Data,
@@ -336,7 +336,7 @@ final class BLEFileTransferHandler {
         }
 
         // BCH-01-002: Enforce storage quota before saving
-        env.enforceStorageQuota(filePacket.content.count)
+        env.enforceStorageQuota(filePacket.content.count, isPrivate)
 
         guard let destination = env.saveIncomingFile(
             filePacket.content,

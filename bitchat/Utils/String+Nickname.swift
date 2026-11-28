@@ -9,12 +9,33 @@
 import Foundation
 
 extension String {
+    /// Maximum UTF-8 byte length accepted by `AnnouncementPacket` TLV encoding.
+    static let maxNicknameUTF8Bytes = 255
+
     /// Canonical form for nickname storage and comparison (Unicode NFC).
     /// "café" typed with a combining accent and "café" typed precomposed
     /// must resolve to the same user wherever nicknames are stored or
     /// matched (mentions, DM resolution, autocomplete, geo presence).
     var normalizedNickname: String {
         precomposedStringWithCanonicalMapping
+    }
+
+    /// Truncates the string on `Character` boundaries so its UTF-8 encoding
+    /// fits within `maxBytes` without splitting multi-byte scalars or grapheme clusters.
+    func truncatedToUTF8Bytes(_ maxBytes: Int) -> String {
+        guard maxBytes > 0 else { return "" }
+        guard utf8.count > maxBytes else { return self }
+        var result = ""
+        var byteCount = 0
+        for character in self {
+            let charBytes = character.utf8.count
+            if byteCount + charBytes > maxBytes {
+                break
+            }
+            result.append(character)
+            byteCount += charBytes
+        }
+        return result
     }
 
     /// Split a nickname into base and a '#abcd' suffix if present

@@ -516,6 +516,53 @@ struct GossipSyncManagerTests {
         #expect(types.contains(.prekeyBundle))
     }
 
+    @Test func initialSyncSplitsMediaWhenFragmentsWouldOverflowGCSFilter() async throws {
+        var config = GossipSyncManager.Config()
+        config.seenCapacity = 10
+        config.gcsMaxBytes = 32
+        config.fragmentCapacity = 50
+        config.fileTransferCapacity = 4
+        config.fragmentSyncIntervalSeconds = 1
+        config.fileTransferSyncIntervalSeconds = 1
+
+        let requestSyncManager = RequestSyncManager()
+        let manager = GossipSyncManager(myPeerID: myPeerID, config: config, requestSyncManager: requestSyncManager)
+        let delegate = RecordingDelegate()
+        manager.delegate = delegate
+
+        let sender = try #require(Data(hexString: "aabbccddeeff0011"))
+        let now = UInt64(Date().timeIntervalSince1970 * 1000)
+        // Disable periodic sync during seeding so maintenance only acts as a
+        // queue barrier before we inspect the initial sync packets.
+        delegate.syncTargetsAvailable = false
+        for index in 0..<25 {
+            let frag = makeFragmentPacket(
+                sender: sender,
+                fragmentID: Data([0, 0, 0, 0, 0, 0, 0, UInt8(index)]),
+                index: 0,
+                timestamp: now + UInt64(index)
+            )
+            manager.onPublicPacketSeen(frag)
+        }
+        manager._performMaintenanceSynchronously(now: Date())
+        #expect(delegate.packets.isEmpty)
+
+        manager.scheduleInitialSyncToPeer(PeerID(str: "FFFFFFFFFFFFFFFF"), delaySeconds: 0.0)
+
+        try await TestHelpers.waitFor({ delegate.packets.count == 2 }, timeout: TestConstants.settleTimeout)
+        let requests = try delegate.packets.map { try #require(RequestSyncPacket.decode(from: $0.payload)) }
+        let coreTypes = try #require(requests[0].types)
+        let mediaTypes = try #require(requests[1].types)
+
+        #expect(coreTypes.contains(.announce))
+        #expect(coreTypes.contains(.message))
+        #expect(!coreTypes.contains(.fragment))
+        #expect(!coreTypes.contains(.fileTransfer))
+        #expect(mediaTypes.contains(.fragment))
+        #expect(mediaTypes.contains(.fileTransfer))
+        #expect(!mediaTypes.contains(.message))
+    }
+
     @Test func handleRequestSyncHonorsTypeFilter() async throws {
         var config = GossipSyncManager.Config()
         config.seenCapacity = 5

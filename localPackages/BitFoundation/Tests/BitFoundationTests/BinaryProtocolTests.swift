@@ -368,8 +368,8 @@ struct BinaryProtocolTests {
             let packet = TestHelpers.createTestPacket(payload: Data(payload.utf8))
             let encodedData = try #require(BinaryProtocol.encode(packet), "Failed to encode packet")
             
-            // Verify padding creates standard block sizes up to configured limit (no 4096 bucket currently)
-            let blockSizes = [256, 512, 1024, 2048]
+            // Verify padding creates standard 256-byte stride block sizes up to 2048
+            let blockSizes = MessagePadding.blockSizes
             if encodedData.count <= 2048 {
                 #expect(blockSizes.contains(encodedData.count), "Encoded size \(encodedData.count) is not a standard block size")
             } else {
@@ -387,6 +387,20 @@ struct BinaryProtocolTests {
         // Different payload sizes (within <=2048) may map to the same bucket depending on compression.
         // Require at least one padded size to be present.
         #expect(encodedSizes.filter { $0 <= 2048 }.count >= 1, "Expected at least one padded size up to 2048, got \(encodedSizes)")
+    }
+
+    @Test func messagePaddingCoversEveryLengthUpTo2048WithoutGaps() {
+        for size in 1...2048 {
+            // Use 0x00 bytes so unpadded frames at exact 256-byte multiples
+            // cannot accidentally look like valid PKCS#7 padding.
+            let raw = Data(repeating: 0x00, count: size)
+            let target = MessagePadding.optimalBlockSize(for: raw.count)
+            let padded = MessagePadding.pad(raw, toSize: target)
+            #expect(MessagePadding.blockSizes.contains(padded.count), "Size \(size) produced non-bucket length \(padded.count)")
+            #expect(padded.count == target)
+            let restored = MessagePadding.unpad(padded)
+            #expect(restored == raw, "Round-trip failed for size \(size)")
+        }
     }
 
     @Test func invalidPKCS7PaddingIsRejected() throws {

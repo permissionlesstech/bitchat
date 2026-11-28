@@ -102,6 +102,9 @@ enum BLEOutboundLinkPlanner {
 
     static func directedPeerHint(for packet: BitchatPacket, explicitPeer: PeerID?) -> PeerID? {
         if let explicitPeer { return explicitPeer }
+        guard !BLEPacketFreshnessPolicy.isBroadcastRecipient(packet.recipientID) else {
+            return nil
+        }
         if let recipient = PeerID(str: packet.recipientID?.hexEncodedString()), !recipient.isEmpty {
             return recipient
         }

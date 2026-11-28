@@ -15,7 +15,7 @@ struct MeshPeerList: View {
     @State private var orderedIDs: [String] = []
 
     private enum Strings {
-        static let noneNearby: LocalizedStringKey = "geohash_people.none_nearby"
+        static let noneNearby = String(localized: "geohash_people.none_nearby")
         static let blockedTooltip = String(localized: "geohash_people.tooltip.blocked", comment: "Tooltip shown next to a blocked peer indicator")
         static let newMessagesTooltip = String(localized: "mesh_peers.tooltip.new_messages", comment: "Tooltip for the unread messages indicator")
         static let connected = String(localized: "content.accessibility.connected_mesh", comment: "Accessibility label for mesh-connected peer indicator")

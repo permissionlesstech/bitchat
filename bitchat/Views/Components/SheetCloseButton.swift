@@ -19,9 +19,9 @@ struct SheetCloseButton: View {
     var body: some View {
         Button(action: action) {
             Image(systemName: "xmark")
-                .bitchatFont(size: 13, weight: .semibold)
-                .frame(width: 32, height: 32)
-                .contentShape(Rectangle().inset(by: -6))
+                .font(.system(size: 15, weight: .semibold))
+                .frame(width: ChromeMetrics.iconTapSize, height: ChromeMetrics.iconTapSize)
+                .contentShape(Rectangle().inset(by: -4))
         }
         .buttonStyle(.plain)
         .accessibilityLabel(String(localized: "common.close", comment: "Accessibility label for close buttons"))

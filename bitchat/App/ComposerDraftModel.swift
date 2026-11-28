@@ -11,11 +11,24 @@ import Foundation
 @MainActor
 final class ComposerDraftModel: ObservableObject {
     @Published var messageText = ""
+    @Published var replyTarget: MessageReplyTarget?
 
     private(set) var activeDraftKey: ComposerDraftStore.Key = .mesh
     private var autocompleteDebounceTask: Task<Void, Never>?
 
     init() {}
+
+    func setReplyTarget(_ target: MessageReplyTarget?) {
+        if replyTarget != target {
+            replyTarget = target
+        }
+    }
+
+    func clearReplyTarget() {
+        if replyTarget != nil {
+            replyTarget = nil
+        }
+    }
 
     func loadInitialDraft(for key: ComposerDraftStore.Key) {
         activeDraftKey = key
@@ -29,6 +42,7 @@ final class ComposerDraftModel: ObservableObject {
         guard newKey != activeDraftKey else { return }
         ComposerDraftStore.save(messageText, for: activeDraftKey)
         activeDraftKey = newKey
+        clearReplyTarget()
         let loaded = ComposerDraftStore.load(newKey)
         if messageText != loaded {
             messageText = loaded
@@ -55,17 +69,23 @@ final class ComposerDraftModel: ObservableObject {
         }
     }
 
-    /// Returns the trimmed message if non-empty, clearing the draft and
-    /// persisted draft store before sending.
+    /// Returns the trimmed message (with quoted reply prefix if replying) when
+    /// non-empty, clearing the draft, reply target, and persisted draft store before sending.
     func takeMessageToSend() -> String? {
         guard let trimmed = messageText.trimmedOrNilIfEmpty else { return nil }
+        let activeReply = replyTarget
         messageText = ""
+        replyTarget = nil
         ComposerDraftStore.save("", for: activeDraftKey)
+        if let activeReply, !trimmed.hasPrefix("/") {
+            return MessageInteractionCodec.encodeReply(to: activeReply, body: trimmed)
+        }
         return trimmed
     }
 
     func resetForPanic() {
         cancelAutocompleteDebounce()
+        clearReplyTarget()
         if !messageText.isEmpty {
             messageText = ""
         }

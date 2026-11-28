@@ -12,10 +12,42 @@ import UserNotifications
 @main
 struct BitchatApp: App {
     static let bundleID = Bundle.main.bundleIdentifier ?? "chat.bitchat"
-    static let groupID = "group.\(bundleID)"
+    static let groupID = resolvedGroupID(
+        infoDictionary: Bundle.main.infoDictionary,
+        bundleIdentifier: Bundle.main.bundleIdentifier
+    )
+
+    static func resolvedGroupID(
+        infoDictionary: [String: Any]?,
+        bundleIdentifier: String?
+    ) -> String {
+        if let configured = (infoDictionary?["AppGroupID"] as? String)?
+            .trimmingCharacters(in: .whitespacesAndNewlines),
+           !configured.isEmpty,
+           !configured.contains("$(") {
+            return configured
+        }
+        let resolvedBundleID = bundleIdentifier ?? "chat.bitchat"
+        return "group.\(resolvedBundleID)"
+    }
+
+    /// Returns shared `UserDefaults` for the configured App Group only when the
+    /// running binary is entitled to that container. Calling
+    /// `UserDefaults(suiteName:)` for an unprovisioned App Group detaches from
+    /// `cfprefsd` and logs `Container: (null)` on every launch.
+    static func sharedUserDefaults(
+        groupID: String = BitchatApp.groupID,
+        containerURLProvider: (String) -> URL? = {
+            FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: $0)
+        },
+        defaultsProvider: (String) -> UserDefaults? = { UserDefaults(suiteName: $0) }
+    ) -> UserDefaults? {
+        guard containerURLProvider(groupID) != nil else { return nil }
+        return defaultsProvider(groupID)
+    }
 
     @StateObject private var runtime: AppRuntime
-    @AppStorage(AppTheme.storageKey) private var appThemeRawValue = AppTheme.matrix.rawValue
+    @AppStorage(AppTheme.storageKey) private var appThemeRawValue = AppTheme.liquidGlass.rawValue
     #if os(iOS)
     @Environment(\.scenePhase) var scenePhase
     @UIApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
@@ -24,6 +56,10 @@ struct BitchatApp: App {
     #endif
 
     init() {
+        // Must run before AppRuntime/KeychainManager/ChatViewModel write any
+        // first-launch defaults or initialize networking, so 1.x upgrades keep
+        // their existing Tor and RAM-only posture until the user chooses a mode.
+        PrivacyModeSettings.migrateLegacyInstallIfNeeded()
         _runtime = StateObject(wrappedValue: AppRuntime())
         UNUserNotificationCenter.current().delegate = NotificationDelegate.shared
     }
@@ -31,7 +67,7 @@ struct BitchatApp: App {
     var body: some Scene {
         WindowGroup {
             ContentView()
-                .environment(\.appTheme, AppTheme(rawValue: appThemeRawValue) ?? .matrix)
+                .environment(\.appTheme, AppTheme(rawValue: appThemeRawValue) ?? .liquidGlass)
                 .installAppEnvironment(runtime.environmentModels)
                 .onAppear {
                     appDelegate.runtime = runtime
@@ -39,6 +75,11 @@ struct BitchatApp: App {
                 }
                 .onOpenURL { url in
                     runtime.handleOpenURL(url)
+                }
+                .onContinueUserActivity(NSUserActivityTypeBrowsingWeb) { activity in
+                    if let url = activity.webpageURL {
+                        runtime.handleOpenURL(url)
+                    }
                 }
                 #if os(iOS)
                 .onChange(of: scenePhase) { newPhase in

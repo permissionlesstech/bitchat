@@ -35,7 +35,7 @@ final class NetworkActivationService: ObservableObject {
     static let shared = NetworkActivationService()
 
     @Published private(set) var activationAllowed: Bool = false
-    @Published private(set) var userTorEnabled: Bool = true
+    @Published private(set) var userTorEnabled: Bool = false
     /// Coarse, debounced network reachability. `false` only when the OS reports
     /// no usable interface at all. Surfaced for UI ("offline" vs "connecting").
     @Published private(set) var isNetworkReachable: Bool = true
@@ -121,18 +121,19 @@ final class NetworkActivationService: ObservableObject {
     nonisolated static func persistedTorPreference(
         in defaults: UserDefaults = .standard
     ) -> Bool {
-        defaults.object(forKey: torPreferenceKey) as? Bool ?? true
+        if let stored = defaults.object(forKey: torPreferenceKey) as? Bool {
+            return stored
+        }
+        // Everyday Mode defaults to direct connections for instant startup;
+        // Stealth Mode enables Tor routing.
+        return PrivacyModeSettings.currentMode(in: defaults) == .stealth
     }
 
     func start() {
         guard !started else { return }
         started = true
 
-        if let stored = storage.object(forKey: Self.torPreferenceKey) as? Bool {
-            userTorEnabled = stored
-        } else {
-            userTorEnabled = true
-        }
+        userTorEnabled = Self.persistedTorPreference(in: storage)
 
         // Begin (idempotent) reachability monitoring and seed initial state.
         reachabilityMonitor.start()
@@ -193,27 +194,31 @@ final class NetworkActivationService: ObservableObject {
             .store(in: &cancellables)
     }
 
-    /// Stops all internet-facing work at the synchronous panic boundary.
-    /// `start()` may be called again only after the full wipe commits.
+    /// Stops all internet-facing work at the synchronous panic boundary and
+    /// restores the default Tor-enabled posture so a wiped device never stays
+    /// on clearnet after recovery. `start()` may be called again only after
+    /// the full wipe commits.
     func stopForPanic() {
         cancellables.removeAll()
         started = false
         reachabilityMonitor.stop()
         activationAllowed = false
         torAutoStartDesired = false
+        userTorEnabled = true
+        storage.removeObject(forKey: Self.torPreferenceKey)
         relayController.disconnect()
         torController.setAutoStartAllowed(false)
-        // Keep proxy mode aligned with the user's Tor preference so an
-        // in-flight request cannot silently fall back to clearnet while Arti
-        // shuts down.
-        proxyController.setProxyMode(useTor: userTorEnabled)
+        proxyController.setProxyMode(useTor: true)
         applyTorLifecycle(torDesired: false)
     }
 
     func setUserTorEnabled(_ enabled: Bool) {
-        guard enabled != userTorEnabled else { return }
+        let changed = enabled != userTorEnabled
+        let hasStoredPreference = storage.object(forKey: Self.torPreferenceKey) != nil
+        guard changed || !hasStoredPreference else { return }
         userTorEnabled = enabled
         storage.set(enabled, forKey: Self.torPreferenceKey)
+        guard changed else { return }
         notificationCenter.post(
             name: .TorUserPreferenceChanged,
             object: nil,

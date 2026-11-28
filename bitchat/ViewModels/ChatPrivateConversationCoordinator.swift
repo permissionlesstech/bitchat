@@ -17,6 +17,10 @@ protocol ChatPrivateConversationContext: ChatIdentityContext, ChatDirectMessageS
     var privateChats: [PeerID: [BitchatMessage]] { get }
     var sentReadReceipts: Set<String> { get }
     var selectedPrivateChatPeer: PeerID? { get }
+    /// Whether the app is currently active in the foreground. A DM left open
+    /// while the app is backgrounded or the phone is locked must not emit
+    /// instant read receipts or suppress notifications.
+    var isAppActive: Bool { get }
     var nostrKeyMapping: [PeerID: String] { get }
 
     // MARK: Conversation store intents
@@ -30,6 +34,12 @@ protocol ChatPrivateConversationContext: ChatIdentityContext, ChatDirectMessageS
     /// Moves all messages from `oldPeerID`'s chat into `newPeerID`'s chat
     /// (dedup by ID, order preserved, unread carried, old chat removed).
     func migratePrivateChat(from oldPeerID: PeerID, to newPeerID: PeerID)
+    /// Reconciles the destination peer ID's disappearing timer with the source
+    /// without removing the source (partial migrations).
+    func reconcileDisappearingTimer(from sourcePeerID: PeerID, to destinationPeerID: PeerID)
+    /// Stores a cryptographically verified identity bundle received in a remote
+    /// `[FAVORITED]` invite acceptance notification.
+    func registerVerifiedFriendInviteIdentity(_ invite: FriendInvite)
     /// `true` when any private chat contains a message with `messageID`.
     func privateChatsContainMessage(withID messageID: String) -> Bool
     /// `true` when `peerID`'s chat contains a message with `messageID`.
@@ -93,6 +103,11 @@ protocol ChatPrivateConversationContext: ChatIdentityContext, ChatDirectMessageS
     func updatePeerFavoritedUs(noiseKey: Data, favorited: Bool, nickname: String, nostrPublicKey: String?)
     /// Posts the incoming-private-message local notification.
     func notifyPrivateMessage(from senderName: String, message: String, peerID: PeerID)
+}
+
+extension ChatPrivateConversationContext {
+    func reconcileDisappearingTimer(from sourcePeerID: PeerID, to destinationPeerID: PeerID) {}
+    func registerVerifiedFriendInviteIdentity(_ invite: FriendInvite) {}
 }
 
 extension ChatViewModel: ChatPrivateConversationContext {
@@ -210,6 +225,7 @@ extension ChatViewModel: ChatPrivateConversationContext {
     }
 
     func notifyPrivateMessage(from senderName: String, message: String, peerID: PeerID) {
+        guard !isConversationMuted(for: peerID) else { return }
         NotificationService.shared.sendPrivateMessageNotification(from: senderName, message: message, peerID: peerID)
     }
 
@@ -540,7 +556,8 @@ final class ChatPrivateConversationCoordinator {
             handleFavoriteNotification(
                 pm.content,
                 from: convKey,
-                senderNickname: senderName
+                senderNickname: senderName,
+                senderNostrPubkeyHex: senderPubkey
             )
             return
         }
@@ -563,10 +580,9 @@ final class ChatPrivateConversationCoordinator {
 
         context.appendPrivateMessage(message, to: conversationPeerID)
 
-        let isViewing = context.selectedPrivateChatPeer == conversationPeerID
+        let isViewing = context.isAppActive && context.selectedPrivateChatPeer == conversationPeerID
         let wasReadBefore = context.sentReadReceipts.contains(messageId)
-        let isRecentMessage = Date().timeIntervalSince(messageTimestamp) < 30
-        let shouldMarkUnread = !wasReadBefore && !isViewing && isRecentMessage
+        let shouldMarkUnread = !wasReadBefore && !isViewing
         if shouldMarkUnread {
             context.markPrivateChatUnread(conversationPeerID)
         }
@@ -701,7 +717,7 @@ final class ChatPrivateConversationCoordinator {
         let noiseKey = peerID.noiseKey ?? context.noisePublicKey(for: peerID)
         mirrorToEphemeralIfNeeded(message, targetPeerID: peerID, key: noiseKey)
 
-        let isViewing = context.selectedPrivateChatPeer == peerID
+        let isViewing = context.isAppActive && context.selectedPrivateChatPeer == peerID
         if isViewing {
             let receipt = ReadReceipt(
                 originalMessageID: message.id,
@@ -741,9 +757,15 @@ final class ChatPrivateConversationCoordinator {
     }
 
     /// Applies an inbound `[FAVORITED]`/`[UNFAVORITED]` marker from either
-    /// transport. `peerID` must resolve to a noise key — a full 64-hex ID or
-    /// one the unified peer list knows; otherwise the notification is dropped.
-    func handleFavoriteNotification(_ content: String, from peerID: PeerID, senderNickname: String) {
+    /// transport. `peerID` must resolve to a noise key — a full 64-hex ID, one
+    /// the unified peer list knows, or a cryptographically signed invite
+    /// acceptance bundle matching `senderNostrPubkeyHex`; otherwise dropped.
+    func handleFavoriteNotification(
+        _ content: String,
+        from peerID: PeerID,
+        senderNickname: String,
+        senderNostrPubkeyHex: String? = nil
+    ) {
         let isFavorite = content.hasPrefix("[FAVORITED]")
         let parts = content.split(separator: ":")
 
@@ -753,8 +775,20 @@ final class ChatPrivateConversationCoordinator {
             SecureLogger.info("📝 Received Nostr npub in favorite notification: \(nostrPubkey ?? "none")", category: .session)
         }
 
-        let noiseKey = peerID.noiseKey ?? context.noisePublicKey(for: peerID)
-        guard let finalNoiseKey = noiseKey else {
+        var resolvedNoiseKey = peerID.noiseKey ?? context.noisePublicKey(for: peerID)
+        if resolvedNoiseKey == nil,
+           isFavorite,
+           let verifiedInvite = FriendInvite.parseFavoriteAcceptancePayload(
+               content,
+               expectedSenderPubkeyHex: senderNostrPubkeyHex,
+               nickname: senderNickname
+           ) {
+            context.registerVerifiedFriendInviteIdentity(verifiedInvite)
+            resolvedNoiseKey = verifiedInvite.noisePublicKey
+            nostrPubkey = verifiedInvite.nostrNpub
+        }
+
+        guard let finalNoiseKey = resolvedNoiseKey else {
             SecureLogger.warning("⚠️ Cannot get Noise key for peer \(peerID)", category: .session)
             return
         }
@@ -832,6 +866,7 @@ final class ChatPrivateConversationCoordinator {
                     if recentMessages.count == messages.count {
                         oldPeerIDsToRemove.append(oldPeerID)
                     } else {
+                        context.reconcileDisappearingTimer(from: oldPeerID, to: peerID)
                         partiallyMigratedMessages.append(contentsOf: recentMessages)
                         SecureLogger.info(
                             "📦 Partially migrating \(recentMessages.count) of \(messages.count) messages from \(oldPeerID)",

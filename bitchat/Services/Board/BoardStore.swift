@@ -103,7 +103,7 @@ final class BoardStore {
             fileURL: fileURL,
             subdirectory: "board",
             fileName: "posts.json",
-            protection: .complete
+            protection: .untilFirstUserAuthentication
         )
         if self.fileStore.fileURL != nil {
             // Restore off the calling thread (cold launch on MainActor) on the
@@ -252,7 +252,13 @@ final class BoardStore {
         retainUntilOverride: UInt64? = nil,
         publishSnapshot: Bool = true
     ) -> BoardIngestResult {
-        guard !tombstones.contains(where: { $0.tombstone.postID == tombstone.postID }) else { return .duplicate }
+        // Dedup by (postID, authorSigningKey) so an attacker's orphan tombstone
+        // signed with a different key cannot block the genuine author's
+        // tombstone from deleting their post.
+        guard !tombstones.contains(where: {
+            $0.tombstone.postID == tombstone.postID
+                && $0.tombstone.authorSigningKey == tombstone.authorSigningKey
+        }) else { return .duplicate }
 
         // Cap retention by both the claimed deletion time (so a doctored file
         // cannot pin a tombstone past any legal expiry) and the receive time:
@@ -273,6 +279,10 @@ final class BoardStore {
             retainUntil = target.expiresAt
             isOrphan = false
             posts.remove(at: index)
+            tombstones.removeAll {
+                $0.tombstone.postID == tombstone.postID
+                    && $0.tombstone.authorSigningKey != tombstone.authorSigningKey
+            }
             if publishSnapshot {
                 publishSnapshotLocked()
             }

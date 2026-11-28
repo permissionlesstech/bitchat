@@ -6,8 +6,9 @@ import SwiftUI
 /// privacy, symbols legend).
 struct AppInfoView: View {
     @Environment(\.dismiss) var dismiss
+    @Environment(\.appTheme) private var theme
     @ThemedPalette private var palette
-    @AppStorage(AppTheme.storageKey) private var appThemeRawValue = AppTheme.matrix.rawValue
+    @AppStorage(AppTheme.storageKey) private var appThemeRawValue = AppTheme.liquidGlass.rawValue
     @EnvironmentObject private var locationChannelsModel: LocationChannelsModel
     @ObservedObject private var bridgeService = BridgeService.shared
 
@@ -17,9 +18,23 @@ struct AppInfoView: View {
     /// Wipes all local data. Nil (previews, missing wiring) hides the danger
     /// zone entirely.
     var onPanicWipe: (@MainActor () -> Void)?
+    /// Clears persisted encrypted chat history when switching to Stealth Mode or disabling history.
+    var onClearPersistedHistory: (@MainActor () -> Void)?
+    /// Optional nickname binding so users can edit their display name directly
+    /// in Settings from any tab.
+    var nicknameBinding: Binding<String>? = nil
+    var onCommitNickname: (@MainActor () -> Void)? = nil
+    /// When true, renders as a native root section using `AppTopBar` and
+    /// `ThemedRootBackground` instead of a modal sheet with a Close button.
+    var isEmbeddedInTab: Bool = false
+    var navItems: [SectionNavItem<AppRootTab>] = []
+    var onSelectTab: ((AppRootTab) -> Void)? = nil
+    var onTripleTapPanic: (() -> Void)? = nil
 
     @State private var showTopology = false
-    @State private var liveVoiceEnabled = PTTSettings.liveVoiceEnabled
+    @State private var privacyMode = PrivacyModeSettings.mode
+    @State private var persistPrivateHistory = PrivacyModeSettings.persistPrivateHistory
+    @ObservedObject private var pttPreferences = PTTPreferences.shared
     @State private var locationNotesEnabled = LocationNotesSettings.enabled
     @State private var hideMessagePreviews = NotificationPrivacySettings.hideMessagePreviews
     @State private var customRelays = NostrRelaySettings.customRelays()
@@ -50,7 +65,7 @@ struct AppInfoView: View {
     }
 
     private var selectedTheme: AppTheme {
-        AppTheme(rawValue: appThemeRawValue) ?? .matrix
+        AppTheme(rawValue: appThemeRawValue) ?? .liquidGlass
     }
 
     private var textColor: Color { palette.primary }
@@ -59,83 +74,98 @@ struct AppInfoView: View {
 
     // MARK: - Constants
     private enum Strings {
-        static let appName: LocalizedStringKey = "app_info.app_name"
-        static let tagline: LocalizedStringKey = "app_info.tagline"
-        static let appearanceTitle: LocalizedStringKey = "app_info.appearance.title"
+        static let appName = String(localized: "app_info.app_name")
+        static let tagline = String(localized: "app_info.tagline")
+        static let appearanceTitle = String(localized: "app_info.appearance.title")
 
         /// New keys carry their English copy inline (defaultValue) until the
         /// i18n pass lands them in the catalog; moved keys keep their homes.
         enum Settings {
-            static let tabPickerLabel = String(localized: "app_info.tab.picker_label", defaultValue: "view", comment: "Accessibility label for the segmented control switching between the settings and info panes of the app info sheet")
-            static let tabSettings = String(localized: "app_info.tab.settings", defaultValue: "settings", comment: "Segmented control label for the settings pane of the app info sheet")
-            static let tabInfo = String(localized: "app_info.tab.info", defaultValue: "info", comment: "Segmented control label for the info pane of the app info sheet")
+            static let tabPickerLabel = String(localized: "app_info.tab.picker_label", defaultValue: "View", comment: "Accessibility label for the segmented control switching between the settings and info panes of the app info sheet")
+            static let tabSettings = String(localized: "app_info.tab.settings", defaultValue: "Settings", comment: "Segmented control label for the settings pane of the app info sheet")
+            static let tabInfo = String(localized: "app_info.tab.info", defaultValue: "Info", comment: "Segmented control label for the info pane of the app info sheet")
 
             static let connectivityTitle = String(localized: "app_info.settings.connectivity.title", defaultValue: "CONNECTIVITY", comment: "Section header (uppercase) for the connectivity toggles: mesh bridge, internet gateway, tor routing")
 
             static let languageTitle = String(localized: "app_info.settings.language.title", defaultValue: "LANGUAGE", comment: "Section header (uppercase) for the app language picker in settings")
-            static let languagePickerLabel = String(localized: "app_info.settings.language.picker_label", defaultValue: "app language", comment: "Label of the app language picker row in settings")
-            static let languageSystem = String(localized: "app_info.settings.language.system", defaultValue: "system default", comment: "Menu option that clears the in-app language override so the app follows the device language")
-            static let languageRestartNote = String(localized: "app_info.settings.language.restart_note", defaultValue: "restart bitchat to apply the new language", comment: "Caption shown after the user picks a different app language; the change takes effect on next launch")
+            static let languagePickerLabel = String(localized: "app_info.settings.language.picker_label", defaultValue: "App Language", comment: "Label of the app language picker row in settings")
+            static let languageSystem = String(localized: "app_info.settings.language.system", defaultValue: "System Default", comment: "Menu option that clears the in-app language override so the app follows the device language")
+            static let languageRestartNote = String(localized: "app_info.settings.language.restart_note", defaultValue: "Restart bitchat to apply the new language.", comment: "Caption shown after the user picks a different app language; the change takes effect on next launch")
 
-            static let bridgeTitle = String(localized: "app_info.settings.bridge.title", defaultValue: "mesh bridge", comment: "Title of the mesh bridge toggle in settings")
-            static let bridgeSubtitle = String(localized: "app_info.settings.bridge.subtitle", defaultValue: "joins nearby mesh islands over the internet: what you say in the mesh channel also reaches people in your area beyond radio range, and their messages appear here marked with the network glyph. while you have internet, your device also carries bridge and location-channel traffic for phones around you that have none.", comment: "Subtitle explaining what the mesh bridge toggle does")
+            static let bridgeTitle = String(localized: "app_info.settings.bridge.title", defaultValue: "Mesh Bridge", comment: "Title of the mesh bridge toggle in settings")
+            static let bridgeSubtitle = String(localized: "app_info.settings.bridge.subtitle", defaultValue: "Joins nearby mesh islands over the internet: what you say in Nearby also reaches people in your area beyond radio range, marked with the network glyph. While you have internet, your device also carries bridge and place traffic for nearby phones without it.", comment: "Subtitle explaining what the mesh bridge toggle does")
             static func bridgeCell(_ cell: String) -> String {
                 String(
-                    format: String(localized: "app_info.settings.bridge.cell", defaultValue: "rendezvous cell: %@", comment: "Caption under the mesh bridge toggle showing the geohash cell the bridge is meeting on"),
+                    format: String(localized: "app_info.settings.bridge.cell", defaultValue: "Rendezvous cell: %@", comment: "Caption under the mesh bridge toggle showing the geohash cell the bridge is meeting on"),
                     locale: .current,
                     cell
                 )
             }
-            static let bridgeNoCell = String(localized: "app_info.settings.bridge.no_cell", defaultValue: "no rendezvous cell yet — needs location access or a nearby bridge peer", comment: "Caption under the mesh bridge toggle when the bridge is on but has no geohash cell to meet on")
+            /// The cell caption plus how many people are across the bridge.
+            /// The count is a plural substitution, so "1 person" and "2 people"
+            /// are separate translations.
+            static func bridgeCell(_ cell: String, people: Int) -> String {
+                String(
+                    format: String(
+                        localized: "app_info.settings.bridge.cell_people",
+                        defaultValue: "Rendezvous cell: %1$@ · %2$#@people@",
+                        comment: "Caption under the mesh bridge toggle: the rendezvous cell and a plural count of people across the bridge"
+                    ),
+                    locale: .current,
+                    cell,
+                    people
+                )
+            }
+            static let bridgeNoCell = String(localized: "app_info.settings.bridge.no_cell", defaultValue: "No rendezvous cell yet — needs location access or a nearby bridge peer.", comment: "Caption under the mesh bridge toggle when the bridge is on but has no geohash cell to meet on")
 
             // Moved from LocationChannelsSheet; keys unchanged. (The former
             // internet-gateway toggle is gone: the bridge switch drives all
             // internet sharing, including geohash-channel gatewaying.)
-            static let torTitle: LocalizedStringKey = "location_channels.tor.title"
+            static let torTitle = String(localized: "location_channels.tor.title")
             // Replaces `location_channels.tor.subtitle`, which described the
             // setting as location-channels-only. It covers private messages and
             // relay-directory refreshes too, and said nothing about the cost of
             // switching it off.
-            static let torSubtitle = String(localized: "app_info.settings.tor.subtitle", defaultValue: "sends internet traffic through tor, so relay operators see tor's address instead of yours. covers location channels and private messages delivered over the internet. recommended: on.", comment: "Subtitle for the tor routing toggle in settings, explaining what it covers")
-            static let torOffWarning = String(localized: "app_info.settings.tor.off_warning", defaultValue: "tor is off: every relay you connect to can see your IP address, including relays carrying your private messages.", comment: "Warning shown under the tor toggle while tor is switched off, stating that relay operators can see the device IP address")
+            static let torSubtitle = String(localized: "app_info.settings.tor.subtitle", defaultValue: "Sends internet traffic through Tor so relay operators see Tor's address instead of yours. Covers Places and private messages delivered over the internet.", comment: "Subtitle for the tor routing toggle in settings, explaining what it covers")
+            static let torOffWarning = String(localized: "app_info.settings.tor.off_warning", defaultValue: "Tor is off: relays you connect to can see your IP address, including relays carrying your private messages.", comment: "Warning shown under the tor toggle while tor is switched off, stating that relay operators can see the device IP address")
 
-            static let relaysTitle = String(localized: "app_info.settings.relays.title", defaultValue: "private message relays", comment: "Title of the relay list editor in settings")
-            static let relaysSubtitle = String(localized: "app_info.settings.relays.subtitle", defaultValue: "when the mesh can't reach someone, private messages travel through these relays. the built-in ones are well-known addresses that a network filter can block, so you can add your own — including .onion addresses.", comment: "Subtitle explaining what the relay list is for and why someone would add a relay")
-            static let relayBuiltIn = String(localized: "app_info.settings.relays.built_in", defaultValue: "built in", comment: "Label marking a relay as one of the built-in relays, which cannot be removed")
+            static let relaysTitle = String(localized: "app_info.settings.relays.title", defaultValue: "Private Message Relays", comment: "Title of the relay list editor in settings")
+            static let relaysSubtitle = String(localized: "app_info.settings.relays.subtitle", defaultValue: "When the mesh can't reach someone, private messages travel through these relays. Built-in relays are well-known addresses that a network filter can block, so you can add your own.", comment: "Subtitle explaining what the relay list is for and why someone would add a relay")
+            static let relayBuiltIn = String(localized: "app_info.settings.relays.built_in", defaultValue: "Built in", comment: "Label marking a relay as one of the built-in relays, which cannot be removed")
             static let relayPlaceholder = String(localized: "app_info.settings.relays.placeholder", defaultValue: "wss://relay.example.com", comment: "Placeholder text in the field for adding a relay address")
-            static let relayAdd = String(localized: "app_info.settings.relays.add", defaultValue: "add", comment: "Button that adds the typed relay address to the list")
-            static let relayRemove = String(localized: "app_info.settings.relays.remove", defaultValue: "remove relay", comment: "Accessibility label for the button that removes an added relay")
+            static let relayAdd = String(localized: "app_info.settings.relays.add", defaultValue: "Add", comment: "Button that adds the typed relay address to the list")
+            static let relayRemove = String(localized: "app_info.settings.relays.remove", defaultValue: "Remove relay", comment: "Accessibility label for the button that removes an added relay")
 
             static func relayError(_ failure: NostrRelaySettings.AddFailure) -> String {
                 switch failure {
                 case .malformed:
-                    return String(localized: "app_info.settings.relays.error.malformed", defaultValue: "that doesn't look like a relay address. try wss://host.", comment: "Error shown when a typed relay address cannot be parsed")
+                    return String(localized: "app_info.settings.relays.error.malformed", defaultValue: "That doesn't look like a relay address. Try wss://host.", comment: "Error shown when a typed relay address cannot be parsed")
                 case .alreadyPresent:
-                    return String(localized: "app_info.settings.relays.error.duplicate", defaultValue: "that relay is already in the list.", comment: "Error shown when the typed relay address is already in the list")
+                    return String(localized: "app_info.settings.relays.error.duplicate", defaultValue: "That relay is already in the list.", comment: "Error shown when the typed relay address is already in the list")
                 case .limitReached:
                     return String(
-                        format: String(localized: "app_info.settings.relays.error.limit", defaultValue: "you can add up to %d relays.", comment: "Error shown when the relay list is already at its maximum size; %d is that maximum"),
+                        format: String(localized: "app_info.settings.relays.error.limit", defaultValue: "You can add up to %d relays.", comment: "Error shown when the relay list is already at its maximum size; %d is that maximum"),
                         locale: .current,
                         NostrRelaySettings.maxCustomRelays
                     )
                 }
             }
-            static let toggleOn: LocalizedStringKey = "common.toggle.on"
-            static let toggleOff: LocalizedStringKey = "common.toggle.off"
+            static let toggleOn = String(localized: "common.toggle.on")
+            static let toggleOff = String(localized: "common.toggle.off")
 
             static let privacyTitle = String(localized: "app_info.settings.privacy.title", defaultValue: "PRIVACY", comment: "Section header (uppercase) for privacy settings such as hiding notification previews")
-            static let hidePreviewsTitle = String(localized: "app_info.settings.hide_previews.title", defaultValue: "hide message previews", comment: "Title of the setting that keeps message text, sender names, and geohashes out of lock-screen notifications")
-            static let hidePreviewsSubtitle = String(localized: "app_info.settings.hide_previews.subtitle", defaultValue: "notifications say that something arrived without showing the message, who sent it, or which location channel it came from. anyone holding your locked phone learns nothing from the lock screen. on by default.", comment: "Subtitle explaining what hiding notification message previews does")
+            static let hidePreviewsTitle = String(localized: "app_info.settings.hide_previews.title", defaultValue: "Hide Message Previews", comment: "Title of the setting that keeps message text, sender names, and geohashes out of lock-screen notifications")
+            static let hidePreviewsSubtitle = String(localized: "app_info.settings.hide_previews.subtitle", defaultValue: "Notifications say something arrived without showing the message, sender, or place. Anyone holding your locked phone learns nothing from the lock screen. On by default.", comment: "Subtitle explaining what hiding notification message previews does")
 
             static let dangerTitle = String(localized: "app_info.settings.danger.title", defaultValue: "DANGER ZONE", comment: "Section header (uppercase) for destructive actions in settings")
-            static let panicButton = String(localized: "app_info.settings.danger.panic_button", defaultValue: "panic wipe", comment: "Button in the settings danger zone that erases all local data after confirmation")
-            static let panicNote = String(localized: "app_info.settings.danger.panic_note", defaultValue: "erases all messages, keys, and identity. triple-tapping the bitchat/ logo does the same, instantly.", comment: "Caption under the panic wipe button explaining what it does and the triple-tap shortcut")
-            static let panicConfirmTitle = String(localized: "app_info.settings.danger.panic_confirm_title", defaultValue: "wipe all data?", comment: "Title of the confirmation dialog before a panic wipe")
-            static let panicConfirmAction = String(localized: "app_info.settings.danger.panic_confirm_action", defaultValue: "wipe everything", comment: "Destructive confirmation button that performs the panic wipe")
+            static let panicButton = String(localized: "app_info.settings.danger.panic_button", defaultValue: "Panic Wipe", comment: "Button in the settings danger zone that erases all local data after confirmation")
+            static let panicNote = String(localized: "app_info.settings.danger.panic_note", defaultValue: "Erases all messages, keys, and identity from this device.", comment: "Caption under the panic wipe button explaining what it does")
+            static let panicConfirmTitle = String(localized: "app_info.settings.danger.panic_confirm_title", defaultValue: "Wipe All Data?", comment: "Title of the confirmation dialog before a panic wipe")
+            static let panicConfirmAction = String(localized: "app_info.settings.danger.panic_confirm_action", defaultValue: "Wipe Everything", comment: "Destructive confirmation button that performs the panic wipe")
         }
 
         enum Features {
-            static let title: LocalizedStringKey = "app_info.features.title"
+            static let title = String(localized: "app_info.features.title")
             static let offlineComm = AppInfoFeatureInfo(
                 icon: "wifi.slash",
                 title: "app_info.features.offline.title",
@@ -174,7 +204,7 @@ struct AppInfoView: View {
         }
 
         enum Legend {
-            static let title: LocalizedStringKey = "app_info.legend.title"
+            static let title = String(localized: "app_info.legend.title")
             /// Every glyph the peer lists and headers use, in one place —
             /// nothing else in the app defines them. A nil color renders in
             /// the theme's primary text color.
@@ -196,7 +226,7 @@ struct AppInfoView: View {
         }
 
         enum Voice {
-            static let title: LocalizedStringKey = "app_info.voice.title"
+            static let title = String(localized: "app_info.voice.title")
             // The live-voice title/description keys are referenced inline at
             // the toggle (they ride the shared settingToggle now).
         }
@@ -210,7 +240,7 @@ struct AppInfoView: View {
         }
 
         enum Network {
-            static let title: LocalizedStringKey = "app_info.network.title"
+            static let title = String(localized: "app_info.network.title")
             static let topology = AppInfoFeatureInfo(
                 icon: "point.3.connected.trianglepath.dotted",
                 title: "app_info.network.topology.title",
@@ -219,7 +249,7 @@ struct AppInfoView: View {
         }
 
         enum Privacy {
-            static let title: LocalizedStringKey = "app_info.privacy.title"
+            static let title = String(localized: "app_info.privacy.title")
             static let noTracking = AppInfoFeatureInfo(
                 icon: "eye.slash",
                 title: "app_info.privacy.no_tracking.title",
@@ -238,7 +268,7 @@ struct AppInfoView: View {
         }
 
         enum HowToUse {
-            static let title: LocalizedStringKey = "app_info.how_to_use.title"
+            static let title = String(localized: "app_info.how_to_use.title")
             /// The instruction strings flowed into one comma-separated
             /// paragraph. The translations carry their legacy bullet-list
             /// prefix ("• "), so it is stripped here.
@@ -251,15 +281,91 @@ struct AppInfoView: View {
                     String(localized: "app_info.how_to_use.clear_chat"),
                     String(localized: "app_info.how_to_use.commands")
                 ]
-                .map { $0.hasPrefix("• ") ? String($0.dropFirst(2)) : $0 }
-                .joined(separator: ", ")
+                .joined(separator: "\n")
             }
         }
 
     }
 
+    private var tabBody: some View {
+        let topBar = AppTopBar {
+            if !navItems.isEmpty, let onSelectTab {
+                SectionNavMenu(
+                    currentTab: .settings,
+                    items: navItems,
+                    onSelect: onSelectTab
+                )
+            } else {
+                Text(
+                    selectedPane == .settings
+                        ? String(localized: "chats.accessibility.settings", defaultValue: "Settings", comment: "Title for Settings tab")
+                        : Strings.Settings.tabInfo.capitalized
+                )
+                .bitchatFont(size: 19, weight: .bold)
+                .foregroundColor(palette.primary)
+                .lineLimit(1)
+            }
+        } trailing: {
+            Picker(Strings.Settings.tabPickerLabel, selection: $selectedPane) {
+                Text(Strings.Settings.tabSettings.capitalized).tag(Pane.settings)
+                Text(Strings.Settings.tabInfo.capitalized).tag(Pane.info)
+            }
+            .pickerStyle(.segmented)
+            .labelsHidden()
+            .frame(width: 156)
+        }
+        .stealthTripleTapPanicWipe {
+            onTripleTapPanic?()
+        }
+
+        let scrollBody = ScrollView {
+            paneContent
+        }
+
+        return Group {
+            if theme.usesGlassChrome {
+                if #available(iOS 17.0, macOS 14.0, *) {
+                    scrollBody
+                        .contentMargins(.top, ChromeMetrics.barHeight + 10, for: .scrollContent)
+                        .contentMargins(.top, ChromeMetrics.barHeight + 10, for: .scrollIndicators)
+                        .overlay(alignment: .top) { topBar }
+                } else {
+                    VStack(spacing: 0) {
+                        topBar
+                        scrollBody
+                    }
+                }
+            } else {
+                VStack(spacing: 0) {
+                    topBar
+                    scrollBody
+                }
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: PrivacyModeSettings.didChangeNotification)) { _ in
+            privacyMode = PrivacyModeSettings.mode
+            persistPrivateHistory = PrivacyModeSettings.persistPrivateHistory
+            hideMessagePreviews = NotificationPrivacySettings.hideMessagePreviews
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(ThemedRootBackground())
+        .onDisappear {
+            onCommitNickname?()
+        }
+    }
+
     private var sheetBody: some View {
         VStack(spacing: 0) {
+            ThemedSheetHeader(
+                title: selectedPane == .settings
+                    ? String(localized: "chats.accessibility.settings", defaultValue: "Settings", comment: "Title for Settings sheet")
+                    : String(localized: "app_info.tab.info", defaultValue: "Info", comment: "Title for Info sheet"),
+                onClose: {
+                    onCommitNickname?()
+                    dismiss()
+                }
+            )
+
             panePicker
 
             ScrollView {
@@ -271,36 +377,16 @@ struct AppInfoView: View {
 
     var body: some View {
         Group {
-            #if os(macOS)
-            VStack(spacing: 0) {
-                // Custom header for macOS
-                HStack {
-                    Spacer()
-                    Button("app_info.done") {
-                        dismiss()
-                    }
-                    .buttonStyle(.plain)
-                    .foregroundColor(textColor)
-                    .padding()
-                }
-                .themedSurface(opacity: 0.95)
-
+            if isEmbeddedInTab {
+                tabBody
+            } else {
                 sheetBody
+                    #if os(macOS)
+                    .frame(minWidth: 520, idealWidth: 580, minHeight: 620, idealHeight: 680)
+                    #endif
             }
-            .frame(width: 600, height: 700)
-            #else
-            NavigationView {
-                sheetBody
-                    .navigationBarTitleDisplayMode(.inline)
-                    .toolbar {
-                        ToolbarItem(placement: .navigationBarTrailing) {
-                            SheetCloseButton { dismiss() }
-                                .foregroundColor(textColor)
-                        }
-                    }
-            }
-            #endif
         }
+        .foregroundColor(textColor)
         .sheet(isPresented: $showTopology) {
             if let topologyProvider {
                 MeshTopologyView(provider: topologyProvider)
@@ -312,13 +398,14 @@ struct AppInfoView: View {
 
     private var panePicker: some View {
         Picker(Strings.Settings.tabPickerLabel, selection: $selectedPane) {
-            Text(Strings.Settings.tabInfo).tag(Pane.info)
-            Text(Strings.Settings.tabSettings).tag(Pane.settings)
+            Text(Strings.Settings.tabSettings.capitalized).tag(Pane.settings)
+            Text(Strings.Settings.tabInfo.capitalized).tag(Pane.info)
         }
         .pickerStyle(.segmented)
         .labelsHidden()
-        .padding(.horizontal)
+        .padding(.horizontal, 16)
         .padding(.top, 12)
+        .padding(.bottom, 4)
     }
 
     @ViewBuilder
@@ -336,6 +423,70 @@ struct AppInfoView: View {
     @ViewBuilder
     private var settingsContent: some View {
         VStack(alignment: .leading, spacing: 24) {
+            if let nicknameBinding {
+                VStack(alignment: .leading, spacing: 10) {
+                    SectionHeader(verbatim: String(localized: "app_info.settings.profile.title", defaultValue: "PROFILE", comment: "Section header for display nickname in settings"))
+
+                    settingsCard {
+                        HStack(spacing: 6) {
+                            Text(verbatim: "@")
+                                .bitchatFont(size: 15, weight: .semibold)
+                                .foregroundColor(secondaryTextColor)
+                            TextField("content.input.nickname_placeholder", text: nicknameBinding)
+                                .textFieldStyle(.plain)
+                                .bitchatFont(size: 15, weight: .medium)
+                                .foregroundColor(textColor)
+                                .autocorrectionDisabled(true)
+                                #if os(iOS)
+                                .textInputAutocapitalization(.never)
+                                #endif
+                                .onSubmit { onCommitNickname?() }
+                        }
+                        Text(String(localized: "app_info.settings.profile.subtitle", defaultValue: "Shown to nearby mesh peers, in places, and on your friend invite links.", comment: "Caption under nickname field in settings"))
+                            .bitchatFont(size: 11)
+                            .foregroundColor(secondaryTextColor)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+            }
+
+            // Privacy Mode — Everyday (instant, persisted encrypted chats) vs Stealth (Tor + RAM-only + hidden previews)
+            VStack(alignment: .leading, spacing: 12) {
+                SectionHeader(verbatim: String(localized: "app_info.settings.privacy_mode.title", defaultValue: "PRIVACY MODE", comment: "Section header for Everyday vs Stealth privacy mode"))
+
+                settingsCard {
+                    Picker(
+                        String(localized: "app_info.settings.privacy_mode.picker", defaultValue: "Privacy Mode", comment: "Picker label for Everyday vs Stealth mode"),
+                        selection: Binding(
+                            get: { privacyMode },
+                            set: { newMode in
+                                privacyMode = newMode
+                                PrivacyModeSettings.applyMode(
+                                    newMode,
+                                    onClearPersistedHistory: onClearPersistedHistory
+                                )
+                                persistPrivateHistory = PrivacyModeSettings.persistPrivateHistory
+                                hideMessagePreviews = NotificationPrivacySettings.hideMessagePreviews
+                            }
+                        )
+                    ) {
+                        Text(String(localized: "app_info.settings.privacy_mode.everyday", defaultValue: "Everyday", comment: "Everyday mode option")).tag(PrivacyMode.everyday)
+                        Text(String(localized: "app_info.settings.privacy_mode.stealth", defaultValue: "Stealth (Tor)", comment: "Stealth mode option")).tag(PrivacyMode.stealth)
+                    }
+                    .pickerStyle(.segmented)
+                    .labelsHidden()
+
+                    Text(
+                        privacyMode == .everyday
+                            ? String(localized: "app_info.settings.privacy_mode.everyday_desc", defaultValue: "Instant internet relay connections and encrypted local history for DMs and groups. End-to-end encryption is always on.", comment: "Description of Everyday mode")
+                            : String(localized: "app_info.settings.privacy_mode.stealth_desc", defaultValue: "Routes internet traffic through Tor, keeps chats in RAM only, hides lock-screen previews, and arms triple-tap panic wipe on the logo.", comment: "Description of Stealth mode")
+                    )
+                    .bitchatFont(size: 11)
+                    .foregroundColor(secondaryTextColor)
+                    .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+
             // Appearance — single row: label left, theme chips right
             HStack(spacing: 12) {
                 SectionHeader(Strings.appearanceTitle)
@@ -412,14 +563,33 @@ struct AppInfoView: View {
 
                 settingsCard {
                     settingToggle(
-                        title: Text("app_info.voice.live.title"),
-                        subtitle: Text("app_info.voice.live.description"),
+                        title: Text(String(localized: "app_info.voice.live.title")),
+                        subtitle: Text(String(localized: "app_info.voice.live.description")),
                         isOn: Binding(
-                            get: { liveVoiceEnabled },
-                            set: { newValue in
-                                liveVoiceEnabled = newValue
-                                PTTSettings.liveVoiceEnabled = newValue
-                            }
+                            get: { pttPreferences.liveVoiceEnabled },
+                            set: { pttPreferences.setLiveVoiceEnabled($0) }
+                        )
+                    )
+
+                    Divider().opacity(0.35)
+
+                    settingToggle(
+                        title: Text(String(localized: "app_info.voice.public_autoplay.title", defaultValue: "Auto-play in Nearby (#mesh)", comment: "Settings toggle title for automatic speaker playback in public Nearby mesh")),
+                        subtitle: Text(String(localized: "app_info.voice.public_autoplay.description", defaultValue: "Off by default. Play incoming live voices aloud in public Nearby; trusted DMs and groups always auto-play unless muted.", comment: "Settings toggle description for public Nearby live voice auto-play")),
+                        isOn: Binding(
+                            get: { pttPreferences.publicAutoPlayEnabled },
+                            set: { pttPreferences.setPublicAutoPlayEnabled($0) }
+                        )
+                    )
+
+                    Divider().opacity(0.35)
+
+                    settingToggle(
+                        title: Text(String(localized: "app_info.voice.cues.title", defaultValue: "Walkie-talkie cue tones", comment: "Settings toggle title for subtle walkie-talkie start/stop audio cues")),
+                        subtitle: Text(String(localized: "app_info.voice.cues.description", defaultValue: "Play a brief tone and haptic tap when your live mic opens and closes.", comment: "Settings toggle description for walkie-talkie cue tones")),
+                        isOn: Binding(
+                            get: { pttPreferences.toneCuesEnabled },
+                            set: { pttPreferences.setToneCuesEnabled($0) }
                         )
                     )
                 }
@@ -439,7 +609,7 @@ struct AppInfoView: View {
                     // a hint about why there isn't one yet (no location and no
                     // bridge peer advertising a cell).
                     if bridgeService.isEnabled {
-                        Text(bridgeService.activeCell.map(Strings.Settings.bridgeCell) ?? Strings.Settings.bridgeNoCell)
+                        Text(bridgeCaption)
                             .bitchatFont(size: 11)
                             .foregroundColor(secondaryTextColor)
                     }
@@ -493,7 +663,7 @@ struct AppInfoView: View {
                 switch locationChannelsModel.permissionState {
                 case .authorized:
                     Button(action: SystemSettings.location.open) {
-                        Text("location_channels.action.remove_access")
+                        Text(String(localized: "location_channels.action.remove_access"))
                             .bitchatFont(size: 12)
                             .foregroundColor(palette.alertRed)
                             .frame(maxWidth: .infinity)
@@ -504,7 +674,7 @@ struct AppInfoView: View {
                     .buttonStyle(.plain)
                 case .notDetermined:
                     Button(action: { locationChannelsModel.enableLocationChannels() }) {
-                        Text("location_channels.action.request_permissions")
+                        Text(String(localized: "location_channels.action.request_permissions"))
                             .bitchatFont(size: 12)
                             .foregroundColor(palette.accent)
                             .frame(maxWidth: .infinity)
@@ -515,10 +685,10 @@ struct AppInfoView: View {
                     .buttonStyle(.plain)
                 case .denied, .restricted:
                     settingsCard {
-                        Text("location_channels.permission_denied")
+                        Text(String(localized: "location_channels.permission_denied"))
                             .bitchatFont(size: 11)
                             .foregroundColor(secondaryTextColor)
-                        Button("location_channels.action.open_settings", action: SystemSettings.location.open)
+                        Button(String(localized: "location_channels.action.open_settings"), action: SystemSettings.location.open)
                             .buttonStyle(.plain)
                             .bitchatFont(size: 12)
                             .foregroundColor(palette.accent)
@@ -530,6 +700,24 @@ struct AppInfoView: View {
             // without being unlocked.
             VStack(alignment: .leading, spacing: 12) {
                 SectionHeader(verbatim: Strings.Settings.privacyTitle)
+
+                settingsCard {
+                    settingToggle(
+                        title: Text(String(localized: "app_info.settings.history.title", defaultValue: "Save Encrypted Chat History", comment: "Title of the setting that enables encrypted local persistence for private DMs and groups")),
+                        subtitle: Text(String(localized: "app_info.settings.history.subtitle", defaultValue: "Keeps your private DMs and group chats across restarts, sealed with a device Keychain key. Public channels are never saved. Automatically off in Stealth Mode.", comment: "Subtitle explaining encrypted local chat history")),
+                        isOn: Binding(
+                            get: { persistPrivateHistory && privacyMode == .everyday },
+                            set: { newValue in
+                                persistPrivateHistory = newValue
+                                PrivacyModeSettings.setPersistPrivateHistory(newValue)
+                                if !newValue {
+                                    onClearPersistedHistory?()
+                                }
+                            }
+                        )
+                    )
+                    .disabled(privacyMode == .stealth)
+                }
 
                 settingsCard {
                     settingToggle(
@@ -569,7 +757,7 @@ struct AppInfoView: View {
                         Button(Strings.Settings.panicConfirmAction, role: .destructive) {
                             onPanicWipe?()
                         }
-                        Button("common.cancel", role: .cancel) {}
+                        Button(String(localized: "common.cancel"), role: .cancel) {}
                     }
 
                     Text(Strings.Settings.panicNote)
@@ -597,6 +785,23 @@ struct AppInfoView: View {
             if isSelected {
                 Image(systemName: "checkmark")
             }
+        }
+    }
+
+    /// The line under the mesh bridge toggle. A live cell keeps the existing
+    /// caption, and adds the bridged-people count only when someone is there.
+    private var bridgeCaption: String {
+        let people = bridgeService.bridgedPeerCount
+        switch BridgeSettingsCaption.resolve(
+            hasCell: bridgeService.activeCell != nil,
+            people: people
+        ) {
+        case .noCell:
+            return Strings.Settings.bridgeNoCell
+        case .cell:
+            return Strings.Settings.bridgeCell(bridgeService.activeCell ?? "")
+        case .cellAndPeople:
+            return Strings.Settings.bridgeCell(bridgeService.activeCell ?? "", people: people)
         }
     }
 
@@ -716,13 +921,9 @@ struct AppInfoView: View {
         )
     }
 
-    /// The padded card every connectivity setting sits in (moved look from
-    /// LocationChannelsSheet's toggle sections).
+    /// Unified card container matching Places, Groups, and Add Friend sheets.
     private func settingsCard<Content: View>(@ViewBuilder _ content: () -> Content) -> some View {
-        VStack(alignment: .leading, spacing: 8, content: content)
-            .padding(12)
-            .background(palette.secondary.opacity(0.12))
-            .cornerRadius(8)
+        ThemedCard(padding: 14, spacing: 8, content: content)
     }
 
     /// A title+subtitle row driving an IRC-style on/off pill — the one
@@ -786,7 +987,7 @@ struct AppInfoView: View {
                         .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
-                    .accessibilityHint(Text("app_info.network.topology.hint"))
+                    .accessibilityHint(Text(String(localized: "app_info.network.topology.hint")))
                 }
             }
 
@@ -852,10 +1053,10 @@ struct AppInfoFeatureInfo {
     let description: Text
 
     /// Catalog-backed strings (existing keys).
-    init(icon: String, title: LocalizedStringKey, description: LocalizedStringKey) {
+    init(icon: String, title: StaticString, description: StaticString) {
         self.icon = icon
-        self.title = Text(title)
-        self.description = Text(description)
+        self.title = Text(String(localized: title))
+        self.description = Text(String(localized: description))
     }
 
     /// Pre-resolved strings — new keys that carry their English defaultValue
@@ -873,7 +1074,7 @@ struct SectionHeader: View {
 
     private var textColor: Color { palette.primary }
 
-    init(_ title: LocalizedStringKey) {
+    init(_ title: String) {
         self.title = Text(title)
     }
 

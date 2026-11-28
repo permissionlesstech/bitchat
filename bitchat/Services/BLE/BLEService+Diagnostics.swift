@@ -143,7 +143,13 @@ extension BLEService {
     /// bidirectionally-confirmed neighbor claims ([] = direct, nil = none).
     func computeMeshPath(to peerID: PeerID) -> [PeerID]? {
         refreshLocalTopology()
-        if let route = computeRoute(to: peerID) {
+        // Diagnostics estimate the physical topology path regardless of
+        // whether every hop has been observed speaking v2.
+        if let route = meshTopology.computeRoute(
+            from: myPeerIDData,
+            to: routingData(for: peerID),
+            maxHops: TransportConfig.bleSourceRouteMaxIntermediateHops
+        ) {
             return route.compactMap { PeerID(routingData: $0) }
         }
         // Confirmed claims can lag a brand-new link (the peer's next announce

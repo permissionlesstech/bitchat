@@ -81,6 +81,10 @@ final class PTTCaptureEngine: @unchecked Sendable {
     @MainActor private var configChangeObserver: NSObjectProtocol?
     /// Called on the capture queue with each batch of encoded AAC frames.
     var onFrames: (([Data]) -> Void)?
+    /// Called on the capture queue with normalized input loudness in `0...1`
+    /// for live voice-level rings in the walkie-talkie UI.
+    var onAudioLevel: (@Sendable (Float) -> Void)?
+    private var lastLevelEmit = Date.distantPast
 
     enum CaptureError: Error {
         case inputUnavailable
@@ -261,6 +265,14 @@ final class PTTCaptureEngine: @unchecked Sendable {
               let resampled = resampler?.resample(buffer)
         else { return }
 
+        if let onAudioLevel {
+            let now = Date()
+            if now.timeIntervalSince(lastLevelEmit) >= 0.05 {
+                lastLevelEmit = now
+                onAudioLevel(Self.normalizedLevel(from: resampled))
+            }
+        }
+
         do {
             try file?.write(from: resampled)
         } catch {
@@ -270,6 +282,22 @@ final class PTTCaptureEngine: @unchecked Sendable {
         guard let frames = encoder?.encode(resampled), !frames.isEmpty else { return }
         encodedFrameCount += frames.count
         onFrames?(frames)
+    }
+
+    private static func normalizedLevel(from buffer: AVAudioPCMBuffer) -> Float {
+        let count = Int(buffer.frameLength)
+        guard count > 0, let channelData = buffer.floatChannelData else { return 0 }
+        let samples = channelData[0]
+        var sumSquares: Float = 0
+        for i in 0..<count {
+            let sample = samples[i]
+            sumSquares += sample * sample
+        }
+        let rms = sqrt(sumSquares / Float(count))
+        guard rms > 0.0001 else { return 0 }
+        // Map roughly -50 dB..0 dB into 0...1 for a responsive voice halo.
+        let db = 20 * log10(rms)
+        return min(max((db + 50) / 50, 0), 1)
     }
 
     private func teardown(deleteFile: Bool) {

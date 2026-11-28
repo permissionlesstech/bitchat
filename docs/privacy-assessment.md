@@ -38,6 +38,7 @@ Ingress validates announce structure, sender binding, signatures, payload sizes,
 ## Private Messaging and Courier Delivery
 
 - Direct mesh sessions use Noise XX with X25519, ChaCha20-Poly1305, and SHA-256.
+- In Everyday Mode (fresh 2.0 default), private direct-message and private-group timelines persist in `EncryptedHistoryStore` (`private-chats.sealed`), sealed with ChaCha20-Poly1305 under a device-only keychain key, with per-conversation disappearing timers (24h, 7d, or RAM-only ephemeral). Stealth Mode disables local history and deletes the file immediately; 1.x upgrades preserve RAM-only behavior until the user chooses Everyday Mode. Public mesh and geohash timelines are never stored in `EncryptedHistoryStore`.
 - Undelivered outgoing private messages remain in a bounded, ChaChaPoly-sealed outbox for at most 24 hours. Its key is stored in the keychain.
 - Physical couriers store opaque Noise-sealed envelopes, not plaintext. Deposits have trust-tier quotas, per-depositor caps, a global cap, and at most a 24-hour lifetime.
 - Spray-and-wait copies are bounded and progress cannot be replenished by replaying a deposit.
@@ -63,8 +64,8 @@ Public archives contain content already intended for public mesh/board distribut
 - When mesh bridge is enabled, public mesh messages not marked “nearby only” are signed under a per-cell Nostr identity and published to a neighborhood rendezvous geohash. Presence and public bridge traffic therefore expose a coarse area to relays and participants.
 - A bridge gateway can carry signed bridge/location events and opaque courier drops for nearby mesh-only peers. It cannot validly publish a neighbor's radio-only message because the author must first sign the bridge event.
 
-- Relays added by hand persist in local preferences (`nostr.customRelays`, at most 8, normalized on read) and are wiped on panic. An added relay names an operator someone chose to route through, so it is treated as sensitive local state rather than inert configuration. `.onion` addresses are accepted, which is the point: the four built-in relays are well-known clearnet hostnames and a filter blocking four names would otherwise end internet-delivered private messages until a new build shipped.
-- Turning the Tor preference off routes relay sockets and the relay-directory fetch directly, disclosing the device IP to every relay operator including those carrying private messages. The settings UI states this while the preference is off.
+- Relays added by hand persist in local preferences (`nostr.customRelays`, at most 8, normalized on read) and are wiped on panic. An added relay names an operator someone chose to route through, so it is treated as sensitive local state rather than inert configuration. Custom `wss://` relays let users bypass filters blocking the four built-in clearnet hostnames; `.onion` relay connections are not yet supported because the bundled Arti build omits `onion-service-client`.
+- Fresh 2.0 installs start in Everyday Mode (direct Nostr relays; no network connection opens before the user uses an internet feature or chooses a mode in onboarding). Stealth Mode enables fail-closed Tor routing. Upgrades from 1.x run `PrivacyModeSettings.migrateLegacyInstallIfNeeded()` before network startup, preserving each install's existing Tor behavior (keeping Tor on for 1.x users who relied on the Tor-on default) until the user explicitly chooses a mode. Turning Tor off routes relay sockets and the relay-directory fetch directly, disclosing the device IP to every relay operator including those carrying private messages. The settings UI states this while the preference is off.
 
 Residual risk: Nostr relay retention and logging are outside project control. Public events may be copied indefinitely. Timing, coarse location, and participation can be correlated even when content is encrypted or per-cell identities are used.
 
@@ -109,7 +110,7 @@ Not addressed, and deliberately out of scope here:
 
 ## Panic Wipe Coverage
 
-The panic action clears identity/session state, preferences, location state, groups, prekeys, outbox mail, courier mail, bridge dedup state, gossip archive, board data, managed media, hand-added relays, and active subscriptions/transports. Managed media deletion completes synchronously, after active media work has been invalidated. Keychain secrets use device-only accessibility, and an install marker detects and clears app keys that survive uninstall before a later reinstall can use them. New persistent stores must add an explicit wipe hook and a regression test.
+The panic action clears identity/session state, encrypted private chat history (`EncryptedHistoryStore`), preferences, location state, groups, prekeys, outbox mail, courier mail, bridge dedup state, gossip archive, board data, managed media, hand-added relays, and active subscriptions/transports. Managed media deletion completes synchronously, after active media work has been invalidated. In Stealth Mode (and on 1.x upgrades until changed), triple-tapping the top header bar triggers the panic confirmation dialog and panic reset preserves the Stealth/Tor posture rather than reverting to disk-persisted Everyday Mode. Keychain secrets use device-only accessibility, and an install marker detects and clears app keys that survive uninstall before a later reinstall can use them. New persistent stores must add an explicit wipe hook and a regression test.
 
 ## Release Review Checklist
 

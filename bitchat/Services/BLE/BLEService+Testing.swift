@@ -123,6 +123,26 @@ extension BLEService {
         }
     }
 
+    /// Waits until work already submitted to `messageQueue`, `bleQueue`, and any
+    /// resulting `MainActor` transport-event hops has completed. Lets negative
+    /// assertions verify absence deterministically instead of sleeping for a
+    /// fixed wall-clock window.
+    func _test_drainAllPipelines() async {
+        let messageQueue = self.messageQueue
+        let bleQueue = self.bleQueue
+        await withCheckedContinuation { continuation in
+            messageQueue.async {
+                bleQueue.async {
+                    messageQueue.async {
+                        Task { @MainActor in
+                            continuation.resume()
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     func _test_hasGossipPrekeyBundle(for peerID: PeerID) -> Bool {
         gossipSyncManager?._hasPrekeyBundle(for: peerID) ?? false
     }

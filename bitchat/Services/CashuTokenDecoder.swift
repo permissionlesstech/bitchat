@@ -89,26 +89,21 @@ enum CashuTokenDecoder {
         private let cache: NSCache<NSString, DecodeCacheEntry> = {
             let c = NSCache<NSString, DecodeCacheEntry>()
             c.countLimit = 256
+            c.totalCostLimit = 1_024 * 1_024
             return c
         }()
 
-        func currentGeneration() -> UInt64 {
+        func lookup(for key: String) -> (entry: DecodeCacheEntry?, generation: UInt64) {
             lock.lock()
             defer { lock.unlock() }
-            return generation
-        }
-
-        func entry(for key: String) -> DecodeCacheEntry? {
-            lock.lock()
-            defer { lock.unlock() }
-            return cache.object(forKey: key as NSString)
+            return (cache.object(forKey: key as NSString), generation)
         }
 
         func store(_ info: TokenInfo?, for key: String, expectedGeneration: UInt64) {
             lock.lock()
             defer { lock.unlock() }
             guard generation == expectedGeneration else { return }
-            cache.setObject(DecodeCacheEntry(info), forKey: key as NSString)
+            cache.setObject(DecodeCacheEntry(info), forKey: key as NSString, cost: max(1, key.utf8.count))
         }
 
         func reset() {
@@ -127,15 +122,22 @@ enum CashuTokenDecoder {
         permissiveCache.reset()
     }
 
+    #if DEBUG
+    static func hasCachedDecode(for raw: String) -> Bool {
+        permissiveCache.lookup(for: raw).entry != nil
+    }
+    #endif
+
     static func decode(_ raw: String, strict: Bool = false) -> TokenInfo? {
-        let generation = strict ? 0 : permissiveCache.currentGeneration()
-        if !strict, let cached = permissiveCache.entry(for: raw) {
+        guard !strict, raw.utf8.count <= maxTokenLength else {
+            return decodeUncached(raw, strict: strict)
+        }
+        let (cached, generation) = permissiveCache.lookup(for: raw)
+        if let cached {
             return cached.info
         }
-        let decoded = decodeUncached(raw, strict: strict)
-        if !strict {
-            permissiveCache.store(decoded, for: raw, expectedGeneration: generation)
-        }
+        let decoded = decodeUncached(raw, strict: false)
+        permissiveCache.store(decoded, for: raw, expectedGeneration: generation)
         return decoded
     }
 

@@ -2,8 +2,9 @@
 // ImagePreviewView.swift
 // bitchat
 //
+// Fullscreen media viewer with pinch/double-tap zoom, pan, native share,
+// and floating Liquid Glass controls.
 // This is free and unencumbered software released into the public domain.
-// For more information, see <https://unlicense.org>
 //
 
 import SwiftUI
@@ -21,50 +22,128 @@ struct ImagePreviewView: View {
     #else
     @State private var platformImage: NSImage?
     #endif
+    @State private var zoomScale: CGFloat = 1.0
+    @State private var lastZoomScale: CGFloat = 1.0
+    @State private var panOffset: CGSize = .zero
+    @State private var lastPanOffset: CGSize = .zero
 
     var body: some View {
         ZStack {
             Color.black.ignoresSafeArea()
-            VStack {
-                Spacer()
+
+            Group {
                 if let image = platformImage {
                     #if os(iOS)
                     Image(uiImage: image)
                         .resizable()
                         .aspectRatio(contentMode: .fit)
-                        .padding()
                     #else
                     Image(nsImage: image)
                         .resizable()
                         .aspectRatio(contentMode: .fit)
-                        .padding()
                     #endif
                 } else {
                     ProgressView()
                         .progressViewStyle(.circular)
                         .tint(.white)
                 }
-                Spacer()
-                HStack {
-                    Button(action: { dismiss() }) {
-                        Text("close", comment: "Button to dismiss fullscreen media viewer")
-                            .font(.bitchatSystem(size: 15, weight: .semibold))
-                            .foregroundColor(.white)
-                            .padding(.horizontal, 16)
-                            .padding(.vertical, 8)
-                            .background(RoundedRectangle(cornerRadius: 12).stroke(Color.white.opacity(0.5), lineWidth: 1))
+            }
+            .scaleEffect(zoomScale)
+            .offset(panOffset)
+            .padding()
+            .gesture(
+                MagnificationGesture()
+                    .onChanged { value in
+                        let next = lastZoomScale * value
+                        zoomScale = min(max(next, 1.0), 4.0)
                     }
-                    Spacer()
-                    Button(action: saveCopy) {
-                        Text("save", comment: "Button to save media to device")
-                            .font(.bitchatSystem(size: 15, weight: .semibold))
-                            .foregroundColor(.white)
-                            .padding(.horizontal, 16)
-                            .padding(.vertical, 8)
-                            .background(RoundedRectangle(cornerRadius: 12).fill(Color.blue.opacity(0.6)))
+                    .onEnded { _ in
+                        lastZoomScale = zoomScale
+                        if zoomScale <= 1.02 {
+                            resetZoom()
+                        }
+                    }
+            )
+            .simultaneousGesture(
+                DragGesture()
+                    .onChanged { value in
+                        guard zoomScale > 1.01 else { return }
+                        panOffset = CGSize(
+                            width: lastPanOffset.width + value.translation.width,
+                            height: lastPanOffset.height + value.translation.height
+                        )
+                    }
+                    .onEnded { _ in
+                        guard zoomScale > 1.01 else { return }
+                        lastPanOffset = panOffset
+                    }
+            )
+            .onTapGesture(count: 2) {
+                withAnimation(.spring(response: 0.28, dampingFraction: 0.82)) {
+                    if zoomScale > 1.05 {
+                        resetZoom()
+                    } else {
+                        zoomScale = 2.5
+                        lastZoomScale = 2.5
                     }
                 }
-                .padding([.horizontal, .bottom], 24)
+            }
+
+            VStack {
+                HStack {
+                    Spacer()
+                    Button(action: { dismiss() }) {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 14, weight: .bold))
+                            .foregroundColor(.white)
+                            .frame(width: 36, height: 36)
+                            .background(.ultraThinMaterial, in: Circle())
+                            .overlay(
+                                Circle().stroke(Color.white.opacity(0.22), lineWidth: 0.75)
+                            )
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(String(localized: "close", defaultValue: "Close", comment: "Button to dismiss fullscreen media viewer"))
+                }
+                .padding(.horizontal, 20)
+                .padding(.top, 16)
+
+                Spacer()
+
+                HStack(spacing: 12) {
+                    ShareLink(item: url) {
+                        Label(
+                            String(localized: "common.share", defaultValue: "Share", comment: "Button to share media"),
+                            systemImage: "square.and.arrow.up"
+                        )
+                        .font(.bitchatSystem(size: 14, weight: .semibold))
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 10)
+                        .background(.ultraThinMaterial, in: Capsule())
+                        .overlay(
+                            Capsule().stroke(Color.white.opacity(0.22), lineWidth: 0.75)
+                        )
+                    }
+                    .buttonStyle(.plain)
+
+                    Button(action: saveCopy) {
+                        Label(
+                            String(localized: "save", defaultValue: "Save", comment: "Button to save media to device"),
+                            systemImage: "square.and.arrow.down"
+                        )
+                        .font(.bitchatSystem(size: 14, weight: .semibold))
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 10)
+                        .background(.ultraThinMaterial, in: Capsule())
+                        .overlay(
+                            Capsule().stroke(Color.white.opacity(0.22), lineWidth: 0.75)
+                        )
+                    }
+                    .buttonStyle(.plain)
+                }
+                .padding(.bottom, 28)
             }
         }
         .onAppear(perform: loadImage)
@@ -73,6 +152,13 @@ struct ImagePreviewView: View {
             FileExportWrapper(url: url)
         }
         #endif
+    }
+
+    private func resetZoom() {
+        zoomScale = 1.0
+        lastZoomScale = 1.0
+        panOffset = .zero
+        lastPanOffset = .zero
     }
 
     private func loadImage() {
@@ -103,7 +189,7 @@ struct ImagePreviewView: View {
             let panel = NSSavePanel()
             panel.canCreateDirectories = true
             panel.nameFieldStringValue = url.lastPathComponent
-            panel.prompt = "save"
+            panel.prompt = "Save"
             if panel.runModal() == .OK, let destination = panel.url {
                 do {
                     if FileManager.default.fileExists(atPath: destination.path) {
@@ -123,7 +209,7 @@ struct ImagePreviewView: View {
         let url: URL
 
         func makeUIViewController(context: Context) -> UIDocumentPickerViewController {
-            let controller = UIDocumentPickerViewController(forExporting: [url])
+            let controller = UIDocumentPickerViewController(forExporting: [url], asCopy: true)
             controller.shouldShowFileExtensions = true
             return controller
         }

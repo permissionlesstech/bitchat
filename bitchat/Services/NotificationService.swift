@@ -65,16 +65,19 @@ final class NotificationService {
     /// or disclosing which geohash it came from.
     private enum Redacted {
         static var directMessageTitle: String {
-            String(localized: "notification.redacted.dm.title", defaultValue: "🔒 new dm", comment: "Lock-screen notification title for a received direct message when message previews are hidden; deliberately names neither the sender nor the content")
+            String(localized: "notification.redacted.dm.title", defaultValue: "🔒 New DM", comment: "Lock-screen notification title for a received direct message when message previews are hidden; deliberately names neither the sender nor the content")
         }
         static var mentionTitle: String {
-            String(localized: "notification.redacted.mention.title", defaultValue: "🫵 you were mentioned", comment: "Lock-screen notification title telling someone they were mentioned when message previews are hidden; deliberately omits who mentioned them")
+            String(localized: "notification.redacted.mention.title", defaultValue: "🫵 You were mentioned", comment: "Lock-screen notification title telling someone they were mentioned when message previews are hidden; deliberately omits who mentioned them")
         }
         static var geohashActivityTitle: String {
-            String(localized: "notification.redacted.geohash.title", defaultValue: "📍 new activity nearby", comment: "Lock-screen notification title for activity in a location channel when message previews are hidden; deliberately omits the geohash")
+            String(localized: "notification.redacted.geohash.title", defaultValue: "📍 New activity nearby", comment: "Lock-screen notification title for activity in a location channel when message previews are hidden; deliberately omits the geohash")
+        }
+        static var verificationTitle: String {
+            String(localized: "notification.redacted.verification.title", defaultValue: "✅ Peer verified", comment: "Lock-screen notification title for peer verification when message previews are hidden; deliberately omits the peer nickname")
         }
         static var body: String {
-            String(localized: "notification.redacted.body", defaultValue: "open bitchat to read", comment: "Lock-screen notification body shown in place of the message text when message previews are hidden")
+            String(localized: "notification.redacted.body", defaultValue: "Open bitchat to read", comment: "Lock-screen notification body shown in place of the message text when message previews are hidden")
         }
     }
 
@@ -175,7 +178,7 @@ final class NotificationService {
     }
 
     func sendMentionNotification(from sender: String, message: String) {
-        let title = hidePreviews ? Redacted.mentionTitle : "🫵 you were mentioned by \(sender)"
+        let title = hidePreviews ? Redacted.mentionTitle : "🫵 You were mentioned by \(sender)"
         let body = hidePreviews ? Redacted.body : message
         let identifier = "mention-\(UUID().uuidString)"
 
@@ -203,6 +206,12 @@ final class NotificationService {
         let deeplink = "bitchat://geohash/\(geohash)"
         let userInfo: [String: Any] = ["deeplink": deeplink]
         sendLocalNotification(title: title, body: body, identifier: identifier, userInfo: userInfo)
+    }
+
+    func sendVerificationNotification(title: String, body: String, identifier: String) {
+        let resolvedTitle = hidePreviews ? Redacted.verificationTitle : title
+        let resolvedBody = hidePreviews ? Redacted.body : body
+        sendLocalNotification(title: resolvedTitle, body: resolvedBody, identifier: identifier)
     }
 
     func sendNetworkAvailableNotification(peerCount: Int) {

@@ -4,14 +4,28 @@ on:
   push:
     branches:
       - main
+    paths-ignore:
+      - "**.md"
+      - "docs/**"
+      - "plans/**"
+      - "LICENSE"
   pull_request:
+    paths-ignore:
+      - "**.md"
+      - "docs/**"
+      - "plans/**"
+      - "LICENSE"
 
 permissions:
   contents: read
 
+concurrency:
+  group: swift-tests-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   test:
-    name: Run Swift Tests (${{ matrix.name }})
+    name: Run Swift Tests
     runs-on: macos-latest
     # A hung test must fail fast, not hold a runner for GitHub's 360-minute
     # default (observed: intermittent app-suite hangs starving the queue).
@@ -19,17 +33,6 @@ jobs:
     # 6-minute benchmark step, 10-minute floor gate that may re-run the
     # benchmarks up to twice on a noisy runner); this is the backstop.
     timeout-minutes: 25
-
-    strategy:
-      fail-fast: false # Don't cancel other matrix jobs when one fails
-      matrix:
-        include:
-          - name: app
-            path: .
-          - name: BitLogger
-            path: localPackages/BitLogger
-          - name: BitFoundation
-            path: localPackages/BitFoundation
 
     steps:
       - name: Checkout code
@@ -45,23 +48,64 @@ jobs:
         id: swift-version
         run: echo "version=$(swift --version 2>/dev/null | head -1 | shasum | cut -c1-12)" >> "$GITHUB_OUTPUT"
 
-      - name: Cache build artifacts
-        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+      # Cache coverage (.build) and uninstrumented benchmark (.build-perf)
+      # separately so the serial benchmark step never overwrites and poisons
+      # the coverage build. Only pushes to main write new cache entries, keeping
+      # repository cache usage well below GitHub's 10 GB eviction limit while
+      # PRs still get warm incremental builds from main's latest artifacts.
+      - name: Cache coverage build artifacts (main)
+        if: github.event_name == 'push'
+        uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25 # v5
         with:
-          path: ${{ matrix.path }}/.build
-          key: ${{ runner.os }}-${{ steps.swift-version.outputs.version }}-${{ matrix.name }}-${{ hashFiles(format('{0}/**/*.swift', matrix.path), format('{0}/**/Package.resolved', matrix.path)) }}
+          path: .build
+          key: ${{ runner.os }}-${{ steps.swift-version.outputs.version }}-app-cov-${{ hashFiles('Package.resolved', 'Package.swift') }}-${{ github.sha }}
           restore-keys: |
-            ${{ runner.os }}-${{ steps.swift-version.outputs.version }}-${{ matrix.name }}-${{ hashFiles(format('{0}/**/Package.resolved', matrix.path)) }}
-            ${{ runner.os }}-${{ steps.swift-version.outputs.version }}-${{ matrix.name }}-
+            ${{ runner.os }}-${{ steps.swift-version.outputs.version }}-app-cov-${{ hashFiles('Package.resolved', 'Package.swift') }}-
+            ${{ runner.os }}-${{ steps.swift-version.outputs.version }}-app-cov-
 
-      - name: Build tests
+      - name: Restore coverage build artifacts (PR)
+        if: github.event_name != 'push'
+        uses: actions/cache/restore@caa296126883cff596d87d8935842f9db880ef25 # v5
+        with:
+          path: .build
+          key: ${{ runner.os }}-${{ steps.swift-version.outputs.version }}-app-cov-${{ hashFiles('Package.resolved', 'Package.swift') }}-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-${{ steps.swift-version.outputs.version }}-app-cov-${{ hashFiles('Package.resolved', 'Package.swift') }}-
+            ${{ runner.os }}-${{ steps.swift-version.outputs.version }}-app-cov-
+
+      - name: Cache benchmark build artifacts (main)
+        if: github.event_name == 'push'
+        uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25 # v5
+        with:
+          path: .build-perf
+          key: ${{ runner.os }}-${{ steps.swift-version.outputs.version }}-app-perf-${{ hashFiles('Package.resolved', 'Package.swift') }}-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-${{ steps.swift-version.outputs.version }}-app-perf-${{ hashFiles('Package.resolved', 'Package.swift') }}-
+            ${{ runner.os }}-${{ steps.swift-version.outputs.version }}-app-perf-
+
+      - name: Restore benchmark build artifacts (PR)
+        if: github.event_name != 'push'
+        uses: actions/cache/restore@caa296126883cff596d87d8935842f9db880ef25 # v5
+        with:
+          path: .build-perf
+          key: ${{ runner.os }}-${{ steps.swift-version.outputs.version }}-app-perf-${{ hashFiles('Package.resolved', 'Package.swift') }}-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-${{ steps.swift-version.outputs.version }}-app-perf-${{ hashFiles('Package.resolved', 'Package.swift') }}-
+            ${{ runner.os }}-${{ steps.swift-version.outputs.version }}-app-perf-
+
+      - name: Run local package tests (BitLogger & BitFoundation)
+        run: |
+          set -euo pipefail
+          swift test --parallel --quiet --package-path localPackages/BitLogger
+          swift test --parallel --quiet --package-path localPackages/BitFoundation
+
+      - name: Build app tests
         # Built separately so the hang watchdog below times only test
         # execution: a cold-cache coverage build on a slow runner can
-        # legitimately take several minutes, and is already bounded by the
-        # 15-minute job timeout.
-        run: swift build --build-tests --enable-code-coverage --package-path ${{ matrix.path }}
+        # legitimately take several minutes.
+        run: swift build --build-tests --enable-code-coverage --package-path .
 
-      - name: Run Tests
+      - name: Run app tests
         # Perf benchmarks are excluded here and run in their own serial step
         # below: measuring while parallel test processes contend for cores
         # produces noisy numbers, and the XCTest measure machinery has hung
@@ -79,7 +123,7 @@ jobs:
         run: |
           swift test --skip-build --parallel --quiet --enable-code-coverage \
             --skip PerformanceBaselineTests \
-            --package-path ${{ matrix.path }} &
+            --package-path . &
           test_pid=$!
           (
             sleep 300
@@ -96,17 +140,15 @@ jobs:
           ) &
           watchdog_pid=$!
           wait "$test_pid" && status=0 || status=$?
+          pkill -TERM -P "$watchdog_pid" 2>/dev/null || true
           kill "$watchdog_pid" 2>/dev/null || true
           exit "$status"
 
-      # Read coverage before the serial benchmark command below rebuilds the
-      # test binary without instrumentation. Reporting against that newer
-      # binary makes llvm-cov reject the profile as out of date.
       # Informational only: there is deliberately no percentage threshold, but
       # a broken/missing report is a CI configuration error and must be visible.
       - name: Coverage summary
         run: |
-          BIN_PATH=$(swift build --show-bin-path --package-path ${{ matrix.path }})
+          BIN_PATH=$(swift build --show-bin-path --package-path .)
           PROF="$BIN_PATH/codecov/default.profdata"
           XCTEST=$(find "$BIN_PATH" -maxdepth 1 -name '*.xctest' | head -1)
           BINARY="$XCTEST/Contents/MacOS/$(basename "$XCTEST" .xctest)"
@@ -117,14 +159,14 @@ jobs:
           xcrun llvm-cov report "$BINARY" -instr-profile "$PROF" \
             -ignore-filename-regex='(Tests|\.build|checkouts|Mocks|_PreviewHelpers)'
 
-      # Benchmarks run serially on an otherwise idle runner for stable
-      # numbers; BITCHAT_PERF_LOG captures the PERF[...] lines for the gate.
+      # Benchmarks run serially on an otherwise idle runner using a separate
+      # uninstrumented build directory (.build-perf) so they neither measure
+      # coverage instrumentation overhead nor clobber the cached .build tree.
       - name: Run performance benchmarks (serial)
-        if: matrix.name == 'app'
         timeout-minutes: 6
         env:
           BITCHAT_PERF_LOG: ${{ github.workspace }}/perf-output.log
-        run: swift test --quiet --filter PerformanceBaselineTests
+        run: swift test --build-path .build-perf --quiet --filter PerformanceBaselineTests
 
       # Order-of-magnitude performance regression gate. Floors are deliberately
       # generous (see bitchatTests/Performance/perf-floors.json) so this
@@ -134,16 +176,31 @@ jobs:
       # benchmark's best value per metric — so noise clears on retry while a
       # real regression fails every attempt. Floors are never lowered by this.
       - name: Performance floor gate
-        if: matrix.name == 'app'
         timeout-minutes: 10
+        env:
+          BITCHAT_PERF_REMEASURE_CMD: "swift test --build-path .build-perf --skip-build --quiet --filter PerformanceBaselineTests"
         run: ./scripts/check-perf-floors.sh perf-output.log
 
-  # SPM tests do not link the shipping app targets. This job covers the
-  # iOS-conditional paths and both universal Release link configurations.
+  # SPM tests do not link the shipping app targets. Build the three Release
+  # targets in parallel to keep wall-clock time around ~3-4 minutes. Pull
+  # requests build native arm64 for simulator/macOS for fast feedback; pushes
+  # to main validate full universal (arm64 + x86_64) slices. iOS device always
+  # links against the shipping ios-arm64 vendored Arti slice.
   ios-build:
-    name: Build Release apps (universal)
+    name: Build Release (${{ matrix.name }})
     runs-on: macos-latest
-    timeout-minutes: 20
+    timeout-minutes: 15
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: iOS device
+            target: ios-device
+          - name: iOS simulator
+            target: ios-simulator
+          - name: macOS
+            target: macos
 
     steps:
       - name: Checkout code
@@ -152,12 +209,15 @@ jobs:
           persist-credentials: false
 
       - name: Check clean recipe safety
+        if: matrix.target == 'ios-device'
         run: bash scripts/check-just-clean-safety.sh
 
       - name: Run workflow and script unit tests
+        if: matrix.target == 'ios-device'
         run: python3 -m unittest discover -s scripts/tests -v
 
       - name: Build iOS (device, no signing)
+        if: matrix.target == 'ios-device'
         # Validate linking against the shipping ios-arm64 vendored Arti slice.
         run: |
           set -o pipefail
@@ -173,41 +233,60 @@ jobs:
             build
 
       - name: Build iOS (simulator, no signing)
-        # Build both simulator architectures so CI validates every vendored
-        # Arti simulator slice and the configuration that ships.
+        if: matrix.target == 'ios-simulator'
+        env:
+          BUILD_UNIVERSAL: ${{ github.event_name == 'push' && '1' || '0' }}
         run: |
           set -o pipefail
+          if [ "$BUILD_UNIVERSAL" = "1" ]; then
+            archs="arm64 x86_64"
+            only_active="NO"
+          else
+            archs="arm64"
+            only_active="YES"
+          fi
           xcodebuild -project bitchat.xcodeproj \
             -scheme "bitchat (iOS)" \
             -configuration Release \
             -sdk iphonesimulator \
             -destination 'generic/platform=iOS Simulator' \
-            ARCHS='arm64 x86_64' \
-            ONLY_ACTIVE_ARCH=NO \
+            ARCHS="$archs" \
+            ONLY_ACTIVE_ARCH="$only_active" \
             CODE_SIGNING_ALLOWED=NO \
             -onlyUsePackageVersionsFromResolvedFile \
             build
 
-      - name: Build macOS (universal, no signing)
+      - name: Build macOS (no signing)
+        if: matrix.target == 'macos'
+        env:
+          BUILD_UNIVERSAL: ${{ github.event_name == 'push' && '1' || '0' }}
         run: |
           set -o pipefail
+          if [ "$BUILD_UNIVERSAL" = "1" ]; then
+            archs="arm64 x86_64"
+            only_active="NO"
+          else
+            archs="arm64"
+            only_active="YES"
+          fi
           xcodebuild -project bitchat.xcodeproj \
             -scheme "bitchat (macOS)" \
             -configuration Release \
             -destination 'generic/platform=macOS' \
-            ARCHS='arm64 x86_64' \
-            ONLY_ACTIVE_ARCH=NO \
+            ARCHS="$archs" \
+            ONLY_ACTIVE_ARCH="$only_active" \
             CODE_SIGNING_ALLOWED=NO \
             -onlyUsePackageVersionsFromResolvedFile \
             build
 
-  # The SwiftPM matrix runs on macOS and cannot execute UIKit/CoreBluetooth
-  # conditional tests. Build the shared iOS test target and run it on the first
-  # available iPhone simulator from the runner image instead of hard-coding a
-  # model that changes when GitHub updates Xcode. The suite intentionally runs
-  # in one test runner: a number of integration tests exercise process-global
-  # stores and notification centers, so overlapping workers can corrupt each
-  # other's fixtures and turn sub-second tests into multi-minute timeouts.
+  # The SwiftPM suite runs on macOS and already executes all cross-platform tests
+  # in parallel. Select an available iPhone simulator via simctl (skipping the
+  # slow xcodebuild -showdestinations fallback), disable unused iOS coverage, and
+  # let xcodebuild compile with all runner cores before booting the simulator
+  # (pre-booting during compilation starved the 3-vCPU runner and doubled build
+  # time). Pull requests run the 18 iOS-conditional / iOS-framework suites for
+  # fast feedback; pushes to main run the full simulator suite (minus
+  # PerformanceBaselineTests, which is already gated in Run Swift Tests).
   ios-tests:
     name: Run iOS simulator tests
     runs-on: macos-latest
@@ -219,64 +298,44 @@ jobs:
         with:
           persist-credentials: false
 
-      # Some runner images list only placeholder destinations (rows carrying
-      # "error:" or "unavailable") or ship the selected Xcode without a
-      # matching iOS simulator runtime, so this walks three paths in order:
-      # a usable xcodebuild destination, an existing simctl device, and
-      # finally creating a device from the newest installed iOS runtime.
       - name: Select available iPhone simulator
         id: destination
         run: |
           set -uo pipefail
-          destinations=$(xcodebuild -project bitchat.xcodeproj -scheme "bitchat (iOS)" -showdestinations 2>/dev/null || true)
-          destination_id=$(awk -F'id:' '
-            /platform:iOS Simulator/ && /name:iPhone/ \
-              && !/error/ && !/unavailable/ && !found {
-              value=$2
-              sub(/,.*/, "", value)
-              gsub(/^[[:space:]]+|[[:space:]]+$/, "", value)
-              print value
-              found=1
-            }
-          ' <<< "$destinations")
+          # Query simctl directly first (xcodebuild -showdestinations takes
+          # ~45s resolving packages and still falls back to simctl on images
+          # with placeholder destinations).
+          destination_id=$(xcrun simctl list devices available --json | jq -r '
+            [.devices | to_entries[]
+              | select(.key | contains("iOS"))
+              | .value[]
+              | select(.isAvailable and (.name | startswith("iPhone")))]
+            | first.udid // empty')
 
           if [ -n "$destination_id" ]; then
-            echo "Selected destination via xcodebuild -showdestinations: $destination_id"
+            echo "Selected existing simctl device: $destination_id"
           else
-            echo "No usable iPhone destination in -showdestinations output; falling back to simctl"
-            destination_id=$(xcrun simctl list devices available --json | jq -r '
-              [.devices | to_entries[]
-                | select(.key | contains("iOS"))
-                | .value[]
-                | select(.isAvailable and (.name | startswith("iPhone")))]
-              | first.udid // empty')
-            if [ -n "$destination_id" ]; then
-              echo "Selected existing simctl device: $destination_id"
-            else
-              echo "No available iPhone simulator device; creating one"
-              # Newest installed iOS runtime plus an iPhone device type that
-              # runtime itself reports as supported, so the pair always match.
-              create_spec=$(xcrun simctl list runtimes --json | jq -r '
-                [.runtimes[] | select(.platform == "iOS" and .isAvailable)]
-                | sort_by(.version | split(".") | map(tonumber))
-                | last // empty
-                | .identifier as $runtime
-                | ([(.supportedDeviceTypes // [])[]
-                    | select(.productFamily == "iPhone"
-                        or (.name // "" | startswith("iPhone")))]
-                  | first.identifier // empty) as $devicetype
-                | "\($devicetype) \($runtime)"')
-              read -r devicetype runtime <<< "$create_spec" || true
-              if [ -z "${devicetype:-}" ] || [ -z "${runtime:-}" ]; then
-                echo "::error::No iPhone simulator destination found and none creatable (no installed iOS runtime with an iPhone device type)"
-                exit 1
-              fi
-              destination_id=$(xcrun simctl create ci-iphone "$devicetype" "$runtime") || {
-                echo "::error::simctl create failed for $devicetype on $runtime"
-                exit 1
-              }
-              echo "Created simulator $destination_id ($devicetype, $runtime)"
+            echo "No available iPhone simulator device; creating one"
+            create_spec=$(xcrun simctl list runtimes --json | jq -r '
+              [.runtimes[] | select(.platform == "iOS" and .isAvailable)]
+              | sort_by(.version | split(".") | map(tonumber))
+              | last // empty
+              | .identifier as $runtime
+              | ([(.supportedDeviceTypes // [])[]
+                  | select(.productFamily == "iPhone"
+                      or (.name // "" | startswith("iPhone")))]
+                | first.identifier // empty) as $devicetype
+              | "\($devicetype) \($runtime)"')
+            read -r devicetype runtime <<< "$create_spec" || true
+            if [ -z "${devicetype:-}" ] || [ -z "${runtime:-}" ]; then
+              echo "::error::No iPhone simulator destination found and none creatable (no installed iOS runtime with an iPhone device type)"
+              exit 1
             fi
+            destination_id=$(xcrun simctl create ci-iphone "$devicetype" "$runtime") || {
+              echo "::error::simctl create failed for $devicetype on $runtime"
+              exit 1
+            }
+            echo "Created simulator $destination_id ($devicetype, $runtime)"
           fi
 
           echo "Using iPhone simulator destination id: $destination_id"
@@ -285,15 +344,51 @@ jobs:
       - name: Run iOS tests
         env:
           DESTINATION_ID: ${{ steps.destination.outputs.id }}
+          RUN_FULL_IOS_SUITE: ${{ github.event_name == 'push' && '1' || '0' }}
+          TEST_RUNNER_BITCHAT_SKIP_PERF_BASELINES: "1"
         run: |
           set -o pipefail
+          test_filters=()
+          if [ "$RUN_FULL_IOS_SUITE" = "1" ]; then
+            test_filters+=(
+              -skip-testing:bitchatTests_iOS/PerformanceBaselineTests
+            )
+          else
+            # iOS-conditional (#if os(iOS) / UIKit) and iOS framework
+            # (AVFoundation, CoreLocation, UserNotifications, CoreBluetooth,
+            # Share Extension) suites. Cross-platform tests already ran in
+            # parallel in Run Swift Tests; pushes to main run the full suite.
+            for suite in \
+              ComposerActionFrameTests \
+              ViewSmokeTests \
+              ImageUtilsTests \
+              ChatMediaPreparationTests \
+              ChatMediaTransferCoordinatorContextTests \
+              ChatViewModelMediaTransferTests \
+              MediaRetentionTests \
+              AudioSessionCoordinatorTests \
+              VoiceRecorderTests \
+              VoiceCaptureSessionTests \
+              VoiceNotePlaybackControllerTests \
+              PTTAudioTests \
+              PTTBurstPlayerTests \
+              LocationStateManagerTests \
+              NotificationServiceTests \
+              SharedContentHandoffTests \
+              BLEServiceCoreTests \
+              BLEServiceTests; do
+              test_filters+=("-only-testing:bitchatTests_iOS/$suite")
+            done
+          fi
           xcodebuild -project bitchat.xcodeproj \
             -scheme "bitchat (iOS)" \
             -sdk iphonesimulator \
             -destination "platform=iOS Simulator,id=$DESTINATION_ID" \
+            -enableCodeCoverage NO \
             -parallel-testing-enabled NO \
             CODE_SIGNING_ALLOWED=NO \
             -onlyUsePackageVersionsFromResolvedFile \
+            "${test_filters[@]}" \
             test
 
   # Blocking since the backlog reached zero (all violations fixed; rules the

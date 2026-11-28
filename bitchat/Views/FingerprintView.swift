@@ -20,14 +20,14 @@ struct FingerprintView: View {
     private var textColor: Color { palette.primary }
 
     private enum Strings {
-        static let title: LocalizedStringKey = "fingerprint.title"
-        static let theirFingerprint: LocalizedStringKey = "fingerprint.their_label"
-        static let handshakePending: LocalizedStringKey = "fingerprint.handshake_pending"
-        static let yourFingerprint: LocalizedStringKey = "fingerprint.your_label"
-        static let copy: LocalizedStringKey = "common.copy"
-        static let verifiedBadge: LocalizedStringKey = "fingerprint.badge.verified"
-        static let notVerifiedBadge: LocalizedStringKey = "fingerprint.badge.not_verified"
-        static let verifiedMessage: LocalizedStringKey = "fingerprint.message.verified"
+        static let title = String(localized: "fingerprint.title")
+        static let theirFingerprint = String(localized: "fingerprint.their_label")
+        static let handshakePending = String(localized: "fingerprint.handshake_pending")
+        static let yourFingerprint = String(localized: "fingerprint.your_label")
+        static let copy = String(localized: "common.copy")
+        static let verifiedBadge = String(localized: "fingerprint.badge.verified")
+        static let notVerifiedBadge = String(localized: "fingerprint.badge.not_verified")
+        static let verifiedMessage = String(localized: "fingerprint.message.verified")
         static let localAlias = String(
             localized: "fingerprint.local_alias.label",
             defaultValue: "local alias",
@@ -50,9 +50,9 @@ struct FingerprintView: View {
                 nickname
             )
         }
-        static let markVerified: LocalizedStringKey = "fingerprint.action.mark_verified"
-        static let removeVerification: LocalizedStringKey = "fingerprint.action.remove_verification"
-        static let vouchedBadge: LocalizedStringKey = "fingerprint.badge.vouched"
+        static let markVerified = String(localized: "fingerprint.action.mark_verified")
+        static let removeVerification = String(localized: "fingerprint.action.remove_verification")
+        static let vouchedBadge = String(localized: "fingerprint.badge.vouched")
         static func vouchedBy(_ count: Int) -> String {
             String(
                 format: String(localized: "fingerprint.message.vouched_by", comment: "How many people the user verified have vouched for this peer"),
@@ -65,21 +65,14 @@ struct FingerprintView: View {
     var body: some View {
         let fingerprintState = verificationModel.fingerprintPresentation(for: peerID)
 
-        VStack(spacing: 20) {
-            // Header
-            HStack {
-                Text(Strings.title)
-                    .bitchatFont(size: 16, weight: .bold)
-                    .foregroundColor(textColor)
-                
-                Spacer()
-                
-                SheetCloseButton { dismiss() }
-                    .foregroundColor(textColor)
-            }
-            .padding()
-            
-            VStack(alignment: .leading, spacing: 16) {
+        VStack(spacing: 0) {
+            ThemedSheetHeader(
+                title: Strings.title,
+                onClose: { dismiss() }
+            )
+
+            ScrollView {
+                VStack(alignment: .leading, spacing: 16) {
                 HStack {
                     if let icon = fingerprintState.encryptionStatus.icon {
                         Image(systemName: icon)
@@ -266,13 +259,12 @@ struct FingerprintView: View {
                     .padding(.top)
                     .frame(maxWidth: .infinity)
                 }
+                }
+                .padding(16)
+                .frame(maxWidth: 500)
+                .frame(maxWidth: .infinity)
             }
-            .padding()
-            .frame(maxWidth: 500) // Constrain max width for better readability
-            
-            Spacer()
         }
-        .padding()
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .themedSheetBackground()
         .onAppear {

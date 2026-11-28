@@ -1,3 +1,4 @@
+import BitFoundation
 import Foundation
 import Testing
 @testable import bitchat
@@ -138,6 +139,89 @@ struct MediaRetentionTests {
         store.finishPendingDelivery(at: pending)
         store.enforceQuota(reservingBytes: 10)
         #expect(!FileManager.default.fileExists(atPath: pending.path))
+    }
+
+    @Test
+    func publicQuotaEvictionNeverDeletesCommittedPrivateMedia() throws {
+        let root = makeRoot()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let store = BLEIncomingFileStore(baseDirectory: root, quotaBytes: 25)
+
+        let privateFileName = "img_\(UUID().uuidString).jpg"
+        let privateFile = try #require(store.save(
+            data: Data(repeating: 0x11, count: 15),
+            preferredName: privateFileName,
+            subdirectory: "images/incoming",
+            fallbackExtension: "jpg",
+            defaultPrefix: "img"
+        ))
+        let stableID = try #require(PrivateMediaMessageIdentity.stableID(
+            senderPeerID: PeerID(str: "1122334455667788"),
+            recipientPeerID: PeerID(str: "aabbccddeeff0011"),
+            fileName: privateFileName
+        ))
+        #expect(store.commitPrivateMediaFile(messageID: stableID, storedURL: privateFile))
+
+        let publicFile = try #require(store.save(
+            data: Data(repeating: 0x22, count: 10),
+            preferredName: "pub.jpg",
+            subdirectory: "images/incoming",
+            fallbackExtension: "jpg",
+            defaultPrefix: "img"
+        ))
+
+        // Public broadcast flood under tight quota evicts old public media
+        // but leaves committed private media intact.
+        store.enforceQuota(reservingBytes: 20, isPrivate: false)
+        #expect(FileManager.default.fileExists(atPath: privateFile.path))
+        #expect(!FileManager.default.fileExists(atPath: publicFile.path))
+
+        // Private arrivals may still reclaim oldest private media once no
+        // public files remain to satisfy the quota.
+        store.enforceQuota(reservingBytes: 20, isPrivate: true)
+        #expect(!FileManager.default.fileExists(atPath: privateFile.path))
+    }
+
+    @Test
+    func saveRecreatesDeletedFilesDirectoryAndFormatsFallbackTimestamp() throws {
+        let root = makeRoot()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let fixedDate = Date(timeIntervalSince1970: 1_700_000_000)
+        let store = BLEIncomingFileStore(baseDirectory: root, dateProvider: { fixedDate })
+
+        let first = try #require(store.save(
+            data: Data([0x01, 0x02]),
+            preferredName: nil,
+            subdirectory: "images/incoming",
+            fallbackExtension: "jpg",
+            defaultPrefix: "img"
+        ))
+        #expect(FileManager.default.fileExists(atPath: first.path))
+
+        // Validate deterministic yyyyMMdd_HHmmss fallback naming when preferredName is nil.
+        let comps = Calendar.current.dateComponents([.year, .month, .day, .hour, .minute, .second], from: fixedDate)
+        let expectedStamp = String(
+            format: "%04d%02d%02d_%02d%02d%02d",
+            locale: Locale(identifier: "en_US_POSIX"),
+            comps.year ?? 0,
+            comps.month ?? 0,
+            comps.day ?? 0,
+            comps.hour ?? 0,
+            comps.minute ?? 0,
+            comps.second ?? 0
+        )
+        #expect(first.lastPathComponent.contains("_img_\(expectedStamp).jpg"))
+
+        // Removing files/ externally must not leave a stale directory cache.
+        try FileManager.default.removeItem(at: root.appendingPathComponent("files", isDirectory: true))
+        let second = try #require(store.save(
+            data: Data([0x03, 0x04]),
+            preferredName: "second.jpg",
+            subdirectory: "images/incoming",
+            fallbackExtension: "jpg",
+            defaultPrefix: "img"
+        ))
+        #expect(FileManager.default.fileExists(atPath: second.path))
     }
 
     #if os(iOS)

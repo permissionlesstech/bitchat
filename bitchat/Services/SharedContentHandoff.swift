@@ -103,11 +103,21 @@ struct SharedContentPayload: Codable, Sendable, Equatable, Identifiable {
         allowsTextLayout: Bool
     ) -> Bool {
         value.unicodeScalars.contains { scalar in
-            guard CharacterSet.controlCharacters.contains(scalar) else { return false }
-            if allowsTextLayout, scalar == "\n" || scalar == "\r" || scalar == "\t" {
+            if scalar.properties.generalCategory == .control {
+                if allowsTextLayout, scalar == "\n" || scalar == "\r" || scalar == "\t" {
+                    return false
+                }
+                return true
+            }
+            // Reject bidirectional override/embedding/isolate controls (Trojan Source),
+            // while allowing ordinary format scalars like ZWJ (U+200D), ZWNJ (U+200C),
+            // LRM/RLM (U+200E/U+200F), and soft hyphens (U+00AD).
+            switch scalar.value {
+            case 0x061C, 0x202A...0x202E, 0x2066...0x2069:
+                return true
+            default:
                 return false
             }
-            return true
         }
     }
 }

@@ -25,12 +25,15 @@ enum VoiceBurstCodec: UInt8 {
 ///
 /// Wire format:
 /// ```
-/// [burstID: 8][seq: UInt16 BE][flags: UInt8][payload…]
+/// [burstID: 8][seq: UInt16 BE][flags: UInt8][groupID?: 16][payload…]
 /// ```
-/// - flags 0x01 (START): payload = [codec: UInt8]
-/// - flags 0x02 (END):   payload = [totalDataPackets: UInt16 BE][durationMs: UInt32 BE]
-/// - flags 0x04 (CANCELED): empty payload; receivers discard the burst
-/// - flags 0x00 (data):  payload = repeated [length: UInt16 BE][AAC frame]
+/// - flags bit `0x80` (GROUP_SCOPED): when set, a 16-byte `groupID` immediately
+///   follows `flags` before `payload`, routing this encrypted frame to the group
+///   conversation instead of the 1:1 DM. Unset (0) is wire-identical to v1.
+/// - flags low bits `0x01` (START): payload = [codec: UInt8]
+/// - flags low bits `0x02` (END):   payload = [totalDataPackets: UInt16 BE][durationMs: UInt32 BE]
+/// - flags low bits `0x04` (CANCELED): empty payload; receivers discard the burst
+/// - flags low bits `0x00` (data):  payload = repeated [length: UInt16 BE][AAC frame]
 struct VoiceBurstPacket: Equatable {
     enum Kind: Equatable {
         case start(codec: VoiceBurstCodec)
@@ -40,7 +43,8 @@ struct VoiceBurstPacket: Equatable {
     }
 
     static let burstIDSize = 8
-    private static let headerSize = burstIDSize + 2 + 1
+    static let groupIDSize = BitchatGroup.groupIDLength
+    private static let baseHeaderSize = burstIDSize + 2 + 1
     /// Sanity cap on frames per packet; real packets carry 1-2 frames.
     static let maxFramesPerPacket = 8
 
@@ -48,14 +52,21 @@ struct VoiceBurstPacket: Equatable {
         static let start: UInt8 = 0x01
         static let end: UInt8 = 0x02
         static let canceled: UInt8 = 0x04
+        static let groupScoped: UInt8 = 0x80
+        static let kindMask: UInt8 = 0x7F
     }
 
     let burstID: Data
     let seq: UInt16
     let kind: Kind
+    /// Non-nil when this voice burst belongs to a mesh group conversation.
+    let groupID: Data?
 
-    init?(burstID: Data, seq: UInt16, kind: Kind) {
+    init?(burstID: Data, seq: UInt16, kind: Kind, groupID: Data? = nil) {
         guard burstID.count == Self.burstIDSize else { return nil }
+        if let groupID {
+            guard groupID.count == Self.groupIDSize else { return nil }
+        }
         if case .frames(let frames) = kind {
             guard !frames.isEmpty,
                   frames.count <= Self.maxFramesPerPacket,
@@ -65,28 +76,35 @@ struct VoiceBurstPacket: Equatable {
         self.burstID = burstID
         self.seq = seq
         self.kind = kind
+        self.groupID = groupID
     }
 
     func encode() -> Data {
-        var data = Data(capacity: Self.headerSize + payloadSize)
+        let groupBytes = groupID?.count ?? 0
+        var data = Data(capacity: Self.baseHeaderSize + groupBytes + payloadSize)
         data.append(burstID)
         data.appendBigEndian(seq)
+        let groupFlag: UInt8 = groupID != nil ? Flags.groupScoped : 0
         switch kind {
         case .start(let codec):
-            data.append(Flags.start)
+            data.append(Flags.start | groupFlag)
+            if let groupID { data.append(groupID) }
             data.append(codec.rawValue)
         case .frames(let frames):
-            data.append(0)
+            data.append(groupFlag)
+            if let groupID { data.append(groupID) }
             for frame in frames {
                 data.appendBigEndian(UInt16(frame.count))
                 data.append(frame)
             }
         case .end(let totalDataPackets, let durationMs):
-            data.append(Flags.end)
+            data.append(Flags.end | groupFlag)
+            if let groupID { data.append(groupID) }
             data.appendBigEndian(totalDataPackets)
             data.appendBigEndian(durationMs)
         case .canceled:
-            data.append(Flags.canceled)
+            data.append(Flags.canceled | groupFlag)
+            if let groupID { data.append(groupID) }
         }
         return data
     }
@@ -94,15 +112,30 @@ struct VoiceBurstPacket: Equatable {
     static func decode(_ data: Data) -> VoiceBurstPacket? {
         // Work on a re-based copy so subscripting is offset-safe.
         let data = Data(data)
-        guard data.count >= headerSize,
+        guard data.count >= baseHeaderSize,
               let seq: UInt16 = data[burstIDSize..<(burstIDSize + 2)].readBigEndian() else { return nil }
 
         let burstID = data.prefix(burstIDSize)
         let flags = data[burstIDSize + 2]
-        let payload = data.dropFirst(headerSize)
+        let isGroupScoped = (flags & Flags.groupScoped) != 0
+        let kindFlags = flags & Flags.kindMask
+
+        let groupID: Data?
+        let payloadStart: Int
+        if isGroupScoped {
+            let groupEnd = baseHeaderSize + groupIDSize
+            guard data.count >= groupEnd else { return nil }
+            groupID = Data(data[baseHeaderSize..<groupEnd])
+            payloadStart = groupEnd
+        } else {
+            groupID = nil
+            payloadStart = baseHeaderSize
+        }
+
+        let payload = data.dropFirst(payloadStart)
 
         let kind: Kind
-        switch flags {
+        switch kindFlags {
         case Flags.start:
             guard let codecByte = payload.first,
                   let codec = VoiceBurstCodec(rawValue: codecByte)
@@ -137,7 +170,7 @@ struct VoiceBurstPacket: Equatable {
             return nil
         }
 
-        return VoiceBurstPacket(burstID: Data(burstID), seq: seq, kind: kind)
+        return VoiceBurstPacket(burstID: Data(burstID), seq: seq, kind: kind, groupID: groupID)
     }
 
     static func makeBurstID() -> Data {
@@ -167,6 +200,7 @@ struct VoiceBurstPacket: Equatable {
 /// Not thread-safe — confine to one queue.
 struct VoiceBurstPacketizer {
     let burstID: Data
+    let groupID: Data?
     private let budget: Int
     private var pendingFrames: [Data] = []
     private var pendingSize = 0
@@ -174,8 +208,13 @@ struct VoiceBurstPacketizer {
     private(set) var nextSeq: UInt16 = 1
     private(set) var dataPacketCount: UInt16 = 0
 
-    init(burstID: Data, budget: Int = TransportConfig.pttMaxBurstContentBytes) {
+    private var headerOverhead: Int {
+        VoiceBurstPacket.burstIDSize + 3 + (groupID?.count ?? 0)
+    }
+
+    init(burstID: Data, groupID: Data? = nil, budget: Int = TransportConfig.pttMaxBurstContentBytes) {
         self.burstID = burstID
+        self.groupID = groupID
         self.budget = budget
     }
 
@@ -184,11 +223,11 @@ struct VoiceBurstPacketizer {
     /// frames never hit this; it guards against misconfiguration looping).
     mutating func add(_ frame: Data) -> [Data] {
         let frameCost = 2 + frame.count
-        guard VoiceBurstPacket.burstIDSize + 3 + frameCost <= budget else { return [] }
+        guard headerOverhead + frameCost <= budget else { return [] }
 
         var packets: [Data] = []
         if !pendingFrames.isEmpty,
-           VoiceBurstPacket.burstIDSize + 3 + pendingSize + frameCost > budget
+           headerOverhead + pendingSize + frameCost > budget
             || pendingFrames.count >= VoiceBurstPacket.maxFramesPerPacket {
             packets.append(contentsOf: flush())
         }
@@ -200,7 +239,7 @@ struct VoiceBurstPacketizer {
     /// Emits any buffered frames as a final data packet.
     mutating func flush() -> [Data] {
         guard !pendingFrames.isEmpty,
-              let packet = VoiceBurstPacket(burstID: burstID, seq: nextSeq, kind: .frames(pendingFrames))
+              let packet = VoiceBurstPacket(burstID: burstID, seq: nextSeq, kind: .frames(pendingFrames), groupID: groupID)
         else {
             pendingFrames = []
             pendingSize = 0

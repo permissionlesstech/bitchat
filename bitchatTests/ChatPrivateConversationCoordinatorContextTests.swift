@@ -24,6 +24,7 @@ private final class MockChatPrivateConversationContext: ChatPrivateConversationC
     var sentGeoDeliveryAcks: Set<String> = []
     var unreadPrivateMessages: Set<PeerID> = []
     var selectedPrivateChatPeer: PeerID?
+    var isAppActive = true
     var nickname = "me"
     var activeChannel: ChannelID = .mesh
     var nostrKeyMapping: [PeerID: String] = [:]
@@ -443,15 +444,16 @@ struct ChatPrivateConversationCoordinatorContextTests {
         context.displayNamesByPubkey[senderPubkey] = "bob#5678"
         let payloadData = PrivateMessagePacket(messageID: "geo-1", content: "hi there").encode()!
         let payload = NoisePayload(type: .privateMessage, data: payloadData)
-        // Old timestamp: not "recent", so no unread marking (and no notification).
-        let oldTimestamp = Date().addingTimeInterval(-120)
+        // Delayed Nostr/offline DM (>30s old): still newly received, so it must
+        // mark unread and post a notification when the thread is not open.
+        let delayedTimestamp = Date().addingTimeInterval(-3600)
 
         coordinator.handlePrivateMessage(
             payload,
             senderPubkey: senderPubkey,
             convKey: convKey,
             id: MockChatPrivateConversationContext.dummyIdentity,
-            messageTimestamp: oldTimestamp
+            messageTimestamp: delayedTimestamp
         )
 
         #expect(context.geoDeliveryAcks.map(\.messageID) == ["geo-1"])
@@ -459,7 +461,8 @@ struct ChatPrivateConversationCoordinatorContextTests {
         #expect(context.sentGeoDeliveryAcks == ["geo-1"])
         #expect(context.privateChats[convKey]?.map(\.id) == ["geo-1"])
         #expect(context.privateChats[convKey]?.first?.sender == "bob#5678")
-        #expect(context.unreadPrivateMessages.isEmpty)
+        #expect(context.unreadPrivateMessages == [convKey])
+        #expect(context.privateMessageNotifications.count == 1)
 
         // Redelivery: ack is deduplicated and the message is not appended twice.
         coordinator.handlePrivateMessage(
@@ -467,10 +470,11 @@ struct ChatPrivateConversationCoordinatorContextTests {
             senderPubkey: senderPubkey,
             convKey: convKey,
             id: MockChatPrivateConversationContext.dummyIdentity,
-            messageTimestamp: oldTimestamp
+            messageTimestamp: delayedTimestamp
         )
         #expect(context.geoDeliveryAcks.count == 1)
         #expect(context.privateChats[convKey]?.count == 1)
+        #expect(context.privateMessageNotifications.count == 1)
     }
 
     @Test @MainActor
@@ -1076,6 +1080,40 @@ struct ChatPrivateConversationCoordinatorContextTests {
         #expect(context.meshReadReceipts.map(\.messageID) == ["pm-2"])
         #expect(context.sentReadReceipts.contains("pm-2"))
         #expect(context.privateMessageNotifications.count == 1)
+    }
+
+    @Test @MainActor
+    func handlePrivateMessage_backgroundedOpenChatMarksUnreadAndSkipsReadReceipt() async {
+        let context = MockChatPrivateConversationContext()
+        let coordinator = ChatPrivateConversationCoordinator(context: context)
+        let meshPeerID = PeerID(str: "0102030405060708")
+        let geoConvKey = PeerID(str: "nostr_abcdef12")
+        let senderPubkey = "feedface00112233"
+        context.displayNamesByPubkey[senderPubkey] = "bob#5678"
+
+        // BLE path: chat is selected, but app is backgrounded/inactive.
+        context.selectedPrivateChatPeer = meshPeerID
+        context.isAppActive = false
+        coordinator.handlePrivateMessage(
+            makeIncomingMessage(id: "bg-mesh-1", content: "ping while locked", senderPeerID: meshPeerID)
+        )
+        #expect(context.meshReadReceipts.isEmpty)
+        #expect(context.unreadPrivateMessages.contains(meshPeerID))
+        #expect(context.privateMessageNotifications.count == 1)
+
+        // Nostr/GeoDM path: chat is selected, app is backgrounded/inactive.
+        context.selectedPrivateChatPeer = geoConvKey
+        let payloadData = PrivateMessagePacket(messageID: "bg-geo-1", content: "nostr while locked").encode()!
+        coordinator.handlePrivateMessage(
+            NoisePayload(type: .privateMessage, data: payloadData),
+            senderPubkey: senderPubkey,
+            convKey: geoConvKey,
+            id: MockChatPrivateConversationContext.dummyIdentity,
+            messageTimestamp: Date()
+        )
+        #expect(context.geoReadReceipts.isEmpty)
+        #expect(context.unreadPrivateMessages.contains(geoConvKey))
+        #expect(context.privateMessageNotifications.count == 2)
     }
 
     @Test @MainActor

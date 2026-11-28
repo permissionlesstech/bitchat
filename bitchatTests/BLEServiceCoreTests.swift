@@ -89,11 +89,7 @@ struct BLEServiceCoreTests {
         #expect(receivedFirst)
 
         ble._test_handlePacket(packet, fromPeerID: sender, signingPublicKey: signingKey)
-        let receivedDuplicate = await TestHelpers.waitUntil(
-            { delegate.publicMessagesSnapshot().count > 1 },
-            timeout: TestConstants.negativeWaitWindow
-        )
-        #expect(!receivedDuplicate)
+        await ble._test_drainAllPipelines()
 
         let messages = delegate.publicMessagesSnapshot()
         #expect(messages.count == 1)
@@ -167,11 +163,8 @@ struct BLEServiceCoreTests {
             signingPublicKey: alice.getSigningPublicKeyData()
         )
 
-        let unsignedRelayed = await TestHelpers.waitUntil(
-            { outbound.count(ofType: .leave) > 0 },
-            timeout: TestConstants.negativeWaitWindow
-        )
-        #expect(!unsignedRelayed)
+        await ble._test_drainAllPipelines()
+        #expect(outbound.count(ofType: .leave) == 0)
         #expect(ble.currentPeerSnapshots().contains { $0.peerID == alicePeerID })
 
         let badSignature = try #require(
@@ -183,11 +176,8 @@ struct BLEServiceCoreTests {
             signingPublicKey: alice.getSigningPublicKeyData()
         )
 
-        let badSignatureRelayed = await TestHelpers.waitUntil(
-            { outbound.count(ofType: .leave) > 0 },
-            timeout: TestConstants.negativeWaitWindow
-        )
-        #expect(!badSignatureRelayed)
+        await ble._test_drainAllPipelines()
+        #expect(outbound.count(ofType: .leave) == 0)
         #expect(ble.currentPeerSnapshots().contains { $0.peerID == alicePeerID })
     }
 
@@ -1354,6 +1344,94 @@ struct BLEServiceCoreTests {
         ))
     }
 
+    @Test
+    func restoredPeripheralService_reusesExactBitChatServiceAndCharacteristic() {
+        let characteristic = CBMutableCharacteristic(
+            type: BLEService.characteristicUUID,
+            properties: BLEService.peripheralCharacteristicProperties,
+            value: nil,
+            permissions: BLEService.peripheralCharacteristicPermissions
+        )
+        let service = CBMutableService(type: BLEService.serviceUUID, primary: true)
+        service.characteristics = [characteristic]
+
+        let restored = BLEService.restoredBitChatCharacteristic(from: [service])
+        #expect(restored === characteristic)
+    }
+
+    @Test
+    func restoredPeripheralService_rejectsMismatchedSecondaryOrExtraServices() {
+        let validCharacteristic = CBMutableCharacteristic(
+            type: BLEService.characteristicUUID,
+            properties: BLEService.peripheralCharacteristicProperties,
+            value: nil,
+            permissions: BLEService.peripheralCharacteristicPermissions
+        )
+
+        // Secondary service instead of primary
+        let secondaryService = CBMutableService(type: BLEService.serviceUUID, primary: false)
+        secondaryService.characteristics = [validCharacteristic]
+        #expect(BLEService.restoredBitChatCharacteristic(from: [secondaryService]) == nil)
+
+        // Missing required characteristic properties
+        let notifyOnly = CBMutableCharacteristic(
+            type: BLEService.characteristicUUID,
+            properties: [.notify],
+            value: nil,
+            permissions: BLEService.peripheralCharacteristicPermissions
+        )
+        let partialPropsService = CBMutableService(type: BLEService.serviceUUID, primary: true)
+        partialPropsService.characteristics = [notifyOnly]
+        #expect(BLEService.restoredBitChatCharacteristic(from: [partialPropsService]) == nil)
+
+        // Missing writeable permission
+        let readOnly = CBMutableCharacteristic(
+            type: BLEService.characteristicUUID,
+            properties: BLEService.peripheralCharacteristicProperties,
+            value: nil,
+            permissions: [.readable]
+        )
+        let readOnlyService = CBMutableService(type: BLEService.serviceUUID, primary: true)
+        readOnlyService.characteristics = [readOnly]
+        #expect(BLEService.restoredBitChatCharacteristic(from: [readOnlyService]) == nil)
+
+        // Extra stale service alongside the BitChat service
+        let validService = CBMutableService(type: BLEService.serviceUUID, primary: true)
+        validService.characteristics = [validCharacteristic]
+        let extraService = CBMutableService(
+            type: CBUUID(string: "0000180F-0000-1000-8000-00805F9B34FB"),
+            primary: true
+        )
+        #expect(BLEService.restoredBitChatCharacteristic(from: [validService, extraService]) == nil)
+    }
+
+    @Test
+    func peripheralPoweredOnAction_reusesRestoredServiceOrRebuildsWhenMissing() {
+        #expect(BLEService.peripheralPoweredOnAction(
+            hasPublishedCharacteristic: false,
+            isAdvertising: false,
+            subscribedCentralCount: 0
+        ) == .rebuildAndAddService)
+
+        #expect(BLEService.peripheralPoweredOnAction(
+            hasPublishedCharacteristic: true,
+            isAdvertising: true,
+            subscribedCentralCount: 0
+        ) == .reusePublishedService(
+            shouldStartAdvertising: false,
+            shouldAnnounceToSubscribedCentrals: false
+        ))
+
+        #expect(BLEService.peripheralPoweredOnAction(
+            hasPublishedCharacteristic: true,
+            isAdvertising: false,
+            subscribedCentralCount: 2
+        ) == .reusePublishedService(
+            shouldStartAdvertising: true,
+            shouldAnnounceToSubscribedCentrals: true
+        ))
+    }
+
     /// Pings are unsigned, so their claimed sender is attacker-controlled.
     /// The pong budget must be keyed on the ingress link (the directly
     /// connected peer that delivered the packet): rotating forged sender IDs
@@ -1392,13 +1470,9 @@ struct BLEServiceCoreTests {
             timeout: TestConstants.longTimeout
         )
         #expect(reachedBudget)
-        // Give any over-budget pong a chance to surface, then confirm the
-        // rotated sender IDs never bought a sixth response.
-        let exceededBudget = await TestHelpers.waitUntil(
-            { outbound.count(ofType: .pong) > budget },
-            timeout: TestConstants.negativeWaitWindow
-        )
-        #expect(!exceededBudget)
+        // Drain all BLE/message queues to confirm the rotated sender IDs never
+        // bought a sixth response.
+        await ble._test_drainAllPipelines()
         #expect(outbound.count(ofType: .pong) == budget)
     }
 }

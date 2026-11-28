@@ -411,7 +411,7 @@ struct MessageDeduplicationServiceTests {
 
         let lock = NSLock()
         var failReads = true
-        let store = NostrProcessedEventStore(fileURL: fileURL) { url in
+        let store = NostrProcessedEventStore(fileURL: fileURL, readData: { url in
             lock.lock()
             let shouldFail = failReads
             lock.unlock()
@@ -419,7 +419,7 @@ struct MessageDeduplicationServiceTests {
                 throw NSError(domain: NSCocoaErrorDomain, code: NSFileReadNoPermissionError)
             }
             return try Data(contentsOf: url)
-        }
+        })
 
         // Transient failure during initial load must not poison the cache.
         #expect(store.load().isEmpty)

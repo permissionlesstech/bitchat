@@ -108,30 +108,25 @@ struct BLEIncomingFileStore: @unchecked Sendable {
         )
     }
 
-    private final class DirectoryCache: @unchecked Sendable {
+    private final class PendingDeliveryTracker: @unchecked Sendable {
         let lock = NSLock()
-        var filesRoot: URL?
-        var incomingDirectoryPaths: Set<String> = []
-        var createdSubdirectories: Set<String> = []
         var pendingDeliveryCounts: [String: Int] = [:]
 
-        func invalidate() {
+        func removeAll() {
             lock.lock()
-            filesRoot = nil
-            incomingDirectoryPaths.removeAll(keepingCapacity: false)
-            createdSubdirectories.removeAll(keepingCapacity: false)
+            defer { lock.unlock() }
             pendingDeliveryCounts.removeAll(keepingCapacity: false)
-            lock.unlock()
         }
 
         func beginPendingDelivery(path: String) {
             lock.lock()
+            defer { lock.unlock() }
             pendingDeliveryCounts[path, default: 0] += 1
-            lock.unlock()
         }
 
         func finishPendingDelivery(path: String) {
             lock.lock()
+            defer { lock.unlock() }
             if let count = pendingDeliveryCounts[path] {
                 if count <= 1 {
                     pendingDeliveryCounts.removeValue(forKey: path)
@@ -139,7 +134,6 @@ struct BLEIncomingFileStore: @unchecked Sendable {
                     pendingDeliveryCounts[path] = count - 1
                 }
             }
-            lock.unlock()
         }
 
         func pendingDeliveryPathsSnapshot() -> Set<String> {
@@ -172,12 +166,6 @@ struct BLEIncomingFileStore: @unchecked Sendable {
     ]
     private static let invalidFilenameCharacters =
         CharacterSet(charactersIn: "<>:\"|?*\0").union(.controlCharacters)
-    private static let timestampFormatterLock = NSLock()
-    private static let timestampFormatter: DateFormatter = {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "yyyyMMdd_HHmmss"
-        return formatter
-    }()
     /// Name prefix of in-flight live voice captures (progressively written by
     /// `ChatLiveVoiceCoordinator`). Quota eviction skips them by pattern —
     /// deleting one mid-stream unlinks the inode under an open `FileHandle`
@@ -201,7 +189,7 @@ struct BLEIncomingFileStore: @unchecked Sendable {
     private let panicMarkerWriter: (Data, URL) throws -> Void
     private let quotaBytes: Int64
     private let privateMediaReceipts: BLEPrivateMediaReceiptStore
-    private let directoryCache: DirectoryCache
+    private let pendingDeliveryTracker: PendingDeliveryTracker
 
     init(
         fileManager: FileManager = .default,
@@ -222,7 +210,7 @@ struct BLEIncomingFileStore: @unchecked Sendable {
             baseDirectory: baseDirectory,
             now: dateProvider
         )
-        self.directoryCache = DirectoryCache()
+        self.pendingDeliveryTracker = PendingDeliveryTracker()
     }
 
     /// Panic-wipe every managed incoming and outgoing media artifact before
@@ -231,7 +219,7 @@ struct BLEIncomingFileStore: @unchecked Sendable {
     func panicWipe(hasDurablePendingMarker: Bool = false) throws {
         defer {
             privateMediaReceipts.resetForPanic()
-            directoryCache.invalidate()
+            pendingDeliveryTracker.removeAll()
         }
 
         let markerError: Error?
@@ -300,7 +288,9 @@ struct BLEIncomingFileStore: @unchecked Sendable {
     /// Resolves (and creates) an incoming-media directory for callers that
     /// write progressively instead of via `save` (live voice captures).
     func incomingDirectory(subdirectory: String) throws -> URL {
-        try ensureSubdirectory(subdirectory)
+        let directory = try filesDirectory().appendingPathComponent(subdirectory, isDirectory: true)
+        try fileManager.createDirectory(at: directory, withIntermediateDirectories: true, attributes: Self.mediaProtectionAttributes)
+        return directory
     }
 
     /// Writes an incoming payload to a globally unique `<uuid>_<sanitizedName>`
@@ -314,7 +304,8 @@ struct BLEIncomingFileStore: @unchecked Sendable {
         defaultPrefix: String
     ) -> URL? {
         do {
-            let base = try ensureSubdirectory(subdirectory)
+            let base = try filesDirectory().appendingPathComponent(subdirectory, isDirectory: true)
+            try fileManager.createDirectory(at: base, withIntermediateDirectories: true, attributes: Self.mediaProtectionAttributes)
             let sanitized = sanitizedFileName(
                 preferredName,
                 defaultName: "\(defaultPrefix)_\(Self.timestampString(from: dateProvider()))",
@@ -335,17 +326,18 @@ struct BLEIncomingFileStore: @unchecked Sendable {
 
     func resetPrivateMediaReceiptsForPanic() {
         privateMediaReceipts.resetForPanic()
+        pendingDeliveryTracker.removeAll()
     }
 
     /// Marks an incoming file as awaiting asynchronous UI delivery so quota
     /// eviction and age-based retention cannot unlink it before the UI receives
     /// the message. Ref-counted per standardized path.
     func beginPendingDelivery(at url: URL) {
-        directoryCache.beginPendingDelivery(path: url.standardizedFileURL.path)
+        pendingDeliveryTracker.beginPendingDelivery(path: url.standardizedFileURL.path)
     }
 
     func finishPendingDelivery(at url: URL) {
-        directoryCache.finishPendingDelivery(path: url.standardizedFileURL.path)
+        pendingDeliveryTracker.finishPendingDelivery(path: url.standardizedFileURL.path)
     }
 
     func privateMediaReceiptState(messageID: String) -> BLEPrivateMediaReceiptState {
@@ -406,12 +398,16 @@ struct BLEIncomingFileStore: @unchecked Sendable {
     }
 
     /// Frees least-recently-modified incoming files until `reservingBytes`
-    /// fits under the quota. In-flight `voice_live_*` captures are never evicted
-    /// but still count toward usage.
-    func enforceQuota(reservingBytes: Int) {
+    /// fits under the quota. In-flight `voice_live_*` captures and files
+    /// awaiting UI delivery are never evicted but still count toward usage.
+    ///
+    /// Public arrivals (`isPrivate == false`) can never evict committed private
+    /// media received from contacts; private arrivals evict public files first
+    /// before touching older private files.
+    func enforceQuota(reservingBytes: Int, isPrivate: Bool = false) {
         do {
             let base = try filesDirectory()
-            var allFiles: [(url: URL, size: Int64, modified: Date)] = []
+            var allFiles: [(url: URL, size: Int64, modified: Date, isPrivateOwned: Bool)] = []
 
             for subdirectory in Self.incomingSubdirectories {
                 let dir = base.appendingPathComponent(subdirectory, isDirectory: true)
@@ -426,7 +422,11 @@ struct BLEIncomingFileStore: @unchecked Sendable {
                     guard let attrs = try? fileURL.resourceValues(forKeys: [.fileSizeKey, .contentModificationDateKey]),
                           let size = attrs.fileSize,
                           let modified = attrs.contentModificationDate else { continue }
-                    allFiles.append((url: fileURL, size: Int64(size), modified: modified))
+                    let relativePath = "\(subdirectory)/\(fileURL.lastPathComponent)"
+                    // Fail closed if the receipt ledger is temporarily unreadable so
+                    // public arrivals cannot evict committed private media.
+                    let isPrivateOwned = privateMediaReceipts.isPayloadOwned(relativePath: relativePath) ?? true
+                    allFiles.append((url: fileURL, size: Int64(size), modified: modified, isPrivateOwned: isPrivateOwned))
                 }
             }
 
@@ -435,9 +435,17 @@ struct BLEIncomingFileStore: @unchecked Sendable {
             guard currentUsage > targetUsage else { return }
 
             let needToFree = currentUsage - targetUsage
-            let protectedPaths = directoryCache.pendingDeliveryPathsSnapshot()
+            let protectedPaths = pendingDeliveryTracker.pendingDeliveryPathsSnapshot()
+            let candidates = allFiles
+                .filter { isPrivate || !$0.isPrivateOwned }
+                .sorted { lhs, rhs in
+                    if lhs.isPrivateOwned != rhs.isPrivateOwned {
+                        return !lhs.isPrivateOwned
+                    }
+                    return lhs.modified < rhs.modified
+                }
             var freedSpace: Int64 = 0
-            for file in allFiles.sorted(by: { $0.modified < $1.modified }) {
+            for file in candidates {
                 guard freedSpace < needToFree else { break }
                 guard !file.url.lastPathComponent.hasPrefix(Self.liveCapturePrefix),
                       !protectedPaths.contains(file.url.standardizedFileURL.path) else { continue }
@@ -465,7 +473,7 @@ struct BLEIncomingFileStore: @unchecked Sendable {
         guard retention > 0 else { return 0 }
 
         let cutoff = dateProvider().addingTimeInterval(-retention)
-        let protectedPaths = directoryCache.pendingDeliveryPathsSnapshot()
+        let protectedPaths = pendingDeliveryTracker.pendingDeliveryPathsSnapshot()
         var removed = 0
         do {
             let base = try filesDirectory()
@@ -576,60 +584,28 @@ struct BLEIncomingFileStore: @unchecked Sendable {
 
     private func incomingPayloadURL(relativePath: String) -> URL? {
         guard !relativePath.isEmpty,
-              let resolved = try? resolvedFilesRootAndIncomingPaths() else {
+              let base = try? filesDirectory().standardizedFileURL else {
             return nil
         }
-        let candidate = resolved.filesRoot
+        let candidate = base
             .appendingPathComponent(relativePath, isDirectory: false)
             .standardizedFileURL
         let parentPath = candidate.deletingLastPathComponent().path
-        guard resolved.incomingPaths.contains(parentPath) else {
+        guard Self.incomingSubdirectories.contains(where: { relativeDirectory in
+            base.appendingPathComponent(
+                relativeDirectory,
+                isDirectory: true
+            ).standardizedFileURL.path == parentPath
+        }) else {
             return nil
         }
         return candidate
     }
 
-    private func resolvedFilesRootAndIncomingPaths() throws -> (filesRoot: URL, incomingPaths: Set<String>) {
-        directoryCache.lock.lock()
-        if let cachedRoot = directoryCache.filesRoot {
-            let paths = directoryCache.incomingDirectoryPaths
-            directoryCache.lock.unlock()
-            return (cachedRoot, paths)
-        }
-        directoryCache.lock.unlock()
-
+    private func filesDirectory() throws -> URL {
         let filesDir = try rootDirectory().appendingPathComponent("files", isDirectory: true)
         try fileManager.createDirectory(at: filesDir, withIntermediateDirectories: true, attributes: Self.mediaProtectionAttributes)
-        let standardized = filesDir.standardizedFileURL
-        let incomingPaths = Set(Self.incomingSubdirectories.map {
-            standardized.appendingPathComponent($0, isDirectory: true).standardizedFileURL.path
-        })
-
-        directoryCache.lock.lock()
-        directoryCache.filesRoot = standardized
-        directoryCache.incomingDirectoryPaths = incomingPaths
-        directoryCache.lock.unlock()
-        return (standardized, incomingPaths)
-    }
-
-    private func ensureSubdirectory(_ subdirectory: String) throws -> URL {
-        let filesDir = try filesDirectory()
-        let directory = filesDir.appendingPathComponent(subdirectory, isDirectory: true)
-        directoryCache.lock.lock()
-        let alreadyCreated = directoryCache.createdSubdirectories.contains(subdirectory)
-        directoryCache.lock.unlock()
-        if alreadyCreated && fileManager.fileExists(atPath: directory.path) {
-            return directory
-        }
-        try fileManager.createDirectory(at: directory, withIntermediateDirectories: true, attributes: Self.mediaProtectionAttributes)
-        directoryCache.lock.lock()
-        directoryCache.createdSubdirectories.insert(subdirectory)
-        directoryCache.lock.unlock()
-        return directory
-    }
-
-    private func filesDirectory() throws -> URL {
-        try resolvedFilesRootAndIncomingPaths().filesRoot
+        return filesDir
     }
 
     private func rootDirectory() throws -> URL {
@@ -700,8 +676,19 @@ struct BLEIncomingFileStore: @unchecked Sendable {
     }
 
     private static func timestampString(from date: Date) -> String {
-        timestampFormatterLock.lock()
-        defer { timestampFormatterLock.unlock() }
-        return timestampFormatter.string(from: date)
+        let components = Calendar.current.dateComponents(
+            [.year, .month, .day, .hour, .minute, .second],
+            from: date
+        )
+        return String(
+            format: "%04d%02d%02d_%02d%02d%02d",
+            locale: Locale(identifier: "en_US_POSIX"),
+            components.year ?? 0,
+            components.month ?? 0,
+            components.day ?? 0,
+            components.hour ?? 0,
+            components.minute ?? 0,
+            components.second ?? 0
+        )
     }
 }

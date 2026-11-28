@@ -19,13 +19,13 @@ let package = Package(
         .package(path: "localPackages/Arti"),
         .package(path: "localPackages/BitFoundation"),
         .package(path: "localPackages/BitLogger"),
-        .package(url: "https://github.com/21-DOT-DEV/swift-secp256k1", exact: "0.24.0")
+        .package(path: "localPackages/BitSecp256k1")
     ],
     targets: [
         .executableTarget(
             name: "bitchat",
             dependencies: [
-                .product(name: "P256K", package: "swift-secp256k1"),
+                .product(name: "BitSecp256k1", package: "BitSecp256k1"),
                 .product(name: "BitFoundation", package: "BitFoundation"),
                 .product(name: "BitLogger", package: "BitLogger"),
                 .product(name: "Tor", package: "Arti")
@@ -33,12 +33,16 @@ let package = Package(
             path: "bitchat",
             exclude: [
                 "Info.plist",
+                "PrivacyInfo.xcprivacy",
                 "Assets.xcassets",
                 "_PreviewHelpers/PreviewAssets.xcassets",
                 "bitchat.entitlements",
                 "bitchat-macOS.entitlements",
                 "LaunchScreen.storyboard",
                 "ViewModels/Extensions/README.md",
+                // Plural-only catalog used by the Xcode app targets alongside
+                // Localizations.zlib; SwiftPM compiles Localizable.xcstrings directly.
+                "Resources/LocalizablePlurals.xcstrings",
                 // Globe picker geometry, bundled by the Xcode app targets and read
                 // from Bundle.main; the SwiftPM build only runs tests.
                 "Resources/Globe"

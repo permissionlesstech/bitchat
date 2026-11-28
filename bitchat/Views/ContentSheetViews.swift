@@ -12,6 +12,7 @@ struct ContentPeopleSheetModalPresentationState {
     var legacyPrivateMediaConsentRequest: LegacyPrivateMediaConsentRequest? = nil
     var isVoiceAlertPresented = false
     var isMediaPickerPresented = false
+    var isWalkieTalkiePresented = false
 
     var hasPresentation: Bool {
         isImagePreviewPresented
@@ -19,6 +20,7 @@ struct ContentPeopleSheetModalPresentationState {
             || legacyPrivateMediaConsentRequest != nil
             || isVoiceAlertPresented
             || isMediaPickerPresented
+            || isWalkieTalkiePresented
     }
 }
 
@@ -39,6 +41,7 @@ struct ContentPeopleSheetView: View {
     var isTextFieldFocused: FocusState<Bool>.Binding
     @ObservedObject var voiceRecordingVM: VoiceRecordingViewModel
     @State private var showVerifySheet = false
+    @State private var showWalkieTalkieSheet = false
     @ThemedPalette private var palette
 
     let headerHeight: CGFloat
@@ -54,7 +57,8 @@ struct ContentPeopleSheetView: View {
             legacyPrivateMediaConsentRequest:
                 conversationUIModel.legacyPrivateMediaConsentRequest,
             isVoiceAlertPresented: includingVoiceAlert && voiceRecordingVM.showAlert,
-            isMediaPickerPresented: mediaPickerMode != nil
+            isMediaPickerPresented: mediaPickerMode != nil,
+            isWalkieTalkiePresented: showWalkieTalkieSheet
         )
     }
 
@@ -123,15 +127,22 @@ struct ContentPeopleSheetView: View {
                         isAtBottomPrivate: $isAtBottomPrivate,
                         isTextFieldFocused: isTextFieldFocused,
                         voiceRecordingVM: voiceRecordingVM,
+                        showWalkieTalkieSheet: $showWalkieTalkieSheet,
                         headerHeight: headerHeight,
                         onSendMessage: onSendMessage,
                         mediaPickerMode: $mediaPickerMode
                     )
+                    #if os(iOS)
+                    .toolbar(.hidden, for: .navigationBar)
+                    #endif
                 } else {
                     ContentPeopleListView(
                         showSidebar: $showSidebar,
                         showVerifySheet: $showVerifySheet
                     )
+                    #if os(iOS)
+                    .toolbar(.hidden, for: .navigationBar)
+                    #endif
                 }
             }
             .navigationDestination(isPresented: Binding(
@@ -143,9 +154,16 @@ struct ContentPeopleSheetView: View {
                 }
             )) {
                 if let peerID = appChromeModel.showingFingerprintFor,
-                   let verificationModel = appEnvironmentModels?.verificationModel {
-                    FingerprintView(peerID: peerID)
-                        .environmentObject(verificationModel)
+                   let models = appEnvironmentModels {
+                    ContactDetailSheet(
+                        peerID: peerID,
+                        conversationPeerID: privateConversationModel.selectedPeerID ?? peerID,
+                        imagePreviewURL: $imagePreviewURL
+                    )
+                    .installAppEnvironment(models)
+                    #if os(iOS)
+                    .toolbar(.hidden, for: .navigationBar)
+                    #endif
                 }
             }
             // This sheet covers the root header where the connectivity
@@ -161,7 +179,6 @@ struct ContentPeopleSheetView: View {
                 }
             }
         }
-        .themedSheetBackground()
         .foregroundColor(palette.primary)
         .confirmationDialog(
             String(
@@ -197,7 +214,7 @@ struct ContentPeopleSheetView: View {
                     )
                 }
             }
-            Button("common.cancel", role: .cancel) {
+            Button(String(localized: "common.cancel"), role: .cancel) {
                 if let requestID = legacyConsentRequest?.id {
                     conversationUIModel.resolveLegacyPrivateMediaConsent(
                         requestID: requestID,
@@ -251,50 +268,28 @@ private struct ContentPeopleListView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            VStack(alignment: .leading, spacing: 8) {
-                HStack(spacing: 12) {
-                    Text(peopleSheetTitle)
-                        .bitchatFont(size: 18)
-                        .foregroundColor(palette.primary)
-                    Spacer()
+            ThemedSheetHeader(
+                title: peopleSheetTitle,
+                subtitle: peopleSheetSubtitle,
+                trailing: {
                     if case .mesh = locationChannelsModel.selectedChannel {
-                        Button(action: { showVerifySheet = true }) {
-                            Image(systemName: "qrcode")
-                                .font(.bitchatSystem(size: 14))
-                        }
-                        .buttonStyle(.plain)
-                        // .help maps to the accessibility *hint* on iOS, so the
-                        // button still needs a spoken name.
-                        .accessibilityLabel(
-                            String(localized: "content.accessibility.verification", comment: "Accessibility label for the verification QR button")
+                        TopBarIconButton(
+                            systemImage: "qrcode",
+                            accessibilityLabel: String(localized: "content.accessibility.verification", comment: "Accessibility label for the verification QR button"),
+                            action: { showVerifySheet = true }
                         )
-                        .help(
-                            String(localized: "content.help.verification", comment: "Help text for verification button")
-                        )
+                        .help(String(localized: "content.help.verification", comment: "Help text for verification button"))
                     }
-                    SheetCloseButton {
-                        withAnimation(.easeInOut(duration: TransportConfig.uiAnimationMediumSeconds)) {
-                            dismiss()
-                            showSidebar = false
-                            showVerifySheet = false
-                            privateConversationModel.endConversation()
-                        }
+                },
+                onClose: {
+                    withAnimation(.easeInOut(duration: TransportConfig.uiAnimationMediumSeconds)) {
+                        dismiss()
+                        showSidebar = false
+                        showVerifySheet = false
+                        privateConversationModel.endConversation()
                     }
                 }
-
-                // The mesh sheet titles its sections inline (#mesh / across
-                // the bridge / groups) — no subtitle or count up here.
-                // Location channels keep their geohash subtitle.
-                if case .location(let channel) = locationChannelsModel.selectedChannel {
-                    Text(verbatim: "#\(channel.geohash.lowercased())")
-                        .bitchatFont(size: 12)
-                        .foregroundColor(palette.locationAccent)
-                }
-            }
-            .padding(.horizontal, 16)
-            .padding(.top, 16)
-            .padding(.bottom, 12)
-            .themedSurface()
+            )
 
             ScrollView {
                 // spacing 0: every section supplies its own rhythm (header
@@ -380,6 +375,7 @@ private struct ContentPeopleListView: View {
                 .id(ConversationID(channelID: locationChannelsModel.selectedChannel))
             }
         }
+        .themedSheetBackground()
         .sheet(isPresented: $showVerifySheet) {
             if let verificationModel = appEnvironmentModels?.verificationModel {
                 VerificationSheetView(isPresented: $showVerifySheet)
@@ -391,13 +387,24 @@ private struct ContentPeopleListView: View {
 
 private extension ContentPeopleListView {
     var peopleSheetTitle: String {
-        String(localized: "content.header.people", comment: "Title for the people list sheet").lowercased()
+        String(localized: "content.header.people", comment: "Title for the people list sheet")
     }
 
+    var peopleSheetSubtitle: String? {
+        if case .location(let channel) = locationChannelsModel.selectedChannel {
+            return "#\(channel.geohash.lowercased())"
+        }
+        return nil
+    }
 }
 
 private struct ContentPrivateChatSheetView: View {
     @EnvironmentObject private var privateConversationModel: PrivateConversationModel
+    @EnvironmentObject private var privateInboxModel: PrivateInboxModel
+    @EnvironmentObject private var peerListModel: PeerListModel
+    @EnvironmentObject private var conversationUIModel: ConversationUIModel
+    @Environment(\.appEnvironmentModels) private var appEnvironmentModels
+    @ObservedObject private var pttPreferences = PTTPreferences.shared
 
     @Binding var showSidebar: Bool
     let draftModel: ComposerDraftModel
@@ -408,78 +415,176 @@ private struct ContentPrivateChatSheetView: View {
     @Binding var isAtBottomPrivate: Bool
     var isTextFieldFocused: FocusState<Bool>.Binding
     @ObservedObject var voiceRecordingVM: VoiceRecordingViewModel
-    @Environment(\.appTheme) private var theme
+    @Binding var showWalkieTalkieSheet: Bool
     @ThemedPalette private var palette
+    @State private var showGroupInfoSheet = false
+    @State private var isSearchPresented = false
+    @State private var searchQuery = ""
+    @State private var searchMatchIndex: Int? = nil
+    @State private var searchJumpNonce = 0
 
     let headerHeight: CGFloat
     let onSendMessage: () -> Void
     @Binding var mediaPickerMode: MediaPickerMode?
 
+    private var privateSearchMatches: [String] {
+        guard isSearchPresented, let peer = privateConversationModel.selectedPeerID else { return [] }
+        return MessageInteractionCodec.matchingMessageIDs(
+            in: privateInboxModel.messages(for: peer),
+            query: searchQuery
+        )
+    }
+
+    private var activePrivateSearchMessageID: String? {
+        let matches = privateSearchMatches
+        guard let idx = searchMatchIndex, matches.indices.contains(idx) else { return nil }
+        return matches[idx]
+    }
+
     var body: some View {
         VStack(spacing: 0) {
             if let headerState = privateConversationModel.selectedHeaderState {
-                HStack(spacing: 12) {
-                    Button(action: {
-                        withAnimation(.easeInOut(duration: TransportConfig.uiAnimationMediumSeconds)) {
-                            privateConversationModel.endConversation()
+                AppTopBar(style: .sheet) {
+                    HStack(spacing: 6) {
+                        Button(action: {
+                            withAnimation(.easeInOut(duration: TransportConfig.uiAnimationMediumSeconds)) {
+                                privateConversationModel.endConversation()
+                            }
+                        }) {
+                            Image(systemName: "chevron.left")
+                                .font(.system(size: ChromeMetrics.backChevronSize, weight: .semibold))
+                                .foregroundColor(palette.primary)
+                                .frame(width: 28, height: ChromeMetrics.iconTapSize)
+                                .contentShape(Rectangle())
                         }
-                    }) {
-                        Image(systemName: "chevron.left")
-                            .font(.bitchatSystem(size: 12))
-                            .foregroundColor(palette.primary)
-                            .frame(width: 44, height: 44)
-                            .contentShape(Rectangle())
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel(
-                        String(localized: "content.accessibility.back_to_main_chat", comment: "Accessibility label for returning to main chat")
-                    )
-
-                    Spacer(minLength: 0)
-
-                    HStack(spacing: 8) {
-                        ContentPrivateHeaderInfoButton(
-                            headerState: headerState,
-                            headerHeight: headerHeight
+                        .buttonStyle(.plain)
+                        .accessibilityLabel(
+                            String(localized: "content.accessibility.back_to_main_chat", comment: "Accessibility label for returning to main chat")
                         )
 
-                        if headerState.supportsFavoriteToggle {
-                            Button(action: {
-                                privateConversationModel.toggleFavoriteForSelectedConversation()
-                            }) {
-                                Image(systemName: headerState.isFavorite ? "star.fill" : "star")
-                                    .font(.bitchatSystem(size: 14))
-                                    .foregroundColor(headerState.isFavorite ? Color.yellow : palette.primary)
-                                    // Same visual box + 44pt hit target as SheetCloseButton.
-                                    .frame(width: 32, height: 32)
-                                    .contentShape(Rectangle().inset(by: -6))
-                            }
-                            .buttonStyle(.plain)
-                            .accessibilityLabel(
-                                headerState.isFavorite
-                                ? String(localized: "content.accessibility.remove_favorite", comment: "Accessibility label to remove a favorite")
-                                : String(localized: "content.accessibility.add_favorite", comment: "Accessibility label to add a favorite")
-                            )
-                        }
+                        ContentPrivateHeaderInfoButton(
+                            headerState: headerState,
+                            headerHeight: headerHeight,
+                            onShowGroupInfo: { showGroupInfoSheet = true }
+                        )
                     }
-                    .frame(maxWidth: .infinity)
+                } trailing: {
+                    if !headerState.conversationPeerID.isGeoDM {
+                        let someoneSpeaking = conversationUIModel.activeTalkerInCurrentContext(
+                            selectedPeerID: headerState.conversationPeerID
+                        ) != nil
+                        TopBarIconButton(
+                            systemImage: "radio",
+                            accessibilityLabel: String(localized: "walkie.accessibility.open", defaultValue: "Open walkie-talkie", comment: "Accessibility label for the header walkie-talkie button"),
+                            color: someoneSpeaking ? Color.red : (pttPreferences.liveVoiceEnabled ? palette.accent : palette.secondary),
+                            action: {
+                                isTextFieldFocused.wrappedValue = false
+                                showWalkieTalkieSheet = true
+                            }
+                        )
+                        .modifier(PulsingOpacityModifier(active: someoneSpeaking))
+                    }
 
-                    Spacer(minLength: 0)
-
-                    SheetCloseButton {
-                        withAnimation(.easeInOut(duration: TransportConfig.uiAnimationMediumSeconds)) {
-                            privateConversationModel.endConversation()
-                            showSidebar = true
+                    TopBarIconButton(
+                        systemImage: "magnifyingglass",
+                        accessibilityLabel: String(localized: "chat.search.accessibility", defaultValue: "Search in chat", comment: "Accessibility label for in-chat search toggle button"),
+                        color: isSearchPresented ? palette.accent : palette.secondary,
+                        action: {
+                            withAnimation(.easeInOut(duration: 0.18)) {
+                                isSearchPresented.toggle()
+                                if !isSearchPresented {
+                                    searchQuery = ""
+                                    searchMatchIndex = nil
+                                }
+                            }
                         }
+                    )
+
+                    let activeTimer = privateConversationModel.disappearingTimer(for: headerState.conversationPeerID)
+                    Menu {
+                        ForEach(DisappearingTimer.allCases) { option in
+                            Button {
+                                privateConversationModel.setDisappearingTimer(
+                                    option,
+                                    for: headerState.conversationPeerID
+                                )
+                            } label: {
+                                HStack {
+                                    Text(option.displayName)
+                                    if activeTimer == option {
+                                        Image(systemName: "checkmark")
+                                    }
+                                }
+                            }
+                        }
+                    } label: {
+                        Image(systemName: activeTimer.iconName)
+                            .font(.system(size: ChromeMetrics.iconSize, weight: .medium))
+                            .foregroundColor(activeTimer == .off ? palette.secondary : Color.orange)
+                            .frame(width: ChromeMetrics.iconTapSize, height: ChromeMetrics.iconTapSize)
+                            .contentShape(Rectangle())
+                    }
+                    .menuStyle(.borderlessButton)
+                    .accessibilityLabel(
+                        String(localized: "chat.timer.label", defaultValue: "Disappearing messages", comment: "Accessibility label for disappearing messages menu")
+                    )
+
+                    if headerState.supportsFavoriteToggle {
+                        TopBarIconButton(
+                            systemImage: headerState.isFavorite ? "star.fill" : "star",
+                            accessibilityLabel: headerState.isFavorite
+                                ? String(localized: "content.accessibility.remove_favorite", comment: "Accessibility label to remove a favorite")
+                                : String(localized: "content.accessibility.add_favorite", comment: "Accessibility label to add a favorite"),
+                            color: headerState.isFavorite ? Color.yellow : palette.secondary,
+                            action: {
+                                privateConversationModel.toggleFavoriteForSelectedConversation()
+                            }
+                        )
                     }
                 }
-                // minHeight so scaled text at accessibility sizes grows the
-                // bar instead of clipping inside it.
-                .frame(minHeight: headerHeight)
-                .padding(.horizontal, 16)
-                .padding(.top, 10)
-                .padding(.bottom, 12)
-                .modifier(PrivateHeaderChrome())
+            }
+
+            if isSearchPresented {
+                let matches = privateSearchMatches
+                ChatSearchBar(
+                    query: $searchQuery,
+                    matchCount: matches.count,
+                    activeMatchIndex: searchMatchIndex,
+                    onPrevious: {
+                        guard !matches.isEmpty else { return }
+                        if let current = searchMatchIndex {
+                            searchMatchIndex = (current - 1 + matches.count) % matches.count
+                        } else {
+                            searchMatchIndex = matches.count - 1
+                        }
+                        searchJumpNonce &+= 1
+                    },
+                    onNext: {
+                        guard !matches.isEmpty else { return }
+                        if let current = searchMatchIndex {
+                            searchMatchIndex = (current + 1) % matches.count
+                        } else {
+                            searchMatchIndex = 0
+                        }
+                        searchJumpNonce &+= 1
+                    },
+                    onClose: {
+                        withAnimation(.easeInOut(duration: 0.18)) {
+                            isSearchPresented = false
+                            searchQuery = ""
+                            searchMatchIndex = nil
+                        }
+                    }
+                )
+                .onChange(of: searchQuery) { newQuery in
+                    let peer = privateConversationModel.selectedPeerID
+                    let latest = MessageInteractionCodec.matchingMessageIDs(
+                        in: privateInboxModel.messages(for: peer),
+                        query: newQuery
+                    )
+                    searchMatchIndex = latest.isEmpty ? nil : latest.count - 1
+                    searchJumpNonce &+= 1
+                }
             }
 
             PrivateMessageListView(
@@ -490,7 +595,9 @@ private struct ContentPrivateChatSheetView: View {
                 imagePreviewURL: $imagePreviewURL,
                 windowCountPrivate: $windowCountPrivate,
                 showSidebar: $showSidebar,
-                isTextFieldFocused: isTextFieldFocused
+                isTextFieldFocused: isTextFieldFocused,
+                highlightedMessageID: activePrivateSearchMessageID,
+                jumpRequestID: searchJumpNonce
             )
             .themedSurface()
             .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -499,10 +606,6 @@ private struct ContentPrivateChatSheetView: View {
             // gesture (a high-priority ancestor drag cancels child gestures
             // within milliseconds — same starvation as the image-reveal bug).
             .highPriorityGesture(swipeToLeaveGesture)
-
-            if !theme.usesGlassChrome {
-                Divider()
-            }
 
             privacyCaption
 
@@ -516,6 +619,31 @@ private struct ContentPrivateChatSheetView: View {
         }
         .themedSheetBackground()
         .foregroundColor(palette.primary)
+        .sheet(isPresented: $showGroupInfoSheet) {
+            if let peerID = privateConversationModel.selectedPeerID, peerID.isGroup {
+                GroupInfoSheet(groupPeerID: peerID)
+                    .environmentObject(privateConversationModel)
+                    .environmentObject(peerListModel)
+            }
+        }
+        .sheet(isPresented: $showWalkieTalkieSheet) {
+            if let models = appEnvironmentModels {
+                WalkieTalkieSheetView(
+                    voiceRecordingVM: voiceRecordingVM,
+                    allowsChannelSwitching: false
+                )
+                .installAppEnvironment(models)
+                #if os(iOS)
+                .presentationDetents([.medium, .large])
+                .presentationDragIndicator(.visible)
+                #endif
+            }
+        }
+        .onChange(of: privateConversationModel.selectedPeerID) { _ in
+            isSearchPresented = false
+            searchQuery = ""
+            searchMatchIndex = nil
+        }
     }
 
     private var swipeToLeaveGesture: some Gesture {
@@ -525,80 +653,124 @@ private struct ContentPrivateChatSheetView: View {
                 let vertical = abs(value.translation.height)
                 guard horizontal > 80, vertical < 60 else { return }
                 withAnimation(.easeInOut(duration: TransportConfig.uiAnimationMediumSeconds)) {
-                    showSidebar = true
                     privateConversationModel.endConversation()
                 }
             }
     }
 
-    /// Persistent one-line reminder that this composer feeds a private
-    /// conversation — the DM sheet otherwise renders identically to the
-    /// public timeline. Claims end-to-end encryption only once the session
-    /// is actually secured.
+    /// Persistent one-line indicator above the private composer showing both
+    /// encryption posture and how the next message will move (Bluetooth mesh,
+    /// Nostr relay, hybrid group split, or queued offline for reconnect/courier).
     private var privacyCaption: some View {
-        HStack(spacing: 5) {
-            Image(systemName: "lock.fill")
-                .font(.bitchatSystem(size: 9))
-                // Optical centering: lock.fill's ink is bottom-heavy, so
-                // geometric centering reads low next to the caption text.
-                .offset(y: -1)
-            Text(verbatim: privacyCaptionText)
+        let info = transportCaptionInfo
+        return HStack(spacing: 5) {
+            Image(systemName: info.icon)
+                .font(.bitchatSystem(size: 10, weight: .medium))
+                .foregroundColor(info.tint)
+                .offset(y: info.icon == "lock.fill" ? -0.5 : 0)
+            Text(verbatim: info.text)
                 .bitchatFont(size: 11, weight: .medium)
+                .foregroundColor(palette.secondary)
+                .lineLimit(1)
+                .truncationMode(.tail)
         }
-        .foregroundColor(Color.orange)
         .frame(maxWidth: .infinity)
-        .padding(.vertical, 4)
-        // The orange text is signature enough; a tinted band here reads as a
-        // stray strip against the untinted composer chrome below it, so the
-        // caption sits on the same surface as the rest of the bottom chrome.
+        .padding(.horizontal, 12)
+        .padding(.vertical, 5)
         .themedSurface()
         .accessibilityElement(children: .combine)
     }
 
-    private var privacyCaptionText: String {
-        // Group chats are ChaCha20-Poly1305 sealed to the roster's shared key.
-        if privateConversationModel.selectedPeerID?.isGroup == true {
-            return String(localized: "content.private.caption_group", comment: "Caption above the group chat composer noting messages are encrypted to group members")
+    private var transportCaptionInfo: (icon: String, tint: Color, text: String) {
+        guard let header = privateConversationModel.selectedHeaderState else {
+            return (
+                "lock.fill",
+                Color.orange.opacity(0.85),
+                String(localized: "content.private.caption", comment: "Caption above the private chat composer before encryption is established")
+            )
         }
-        // Geohash DMs use BitChat's private-envelope encryption over Nostr —
-        // always end-to-end encrypted,
-        // even though they carry no Noise session status. Mesh DMs earn the
-        // "encrypted" claim only once the Noise handshake has secured — or
-        // when the peer is reachable only over Nostr, where delivery is
-        // gift-wrapped end-to-end without a Noise session.
-        let isGeoDM = privateConversationModel.selectedPeerID?.isGeoDM == true
+
+        if header.isGroupConversation {
+            let mesh = header.groupMeshReachableCount
+            let nostr = header.groupNostrReachableCount
+            if mesh > 0 && nostr > 0 {
+                return (
+                    "lock.fill",
+                    palette.accent,
+                    String(
+                        format: String(localized: "content.private.transport.group_hybrid", defaultValue: "Encrypted · %lld on mesh, %lld via Nostr", comment: "Group transport caption when members span Bluetooth mesh and Nostr"),
+                        locale: .current,
+                        mesh,
+                        nostr
+                    )
+                )
+            } else if mesh > 0 {
+                return (
+                    "antenna.radiowaves.left.and.right",
+                    palette.accentBlue,
+                    String(
+                        format: String(localized: "content.private.transport.group_mesh", defaultValue: "Encrypted · %lld on Bluetooth mesh", comment: "Group transport caption when members are reachable over Bluetooth mesh"),
+                        locale: .current,
+                        mesh
+                    )
+                )
+            } else if nostr > 0 {
+                return (
+                    "globe",
+                    .purple,
+                    String(
+                        format: String(localized: "content.private.transport.group_nostr", defaultValue: "Encrypted · %lld via Nostr relay", comment: "Group transport caption when members are reachable via Nostr"),
+                        locale: .current,
+                        nostr
+                    )
+                )
+            } else if header.groupOtherMemberCount > 0 {
+                return (
+                    "clock.arrow.circlepath",
+                    Color.orange.opacity(0.9),
+                    String(localized: "content.private.transport.group_offline", defaultValue: "Encrypted · Members offline, sends on reconnect", comment: "Group transport caption when all other members are offline")
+                )
+            }
+            return (
+                "lock.fill",
+                Color.orange.opacity(0.85),
+                String(localized: "content.private.caption_group", comment: "Caption above the group chat composer noting messages are encrypted to group members")
+            )
+        }
+
+        let isGeoDM = header.conversationPeerID.isGeoDM
         let noiseSecured: Bool = {
-            switch privateConversationModel.selectedHeaderState?.encryptionStatus {
+            switch header.encryptionStatus {
             case .noiseSecured, .noiseVerified: return true
             default: return false
             }
         }()
-        let nostrTransport = privateConversationModel.selectedHeaderState?.availability == .nostrAvailable
-        if isGeoDM || noiseSecured || nostrTransport {
-            return String(localized: "content.private.caption_encrypted", comment: "Caption above the private chat composer once the session is end-to-end encrypted")
-        }
-        return String(localized: "content.private.caption", comment: "Caption above the private chat composer before encryption is established")
-    }
-}
 
-/// Chrome for the private-chat header. Matrix keeps its orange privacy wash
-/// over an opaque themed surface. Glass gets the same floating panel as the
-/// main header instead: an orange wash over the backdrop gradient reads as a
-/// muddy gray-beige band, and the DM signature is already carried by the
-/// orange lock, caption, and composer accents.
-private struct PrivateHeaderChrome: ViewModifier {
-    @Environment(\.appTheme) private var theme
+        switch header.availability {
+        case .bluetoothConnected:
+            let text = noiseSecured
+                ? String(localized: "content.private.transport.ble_encrypted", defaultValue: "Encrypted · Direct Bluetooth", comment: "DM transport caption for secured direct Bluetooth connection")
+                : String(localized: "content.private.transport.ble_securing", defaultValue: "Direct Bluetooth · Securing session", comment: "DM transport caption while Bluetooth Noise handshake is pending")
+            return ("dot.radiowaves.left.and.right", palette.accentBlue, text)
 
-    @ViewBuilder
-    func body(content: Content) -> some View {
-        if theme.usesGlassChrome {
-            content.themedChromePanel(edge: .top)
-        } else {
-            // Orange tint before themedSurface so it layers in front of the
-            // opaque themed background rather than behind it.
-            content
-                .background(Color.orange.opacity(0.06))
-                .themedSurface()
+        case .meshReachable:
+            let text = noiseSecured
+                ? String(localized: "content.private.transport.mesh_encrypted", defaultValue: "Encrypted · Relayed on mesh", comment: "DM transport caption for secured multi-hop mesh path")
+                : String(localized: "content.private.transport.mesh_securing", defaultValue: "Mesh relay · Securing session", comment: "DM transport caption while multi-hop mesh Noise handshake is pending")
+            return ("point.3.filled.connected.trianglepath.dotted", palette.accentBlue, text)
+
+        case .nostrAvailable:
+            let text = isGeoDM
+                ? String(localized: "content.private.transport.nostr_geo", defaultValue: "Encrypted · Nostr location DM", comment: "DM transport caption for a geohash Nostr DM")
+                : String(localized: "content.private.transport.nostr_relay", defaultValue: "Encrypted · Nostr relay", comment: "DM transport caption for a Nostr-routed DM")
+            return ("globe", .purple, text)
+
+        case .offline:
+            return (
+                "clock.arrow.circlepath",
+                Color.orange.opacity(0.9),
+                String(localized: "content.private.transport.offline_queue", defaultValue: "Offline · Messages queue until reconnect or courier", comment: "DM transport caption when peer is currently offline")
+            )
         }
     }
 }
@@ -609,70 +781,62 @@ private struct ContentPrivateHeaderInfoButton: View {
 
     let headerState: PrivateConversationHeaderState
     let headerHeight: CGFloat
+    var onShowGroupInfo: () -> Void = {}
 
     var body: some View {
         Button(action: {
-            // A group has no single fingerprint to show.
-            guard !headerState.isGroupConversation else { return }
+            if headerState.isGroupConversation {
+                onShowGroupInfo()
+                return
+            }
             appChromeModel.showFingerprint(for: headerState.headerPeerID)
         }) {
             HStack(spacing: 6) {
                 if headerState.isGroupConversation {
                     Image(systemName: "person.3.fill")
-                        .font(.bitchatSystem(size: 14))
+                        .font(.system(size: 14, weight: .medium))
                         .foregroundColor(palette.primary)
                         .accessibilityLabel(String(localized: "content.accessibility.group_chat", comment: "Accessibility label for the group chat indicator"))
                 } else {
                     switch headerState.availability {
                     case .bluetoothConnected:
                         Image(systemName: "dot.radiowaves.left.and.right")
-                            .font(.bitchatSystem(size: 14))
+                            .font(.system(size: 14, weight: .medium))
                             .foregroundColor(palette.primary)
                             .accessibilityLabel(String(localized: "content.accessibility.connected_mesh", comment: "Accessibility label for mesh-connected peer indicator"))
                     case .meshReachable:
                         Image(systemName: "point.3.filled.connected.trianglepath.dotted")
-                            .font(.bitchatSystem(size: 14))
+                            .font(.system(size: 14, weight: .medium))
                             .foregroundColor(palette.primary)
                             .accessibilityLabel(String(localized: "content.accessibility.reachable_mesh", comment: "Accessibility label for mesh-reachable peer indicator"))
                     case .nostrAvailable:
                         Image(systemName: "globe")
-                            .font(.bitchatSystem(size: 14))
+                            .font(.system(size: 14, weight: .medium))
                             .foregroundColor(.purple)
                             .accessibilityLabel(String(localized: "content.accessibility.available_nostr", comment: "Accessibility label for Nostr-available peer indicator"))
                     case .offline:
-                        // Slashed variant of the connected glyph — offline as
-                        // the negation of connected, no text label (a leading
-                        // one read as part of the name: "sin conexión bob").
-                        // VoiceOver still says it.
                         Image(systemName: "antenna.radiowaves.left.and.right.slash")
-                            .font(.bitchatSystem(size: 14))
+                            .font(.system(size: 14, weight: .medium))
                             .foregroundColor(palette.secondary)
                             .accessibilityLabel(String(localized: "mesh_peers.state.offline", comment: "State label for a peer that is not currently reachable"))
                     }
                 }
 
                 Text(headerState.displayName)
-                    .bitchatFont(size: 16, weight: .medium)
+                    .bitchatFont(size: 17, weight: .bold)
                     .foregroundColor(palette.primary)
-                    // Middle truncation keeps the identity suffix visible on
-                    // long nicknames instead of wrapping into the fixed-height
-                    // header.
                     .lineLimit(1)
                     .truncationMode(.middle)
 
                 if let encryptionStatus = headerState.encryptionStatus,
                    let icon = encryptionStatus.icon {
                     Image(systemName: icon)
-                        .font(.bitchatSystem(size: 14))
-                        // Optical centering: the lock glyphs' ink is bottom-heavy
-                        // (solid body, thin shackle), so geometric centering reads
-                        // ~1pt low next to the name. The seal badge is symmetric
-                        // and needs no lift.
-                        .offset(y: icon.hasPrefix("lock") ? -1 : 0)
+                        .font(.system(size: 13, weight: .medium))
+                        .offset(y: icon.hasPrefix("lock") ? -0.5 : 0)
                         .foregroundColor(
                             encryptionStatus == .noiseVerified || encryptionStatus == .noiseSecured
-                            ? palette.primary
-                            : Color.red
+                            ? palette.secondary
+                            : palette.alertRed
                         )
                         .accessibilityLabel(
                             String(

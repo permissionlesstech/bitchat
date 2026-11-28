@@ -8,8 +8,8 @@
 
 /* Begin PBXBuildFile section */
 		17901751FD8010AFC8E750F2 /* bitchatShareExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 61F92EBA29C47C0FCC482F1F /* bitchatShareExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
-		3EE336D150427F736F32B56C /* P256K in Frameworks */ = {isa = PBXBuildFile; productRef = B1D9136AA0083366353BFA2F /* P256K */; };
-		885BBED78092484A5B069461 /* P256K in Frameworks */ = {isa = PBXBuildFile; productRef = 4EB6BA1B8464F1EA38F4E286 /* P256K */; };
+		3EE336D150427F736F32B56C /* BitSecp256k1 in Frameworks */ = {isa = PBXBuildFile; productRef = B1D9136AA0083366353BFA2F /* BitSecp256k1 */; };
+		885BBED78092484A5B069461 /* BitSecp256k1 in Frameworks */ = {isa = PBXBuildFile; productRef = 4EB6BA1B8464F1EA38F4E286 /* BitSecp256k1 */; };
 		A6BCF9482F80953E001CF9B9 /* BitFoundation in Frameworks */ = {isa = PBXBuildFile; productRef = A6BCF9472F80953E001CF9B9 /* BitFoundation */; };
 		A6BCF94A2F809550001CF9B9 /* BitFoundation in Frameworks */ = {isa = PBXBuildFile; productRef = A6BCF9492F809550001CF9B9 /* BitFoundation */; };
 		A6E3E5702E77036A0032EA8A /* BitLogger in Frameworks */ = {isa = PBXBuildFile; productRef = A6E3E56F2E77036A0032EA8A /* BitLogger */; };
@@ -61,7 +61,6 @@
 		61F92EBA29C47C0FCC482F1F /* bitchatShareExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = bitchatShareExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		8F3A7C058C2C8E1A06C8CF8B /* bitchat.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = bitchat.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		96D0D41CA19EE5A772AA8434 /* bitchat.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = bitchat.app; sourceTree = BUILT_PRODUCTS_DIR; };
-		A6F183FC2E948783006A9046 /* tor-nolzma.xcframework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcframework; name = "tor-nolzma.xcframework"; path = "localPackages/Tor/Frameworks/tor-nolzma.xcframework"; sourceTree = "<group>"; };
 		C0DB1DE27F0AAB5092663E8E /* bitchatTests_iOS.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = bitchatTests_iOS.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		E0A1B2C3D4E5F6012345678A /* relays/online_relays_gps.csv */ = {isa = PBXFileReference; lastKnownFileType = text; path = relays/online_relays_gps.csv; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -79,6 +78,8 @@
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
 				Info.plist,
+				Localizable.xcstrings,
+				ViewModels/Extensions/README.md,
 			);
 			target = AF077EA0474EDEDE2C72716C /* bitchat_iOS */;
 		};
@@ -87,6 +88,8 @@
 			membershipExceptions = (
 				Info.plist,
 				LaunchScreen.storyboard,
+				Localizable.xcstrings,
+				ViewModels/Extensions/README.md,
 			);
 			target = 0576A29205865664C0937536 /* bitchat_macOS */;
 		};
@@ -157,7 +160,7 @@
 			isa = PBXFrameworksBuildPhase;
 			files = (
 				A6E3E5722E7703760032EA8A /* BitLogger in Frameworks */,
-				3EE336D150427F736F32B56C /* P256K in Frameworks */,
+				3EE336D150427F736F32B56C /* BitSecp256k1 in Frameworks */,
 				A6E3EA812E7706A80032EA8A /* Tor in Frameworks */,
 				A6BCF94A2F809550001CF9B9 /* BitFoundation in Frameworks */,
 			);
@@ -166,7 +169,7 @@
 			isa = PBXFrameworksBuildPhase;
 			files = (
 				A6E3E5702E77036A0032EA8A /* BitLogger in Frameworks */,
-				885BBED78092484A5B069461 /* P256K in Frameworks */,
+				885BBED78092484A5B069461 /* BitSecp256k1 in Frameworks */,
 				A6E3EA7F2E7706720032EA8A /* Tor in Frameworks */,
 				A6BCF9482F80953E001CF9B9 /* BitFoundation in Frameworks */,
 			);
@@ -202,7 +205,6 @@
 		A6F183FB2E948783006A9046 /* Frameworks */ = {
 			isa = PBXGroup;
 			children = (
-				A6F183FC2E948783006A9046 /* tor-nolzma.xcframework */,
 			);
 			name = Frameworks;
 			sourceTree = "<group>";
@@ -216,6 +218,7 @@
 			buildPhases = (
 				137ABE739BF20ACDDF8CC605 /* Sources */,
 				0214973A876129753D39EB47 /* Resources */,
+				C6F1E2A34B5C6D7E8F901235 /* Compress Localizations */,
 				31F6FDADA63050361C14F3A1 /* Frameworks */,
 			);
 			buildRules = (
@@ -225,7 +228,7 @@
 			);
 			name = bitchat_macOS;
 			packageProductDependencies = (
-				B1D9136AA0083366353BFA2F /* P256K */,
+				B1D9136AA0083366353BFA2F /* BitSecp256k1 */,
 				A6E3E5712E7703760032EA8A /* BitLogger */,
 				A6E3EA802E7706A80032EA8A /* Tor */,
 				A6BCF9492F809550001CF9B9 /* BitFoundation */,
@@ -297,6 +300,7 @@
 			buildPhases = (
 				4E49E34F00154C051AE90FED /* Sources */,
 				CD6E8F32BC38357473954F97 /* Resources */,
+				C6F1E2A34B5C6D7E8F901234 /* Compress Localizations */,
 				B5A5CC493FFB3D8966548140 /* Frameworks */,
 				B6C356449BAE4E0F650565D1 /* Embed Foundation Extensions */,
 			);
@@ -310,7 +314,7 @@
 			);
 			name = bitchat_iOS;
 			packageProductDependencies = (
-				4EB6BA1B8464F1EA38F4E286 /* P256K */,
+				4EB6BA1B8464F1EA38F4E286 /* BitSecp256k1 */,
 				A6E3E56F2E77036A0032EA8A /* BitLogger */,
 				A6E3EA7E2E7706720032EA8A /* Tor */,
 				A6BCF9472F80953E001CF9B9 /* BitFoundation */,
@@ -326,7 +330,7 @@
 			isa = PBXProject;
 			attributes = {
 				BuildIndependentTargetsInParallel = YES;
-				LastUpgradeCheck = 2650;
+				LastUpgradeCheck = 2720;
 			};
 			buildConfigurationList = 3EA424CBD51200895D361189 /* Build configuration list for PBXProject "bitchat" */;
 			developmentRegion = en;
@@ -353,7 +357,7 @@
 			mainGroup = 18198ED912AAF495D8AF7763;
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
-				B8C407587481BBB190741C93 /* XCRemoteSwiftPackageReference "swift-secp256k1" */,
+				B8C407587481BBB190741C93 /* XCLocalSwiftPackageReference "localPackages/BitSecp256k1" */,
 				A6E3E56E2E77036A0032EA8A /* XCLocalSwiftPackageReference "localPackages/BitLogger" */,
 				A6E3EA7D2E7706720032EA8A /* XCLocalSwiftPackageReference "localPackages/Arti" */,
 				A6BCF9462F80953E001CF9B9 /* XCLocalSwiftPackageReference "localPackages/BitFoundation" */,
@@ -400,6 +404,43 @@
 			);
 		};
 /* End PBXResourcesBuildPhase section */
+
+/* Begin PBXShellScriptBuildPhase section */
+		C6F1E2A34B5C6D7E8F901234 /* Compress Localizations */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputPaths = (
+				"$(SRCROOT)/bitchat/Localizable.xcstrings",
+				"$(SRCROOT)/scripts/compress_localizations.py",
+			);
+			name = "Compress Localizations";
+			outputPaths = (
+				"$(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/Localizations.zlib",
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "/usr/bin/python3 -B \"${SRCROOT}/scripts/compress_localizations.py\" --input \"${SRCROOT}/bitchat/Localizable.xcstrings\" --zlib-out \"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/Localizations.zlib\"\n";
+		};
+		C6F1E2A34B5C6D7E8F901235 /* Compress Localizations */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputPaths = (
+				"$(SRCROOT)/bitchat/Localizable.xcstrings",
+				"$(SRCROOT)/scripts/compress_localizations.py",
+			);
+			name = "Compress Localizations";
+			outputPaths = (
+				"$(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/Localizations.zlib",
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "/usr/bin/python3 -B \"${SRCROOT}/scripts/compress_localizations.py\" --input \"${SRCROOT}/bitchat/Localizable.xcstrings\" --zlib-out \"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/Localizations.zlib\"\n";
+		};
+/* End PBXShellScriptBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
 		0A08E70F08F55FD5BA8C7EF3 /* Sources */ = {
@@ -614,13 +655,13 @@
 			baseConfigurationReferenceRelativePath = Release.xcconfig;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
-				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = YES;
+				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = NO;
 				CODE_SIGNING_ALLOWED = YES;
 				CODE_SIGNING_REQUIRED = YES;
 				CODE_SIGN_ENTITLEMENTS = bitchat/bitchat.entitlements;
 				CODE_SIGN_STYLE = "$(CODE_SIGN_STYLE)";
 				DEVELOPMENT_ASSET_PATHS = bitchat/_PreviewHelpers;
-				ENABLE_PREVIEWS = YES;
+				ENABLE_PREVIEWS = NO;
 				INFOPLIST_FILE = bitchat/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = bitchat;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.social-networking";
@@ -647,14 +688,14 @@
 			baseConfigurationReferenceRelativePath = Release.xcconfig;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
-				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = YES;
+				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = NO;
 				CODE_SIGNING_ALLOWED = YES;
 				CODE_SIGNING_REQUIRED = YES;
 				CODE_SIGN_ENTITLEMENTS = "bitchat/bitchat-macOS.entitlements";
 				CODE_SIGN_STYLE = "$(CODE_SIGN_STYLE)";
 				COMBINE_HIDPI_IMAGES = YES;
 				DEAD_CODE_STRIPPING = YES;
-				ENABLE_PREVIEWS = YES;
+				ENABLE_PREVIEWS = NO;
 				INFOPLIST_FILE = bitchat/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = bitchat;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.social-networking";
@@ -678,8 +719,10 @@
 				CLANG_ANALYZER_LOCALIZABILITY_NONLOCALIZED = YES;
 				CLANG_ANALYZER_NONNULL = YES;
 				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_COVERAGE_MAPPING = NO;
 				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
 				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_CODE_COVERAGE = NO;
 				CLANG_ENABLE_MODULES = YES;
 				CLANG_ENABLE_OBJC_ARC = YES;
 				CLANG_ENABLE_OBJC_WEAK = YES;
@@ -715,6 +758,7 @@
 				ENABLE_USER_SCRIPT_SANDBOXING = YES;
 				GCC_C_LANGUAGE_STANDARD = gnu11;
 				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = z;
 				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
 				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
 				GCC_WARN_UNDECLARED_SELECTOR = YES;
@@ -722,13 +766,18 @@
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = "$(IPHONEOS_DEPLOYMENT_TARGET)";
+				LLVM_LTO = YES_THIN;
 				MACOSX_DEPLOYMENT_TARGET = "$(MACOSX_DEPLOYMENT_TARGET)";
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = NO;
+				STRIP_INSTALLED_PRODUCT = YES;
+				STRIP_STYLE = all;
+				STRIP_SWIFT_SYMBOLS = YES;
 				SWIFT_COMPILATION_MODE = wholemodule;
-				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				SWIFT_OPTIMIZATION_LEVEL = "-Osize";
+				SWIFT_REFLECTION_METADATA_LEVEL = "without-names";
 				SWIFT_VERSION = "$(SWIFT_VERSION)";
 			};
 			name = Release;
@@ -927,24 +976,17 @@
 			isa = XCLocalSwiftPackageReference;
 			relativePath = localPackages/Arti;
 		};
+		B8C407587481BBB190741C93 /* XCLocalSwiftPackageReference "localPackages/BitSecp256k1" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = localPackages/BitSecp256k1;
+		};
 /* End XCLocalSwiftPackageReference section */
 
-/* Begin XCRemoteSwiftPackageReference section */
-		B8C407587481BBB190741C93 /* XCRemoteSwiftPackageReference "swift-secp256k1" */ = {
-			isa = XCRemoteSwiftPackageReference;
-			repositoryURL = "https://github.com/21-DOT-DEV/swift-secp256k1";
-			requirement = {
-				kind = exactVersion;
-				version = 0.24.0;
-			};
-		};
-/* End XCRemoteSwiftPackageReference section */
-
 /* Begin XCSwiftPackageProductDependency section */
-		4EB6BA1B8464F1EA38F4E286 /* P256K */ = {
+		4EB6BA1B8464F1EA38F4E286 /* BitSecp256k1 */ = {
 			isa = XCSwiftPackageProductDependency;
-			package = B8C407587481BBB190741C93 /* XCRemoteSwiftPackageReference "swift-secp256k1" */;
-			productName = P256K;
+			package = B8C407587481BBB190741C93 /* XCLocalSwiftPackageReference "localPackages/BitSecp256k1" */;
+			productName = BitSecp256k1;
 		};
 		A6BCF9472F80953E001CF9B9 /* BitFoundation */ = {
 			isa = XCSwiftPackageProductDependency;
@@ -971,10 +1013,10 @@
 			isa = XCSwiftPackageProductDependency;
 			productName = Tor;
 		};
-		B1D9136AA0083366353BFA2F /* P256K */ = {
+		B1D9136AA0083366353BFA2F /* BitSecp256k1 */ = {
 			isa = XCSwiftPackageProductDependency;
-			package = B8C407587481BBB190741C93 /* XCRemoteSwiftPackageReference "swift-secp256k1" */;
-			productName = P256K;
+			package = B8C407587481BBB190741C93 /* XCLocalSwiftPackageReference "localPackages/BitSecp256k1" */;
+			productName = BitSecp256k1;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

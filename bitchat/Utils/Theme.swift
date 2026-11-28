@@ -18,10 +18,10 @@ enum AppTheme: String, CaseIterable, Identifiable {
     /// UserDefaults key backing the theme selection.
     static let storageKey = "appTheme"
 
-    var displayNameKey: LocalizedStringKey {
+    var displayNameKey: String {
         switch self {
-        case .matrix: return "app_info.appearance.matrix"
-        case .liquidGlass: return "app_info.appearance.liquid_glass"
+        case .matrix: return String(localized: "app_info.appearance.matrix")
+        case .liquidGlass: return String(localized: "app_info.appearance.liquid_glass")
         }
     }
 
@@ -72,6 +72,8 @@ struct ThemePalette {
     let secondary: Color
     /// Interactive tint (buttons, toggles, selection).
     let accent: Color
+    /// High-contrast text/icon color rendered on top of `accent` fills.
+    let accentForeground: Color
     /// Location/geohash channel accent (badges, counts, subtitles).
     let locationAccent: Color
     /// Informational accent (links, read receipts, teleport markers).
@@ -80,6 +82,14 @@ struct ThemePalette {
     let alertRed: Color
     /// Hairline separators.
     let divider: Color
+    /// Unified card fill across tabs and sheets.
+    let cardBackground: Color
+    /// Subtle hairline border around cards.
+    let cardBorder: Color
+    /// Consistent corner radius for grouped cards.
+    let cardRadius: CGFloat
+    /// Consistent corner radius for primary/secondary action buttons.
+    let buttonRadius: CGFloat
 
     static func matrix(_ colorScheme: ColorScheme) -> ThemePalette {
         let isDark = colorScheme == .dark
@@ -89,45 +99,40 @@ struct ThemePalette {
             primary: green,
             secondary: green.opacity(0.8),
             accent: green,
+            accentForeground: isDark ? Color.black : Color.white,
             locationAccent: green,
             accentBlue: Color(red: 0.0, green: 0.478, blue: 1.0),
             alertRed: Color(red: 0.75, green: 0.1, blue: 0.1),
-            divider: isDark ? Color.white.opacity(0.12) : Color.black.opacity(0.08)
+            divider: isDark ? Color.white.opacity(0.12) : Color.black.opacity(0.08),
+            cardBackground: green.opacity(isDark ? 0.10 : 0.07),
+            cardBorder: green.opacity(isDark ? 0.25 : 0.18),
+            cardRadius: 8,
+            buttonRadius: 6
         )
     }
 
-    static func liquidGlass(_: ColorScheme) -> ThemePalette {
-        ThemePalette(
-            background: systemBackground,
+    static func liquidGlass(_ colorScheme: ColorScheme) -> ThemePalette {
+        let isDark = colorScheme == .dark
+        return ThemePalette(
+            background: isDark ? Color(red: 0.04, green: 0.04, blue: 0.05) : Color(red: 0.96, green: 0.965, blue: 0.975),
             primary: .primary,
             secondary: .secondary,
             accent: .blue,
+            accentForeground: .white,
             locationAccent: .green,
             accentBlue: .blue,
             alertRed: .red,
-            divider: separator
+            divider: isDark ? Color.white.opacity(0.11) : Color.black.opacity(0.08),
+            cardBackground: isDark ? Color.white.opacity(0.07) : Color.white,
+            cardBorder: isDark ? Color.white.opacity(0.10) : Color.black.opacity(0.07),
+            cardRadius: 14,
+            buttonRadius: 12
         )
-    }
-
-    private static var systemBackground: Color {
-        #if os(iOS)
-        Color(UIColor.systemBackground)
-        #else
-        Color(NSColor.windowBackgroundColor)
-        #endif
-    }
-
-    private static var separator: Color {
-        #if os(iOS)
-        Color(UIColor.separator)
-        #else
-        Color(NSColor.separatorColor)
-        #endif
     }
 }
 
 private struct AppThemeKey: EnvironmentKey {
-    static let defaultValue: AppTheme = .matrix
+    static let defaultValue: AppTheme = .liquidGlass
 }
 
 extension EnvironmentValues {
@@ -163,9 +168,9 @@ private struct ThemedFontModifier: ViewModifier {
     }
 }
 
-/// Root backdrop. Matrix gets its flat background; glass gets a subtle static
-/// gradient with a soft tinted glow — glass panels need visual texture behind
-/// them to refract, and collapse to flat gray over a solid color.
+/// Root backdrop. Matrix gets its pure black/white terminal canvas; Liquid Glass
+/// gets a crisp, neutral system-like canvas so chat timelines, usernames, cards,
+/// and translucent glass controls stay razor-sharp without pastel color cast.
 struct ThemedRootBackground: View {
     @Environment(\.appTheme) private var theme
     @Environment(\.colorScheme) private var colorScheme
@@ -174,27 +179,13 @@ struct ThemedRootBackground: View {
     var body: some View {
         if theme.usesGlassChrome {
             let isDark = colorScheme == .dark
-            ZStack {
-                LinearGradient(
-                    colors: isDark
-                        ? [Color(red: 0.09, green: 0.10, blue: 0.15), Color(red: 0.04, green: 0.04, blue: 0.07)]
-                        : [Color(red: 0.93, green: 0.95, blue: 1.0), Color(red: 0.98, green: 0.97, blue: 0.99)],
-                    startPoint: .top,
-                    endPoint: .bottom
-                )
-                RadialGradient(
-                    colors: [Color.blue.opacity(isDark ? 0.22 : 0.12), .clear],
-                    center: .topLeading,
-                    startRadius: 0,
-                    endRadius: 600
-                )
-                RadialGradient(
-                    colors: [Color.purple.opacity(isDark ? 0.14 : 0.08), .clear],
-                    center: .bottomTrailing,
-                    startRadius: 0,
-                    endRadius: 500
-                )
-            }
+            LinearGradient(
+                colors: isDark
+                    ? [Color(red: 0.055, green: 0.058, blue: 0.068), Color(red: 0.025, green: 0.025, blue: 0.032)]
+                    : [Color(red: 0.965, green: 0.968, blue: 0.976), Color(red: 0.945, green: 0.950, blue: 0.962)],
+                startPoint: .top,
+                endPoint: .bottom
+            )
             .ignoresSafeArea()
         } else {
             // Full-bleed like the gradient above. Passed to .background(_:)
@@ -233,9 +224,9 @@ private struct GlassPanel<S: Shape>: ViewModifier {
     }
 }
 
-/// Chrome surface for the header and composer. Matrix keeps the original flat
-/// edge-to-edge wash; glass floats the content as an inset Liquid Glass panel
-/// (content is expected to scroll underneath via safe-area insets).
+/// Floating Liquid Glass chrome for root top bars and the chat composer — no
+/// full-width divider lines, maximizing vertical space while content scrolls
+/// underneath. Matrix keeps its classic flat bar wash.
 private struct ThemedChromePanelModifier: ViewModifier {
     @Environment(\.appTheme) private var theme
     @ThemedPalette private var palette
@@ -245,8 +236,8 @@ private struct ThemedChromePanelModifier: ViewModifier {
     func body(content: Content) -> some View {
         if theme.usesGlassChrome {
             content
-                .modifier(GlassPanel(shape: RoundedRectangle(cornerRadius: 18, style: .continuous)))
-                .padding(.horizontal, 8)
+                .modifier(GlassPanel(shape: RoundedRectangle(cornerRadius: 22, style: .continuous)))
+                .padding(.horizontal, 10)
                 .padding(edge == .top ? .top : .bottom, 4)
         } else {
             content.background(palette.background.opacity(0.95))
@@ -254,9 +245,9 @@ private struct ThemedChromePanelModifier: ViewModifier {
     }
 }
 
-/// Background for the composer input field. Matrix keeps its translucent fill;
-/// glass leaves it clear — the field sits inside the composer's glass panel,
-/// and glass cannot sample other glass.
+/// Background for the composer input field. Liquid Glass leaves it clear so
+/// the field sits directly inside the single floating glass capsule (no nested
+/// box-in-box); Matrix keeps its subtle rounded fill.
 private struct ThemedInputBackgroundModifier: ViewModifier {
     @Environment(\.appTheme) private var theme
     @Environment(\.colorScheme) private var colorScheme

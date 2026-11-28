@@ -30,24 +30,53 @@ extension BLEService: CBPeripheralManagerDelegate {
                 characteristic = nil
                 return
             }
-            // Remove all services first to ensure clean state
-            peripheral.removeAllServices()
 
-            // Create characteristic
-            characteristic = CBMutableCharacteristic(
-                type: BLEService.characteristicUUID,
-                properties: [.notify, .write, .writeWithoutResponse, .read],
-                value: nil,
-                permissions: [.readable, .writeable]
-            )
+            switch BLEService.peripheralPoweredOnAction(
+                hasPublishedCharacteristic: characteristic != nil,
+                isAdvertising: peripheral.isAdvertising,
+                subscribedCentralCount: linkStateStore.subscribedCentralCount
+            ) {
+            case let .reusePublishedService(shouldStartAdvertising, shouldAnnounceToSubscribedCentrals):
+                // CoreBluetooth already restored (or previously published) our
+                // matching BitChat GATT service. Reusing it avoids tearing down
+                // the GATT database and firing redundant Service Changed
+                // indications to already-connected peers.
+                if shouldStartAdvertising {
+                    peripheral.startAdvertising(BLERadioController.advertisementData())
+                }
+                SecureLogger.debug(
+                    "♻️ Reusing published BLE service (startedAdvertising=\(shouldStartAdvertising), subscribedCentrals=\(linkStateStore.subscribedCentralCount), ID: \(myPeerID.id.prefix(8))…)",
+                    category: .session
+                )
+                if shouldAnnounceToSubscribedCentrals {
+                    wakeMaintenanceCadenceIfNeeded()
+                    engineScheduler.schedule(after: TransportConfig.blePostSubscribeAnnounceDelaySeconds) { [weak self] in
+                        self?.sendAnnounce(forceSend: true)
+                        self?.flushDirectedSpool()
+                    }
+                }
 
-            // Create service
-            let service = CBMutableService(type: BLEService.serviceUUID, primary: true)
-            service.characteristics = [characteristic!]
+            case .rebuildAndAddService:
+                // Remove any stale services first to ensure a clean GATT database
+                peripheral.removeAllServices()
 
-            // Add service (advertising will start in didAdd delegate)
-            SecureLogger.debug("🔧 Adding BLE service...", category: .session)
-            peripheral.add(service)
+                // Create characteristic
+                let newCharacteristic = CBMutableCharacteristic(
+                    type: BLEService.characteristicUUID,
+                    properties: BLEService.peripheralCharacteristicProperties,
+                    value: nil,
+                    permissions: BLEService.peripheralCharacteristicPermissions
+                )
+                characteristic = newCharacteristic
+
+                // Create service
+                let service = CBMutableService(type: BLEService.serviceUUID, primary: true)
+                service.characteristics = [newCharacteristic]
+
+                // Add service (advertising will start in didAdd delegate)
+                SecureLogger.debug("🔧 Adding BLE service...", category: .session)
+                peripheral.add(service)
+            }
 
         case .poweredOff:
             // Bluetooth was turned off - clean up peripheral state
@@ -74,8 +103,16 @@ extension BLEService: CBPeripheralManagerDelegate {
             SecureLogger.error("❌ Bluetooth LE peripheral role not supported", category: .session)
 
         case .resetting:
-            // Bluetooth stack is resetting
+            // CoreBluetooth drops all published GATT services on stack reset;
+            // clear local state so the subsequent poweredOn rebuilds cleanly.
             SecureLogger.info("🔄 Bluetooth peripheral stack resetting...", category: .session)
+            let centralIDs = linkStateStore.subscribedCentrals.map { $0.identifier.uuidString }
+            pendingNotifications.removeAll()
+            pendingWriteBuffers.removeAll()
+            linkStateStore.clearCentrals()
+            subscriptionAnnounceLimiter.removeAll()
+            characteristic = nil
+            emitLinkEvent(.allCentralLinksEnded(centralUUIDs: centralIDs, retireProofsAndNotify: true))
 
         case .unknown:
             SecureLogger.debug("❓ Peripheral Bluetooth state unknown (initializing)", category: .session)
@@ -101,18 +138,23 @@ extension BLEService: CBPeripheralManagerDelegate {
             category: .session
         )
 
-        // Attempt to recover characteristic from restored services
-        if characteristic == nil {
-            if let service = restoredServices.first(where: { $0.uuid == BLEService.serviceUUID }),
-               let restoredCharacteristic = service.characteristics?.first(where: { $0.uuid == BLEService.characteristicUUID }) as? CBMutableCharacteristic {
-                characteristic = restoredCharacteristic
+        // Recover our published characteristic when the restored GATT database
+        // already matches what poweredOn would publish, along with any centrals
+        // still subscribed to it. Otherwise leave `characteristic` nil so
+        // poweredOn rebuilds the service cleanly.
+        if let restoredCharacteristic = BLEService.restoredBitChatCharacteristic(from: restoredServices) {
+            characteristic = restoredCharacteristic
+            for central in restoredCharacteristic.subscribedCentrals ?? [] {
+                linkStateStore.addSubscribedCentral(central)
             }
+        } else {
+            characteristic = nil
         }
 
         // Via the sampler for a fresh background budget (see central-restore).
         logBluetoothStatus("peripheral-restore")
 
-        if peripheral.state == .poweredOn && !peripheral.isAdvertising {
+        if characteristic != nil && peripheral.state == .poweredOn && !peripheral.isAdvertising {
             peripheral.startAdvertising(BLERadioController.advertisementData())
         }
     }
@@ -124,6 +166,7 @@ extension BLEService: CBPeripheralManagerDelegate {
             return
         }
         if let error = error {
+            characteristic = nil
             SecureLogger.error("❌ Failed to add service: \(error.localizedDescription)", category: .session)
             return
         }
@@ -324,5 +367,57 @@ extension BLEService: CBPeripheralManagerDelegate {
             link: .central(centralUUID),
             linkDescription: "Central \(centralUUID.prefix(8))…"
         ))
+    }
+}
+
+enum BLEPeripheralPoweredOnAction: Equatable {
+    case reusePublishedService(
+        shouldStartAdvertising: Bool,
+        shouldAnnounceToSubscribedCentrals: Bool
+    )
+    case rebuildAndAddService
+}
+
+extension BLEService {
+    static let peripheralCharacteristicProperties: CBCharacteristicProperties = [
+        .notify, .write, .writeWithoutResponse, .read
+    ]
+    static let peripheralCharacteristicPermissions: CBAttributePermissions = [
+        .readable, .writeable
+    ]
+
+    /// Returns the restored BitChat characteristic only when the restored GATT
+    /// database already matches what `peripheralManagerDidUpdateState(.poweredOn)`
+    /// would publish. Returning `nil` falls back to `removeAllServices()` + `add(service)`.
+    static func restoredBitChatCharacteristic(
+        from restoredServices: [CBMutableService]
+    ) -> CBMutableCharacteristic? {
+        guard restoredServices.count == 1,
+              let service = restoredServices.first,
+              service.uuid == BLEService.serviceUUID,
+              service.isPrimary,
+              let characteristics = service.characteristics,
+              characteristics.count == 1,
+              let restored = characteristics.first as? CBMutableCharacteristic,
+              restored.uuid == BLEService.characteristicUUID,
+              restored.properties.contains(peripheralCharacteristicProperties),
+              restored.permissions.contains(peripheralCharacteristicPermissions) else {
+            return nil
+        }
+        return restored
+    }
+
+    static func peripheralPoweredOnAction(
+        hasPublishedCharacteristic: Bool,
+        isAdvertising: Bool,
+        subscribedCentralCount: Int
+    ) -> BLEPeripheralPoweredOnAction {
+        guard hasPublishedCharacteristic else {
+            return .rebuildAndAddService
+        }
+        return .reusePublishedService(
+            shouldStartAdvertising: !isAdvertising,
+            shouldAnnounceToSubscribedCentrals: subscribedCentralCount > 0
+        )
     }
 }

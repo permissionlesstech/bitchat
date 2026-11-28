@@ -12,6 +12,8 @@ struct ContentComposerView: View {
     @EnvironmentObject private var privateConversationModel: PrivateConversationModel
     @EnvironmentObject private var locationChannelsModel: LocationChannelsModel
     @ObservedObject private var bridgeService = BridgeService.shared
+    @ObservedObject private var pttPreferences = PTTPreferences.shared
+    @Environment(\.colorScheme) private var colorScheme
     @Environment(\.appTheme) private var theme
     @ThemedPalette private var palette
 
@@ -21,6 +23,9 @@ struct ContentComposerView: View {
 
     let onSendMessage: () -> Void
     @Binding var mediaPickerMode: MediaPickerMode?
+
+    @State private var isSlideCanceling = false
+    @State private var micDragOffsetX: CGFloat = 0
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
@@ -57,8 +62,18 @@ struct ContentComposerView: View {
                 CommandSuggestionsView(messageText: $draftModel.messageText)
             }
 
+            if let talker = activeTalkerInCurrentContext {
+                liveTalkerBanner(nickname: talker)
+            }
+
             if voiceRecordingVM.state.isActive {
                 recordingIndicator
+            } else if let hint = voiceRecordingVM.briefHint {
+                briefVoiceHintPill(hint)
+            }
+
+            if let reply = draftModel.replyTarget {
+                replyBanner(for: reply)
             }
 
             HStack(alignment: .center, spacing: 4) {
@@ -107,7 +122,7 @@ struct ContentComposerView: View {
                     isTextFieldFocused.wrappedValue = true
                 }
                 .padding(.vertical, theme.usesGlassChrome ? 8 : 4)
-                .padding(.horizontal, 6)
+                .padding(.horizontal, theme.usesGlassChrome ? 8 : 6)
                 .themedInputBackground()
                 .modifier(FocusEffectDisabledModifier())
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -128,9 +143,9 @@ struct ContentComposerView: View {
                 }
             }
         }
-        .padding(.horizontal, 6)
-        .padding(.top, theme.usesGlassChrome ? 8 : 6)
-        .padding(.bottom, 8)
+        .padding(.horizontal, 8)
+        .padding(.top, theme.usesGlassChrome ? 6 : 6)
+        .padding(.bottom, 6)
         .themedChromePanel(edge: .bottom)
         .onDisappear {
             draftModel.cancelAutocompleteDebounce()
@@ -197,10 +212,11 @@ private extension ContentComposerView {
     /// user never has to guess who can read what they're typing.
     var placeholderText: String {
         if let header = privateConversationModel.selectedHeaderState {
-            // A geohash-DM display name already carries its own "#geohash/@name"
-            // form, so it must not get another "@" prefix; a mesh nickname does.
+            // Geohash-DM ("#geohash/@name") and group ("#Name (n)") display
+            // names already carry their own prefix, so only 1:1 mesh nicknames
+            // get an "@" prefix.
             let isGeoDM = privateConversationModel.selectedPeerID?.isGeoDM == true
-            let target = isGeoDM ? header.displayName : "@\(header.displayName)"
+            let target = (isGeoDM || header.isGroupConversation) ? header.displayName : "@\(header.displayName)"
             return String(format: Strings.placeholderPrivateFormat, locale: .current, target)
         }
         switch locationChannelsModel.selectedChannel {
@@ -211,44 +227,220 @@ private extension ContentComposerView {
         }
     }
 
+    func replyBanner(for target: MessageReplyTarget) -> some View {
+        let senderTint = conversationUIModel.colorForSenderName(
+            target.sender,
+            isDark: colorScheme == .dark
+        )
+        return HStack(spacing: 8) {
+            Capsule()
+                .fill(senderTint)
+                .frame(width: 3, height: 28)
+
+            VStack(alignment: .leading, spacing: 1) {
+                Text(
+                    String(
+                        format: String(localized: "composer.replying_to", defaultValue: "Replying to @%@", comment: "Header label in the reply preview banner above the composer"),
+                        locale: .current,
+                        target.sender
+                    )
+                )
+                .bitchatFont(size: 11, weight: .semibold)
+                .foregroundColor(senderTint)
+                .lineLimit(1)
+
+                Text(verbatim: target.snippet)
+                    .bitchatFont(size: 12)
+                    .foregroundColor(palette.secondary)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+            }
+            .accessibilityIdentifier("reply-banner-\(target.messageID)")
+
+            Spacer(minLength: 4)
+
+            Button {
+                draftModel.clearReplyTarget()
+            } label: {
+                Image(systemName: "xmark.circle.fill")
+                    .font(.system(size: 16))
+                    .foregroundColor(palette.secondary)
+                    .frame(width: 28, height: 28)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(String(localized: "composer.reply.cancel", defaultValue: "Cancel reply", comment: "Button to cancel replying to a message"))
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 6)
+        .background(palette.cardBackground)
+        .overlay(
+            RoundedRectangle(cornerRadius: palette.buttonRadius, style: .continuous)
+                .stroke(palette.cardBorder, lineWidth: 1)
+        )
+        .clipShape(RoundedRectangle(cornerRadius: palette.buttonRadius, style: .continuous))
+        .padding(.horizontal, 4)
+    }
+
+    var activeTalkerInCurrentContext: String? {
+        conversationUIModel.activeTalkerInCurrentContext(
+            selectedPeerID: privateConversationModel.selectedPeerID
+        )
+    }
+
+    var isLiveVoiceReadyNow: Bool {
+        pttPreferences.liveVoiceEnabled && conversationUIModel.canStreamLiveVoiceNow
+    }
+
+    func liveTalkerBanner(nickname: String) -> some View {
+        HStack(spacing: 8) {
+            Circle()
+                .fill(Color.red)
+                .frame(width: 8, height: 8)
+                .modifier(PulsingOpacityModifier(active: true))
+
+            Text(
+                String(
+                    format: String(
+                        localized: "walkie.banner.speaking",
+                        defaultValue: "@%@ is talking live",
+                        comment: "Banner above the composer announcing who is streaming live voice right now"
+                    ),
+                    locale: .current,
+                    nickname
+                )
+            )
+            .bitchatFont(size: 12, weight: .semibold)
+            .foregroundColor(palette.primary)
+            .lineLimit(1)
+
+            Spacer(minLength: 4)
+
+            Button {
+                pttPreferences.toggleAutoListenMuted()
+                if pttPreferences.isAutoListenMuted {
+                    conversationUIModel.muteActiveLiveVoicePlayback()
+                }
+            } label: {
+                HStack(spacing: 4) {
+                    Image(systemName: pttPreferences.isAutoListenMuted ? "speaker.slash.fill" : "speaker.wave.2.fill")
+                        .font(.system(size: 11, weight: .semibold))
+                    Text(
+                        pttPreferences.isAutoListenMuted
+                        ? String(localized: "walkie.action.muted", defaultValue: "Muted", comment: "Label when live voice speaker autoplay is muted")
+                        : String(localized: "walkie.action.mute", defaultValue: "Mute", comment: "Button to mute live voice speaker playback")
+                    )
+                    .bitchatFont(size: 11, weight: .semibold)
+                }
+                .foregroundColor(pttPreferences.isAutoListenMuted ? palette.secondary : Color.red)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+                .background(
+                    Capsule().fill(
+                        pttPreferences.isAutoListenMuted
+                        ? palette.secondary.opacity(0.14)
+                        : Color.red.opacity(0.14)
+                    )
+                )
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 7)
+        .background(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .fill(Color.red.opacity(0.1))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .stroke(Color.red.opacity(0.25), lineWidth: 1)
+        )
+    }
+
+    func briefVoiceHintPill(_ message: String) -> some View {
+        HStack(spacing: 6) {
+            Image(systemName: isLiveVoiceReadyNow ? "dot.radiowaves.left.and.right" : "mic.fill")
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundColor(composerAccentColor)
+            Text(verbatim: message)
+                .bitchatFont(size: 12, weight: .medium)
+                .foregroundColor(palette.primary)
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 6)
+        .background(
+            Capsule().fill(palette.cardBackground)
+        )
+        .overlay(
+            Capsule().stroke(palette.cardBorder, lineWidth: 1)
+        )
+        .frame(maxWidth: .infinity, alignment: .trailing)
+        .transition(.opacity.combined(with: .move(edge: .bottom)))
+    }
+
     var recordingIndicator: some View {
-        HStack(spacing: 12) {
-            Image(systemName: voiceRecordingVM.isLiveStreaming ? "dot.radiowaves.left.and.right" : "waveform.circle.fill")
-                .foregroundColor(.red)
+        let tint: Color = isSlideCanceling ? .orange : .red
+        return HStack(spacing: 10) {
+            Image(systemName: isSlideCanceling ? "trash.fill" : (voiceRecordingVM.isLiveStreaming ? "dot.radiowaves.left.and.right" : "waveform.circle.fill"))
+                .foregroundColor(tint)
                 .font(.bitchatSystem(size: 20))
-                .modifier(PulsingOpacityModifier(active: voiceRecordingVM.isLiveStreaming))
-            TimelineView(.periodic(from: .now, by: 0.05)) { context in
-                // Live streaming means audio is heard as you speak — the HUD
-                // must make that unmistakable, not just show a timer.
-                if voiceRecordingVM.isLiveStreaming {
-                    Text(
-                        "live \(voiceRecordingVM.formattedDuration(for: context.date))",
-                        comment: "Recording HUD label while a voice message streams live to the recipient"
+                .modifier(PulsingOpacityModifier(active: voiceRecordingVM.isLiveStreaming && !isSlideCanceling))
+            if isSlideCanceling {
+                Text(
+                    String(
+                        localized: "walkie.hud.release_to_cancel",
+                        defaultValue: "Release to cancel",
+                        comment: "Recording HUD prompt when user has slid left past the cancel threshold"
                     )
-                    .bitchatFont(size: 13, weight: .bold)
-                    .foregroundColor(.red)
-                } else {
-                    Text(
-                        "recording \(voiceRecordingVM.formattedDuration(for: context.date))",
-                        comment: "Voice note recording duration indicator"
-                    )
-                    .bitchatFont(size: 13)
-                    .foregroundColor(.red)
+                )
+                .bitchatFont(size: 13, weight: .bold)
+                .foregroundColor(.orange)
+            } else {
+                TimelineView(.periodic(from: .now, by: 0.05)) { context in
+                    // Live streaming means audio is heard as you speak — the HUD
+                    // must make that unmistakable, not just show a timer.
+                    if voiceRecordingVM.isLiveStreaming {
+                        Text(
+                            "live \(voiceRecordingVM.formattedDuration(for: context.date))",
+                            comment: "Recording HUD label while a voice message streams live to the recipient"
+                        )
+                        .bitchatFont(size: 13, weight: .bold)
+                        .foregroundColor(.red)
+                    } else {
+                        Text(
+                            "recording \(voiceRecordingVM.formattedDuration(for: context.date))",
+                            comment: "Voice note recording duration indicator"
+                        )
+                        .bitchatFont(size: 13)
+                        .foregroundColor(.red)
+                    }
                 }
             }
-            Spacer()
+            Spacer(minLength: 4)
+            if !isSlideCanceling {
+                Text(
+                    String(
+                        localized: "walkie.hud.slide_to_cancel",
+                        defaultValue: "← Slide to cancel",
+                        comment: "Subtle hint inside the recording HUD showing one-handed slide-to-cancel"
+                    )
+                )
+                .bitchatFont(size: 11)
+                .foregroundColor(palette.secondary)
+                .lineLimit(1)
+            }
             Button(action: voiceRecordingVM.cancel) {
                 Label(Strings.cancel, systemImage: "xmark.circle")
                     .labelStyle(.iconOnly)
                     .font(.bitchatSystem(size: 18))
-                    .foregroundColor(.red)
+                    .foregroundColor(tint)
             }
             .buttonStyle(.plain)
         }
         .padding(10)
         .background(
             RoundedRectangle(cornerRadius: 12)
-                .fill(Color.red.opacity(0.15))
+                .fill(tint.opacity(0.15))
         )
     }
 
@@ -261,7 +453,7 @@ private extension ContentComposerView {
         Image(systemName: "camera.circle.fill")
             .font(.bitchatSystem(size: 24))
             .foregroundColor(composerAccentColor)
-            .frame(width: 36, height: 36)
+            .modifier(ComposerActionFrame())
             .contentShape(Circle())
             .onTapGesture {
                 mediaPickerMode = .photoLibrary
@@ -274,7 +466,7 @@ private extension ContentComposerView {
             .accessibilityAddTraits(.isButton)
             // The long-press → camera path is unreachable for VoiceOver users;
             // mirror it as a named action.
-            .accessibilityAction(named: Text("content.accessibility.take_photo", comment: "Accessibility action name for taking a photo with the camera")) {
+            .accessibilityAction(named: Text(String(localized: "content.accessibility.take_photo", comment: "Accessibility action name for taking a photo with the camera"))) {
                 mediaPickerMode = .camera
             }
         #else
@@ -282,7 +474,7 @@ private extension ContentComposerView {
             Image(systemName: "photo.circle.fill")
                 .font(.bitchatSystem(size: 24))
                 .foregroundColor(composerAccentColor)
-                .frame(width: 36, height: 36)
+                .modifier(ComposerActionFrame())
         }
         .buttonStyle(.plain)
         .accessibilityLabel(Strings.choosePhoto)
@@ -292,7 +484,7 @@ private extension ContentComposerView {
     @ViewBuilder
     var sendOrMicButton: some View {
         let hasText = draftModel.messageText.hasNonWhitespaceContent
-        if conversationUIModel.canSendMediaInCurrentContext {
+        if conversationUIModel.canSendVoiceInCurrentContext {
             ZStack {
                 micButtonView
                     .opacity(hasText ? 0 : 1)
@@ -301,10 +493,10 @@ private extension ContentComposerView {
                     .opacity(hasText ? 1 : 0)
                     .allowsHitTesting(hasText)
             }
-            .frame(width: 36, height: 36)
+            .modifier(ComposerActionFrame())
         } else {
             sendButtonView(enabled: hasText)
-                .frame(width: 36, height: 36)
+                .modifier(ComposerActionFrame())
         }
     }
 
@@ -333,50 +525,81 @@ private extension ContentComposerView {
     }
 
     var micButtonView: some View {
-        Image(systemName: "mic.circle.fill")
-            .font(.bitchatSystem(size: 24))
-            .foregroundColor(micColor)
-            .modifier(PulsingOpacityModifier(active: busyTalker != nil && !voiceRecordingVM.state.isActive))
-            .frame(width: 36, height: 36)
-            .contentShape(Circle())
-            .overlay(
-                Color.clear
-                    .contentShape(Circle())
-                    .gesture(
-                        DragGesture(minimumDistance: 0)
-                            .onChanged { _ in
+        ZStack(alignment: .topTrailing) {
+            Image(systemName: "mic.circle.fill")
+                .font(.bitchatSystem(size: 24))
+                .foregroundColor(isSlideCanceling ? .orange : micColor)
+                .scaleEffect(voiceRecordingVM.state.isActive ? 1.15 : 1.0)
+                .offset(x: max(-24, micDragOffsetX * 0.35))
+                .animation(.easeOut(duration: 0.12), value: voiceRecordingVM.state.isActive)
+                .modifier(PulsingOpacityModifier(active: busyTalker != nil && !voiceRecordingVM.state.isActive))
+                .modifier(ComposerActionFrame())
+
+            if isLiveVoiceReadyNow && !voiceRecordingVM.state.isActive {
+                Circle()
+                    .fill(Color.red)
+                    .frame(width: 8, height: 8)
+                    .overlay(Circle().stroke(palette.background, lineWidth: 1.5))
+                    .offset(x: -3, y: 3)
+            }
+        }
+        .contentShape(Circle())
+        .overlay(
+            Color.clear
+                .contentShape(Circle())
+                .gesture(
+                    DragGesture(minimumDistance: 0)
+                        .onChanged { value in
+                            if !voiceRecordingVM.state.isActive && voiceRecordingVM.state == .idle {
                                 voiceRecordingVM.start(
-                                    shouldShow: conversationUIModel.canSendMediaInCurrentContext,
+                                    shouldShow: conversationUIModel.canSendVoiceInCurrentContext,
                                     target: currentVoiceNoteTarget
                                 )
                             }
-                            .onEnded { _ in
+                            if voiceRecordingVM.state.isActive {
+                                let clampedX = min(0, value.translation.width)
+                                micDragOffsetX = clampedX
+                                let shouldCancel = clampedX <= -68
+                                if shouldCancel != isSlideCanceling {
+                                    isSlideCanceling = shouldCancel
+                                    WalkieFeedback.detent()
+                                }
+                            }
+                        }
+                        .onEnded { _ in
+                            let cancelNow = isSlideCanceling
+                            isSlideCanceling = false
+                            micDragOffsetX = 0
+                            if cancelNow {
+                                voiceRecordingVM.cancel()
+                            } else {
                                 voiceRecordingVM.finish(completion: conversationUIModel.sendVoiceNote(at:target:))
                             }
-                    )
-            )
-            .accessibilityLabel(Strings.recordVoice)
-            .accessibilityValue(
-                voiceRecordingVM.state.isActive
-                ? Strings.recording
-                : busyTalker.map {
-                    String(format: Strings.someoneSpeakingFormat, locale: .current, $0)
-                } ?? ""
-            )
-            .accessibilityHint(Strings.recordVoiceHint)
-            .accessibilityAddTraits(.isButton)
-            // Press-and-hold drag gestures can't be activated by VoiceOver;
-            // give it a start/stop toggle as the default action.
-            .accessibilityAction {
-                if voiceRecordingVM.state.isActive {
-                    voiceRecordingVM.finish(completion: conversationUIModel.sendVoiceNote(at:target:))
-                } else {
-                    voiceRecordingVM.start(
-                        shouldShow: conversationUIModel.canSendMediaInCurrentContext,
-                        target: currentVoiceNoteTarget
-                    )
-                }
+                        }
+                )
+        )
+        .accessibilityLabel(Strings.recordVoice)
+        .accessibilityValue(
+            voiceRecordingVM.state.isActive
+            ? Strings.recording
+            : busyTalker.map {
+                String(format: Strings.someoneSpeakingFormat, locale: .current, $0)
+            } ?? ""
+        )
+        .accessibilityHint(Strings.recordVoiceHint)
+        .accessibilityAddTraits(.isButton)
+        // Press-and-hold drag gestures can't be activated by VoiceOver;
+        // give it a start/stop toggle as the default action.
+        .accessibilityAction {
+            if voiceRecordingVM.state.isActive {
+                voiceRecordingVM.finish(completion: conversationUIModel.sendVoiceNote(at:target:))
+            } else {
+                voiceRecordingVM.start(
+                    shouldShow: conversationUIModel.canSendVoiceInCurrentContext,
+                    target: currentVoiceNoteTarget
+                )
             }
+        }
     }
 
     func sendButtonView(enabled: Bool) -> some View {
@@ -385,7 +608,7 @@ private extension ContentComposerView {
             Image(systemName: "arrow.up.circle.fill")
                 .font(.bitchatSystem(size: 24))
                 .foregroundColor(enabled ? activeColor : Color.gray)
-                .frame(width: 36, height: 36)
+                .modifier(ComposerActionFrame())
         }
         .buttonStyle(.plain)
         .disabled(!enabled)
@@ -493,4 +716,12 @@ private struct AutocompleteKeyboardNavigationModifier: ViewModifier {
         }
     }
     #endif
+}
+
+struct ComposerActionFrame: ViewModifier {
+    // Match the .title2 scaling used by the composer's size-24 icons.
+    @ScaledMetric(relativeTo: .title2) private var scaledSize: CGFloat = 36
+    func body(content: Content) -> some View {
+        content.frame(width: max(36, scaledSize), height: max(36, scaledSize))
+    }
 }

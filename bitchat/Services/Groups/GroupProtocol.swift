@@ -24,6 +24,22 @@ struct GroupMember: Codable, Equatable {
     let signingKey: Data
     /// Nickname at invite time; display fallback when the peer is offline.
     var nickname: String
+    /// Optional 64-hex x-only Nostr public key distributed by the creator so
+    /// group members who haven't added each other as 1:1 favorites can still
+    /// deliver sealed group envelopes over Nostr.
+    var nostrPubkeyHex: String?
+
+    init(
+        fingerprint: String,
+        signingKey: Data,
+        nickname: String,
+        nostrPubkeyHex: String? = nil
+    ) {
+        self.fingerprint = fingerprint
+        self.signingKey = signingKey
+        self.nickname = nickname
+        self.nostrPubkeyHex = nostrPubkeyHex
+    }
 }
 
 /// Creator-managed encrypted group. Metadata only — the symmetric key lives
@@ -227,6 +243,9 @@ struct GroupStatePayload: Equatable {
         case roster = 0x05
         case creatorFingerprint = 0x06
         case signature = 0x07
+        /// Optional creator-distributed Nostr routing map (`[fingerprint(32) || xonlyPubkey(32)]`).
+        /// Ignored by legacy BLE-only clients for forward compatibility.
+        case memberRouting = 0x08
     }
 
     static let signingDomain = Data("bitchat-group-v1".utf8)
@@ -279,6 +298,9 @@ struct GroupStatePayload: Equatable {
             try GroupTLV.put(FieldType.roster.rawValue, rosterBlob, into: &out)
             try GroupTLV.put(FieldType.creatorFingerprint.rawValue, fingerprintData, into: &out)
             try GroupTLV.put(FieldType.signature.rawValue, signature, into: &out)
+            if let routingBlob = Self.encodeMemberRouting(members) {
+                try GroupTLV.put(FieldType.memberRouting.rawValue, routingBlob, into: &out)
+            }
         } catch {
             return nil
         }
@@ -295,6 +317,7 @@ struct GroupStatePayload: Equatable {
         var members: [GroupMember]?
         var creatorFingerprint: String?
         var signature: Data?
+        var routingByFingerprint: [String: String] = [:]
 
         for (type, value) in fields {
             switch FieldType(rawValue: type) {
@@ -313,23 +336,73 @@ struct GroupStatePayload: Equatable {
                 creatorFingerprint = value.hexEncodedString()
             case .signature where value.count == 64:
                 signature = value
+            case .memberRouting:
+                if let decodedRouting = Self.decodeMemberRouting(value) {
+                    routingByFingerprint = decodedRouting
+                }
             default:
                 break // forward compatible; ignore unknown TLVs
             }
         }
 
         guard let groupID, let name, let key, let epoch,
-              rosterBlob != nil, let members, !members.isEmpty,
+              rosterBlob != nil, var resolvedMembers = members, !resolvedMembers.isEmpty,
               let creatorFingerprint, let signature else { return nil }
+        if !routingByFingerprint.isEmpty {
+            for index in resolvedMembers.indices {
+                if let pubkeyHex = routingByFingerprint[resolvedMembers[index].fingerprint] {
+                    resolvedMembers[index].nostrPubkeyHex = pubkeyHex
+                }
+            }
+        }
         return GroupStatePayload(
             groupID: groupID,
             name: name,
             key: key,
             epoch: epoch,
-            members: members,
+            members: resolvedMembers,
             creatorFingerprint: creatorFingerprint,
             signature: signature
         )
+    }
+
+    private static func encodeMemberRouting(_ members: [GroupMember]) -> Data? {
+        var entries: [(Data, Data)] = []
+        for member in members {
+            guard let hex = member.nostrPubkeyHex?.lowercased(),
+                  hex.count == 64,
+                  let fpData = Data(hexString: member.fingerprint),
+                  fpData.count == 32,
+                  let pubData = Data(hexString: hex),
+                  pubData.count == 32 else {
+                continue
+            }
+            entries.append((fpData, pubData))
+        }
+        guard !entries.isEmpty, entries.count <= BitchatGroup.maxMembers else { return nil }
+        var out = Data([UInt8(entries.count)])
+        for (fp, pub) in entries {
+            out.append(fp)
+            out.append(pub)
+        }
+        return out
+    }
+
+    private static func decodeMemberRouting(_ data: Data) -> [String: String]? {
+        guard let count = data.first, count <= UInt8(BitchatGroup.maxMembers) else { return nil }
+        let expectedBytes = 1 + Int(count) * 64
+        guard data.count == expectedBytes else { return nil }
+        var map: [String: String] = [:]
+        var offset = data.index(after: data.startIndex)
+        for _ in 0..<count {
+            let fpEnd = data.index(offset, offsetBy: 32)
+            let pubEnd = data.index(fpEnd, offsetBy: 32)
+            let fp = Data(data[offset..<fpEnd]).hexEncodedString()
+            let pub = Data(data[fpEnd..<pubEnd]).hexEncodedString()
+            map[fp] = pub
+            offset = pubEnd
+        }
+        return map
     }
 
     /// Verifies the creator signature against the creator's signing key

@@ -165,6 +165,41 @@ struct BLEDirectedRelaySpoolTests {
         #expect(spool.count >= 1)
     }
 
+    @Test
+    func drainPreservesOriginalEnqueuedAtAndIngressPeerID() {
+        let recipient = PeerID(str: "1122334455667788")
+        let ingressPeer = PeerID(str: "aabbccddeeff0011")
+        let t0 = Date(timeIntervalSince1970: 1_000)
+        var spool = BLEDirectedRelaySpool()
+
+        spool.enqueue(
+            packet: makePacket(payload: [0x42]),
+            recipient: recipient,
+            messageID: "spooled-1",
+            enqueuedAt: t0,
+            ingressPeerID: ingressPeer
+        )
+
+        // Drain mid-window and re-enqueue with the preserved metadata (as
+        // flushDirectedSpool does when no forward link is available yet).
+        let firstDrain = spool.drainUnexpired(now: t0.addingTimeInterval(30), window: 60)
+        #expect(firstDrain.count == 1)
+        #expect(firstDrain[0].enqueuedAt == t0)
+        #expect(firstDrain[0].ingressPeerID == ingressPeer)
+
+        spool.enqueue(
+            packet: firstDrain[0].packet,
+            recipient: firstDrain[0].recipient,
+            messageID: "spooled-1",
+            enqueuedAt: firstDrain[0].enqueuedAt,
+            ingressPeerID: firstDrain[0].ingressPeerID
+        )
+
+        // Past the original 60s window, the entry expires instead of resetting.
+        let expiredDrain = spool.drainUnexpired(now: t0.addingTimeInterval(61), window: 60)
+        #expect(expiredDrain.isEmpty)
+    }
+
     private func makePacket(payload: [UInt8]) -> BitchatPacket {
         makePacket(payload: Data(payload))
     }

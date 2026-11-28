@@ -401,7 +401,7 @@ struct NostrTransportTests {
         transport.sendReadReceipt(first, to: fullPeerID)
         transport.sendReadReceipt(second, to: fullPeerID)
 
-        let readReceiptTimeout: TimeInterval = 5.0
+        let readReceiptTimeout = TestConstants.settleTimeout
         let sentFirst = await TestHelpers.waitUntil({ probe.sentEvents.count >= 1 }, timeout: readReceiptTimeout)
         try #require(sentFirst, "Expected first queued read receipt event")
         let scheduledThrottle = await TestHelpers.waitUntil({ probe.scheduledActionCount == 1 }, timeout: readReceiptTimeout)

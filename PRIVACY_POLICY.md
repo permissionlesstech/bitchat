@@ -1,6 +1,6 @@
 # bitchat Privacy Policy
 
-*Last updated: July 2026*
+*Last updated: November 2026*
 
 ## Our Commitment
 
@@ -28,28 +28,34 @@ bitchat is designed for private, account-free communication. This policy describ
    - Group names, rosters, creator identity, and key epoch are stored as protected files in Application Support.
    - Current group keys are stored in the keychain. Group state remains until you leave or remove the group, panic-wipe the app, or remove the app.
 
-4. **Queued and carried private messages**
+4. **Encrypted private chat history (Everyday Mode) and disappearing timers**
+   - In **Everyday Mode** (the default for fresh 2.0 installs), private direct-message and private-group timelines can be saved locally in an encrypted file (`private-chats.sealed`) sealed with ChaCha20-Poly1305 using a device-only key stored in the keychain. Public mesh and location-channel timelines are never written to this file.
+   - You can set per-conversation disappearing message timers (24 hours, 7 days, or RAM-only ephemeral), turn local history off in Settings, or switch to **Stealth Mode** (which keeps timelines in RAM only and immediately deletes any saved history file).
+   - Upgrades from 1.x keep RAM-only timelines until you explicitly choose Everyday Mode or enable local history in Settings.
+   - Panic wipe deletes the encrypted history file and its key immediately.
+
+5. **Queued and carried private messages**
    - An outgoing private message that has not been acknowledged may remain for up to 24 hours in a bounded, encrypted outbox. The outbox is sealed with ChaCha20-Poly1305 and its key is stored in the keychain.
    - A device acting as a courier may store a bounded opaque end-to-end encrypted envelope for another user for up to 24 hours. The courier cannot read its message content.
    - A panic wipe deletes both stores.
 
-5. **Recent public mesh messages and notices**
+6. **Recent public mesh messages and notices**
    - Signed public mesh messages may be kept in a protected local gossip archive for up to 6 hours so they can cross mesh partitions and survive a relaunch.
    - Public bulletin-board posts and deletion tombstones persist until the post's author-selected expiry, at most seven days. Both stores are bounded and panic-wipeable.
    - These items are public to the mesh or board where they are posted; they are not confidential messages.
 
-6. **Media attachments**
+7. **Media attachments**
    - Voice notes and images you send or receive can be stored under Application Support so they remain playable while referenced by the app.
    - Incoming media is subject to a 100 MB quota with oldest-file eviction. All stored media, sent and received, is also deleted once it is more than seven days old, and immediately by panic wipe or app removal.
 
-7. **Optional location-channel state**
+8. **Optional location-channel state**
    - Your selected geohash channel, bookmarks, teleport flags, and bookmark display names are stored locally so the UI can restore them.
    - Per-geohash Nostr identities are derived locally from a device seed stored in the keychain.
    - bitchat does not persist exact latitude or longitude and does not include exact coordinates in mesh or Nostr messages.
 
 ## Temporary Session Data
 
-While running, bitchat maintains active connections, routing state, deduplication state, and bounded in-memory conversation timelines. Closing the app clears the in-memory timelines and active connections, but it does not erase the persistent stores listed above.
+While running, bitchat maintains active connections, routing state, deduplication state, and bounded in-memory conversation timelines. Closing the app clears active connections and public in-memory timelines; in Stealth Mode (or when local history is turned off), private timelines are also cleared when the app closes. Closing the app does not erase the persistent stores listed above.
 
 ## What Is Shared
 
@@ -81,7 +87,15 @@ Internet-backed features are optional. When enabled or used:
 
 Nostr relays are operated by third parties. Their retention, logging, availability, and privacy practices are outside the project's control. Public events and encrypted events may remain on relays according to each relay's policy.
 
-You can add relays yourself in settings, including `.onion` addresses. Added relays are stored locally, are limited in number, and are erased by panic wipe. Tor routing is on by default; while it is off, every relay you connect to can see your IP address, including relays carrying your private messages.
+You can add custom `wss://` relays yourself in settings. Added relays are stored locally, are limited in number, and are erased by panic wipe.
+
+bitchat offers two privacy postures that you can choose during setup or switch anytime in Settings:
+
+- **Everyday Mode** (default on fresh 2.0 installs): Connects directly to Nostr relays when internet features are used for fast startup, and stores encrypted private chat history on your device. While Tor routing is off, every relay you connect to can see your IP address, including relays carrying your private messages.
+- **Stealth Mode**: Routes all internet traffic through Tor (fail-closed), keeps chat timelines in RAM only, enforces hidden lock-screen previews, and arms the triple-tap panic wipe gesture on the header bar.
+- **Upgrades from 1.x**: Existing installs preserve their prior Tor setting (keeping Tor on for users who relied on the 1.x Tor-on default) and RAM-only history until you explicitly choose a mode.
+
+Tor routing can also be toggled independently in Settings at any time.
 
 ## Location and Apple Services
 
@@ -96,7 +110,7 @@ Location permission is optional and requested as when-in-use access. It is used 
 
 - Microphone access is used only while you record a voice note or actively hold live push-to-talk. The resulting audio is sent to the mesh conversation you selected; public-conversation audio is public to that mesh, while private-conversation audio uses the private transport protections described below.
 - Voice-note and live-audio files can remain in Application Support under the media retention rules above.
-- Camera access is used to scan peer-verification QR codes. Photo-library access is used when you choose an image to send.
+- Camera access is used to scan peer-verification QR codes and when you take a photo to share in a mesh chat. Photo-library access is used when you choose an image to send.
 - These permissions can be revoked in system settings. bitchat does not record microphone or camera input while the related capture UI is inactive.
 
 ## Cryptography
@@ -113,7 +127,8 @@ No cryptographic system can protect content after a recipient reads, copies, scr
 
 ## Data Retention Summary
 
-- **In-memory chat timelines and active connections:** until the app closes or state is cleared.
+- **In-memory public timelines and active connections:** until the app closes or state is cleared.
+- **Encrypted private chat history (Everyday Mode, optional):** until cleared, expired by a per-chat disappearing timer (24 hours, 7 days, or RAM-only), disabled in Settings, switched to Stealth Mode, panic-wiped, or the app is removed.
 - **Queued outgoing private messages:** until acknowledged, dropped by bounded policy, or 24 hours, whichever comes first.
 - **Opaque courier envelopes:** until handed off, evicted by bounded policy, or 24 hours, whichever comes first.
 - **Recent public mesh gossip:** up to 6 hours.
@@ -124,7 +139,7 @@ No cryptographic system can protect content after a recipient reads, copies, scr
 
 ## Your Controls
 
-- **Panic wipe:** Triple-tap the logo to synchronously cancel in-flight media work and clear local keys, sessions, preferences, groups, queues, carried mail, public archives, board data, and media managed by the app.
+- **Panic wipe:** Trigger Panic Wipe in Settings (or triple-tap the top header bar in Stealth Mode) to synchronously cancel in-flight media work and clear local keys, encrypted private history, sessions, preferences, groups, queues, carried mail, public archives, board data, and media managed by the app.
 - **Notification previews:** Hidden by default, so lock-screen alerts do not show message text, sender names, or geohashes. Full previews can be turned on in settings.
 - **Clearing a conversation:** Clearing the mesh timeline also deletes the recent public gossip this device had stored on disk.
 - **Feature controls:** Location channels, mesh bridge, internet gateway, and related internet behaviors can be disabled in the app. Some already-published relay data cannot be recalled.

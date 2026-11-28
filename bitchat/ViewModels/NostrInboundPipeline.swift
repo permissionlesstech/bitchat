@@ -36,10 +36,7 @@ protocol NostrInboundPipelineContext: AnyObject {
     func recordGeoParticipant(pubkeyHex: String, seenAt: Date) -> Bool
 
     // MARK: Inbound public messages
-    /// `powBits` is the validated NIP-13 difficulty of the source event
-    /// (`NostrPoW.validatedDifficulty`); it relaxes the per-sender rate limit
-    /// downstream.
-    func handlePublicMessage(_ message: BitchatMessage, powBits: Int)
+    func handlePublicMessage(_ message: BitchatMessage)
     func checkForMentions(_ message: BitchatMessage)
     func sendHapticFeedback(for message: BitchatMessage)
     func parseMentions(from content: String) -> [String]
@@ -54,6 +51,15 @@ protocol NostrInboundPipelineContext: AnyObject {
     )
     func handleDelivered(_ payload: NoisePayload, senderPubkey: String, convKey: PeerID)
     func handleReadReceipt(_ payload: NoisePayload, senderPubkey: String, convKey: PeerID)
+    func handleNostrGroupInvite(_ payload: Data, from senderPeerID: PeerID)
+    func handleNostrGroupKeyUpdate(_ payload: Data, from senderPeerID: PeerID)
+    func handleNostrGroupMessage(_ payload: Data, timestamp: Date)
+}
+
+extension NostrInboundPipelineContext {
+    func handleNostrGroupInvite(_ payload: Data, from senderPeerID: PeerID) {}
+    func handleNostrGroupKeyUpdate(_ payload: Data, from senderPeerID: PeerID) {}
+    func handleNostrGroupMessage(_ payload: Data, timestamp: Date) {}
 }
 
 extension ChatViewModel: NostrInboundPipelineContext {
@@ -86,6 +92,18 @@ extension ChatViewModel: NostrInboundPipelineContext {
     @discardableResult
     func recordGeoParticipant(pubkeyHex: String, seenAt: Date) -> Bool {
         participantTracker.recordParticipant(pubkeyHex: pubkeyHex, seenAt: seenAt)
+    }
+
+    func handleNostrGroupInvite(_ payload: Data, from senderPeerID: PeerID) {
+        groupCoordinator.handleGroupInvitePayload(from: senderPeerID, payload: payload)
+    }
+
+    func handleNostrGroupKeyUpdate(_ payload: Data, from senderPeerID: PeerID) {
+        groupCoordinator.handleGroupKeyUpdatePayload(from: senderPeerID, payload: payload)
+    }
+
+    func handleNostrGroupMessage(_ payload: Data, timestamp: Date) {
+        groupCoordinator.handleGroupMessagePayload(payload, timestamp: timestamp)
     }
 }
 
@@ -144,13 +162,11 @@ final class NostrInboundPipeline {
         }
         context.recordProcessedEphemeralNostrEvent(event.id)
 
-        let powBits = NostrPoW.validatedDifficulty(idHex: event.id, tags: event.tags)
-
         // Sampled: fires for every geo event and floods dev logs in busy geohashes.
         geoEventLogCount += 1
         if geoEventLogCount == 1 || geoEventLogCount.isMultiple(of: TransportConfig.nostrInboundEventLogInterval) {
             SecureLogger.debug(
-                "GeoTeleport: recv #\(geoEventLogCount) pub=\(event.pubkey.prefix(8))… pow=\(powBits) tagCount=\(event.tags.count)",
+                "GeoTeleport: recv #\(geoEventLogCount) pub=\(event.pubkey.prefix(8))… tagCount=\(event.tags.count)",
                 category: .session
             )
         }
@@ -216,7 +232,7 @@ final class NostrInboundPipeline {
             mentions: mentions.isEmpty ? nil : mentions
         )
 
-        context.handlePublicMessage(message, powBits: powBits)
+        context.handlePublicMessage(message)
         context.checkForMentions(message)
         context.sendHapticFeedback(for: message)
     }
@@ -343,12 +359,22 @@ final class NostrInboundPipeline {
             return
         }
 
+        let messageTimestamp = Date(timeIntervalSince1970: TimeInterval(rumorTimestamp))
+
+        if !isGeohashDM, packet.type == MessageType.groupMessage.rawValue {
+            let groupPayload = packet.payload
+            await MainActor.run {
+                guard self.wipeGeneration == wipeGeneration else { return }
+                context.handleNostrGroupMessage(groupPayload, timestamp: messageTimestamp)
+            }
+            return
+        }
+
         guard packet.type == MessageType.noiseEncrypted.rawValue,
               let payload = NoisePayload.decode(packet.payload) else {
             return
         }
 
-        let messageTimestamp = Date(timeIntervalSince1970: TimeInterval(rumorTimestamp))
         await MainActor.run {
             // Drop pre-wipe plaintext if a panic wipe landed during the off-main decrypt.
             guard self.wipeGeneration == wipeGeneration else { return }
@@ -375,8 +401,15 @@ final class NostrInboundPipeline {
                 context.handleDelivered(payload, senderPubkey: senderPubkey, convKey: convKey)
             case .readReceipt:
                 context.handleReadReceipt(payload, senderPubkey: senderPubkey, convKey: convKey)
-            // Group state and live voice are mesh-only in v1.
-            case .verifyChallenge, .verifyResponse, .groupInvite, .groupKeyUpdate, .vouch, .voiceFrame, .privateFile, .authenticatedPeerState:
+            case .groupInvite:
+                if !isGeohashDM {
+                    context.handleNostrGroupInvite(payload.data, from: convKey)
+                }
+            case .groupKeyUpdate:
+                if !isGeohashDM {
+                    context.handleNostrGroupKeyUpdate(payload.data, from: convKey)
+                }
+            case .verifyChallenge, .verifyResponse, .vouch, .voiceFrame, .privateFile, .authenticatedPeerState:
                 break
             }
         }

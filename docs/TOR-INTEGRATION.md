@@ -2,7 +2,9 @@
 
 ## Overview
 
-Internet traffic — Nostr relay sockets and the geo-relay directory fetch — is routed through Tor by default, fail-closed: when Tor is wanted but not ready, requests queue rather than falling back to clearnet.
+When Tor routing is enabled — in **Stealth Mode**, via the Settings toggle, or preserved automatically on upgrades from 1.x — all internet traffic (Nostr relay sockets and the geo-relay directory fetch) is routed through Tor, fail-closed: when Tor is wanted but not ready, requests queue rather than falling back to clearnet.
+
+On fresh 2.0 installs, **Everyday Mode** starts with Tor off so Nostr relays connect directly without Tor bootstrap latency (users can pick Stealth Mode during first-run onboarding before any relay connection opens, or switch anytime in Settings). Existing 1.x installs migrating to 2.0 preserve their prior Tor behavior — keeping Tor explicitly on for users who relied on 1.x's Tor-on default — until the user chooses a mode.
 
 Tor is provided by **Arti, in-process**, vendored as a Swift package under `localPackages/Arti` wrapping a Rust static-library xcframework. There is no `tor` binary, no `torrc`, and no control port. A SOCKS5 listener on `127.0.0.1:39050` is the only interface.
 
@@ -19,7 +21,11 @@ Both network call sites go through `TorURLSession`: `NostrRelayManager` (relay w
 
 ## The Tor preference is user-visible
 
-The earlier version of this document said there are no user-visible settings. There is one: a **tor routing** toggle in settings, persisted under `networkActivationService.userTorEnabled`, defaulting to on.
+There is a **Tor Routing** toggle in Settings, persisted under `networkActivationService.userTorEnabled`, coordinated with Privacy Mode (`Everyday` vs `Stealth`):
+
+- Fresh 2.0 installs default to **Everyday Mode** (`userTorEnabled` unset → direct relays, with no outbound network calls before the user grants location permission, adds a mutual friend, or opens a location channel).
+- **Stealth Mode** enables Tor (`userTorEnabled = true`, fail-closed).
+- Upgrades from 1.x run `PrivacyModeSettings.migrateLegacyInstallIfNeeded()` before startup networking, pinning `userTorEnabled = true` and `.stealth` mode for installs that relied on 1.x's Tor-on default (or preserving `false` if the user had explicitly turned Tor off).
 
 Turning it off is a real change in exposure, not a performance tweak. Every fail-closed guard is conditioned on the preference, so with it off:
 
@@ -32,7 +38,7 @@ The settings UI states this while the toggle is off.
 
 ## Relays
 
-Private messages target the built-in relay set plus any relays added by hand (`NostrRelaySettings`, capped at 8, `.onion` addresses accepted). The built-in set is four well-known clearnet hostnames, so a filter blocking four names would otherwise end internet-delivered private messages until a new build shipped.
+Private messages target the built-in relay set plus any relays added by hand (`NostrRelaySettings`, capped at 8). The built-in set is four well-known clearnet hostnames, so adding custom `wss://` relays lets users work around filters blocking those hosts. `.onion` onion-service relays are not yet supported because `arti-client` is built without the `onion-service-client` feature.
 
 ## Artifact maintenance
 

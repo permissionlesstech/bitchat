@@ -44,6 +44,9 @@ final class MessageRouter {
     }
 
     private let transports: [Transport]
+    var nostrTransport: NostrTransport? {
+        transports.compactMap { $0 as? NostrTransport }.first
+    }
     private let now: () -> Date
     private let courierDirectory: CourierDirectory
     private let outboxStore: MessageOutboxStore?
@@ -752,7 +755,6 @@ final class MessageRouter {
         }
     }
 
-    @discardableResult
     private func flushOutbox(for peerID: PeerID, fallbackPeerID: PeerID? = nil, persist: Bool) -> Bool {
         guard let queued = outbox[peerID], !queued.isEmpty else { return false }
         SecureLogger.debug("Flushing outbox for \(peerID.id.prefix(8))… count=\(queued.count)", category: .session)

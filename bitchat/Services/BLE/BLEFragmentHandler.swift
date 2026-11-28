@@ -32,9 +32,18 @@ final class BLEFragmentHandler {
     }
 
     @discardableResult
-    func handle(_ packet: BitchatPacket, from peerID: PeerID) -> Bool {
+    func handle(_ packet: BitchatPacket, from peerID: PeerID, receivedFrom: PeerID? = nil) -> Bool {
         let env = environment
-        guard let header = BLEFragmentHeader(packet: packet) else { return false }
+        let rsrResponder = packet.isRSR ? (receivedFrom ?? peerID) : nil
+        guard let header = BLEFragmentHeader(packet: packet, rsrResponder: rsrResponder) else { return false }
+
+        // REQUEST_SYNC is strictly link-local (ttl == 0) and never fragmented.
+        // Rejecting it here stops a relayed fragment from zeroing TTL on
+        // reassembly and triggering a mesh-wide gossip store replay.
+        if header.originalType == MessageType.requestSync.rawValue {
+            SecureLogger.warning("🚫 Dropping fragmented REQUEST_SYNC from \(peerID.id.prefix(8))…", category: .security)
+            return false
+        }
 
         // Sync replay legitimately hands us our own fragments back (the RSR
         // ttl=0 restore path): after a relaunch the fragment store starts
@@ -66,23 +75,37 @@ final class BLEFragmentHandler {
         case let .complete(completedHeader, reassembled, _):
             // Decode the original packet bytes we reassembled, so flags/compression are preserved
             if var originalPacket = BinaryProtocol.decode(reassembled) {
+                // Fragments served via gossip sync carry `isRSR` on the outer
+                // fragment envelopes; propagate that onto the reassembled inner
+                // packet so ingress validation accepts older synced payloads
+                // against the active REQUEST_SYNC responder rather than the
+                // original inner author.
+                if completedHeader.isRSR {
+                    originalPacket.isRSR = true
+                }
 
                 // Reassembled packet validation. Both platforms' fragmenters copy
                 // the inner type into every fragment, and the assembly was sized
                 // for that claim, so a packet of any other type is forged.
                 let innerSender = PeerID(hexData: originalPacket.senderID)
+                let validationPeer = originalPacket.isRSR
+                    ? (completedHeader.rsrResponder ?? receivedFrom ?? innerSender)
+                    : innerSender
                 if originalPacket.type != completedHeader.originalType {
                     SecureLogger.warning(
                         "🚫 Reassembled packet id=\(completedHeader.idLogString) is type \(originalPacket.type), fragments claimed \(completedHeader.originalType)",
                         category: .security
                     )
                     return false
-                } else if !env.isAcceptedIngressPayload(originalPacket, innerSender) {
+                } else if originalPacket.type == MessageType.requestSync.rawValue {
+                    SecureLogger.warning("🚫 Dropping reassembled REQUEST_SYNC from \(peerID.id.prefix(8))…", category: .security)
+                    return false
+                } else if !env.isAcceptedIngressPayload(originalPacket, validationPeer) {
                     return false
                 } else {
                     SecureLogger.debug("✅ Reassembled packet id=\(completedHeader.idLogString) type=\(originalPacket.type) bytes=\(reassembled.count)", category: .session)
                     originalPacket.ttl = 0
-                    env.processReassembledPacket(originalPacket, peerID)
+                    env.processReassembledPacket(originalPacket, receivedFrom ?? peerID)
                     return true
                 }
             } else {

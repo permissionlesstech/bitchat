@@ -96,7 +96,21 @@ struct NoiseReplayWindowTests {
         let heldPayload = try transportPayload(nonce: held)
         var failures: [String] = []
 
-        for shift in UInt64(1)...1100 {
+        // Exercise every bit/byte/word offset (1...72), multi-word power-of-two
+        // boundaries, and every offset across the 1024-slot eviction edge so
+        // bit-shift bugs anywhere in the 128-byte bitmap are caught without
+        // running ~20k unoptimized ChaChaPoly ops per test run.
+        let shifts: [UInt64] = Array(UInt64(1)...72)
+            + [126, 127, 128, 129, 130]
+            + [190, 191, 192, 193, 194]
+            + [254, 255, 256, 257, 258]
+            + [382, 383, 384, 385, 386]
+            + [510, 511, 512, 513, 514]
+            + [766, 767, 768, 769, 770]
+            + Array(UInt64(1005)...1030)
+            + [1088, 1100]
+
+        for shift in shifts {
             let receiver = makeReceiver()
             for entry in earlier {
                 if deliver(entry.payload, to: receiver) != .accepted {

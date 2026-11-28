@@ -30,9 +30,9 @@ tor-rtcompat = { version = "0.38", default-features = false, features = ["tokio"
 libc = "0.2"
 once_cell = "1"
 
-# Logging (minimal)
-tracing = "0.1"
-tracing-subscriber = { version = "0.3", default-features = false, features = ["fmt"] }
+# Logging (compiled out in release builds — no subscriber is registered)
+tracing = { version = "0.1", default-features = false, features = ["release_max_level_off", "max_level_off"] }
+log = { version = "0.4", features = ["release_max_level_off"] }
 
 [features]
 default = []

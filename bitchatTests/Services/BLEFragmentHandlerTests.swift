@@ -271,6 +271,133 @@ struct BLEFragmentHandlerTests {
         #expect(recorder.reinjectedPackets.isEmpty)
     }
 
+    @Test
+    func fragmentedRequestSyncIsRejectedBeforeAssembly() {
+        let recorder = Recorder()
+        let handler = makeHandler(recorder: recorder)
+        let packet = makeFragmentPacket(
+            sender: remotePeerID,
+            index: 0,
+            total: 2,
+            originalType: MessageType.requestSync.rawValue
+        )
+
+        handler.handle(packet, from: remotePeerID)
+
+        #expect(recorder.trackedPackets.isEmpty)
+        #expect(recorder.appendedHeaders.isEmpty)
+        #expect(recorder.ingressChecks.isEmpty)
+        #expect(recorder.reinjectedPackets.isEmpty)
+    }
+
+    @Test
+    func reassembledRequestSyncDisguisedAsAnotherTypeIsDropped() throws {
+        let innerPacket = BitchatPacket(
+            type: MessageType.requestSync.rawValue,
+            senderID: Data(hexString: remotePeerID.id) ?? Data(),
+            recipientID: nil,
+            timestamp: 900_000,
+            payload: Data([0x01, 0x02]),
+            signature: nil,
+            ttl: 0
+        )
+        let reassembled = try #require(innerPacket.toBinaryData())
+
+        let recorder = Recorder()
+        recorder.appendResult = { header in
+            .complete(header: header, reassembledData: reassembled, started: false)
+        }
+        let handler = makeHandler(recorder: recorder)
+        let packet = makeFragmentPacket(
+            sender: remotePeerID,
+            index: 1,
+            total: 2,
+            originalType: MessageType.message.rawValue
+        )
+
+        handler.handle(packet, from: remotePeerID)
+
+        #expect(recorder.ingressChecks.isEmpty)
+        #expect(recorder.reinjectedPackets.isEmpty)
+    }
+
+    @Test
+    func rsrFragmentReassemblyPropagatesRSRAndValidatesAgainstResponder() throws {
+        let originalAuthor = PeerID(str: "99AABBCCDDEEFF00")
+        let syncResponder = PeerID(str: "1122334455667788")
+        // Third-party packet authored 10 minutes ago, well past the 2-minute
+        // live timestamp skew window.
+        let tenMinutesAgoMs = UInt64(Date().addingTimeInterval(-600).timeIntervalSince1970 * 1000)
+        let inner = BitchatPacket(
+            type: MessageType.fileTransfer.rawValue,
+            senderID: Data(hexString: originalAuthor.id) ?? Data(),
+            recipientID: nil,
+            timestamp: tenMinutesAgoMs,
+            payload: uncompressiblePrefixThenZeros(count: 1024),
+            signature: nil,
+            ttl: 5
+        )
+        let fragments = try fragmentsAsReceived(inner).map { fragment -> BitchatPacket in
+            var copy = fragment
+            copy.isRSR = true
+            return copy
+        }
+        #expect(fragments.count >= 2)
+
+        var buffer = BLEFragmentAssemblyBuffer()
+        let recorder = Recorder()
+        recorder.appendResult = { header in
+            buffer.append(header, maxInFlightAssemblies: 8)
+        }
+        let handler = makeHandler(recorder: recorder)
+
+        for fragment in fragments {
+            handler.handle(fragment, from: originalAuthor, receivedFrom: syncResponder)
+        }
+
+        #expect(recorder.ingressChecks.count == 1)
+        #expect(recorder.ingressChecks[0].packet.isRSR == true)
+        #expect(recorder.ingressChecks[0].innerSender == syncResponder)
+        #expect(recorder.reinjectedPackets.count == 1)
+        #expect(recorder.reinjectedPackets[0].packet.isRSR == true)
+        #expect(recorder.reinjectedPackets[0].from == syncResponder)
+    }
+
+    @Test
+    func mixedRSRAndLiveFragmentsPreserveRSRFlagThroughBuffer() throws {
+        let originalAuthor = PeerID(str: "99AABBCCDDEEFF00")
+        let syncResponder = PeerID(str: "1122334455667788")
+        let inner = BitchatPacket(
+            type: MessageType.fileTransfer.rawValue,
+            senderID: Data(hexString: originalAuthor.id) ?? Data(),
+            recipientID: nil,
+            timestamp: 900_000,
+            payload: uncompressiblePrefixThenZeros(count: 1024),
+            signature: nil,
+            ttl: 5
+        )
+        var fragments = try fragmentsAsReceived(inner)
+        #expect(fragments.count >= 2)
+        // Only the first fragment arrived via RSR; the final fragment was live.
+        fragments[0].isRSR = true
+
+        var buffer = BLEFragmentAssemblyBuffer()
+        let recorder = Recorder()
+        recorder.appendResult = { header in
+            buffer.append(header, maxInFlightAssemblies: 8)
+        }
+        let handler = makeHandler(recorder: recorder)
+
+        for (idx, fragment) in fragments.enumerated() {
+            let ingressPeer = idx == 0 ? syncResponder : originalAuthor
+            handler.handle(fragment, from: originalAuthor, receivedFrom: ingressPeer)
+        }
+
+        #expect(recorder.ingressChecks.count == 1)
+        #expect(recorder.ingressChecks[0].packet.isRSR == true)
+        #expect(recorder.ingressChecks[0].innerSender == syncResponder)
+    }
+
     /// Every byte value once, then zeros: the encoder leaves the inner
     /// payload uncompressed (100% byte diversity), while the zero chunks
     /// compress inside their fragments.

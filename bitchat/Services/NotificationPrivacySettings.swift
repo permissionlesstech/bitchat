@@ -28,8 +28,12 @@ enum NotificationPrivacySettings {
 
     /// Store-injecting forms, so tests can assert the default and both settings
     /// without touching the shared preferences other tests read.
+    /// Stealth Mode always enforces hidden previews regardless of prior toggle state.
     static func hideMessagePreviews(in defaults: UserDefaults) -> Bool {
-        defaults.object(forKey: hidePreviewsKey) as? Bool ?? true
+        if PrivacyModeSettings.currentMode(in: defaults) == .stealth {
+            return true
+        }
+        return defaults.object(forKey: hidePreviewsKey) as? Bool ?? true
     }
 
     static func setHideMessagePreviews(_ hide: Bool, in defaults: UserDefaults) {

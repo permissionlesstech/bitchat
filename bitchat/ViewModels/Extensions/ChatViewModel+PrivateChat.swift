@@ -60,10 +60,71 @@ extension ChatViewModel {
         mediaTransferCoordinator.sendVoiceNote(at: url, target: target)
     }
 
+    /// Describes whether pressing and holding talk right now will stream live
+    /// over Bluetooth mesh or fall back to a classic voice note.
+    enum LiveVoiceAvailability: Equatable {
+        case liveReadyPublic
+        case liveReadyDM
+        case liveReadyGroup(reachableMemberCount: Int)
+        case disabledByUser
+        case dmHandshaking
+        case dmOutOfRadioRange
+        case groupNoReachableMembers
+        case unsupported
+    }
+
+    /// Resolves mesh-reachable group members (up to `BitchatGroup.maxMembers`)
+    /// with established Noise sessions for encrypted group walkie-talkie fan-out.
+    @MainActor
+    func reachableGroupVoiceMembers(for groupPeerID: PeerID) -> (groupID: Data, peers: [PeerID])? {
+        guard let group = groupStore.group(for: groupPeerID) else { return nil }
+        let myFingerprint = myNoiseFingerprint()
+        var targets: [PeerID] = []
+        for member in group.members where member.fingerprint != myFingerprint {
+            let shortID = PeerID(str: String(member.fingerprint.prefix(16)))
+            guard meshService.isPeerReachable(shortID),
+                  case .established = meshService.getNoiseSessionState(for: shortID) else {
+                continue
+            }
+            targets.append(shortID)
+            if targets.count >= BitchatGroup.maxMembers {
+                break
+            }
+        }
+        return (group.groupID, targets)
+    }
+
+    @MainActor
+    func currentLiveVoiceAvailability() -> LiveVoiceAvailability {
+        if let selectedPeer = selectedPrivateChatPeer {
+            if selectedPeer.isGroup {
+                guard liveVoiceCoordinator.liveVoiceEnabled() else { return .disabledByUser }
+                guard let (_, peers) = reachableGroupVoiceMembers(for: selectedPeer), !peers.isEmpty else {
+                    return .groupNoReachableMembers
+                }
+                return .liveReadyGroup(reachableMemberCount: peers.count)
+            }
+            guard !selectedPeer.isGeoDM, !selectedPeer.isGeoChat else {
+                return .unsupported
+            }
+            guard liveVoiceCoordinator.liveVoiceEnabled() else { return .disabledByUser }
+            let peerID = selectedPeer.toShort()
+            guard meshService.isPeerReachable(peerID) else { return .dmOutOfRadioRange }
+            guard case .established = meshService.getNoiseSessionState(for: peerID) else {
+                return .dmHandshaking
+            }
+            return .liveReadyDM
+        }
+
+        guard activeChannel == .mesh else { return .unsupported }
+        return liveVoiceCoordinator.liveVoiceEnabled() ? .liveReadyPublic : .disabledByUser
+    }
+
     /// Where a live burst would stream right now, or nil when the hold would
     /// fall back to a classic voice note.
     private enum LiveVoiceTarget {
         case peer(PeerID)
+        case group(groupID: Data, peers: [PeerID])
         case publicMesh
     }
 
@@ -72,7 +133,13 @@ extension ChatViewModel {
         guard liveVoiceCoordinator.liveVoiceEnabled() else { return nil }
 
         if let selectedPeer = selectedPrivateChatPeer {
-            guard !selectedPeer.isGeoDM, !selectedPeer.isGeoChat, !selectedPeer.isGroup else { return nil }
+            if selectedPeer.isGroup {
+                guard let (groupID, peers) = reachableGroupVoiceMembers(for: selectedPeer), !peers.isEmpty else {
+                    return nil
+                }
+                return .group(groupID: groupID, peers: peers)
+            }
+            guard !selectedPeer.isGeoDM, !selectedPeer.isGeoChat else { return nil }
             // A conversation can be selected under the stable 64-hex Noise key
             // (e.g. after migration on disconnect), but Noise sessions are keyed
             // by the 16-hex routing ID — normalize once and send to that same
@@ -91,10 +158,9 @@ extension ChatViewModel {
 
     /// Picks the capture backend for the composer's hold-to-record gesture:
     /// live push-to-talk when the audience can hear it now — a DM peer that
-    /// is mesh-reachable with an established Noise session, or the public
-    /// mesh channel — otherwise the classic record-then-send voice note.
-    /// Either way the release delivers a normal voice note through
-    /// `sendVoiceNote(at:)`, which live receivers absorb into the live bubble.
+    /// is mesh-reachable with an established Noise session, mesh-reachable
+    /// members of a small group, or the public mesh channel — otherwise the
+    /// classic record-then-send voice note.
     @MainActor
     func makeVoiceCaptureSession() -> VoiceCaptureSession {
         // Live voice rides the mesh only; frames are useful now or never,
@@ -105,6 +171,15 @@ extension ChatViewModel {
             return PTTLiveVoiceSession(sendPacket: { packet in
                 voiceTransport?.sendVoiceFrame(packet, to: peerID)
             })
+        case .group(let groupID, let peers):
+            return PTTLiveVoiceSession(
+                sendPacket: { packet in
+                    for peerID in peers {
+                        voiceTransport?.sendVoiceFrame(packet, to: peerID)
+                    }
+                },
+                groupID: groupID
+            )
         case .publicMesh:
             return PTTLiveVoiceSession(sendPacket: { packet in
                 voiceTransport?.sendVoiceFrameBroadcast(packet)

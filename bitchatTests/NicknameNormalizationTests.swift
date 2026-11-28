@@ -42,4 +42,31 @@ struct NicknameNormalizationTests {
         #expect(base == precomposed)
         #expect(suffix == "#ab12")
     }
+
+    @Test
+    func utf8TruncationRespectsByteLimitAndGraphemeBoundaries() {
+        let longASCII = String(repeating: "a", count: 300)
+        let truncatedASCII = longASCII.truncatedToUTF8Bytes(String.maxNicknameUTF8Bytes)
+        #expect(truncatedASCII.utf8.count == 255)
+
+        // 4-byte emoji: 70 * 4 = 280 bytes -> at most 63 emoji (252 bytes), never splitting a scalar.
+        let emojiNick = String(repeating: "🔥", count: 70)
+        let truncatedEmoji = emojiNick.truncatedToUTF8Bytes(String.maxNicknameUTF8Bytes)
+        #expect(truncatedEmoji.count == 63)
+        #expect(truncatedEmoji.utf8.count == 252)
+
+        // ZWJ family emoji is 25 UTF-8 bytes as one Character; 11 copies = 275 bytes -> 10 copies (250 bytes).
+        let zwjNick = String(repeating: "👨‍👩‍👧‍👦", count: 11)
+        let truncatedZWJ = zwjNick.truncatedToUTF8Bytes(String.maxNicknameUTF8Bytes)
+        #expect(truncatedZWJ.count == 10)
+        #expect(truncatedZWJ.utf8.count <= String.maxNicknameUTF8Bytes)
+
+        let packet = AnnouncementPacket(
+            nickname: truncatedEmoji,
+            noisePublicKey: Data(repeating: 0x11, count: 32),
+            signingPublicKey: Data(repeating: 0x22, count: 32),
+            directNeighbors: nil
+        )
+        #expect(packet.encode() != nil)
+    }
 }

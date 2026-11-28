@@ -24,7 +24,8 @@ private func makeSmokeViewModel() -> (viewModel: ChatViewModel, transport: MockT
         keychain: keychain,
         idBridge: idBridge,
         identityManager: identityManager,
-        transport: transport
+        transport: transport,
+        locationManager: makeSmokeLocationManager()
     )
 
     return (viewModel, transport, identityManager)
@@ -73,10 +74,9 @@ private func makeSmokeLocationManager() -> LocationChannelManager {
 
 @MainActor
 private func makeSmokeFeatureModels(for viewModel: ChatViewModel) -> SmokeFeatureModels {
-    let locationManager = makeSmokeLocationManager()
     let conversations = viewModel.conversations
     let publicChatModel = PublicChatModel(conversations: conversations)
-    let locationChannelsModel = LocationChannelsModel(manager: locationManager)
+    let locationChannelsModel = LocationChannelsModel(manager: viewModel.locationManager)
     let privateInboxModel = PrivateInboxModel(conversations: conversations)
     let appChromeModel = AppChromeModel(
         chatViewModel: viewModel,
@@ -833,11 +833,18 @@ struct ViewSmokeTests {
         viewModel.conversations.appendBatch(meshHistory, to: .mesh)
 
         let rootView = installSmokeEnvironment(
-            ContentView().environment(\.appTheme, .liquidGlass),
+            ContentView(initialTab: .nearby).environment(\.appTheme, .liquidGlass),
             featureModels: featureModels
         )
         let host = UIHostingController(rootView: rootView)
-        let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 393, height: 852))
+        let windowScene = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first
+        let window: UIWindow
+        if let windowScene {
+            window = UIWindow(windowScene: windowScene)
+            window.frame = windowScene.coordinateSpace.bounds
+        } else {
+            window = UIWindow(frame: CGRect(x: 0, y: 0, width: 393, height: 852))
+        }
         window.rootViewController = host
         window.makeKeyAndVisible()
         host.view.frame = window.bounds
@@ -852,6 +859,9 @@ struct ViewSmokeTests {
         host.additionalSafeAreaInsets = UIEdgeInsets(top: 0, left: 0, bottom: 330, right: 0)
         host.view.setNeedsLayout()
         host.view.layoutIfNeeded()
+        _ = await TestHelpers.waitUntil {
+            featureModels.publicChatModel.activeChannel == .location(channel)
+        }
         try? await Task.sleep(nanoseconds: 100_000_000)
 
         // Now deliver two system messages (matching the Tor restart screenshot).
@@ -873,9 +883,12 @@ struct ViewSmokeTests {
         try? await Task.sleep(nanoseconds: 80_000_000)
         viewModel.conversations.append(second, to: .geohash("ez"))
         // Let followToBottom + 50ms retry settle.
-        try? await Task.sleep(nanoseconds: 120_000_000)
+        try? await Task.sleep(nanoseconds: 150_000_000)
         host.view.setNeedsLayout()
         host.view.layoutIfNeeded()
+
+        #expect(featureModels.publicChatModel.activeChannel == .location(channel))
+        #expect(featureModels.publicChatModel.messages.count == 2)
 
         func findScrollView(in view: UIView) -> UIScrollView? {
             if let sv = view as? UIScrollView { return sv }
@@ -885,35 +898,91 @@ struct ViewSmokeTests {
             return nil
         }
 
-        let scrollView = findScrollView(in: host.view)
-        #expect(scrollView != nil)
-        if let scrollView {
+        func assertSingleTopInset(for hostController: UIHostingController<some View>, label: String) {
+            let scrollView = findScrollView(in: hostController.view)
+            #expect(scrollView != nil, "\(label): expected UIScrollView")
+            guard let scrollView else { return }
+
             let frameTopInWindow = scrollView.superview?.convert(scrollView.frame.origin, to: window).y ?? scrollView.frame.origin.y
             let contentZeroInWindow = scrollView.convert(CGPoint.zero, to: window).y
-            let topInset = scrollView.adjustedContentInset.top
-            let expectedMaxTop = host.view.safeAreaInsets.top + 80
+            let hostSafeTop = hostController.view.safeAreaInsets.top
+            let expectedMinTop = hostSafeTop + 40
+            let expectedMaxTop = hostSafeTop + 80
+
             #expect(
-                frameTopInWindow <= host.view.safeAreaInsets.top + 1,
-                "ScrollView frame should extend behind top safeAreaInset (frameTop=\(frameTopInWindow), hostSafeTop=\(host.view.safeAreaInsets.top), topInset=\(topInset), contentOffset.y=\(scrollView.contentOffset.y), contentZeroInWindow=\(contentZeroInWindow))"
+                frameTopInWindow <= hostSafeTop + 1,
+                "\(label): ScrollView frame should extend full-bleed behind the floating header (frameTop=\(frameTopInWindow), hostSafeTop=\(hostSafeTop))"
             )
             #expect(
-                contentZeroInWindow <= expectedMaxTop,
-                "First message top (\(contentZeroInWindow)) exceeded header budget (\(expectedMaxTop)); frameTop=\(frameTopInWindow), topInset=\(topInset), contentOffset.y=\(scrollView.contentOffset.y), hostSafeTop=\(host.view.safeAreaInsets.top)"
+                scrollView.safeAreaInsets.top <= hostSafeTop + 1,
+                "\(label): ScrollView must not receive stacked safeAreaInsets from nested .safeAreaInset modifiers (scrollSafeTop=\(scrollView.safeAreaInsets.top), hostSafeTop=\(hostSafeTop))"
             )
-            // Also verify the actual rendered content subview inside UIScrollView
-            // is not vertically centered or pushed halfway down.
-            let renderedContentMinY = scrollView.subviews
-                .filter { $0.bounds.height > 1 && $0.bounds.width > 100 }
-                .map { scrollView.convert($0.frame.origin, to: window).y }
-                .min()
-            if let renderedContentMinY {
-                #expect(
-                    renderedContentMinY <= expectedMaxTop + 16,
-                    "Rendered content subview top (\(renderedContentMinY)) was pushed down (expected <= \(expectedMaxTop + 16)); contentSize=\(scrollView.contentSize), contentOffset=\(scrollView.contentOffset), adjustedContentInset=\(scrollView.adjustedContentInset)"
-                )
-            }
+            #expect(
+                contentZeroInWindow >= expectedMinTop && contentZeroInWindow <= expectedMaxTop,
+                "\(label): First message top (\(contentZeroInWindow)) outside single-header range [\(expectedMinTop), \(expectedMaxTop)] (adjustedContentInset=\(scrollView.adjustedContentInset), contentInset=\(scrollView.contentInset), contentOffset=\(scrollView.contentOffset), contentSize=\(scrollView.contentSize))"
+            )
         }
+
+        assertSingleTopInset(for: host, label: "#ez with 2 system messages + keyboard")
+
+        // Also verify fresh launch -> banner dismissed -> empty #mesh -> 1 message + keyboard.
+        let (meshViewModel, _, _) = makeSmokeViewModel()
+        let meshFeatureModels = makeSmokeFeatureModels(for: meshViewModel)
+        meshViewModel.bluetoothState = .poweredOff
+        let meshHost = UIHostingController(rootView: installSmokeEnvironment(
+            ContentView(initialTab: .nearby).environment(\.appTheme, .liquidGlass),
+            featureModels: meshFeatureModels
+        ))
+        window.rootViewController = meshHost
+        meshHost.view.frame = window.bounds
+        meshHost.view.setNeedsLayout()
+        meshHost.view.layoutIfNeeded()
+        try? await Task.sleep(nanoseconds: 120_000_000)
+
+        meshViewModel.bluetoothState = .poweredOn
+        meshHost.additionalSafeAreaInsets = UIEdgeInsets(top: 0, left: 0, bottom: 330, right: 0)
+        meshViewModel.conversations.append(BitchatMessage(
+            id: "yo-1",
+            sender: "anon6990",
+            content: "Yo",
+            timestamp: Date(timeIntervalSince1970: 1_700_001_000),
+            isRelay: false
+        ), to: .mesh)
+        try? await Task.sleep(nanoseconds: 150_000_000)
+        meshHost.view.setNeedsLayout()
+        meshHost.view.layoutIfNeeded()
+
+        assertSingleTopInset(for: meshHost, label: "fresh #mesh after banner dismissal + 1 message + keyboard")
         window.isHidden = true
     }
     #endif
+
+    @Test("Message list external URL allowlist permits only safe schemes")
+    func messageListExternalURLAllowlist() throws {
+        let allowed = [
+            "https://bitchat.free",
+            "http://example.com",
+            "HTTPS://EXAMPLE.COM/path",
+            "cashu:cashuA_test",
+            "lightning:lnbc1test",
+            "bitchat://verify?name=alice"
+        ]
+        for raw in allowed {
+            let url = try #require(URL(string: raw))
+            #expect(MessageListExternalURLPolicy.isAllowed(url), "Expected \(raw) to be allowed")
+        }
+
+        let blocked = [
+            "tel:+15551234567",
+            "sms:+15551234567",
+            "mailto:alice@example.com",
+            "file:///etc/passwd",
+            "javascript:alert(1)",
+            "itms-services://?action=download-manifest"
+        ]
+        for raw in blocked {
+            let url = try #require(URL(string: raw))
+            #expect(!MessageListExternalURLPolicy.isAllowed(url), "Expected \(raw) to be blocked")
+        }
+    }
 }
