@@ -127,11 +127,17 @@ struct ContentPeopleSheetView: View {
                         onSendMessage: onSendMessage,
                         mediaPickerMode: $mediaPickerMode
                     )
+                    #if os(iOS)
+                    .toolbar(.hidden, for: .navigationBar)
+                    #endif
                 } else {
                     ContentPeopleListView(
                         showSidebar: $showSidebar,
                         showVerifySheet: $showVerifySheet
                     )
+                    #if os(iOS)
+                    .toolbar(.hidden, for: .navigationBar)
+                    #endif
                 }
             }
             .navigationDestination(isPresented: Binding(
@@ -146,6 +152,9 @@ struct ContentPeopleSheetView: View {
                    let verificationModel = appEnvironmentModels?.verificationModel {
                     FingerprintView(peerID: peerID)
                         .environmentObject(verificationModel)
+                        #if os(iOS)
+                        .toolbar(.hidden, for: .navigationBar)
+                        #endif
                 }
             }
             // This sheet covers the root header where the connectivity
@@ -161,7 +170,6 @@ struct ContentPeopleSheetView: View {
                 }
             }
         }
-        .themedSheetBackground()
         .foregroundColor(palette.primary)
         .confirmationDialog(
             String(
@@ -358,6 +366,7 @@ private struct ContentPeopleListView: View {
                 .id(ConversationID(channelID: locationChannelsModel.selectedChannel))
             }
         }
+        .themedSheetBackground()
         .sheet(isPresented: $showVerifySheet) {
             if let verificationModel = appEnvironmentModels?.verificationModel {
                 VerificationSheetView(isPresented: $showVerifySheet)

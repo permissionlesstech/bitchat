@@ -114,7 +114,7 @@ struct ThemePalette {
     static func liquidGlass(_ colorScheme: ColorScheme) -> ThemePalette {
         let isDark = colorScheme == .dark
         return ThemePalette(
-            background: systemBackground,
+            background: isDark ? Color(red: 0.04, green: 0.04, blue: 0.05) : Color(red: 0.96, green: 0.965, blue: 0.975),
             primary: .primary,
             secondary: .secondary,
             accent: .blue,
@@ -122,9 +122,9 @@ struct ThemePalette {
             locationAccent: .green,
             accentBlue: .blue,
             alertRed: .red,
-            divider: separator,
-            cardBackground: isDark ? Color.white.opacity(0.08) : Color.black.opacity(0.05),
-            cardBorder: isDark ? Color.white.opacity(0.12) : Color.black.opacity(0.07),
+            divider: isDark ? Color.white.opacity(0.11) : Color.black.opacity(0.08),
+            cardBackground: isDark ? Color.white.opacity(0.07) : Color.white,
+            cardBorder: isDark ? Color.white.opacity(0.10) : Color.black.opacity(0.07),
             cardRadius: 14,
             buttonRadius: 12
         )
@@ -184,9 +184,9 @@ private struct ThemedFontModifier: ViewModifier {
     }
 }
 
-/// Root backdrop. Matrix gets its flat background; glass gets a subtle static
-/// gradient with a soft tinted glow — glass panels need visual texture behind
-/// them to refract, and collapse to flat gray over a solid color.
+/// Root backdrop. Matrix gets its pure black/white terminal canvas; Liquid Glass
+/// gets a crisp, neutral system-like canvas so chat timelines, usernames, cards,
+/// and translucent glass controls stay razor-sharp without pastel color cast.
 struct ThemedRootBackground: View {
     @Environment(\.appTheme) private var theme
     @Environment(\.colorScheme) private var colorScheme
@@ -195,27 +195,13 @@ struct ThemedRootBackground: View {
     var body: some View {
         if theme.usesGlassChrome {
             let isDark = colorScheme == .dark
-            ZStack {
-                LinearGradient(
-                    colors: isDark
-                        ? [Color(red: 0.09, green: 0.10, blue: 0.15), Color(red: 0.04, green: 0.04, blue: 0.07)]
-                        : [Color(red: 0.93, green: 0.95, blue: 1.0), Color(red: 0.98, green: 0.97, blue: 0.99)],
-                    startPoint: .top,
-                    endPoint: .bottom
-                )
-                RadialGradient(
-                    colors: [Color.blue.opacity(isDark ? 0.22 : 0.12), .clear],
-                    center: .topLeading,
-                    startRadius: 0,
-                    endRadius: 600
-                )
-                RadialGradient(
-                    colors: [Color.purple.opacity(isDark ? 0.14 : 0.08), .clear],
-                    center: .bottomTrailing,
-                    startRadius: 0,
-                    endRadius: 500
-                )
-            }
+            LinearGradient(
+                colors: isDark
+                    ? [Color(red: 0.055, green: 0.058, blue: 0.068), Color(red: 0.025, green: 0.025, blue: 0.032)]
+                    : [Color(red: 0.965, green: 0.968, blue: 0.976), Color(red: 0.945, green: 0.950, blue: 0.962)],
+                startPoint: .top,
+                endPoint: .bottom
+            )
             .ignoresSafeArea()
         } else {
             // Full-bleed like the gradient above. Passed to .background(_:)
