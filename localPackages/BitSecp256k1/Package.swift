@@ -31,12 +31,16 @@ let package = Package(
                 .define("COMB_TEETH", to: "5"),
                 .define("ENABLE_MODULE_EXTRAKEYS"),
                 .define("ENABLE_MODULE_SCHNORRSIG"),
-                .define("ENABLE_MODULE_ECDH")
+                .define("ENABLE_MODULE_ECDH"),
+                .unsafeFlags(["-Oz"], .when(configuration: .release))
             ]
         ),
         .target(
             name: "BitSecp256k1",
-            dependencies: ["CLibSecp256k1"]
+            dependencies: ["CLibSecp256k1"],
+            swiftSettings: [
+                .unsafeFlags(["-Osize"], .when(configuration: .release))
+            ]
         ),
         .testTarget(
             name: "BitSecp256k1Tests",
