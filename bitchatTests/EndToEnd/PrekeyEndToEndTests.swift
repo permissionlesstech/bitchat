@@ -475,4 +475,32 @@ struct PrekeyEndToEndTests {
         #expect(!alice.prekeyBundleStore.hasUsableBundle(for: bob.noiseStaticPublicKeyData()))
         #expect(!alice._test_hasGossipPrekeyBundle(for: bob.myPeerID))
     }
+
+    @Test func panicResetDropsDeferredPrekeyBundle() async throws {
+        let (alice, aliceIdentity) = makeService()
+        let (bob, _) = makeService()
+
+        let bobOut = PacketTap()
+        bob._test_onOutboundPacket = bobOut.record
+        let (announce, bundlePacket) = try await captureAnnounceAndBundle(from: bob, tap: bobOut)
+
+        // Alice has no Noise-authenticated signing key for Bob, so his bundle
+        // waits in the deferred map.
+        alice._test_handlePacket(announce, fromPeerID: bob.myPeerID, preseedPeer: false)
+        alice._test_handlePacket(bundlePacket, fromPeerID: bob.myPeerID, preseedPeer: false)
+        await alice._test_drainAllPipelines()
+        #expect(alice._test_pendingPrekeyBundleCount == 1)
+
+        alice.suspendForPanicReset()
+        alice.resetIdentityForPanic(currentNickname: "anon1234", restartServices: false)
+        alice.completePanicReset(restartServices: false)
+        #expect(alice._test_pendingPrekeyBundleCount == 0)
+
+        // Bob authenticates after the wipe. His next announce must not pull
+        // the pre-panic bundle into the prekey store.
+        authenticateSigningKey(of: bob, in: aliceIdentity)
+        alice._test_handlePacket(announce, fromPeerID: bob.myPeerID, preseedPeer: false)
+        await alice._test_drainAllPipelines()
+        #expect(!alice.prekeyBundleStore.hasUsableBundle(for: bob.noiseStaticPublicKeyData()))
+    }
 }

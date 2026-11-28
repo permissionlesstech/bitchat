@@ -417,7 +417,7 @@ final class GeoRelayDirectory {
         let fetchData = await makeFetchData()
         guard !Task.isCancelled else { return .cancelled }
 
-        return await Task.detached(priority: .utility) {
+        let fetchTask = Task.detached(priority: .utility) {
             guard !Task.isCancelled else { return DetachedFetchOutcome.cancelled }
             do {
                 let data = try await fetchData(request)
@@ -436,7 +436,15 @@ final class GeoRelayDirectory {
                 if Task.isCancelled { return .cancelled }
                 return .network(error.localizedDescription)
             }
-        }.value
+        }
+        // A detached task does not inherit cancellation. Forward the caller's
+        // cancel (panic wipe, a newer fetch) so the checks above and the HTTP
+        // reader's own cancellation handler can stop a request in flight.
+        return await withTaskCancellationHandler {
+            await fetchTask.value
+        } onCancel: {
+            fetchTask.cancel()
+        }
     }
 
     private enum FetchFailure {
