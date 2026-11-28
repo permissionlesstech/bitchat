@@ -47,7 +47,7 @@ struct ImagePreviewView: View {
                 Spacer()
                 HStack {
                     Button(action: { dismiss() }) {
-                        Text("close", comment: "Button to dismiss fullscreen media viewer")
+                        Text(String(localized: "close", comment: "Button to dismiss fullscreen media viewer"))
                             .font(.bitchatSystem(size: 15, weight: .semibold))
                             .foregroundColor(.white)
                             .padding(.horizontal, 16)
@@ -56,7 +56,7 @@ struct ImagePreviewView: View {
                     }
                     Spacer()
                     Button(action: saveCopy) {
-                        Text("save", comment: "Button to save media to device")
+                        Text(String(localized: "save", comment: "Button to save media to device"))
                             .font(.bitchatSystem(size: 15, weight: .semibold))
                             .foregroundColor(.white)
                             .padding(.horizontal, 16)
