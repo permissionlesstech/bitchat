@@ -37,6 +37,10 @@ protocol ChatGroupContext: AnyObject {
     func connectedPeerID(forFingerprint fingerprint: String) -> PeerID?
     /// A Nostr-reachable peer ID (full 64-hex Noise key) whose fingerprint matches, if any.
     func nostrReachablePeerID(forFingerprint fingerprint: String) -> PeerID?
+    /// Our own 64-hex x-only Nostr public key, if initialized.
+    func myNostrPubkeyHex() -> String?
+    /// Known 64-hex x-only Nostr public key for a peer fingerprint, if any.
+    func nostrPubkeyHex(forFingerprint fingerprint: String) -> String?
     /// Whether the user has blocked the identity with this Noise fingerprint.
     func isFingerprintBlocked(_ fingerprint: String) -> Bool
 
@@ -47,6 +51,7 @@ protocol ChatGroupContext: AnyObject {
     func sendGroupInviteViaNostr(_ payload: Data, to peerID: PeerID)
     func sendGroupKeyUpdateViaNostr(_ payload: Data, to peerID: PeerID)
     func sendGroupMessageViaNostr(_ payload: Data, to peerID: PeerID)
+    func sendGroupMessageViaNostr(_ payload: Data, toPubkeyHex pubkeyHex: String)
 
     // MARK: Conversation intents (group chats are direct-keyed)
     @discardableResult
@@ -62,9 +67,12 @@ protocol ChatGroupContext: AnyObject {
 
 extension ChatGroupContext {
     func nostrReachablePeerID(forFingerprint fingerprint: String) -> PeerID? { nil }
+    func myNostrPubkeyHex() -> String? { nil }
+    func nostrPubkeyHex(forFingerprint fingerprint: String) -> String? { nil }
     func sendGroupInviteViaNostr(_ payload: Data, to peerID: PeerID) {}
     func sendGroupKeyUpdateViaNostr(_ payload: Data, to peerID: PeerID) {}
     func sendGroupMessageViaNostr(_ payload: Data, to peerID: PeerID) {}
+    func sendGroupMessageViaNostr(_ payload: Data, toPubkeyHex pubkeyHex: String) {}
 }
 
 extension ChatViewModel: ChatGroupContext {
@@ -130,6 +138,30 @@ extension ChatViewModel: ChatGroupContext {
         return nil
     }
 
+    func myNostrPubkeyHex() -> String? {
+        try? idBridge.getCurrentNostrIdentity()?.publicKeyHex
+    }
+
+    func nostrPubkeyHex(forFingerprint fingerprint: String) -> String? {
+        if fingerprint == myNoiseFingerprint() {
+            return myNostrPubkeyHex()
+        }
+        for (noiseKey, rel) in FavoritesPersistenceService.shared.favorites {
+            guard let rawNostr = rel.peerNostrPublicKey?.trimmingCharacters(in: .whitespacesAndNewlines),
+                  noiseKey.sha256Fingerprint() == fingerprint else { continue }
+            if rawNostr.lowercased().hasPrefix("npub1"),
+               let (hrp, data) = try? Bech32.decode(rawNostr.lowercased()),
+               hrp == "npub",
+               data.count == 32 {
+                return data.hexEncodedString()
+            }
+            if rawNostr.count == 64, Data(hexString: rawNostr)?.count == 32 {
+                return rawNostr.lowercased()
+            }
+        }
+        return nil
+    }
+
     func isFingerprintBlocked(_ fingerprint: String) -> Bool {
         identityManager.isBlocked(fingerprint: fingerprint)
     }
@@ -159,6 +191,10 @@ extension ChatViewModel: ChatGroupContext {
 
     func sendGroupMessageViaNostr(_ payload: Data, to peerID: PeerID) {
         messageRouter.nostrTransport?.sendGroupMessage(payload, to: peerID)
+    }
+
+    func sendGroupMessageViaNostr(_ payload: Data, toPubkeyHex pubkeyHex: String) {
+        messageRouter.nostrTransport?.sendGroupMessage(payload, toPubkeyHex: pubkeyHex)
     }
 
     // MARK: CommandContextProvider group commands (parsed by CommandProcessor)
@@ -214,7 +250,12 @@ final class ChatGroupCoordinator {
             return .error(message: String(localized: "system.group.identity_unavailable", comment: "Error when the local identity is not ready for group operations"))
         }
 
-        let creator = GroupMember(fingerprint: myFingerprint, signingKey: mySigningKey, nickname: context.nickname)
+        let creator = GroupMember(
+            fingerprint: myFingerprint,
+            signingKey: mySigningKey,
+            nickname: context.nickname,
+            nostrPubkeyHex: context.myNostrPubkeyHex()
+        )
         guard let group = context.groupStore.createGroup(named: name, creator: creator) else {
             return .error(message: String(localized: "system.group.create_failed", comment: "Error when group creation fails"))
         }
@@ -279,13 +320,14 @@ final class ChatGroupCoordinator {
         let newMember = GroupMember(
             fingerprint: identity.fingerprint,
             signingKey: identity.signingKey,
-            nickname: context.peerNickname(for: peerID) ?? nickname
+            nickname: context.peerNickname(for: peerID) ?? nickname,
+            nostrPubkeyHex: context.nostrPubkeyHex(forFingerprint: identity.fingerprint)
         )
         // Rotate the key (epoch + 1) on every roster change, not just removals.
         // A monotonically increasing epoch per roster gives the receiver a
         // strict ordering: two out-of-order invite states can no longer share
         // an epoch and last-writer-wins a just-added member back out.
-        let members = group.members + [newMember]
+        let members = enrichedRoutingMembers(group.members + [newMember])
         guard let (updated, key) = context.groupStore.rotateKey(groupID: group.groupID, members: members),
               let payload = signedStatePayload(for: updated, key: key) else {
             return .error(message: String(localized: "system.group.invite_failed", comment: "Error when building or signing a group invite fails"))
@@ -435,11 +477,14 @@ final class ChatGroupCoordinator {
         context.broadcastGroupMessagePayload(payload)
 
         // Hybrid delivery: also fan out over Nostr to any roster members who
-        // are reachable via Nostr (deduped by messageID if they also get BLE).
+        // are reachable via local favorites OR via creator-distributed Nostr
+        // routing keys in the group roster (deduped by messageID if they also get BLE).
         let myFingerprint = context.myNoiseFingerprint()
         for member in group.members where member.fingerprint != myFingerprint {
             if let nostrPeerID = context.nostrReachablePeerID(forFingerprint: member.fingerprint) {
                 context.sendGroupMessageViaNostr(payload, to: nostrPeerID)
+            } else if let pubkeyHex = member.nostrPubkeyHex, !pubkeyHex.isEmpty {
+                context.sendGroupMessageViaNostr(payload, toPubkeyHex: pubkeyHex)
             }
         }
     }
@@ -500,9 +545,10 @@ final class ChatGroupCoordinator {
         let newMember = GroupMember(
             fingerprint: identity.fingerprint,
             signingKey: identity.signingKey,
-            nickname: displayName
+            nickname: displayName,
+            nostrPubkeyHex: context.nostrPubkeyHex(forFingerprint: identity.fingerprint)
         )
-        let members = group.members + [newMember]
+        let members = enrichedRoutingMembers(group.members + [newMember])
         guard let (updated, key) = context.groupStore.rotateKey(groupID: group.groupID, members: members),
               let payload = signedStatePayload(for: updated, key: key) else {
             return .error(message: String(localized: "system.group.invite_failed", comment: "Error when building or signing a group invite fails"))
@@ -663,6 +709,20 @@ private extension ChatGroupCoordinator {
     func normalizedNickname(_ raw: String) -> String {
         let trimmed = raw.trimmed
         return trimmed.hasPrefix("@") ? String(trimmed.dropFirst()) : trimmed
+    }
+
+    func enrichedRoutingMembers(_ members: [GroupMember]) -> [GroupMember] {
+        let myFingerprint = context.myNoiseFingerprint()
+        return members.map { member in
+            guard member.nostrPubkeyHex == nil else { return member }
+            var copy = member
+            if member.fingerprint == myFingerprint {
+                copy.nostrPubkeyHex = context.myNostrPubkeyHex()
+            } else {
+                copy.nostrPubkeyHex = context.nostrPubkeyHex(forFingerprint: member.fingerprint)
+            }
+            return copy
+        }
     }
 
     func selectedGroup() -> BitchatGroup? {

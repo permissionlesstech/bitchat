@@ -359,6 +359,7 @@ final class ChatViewModel: ObservableObject, SynchronousMessageTransportEventDel
     /// per-chat disappearing message timers.
     let encryptedHistoryStore: EncryptedHistoryStore
     private var historyPersistTask: Task<Void, Never>?
+    private var expirationSweepTask: Task<Void, Never>?
     private let nicknameKey = "bitchat.nickname"
     // Location channel state (macOS supports manual geohash selection)
     var activeChannel: ChannelID {
@@ -1028,10 +1029,23 @@ final class ChatViewModel: ObservableObject, SynchronousMessageTransportEventDel
 
     /// Moves all messages from `oldPeerID`'s chat into `newPeerID`'s chat
     /// (ephemeral↔stable peer-ID handoff): dedups by ID, preserves order,
-    /// carries unread state, removes the old chat.
+    /// carries unread state, migrates disappearing timer with strictest-wins
+    /// reconciliation, and removes the old chat.
     @MainActor
     func migratePrivateChat(from oldPeerID: PeerID, to newPeerID: PeerID) {
+        encryptedHistoryStore.migrateTimer(from: oldPeerID, to: newPeerID)
         conversations.migrateConversation(from: .directPeer(oldPeerID), to: .directPeer(newPeerID))
+        pruneExpiredPrivateMessages(for: newPeerID)
+        scheduleNextExpirationSweep()
+    }
+
+    /// Reconciles the destination peer ID's disappearing timer with the source
+    /// without removing the source (used for partial migrations).
+    @MainActor
+    func reconcileDisappearingTimer(from sourcePeerID: PeerID, to destinationPeerID: PeerID) {
+        encryptedHistoryStore.reconcileTimer(from: sourcePeerID, to: destinationPeerID)
+        pruneExpiredPrivateMessages(for: destinationPeerID)
+        scheduleNextExpirationSweep()
     }
 
     /// A single private chat's timeline, read straight from the store —
@@ -1305,6 +1319,8 @@ final class ChatViewModel: ObservableObject, SynchronousMessageTransportEventDel
                     self.visibleMessagesCache = nil
                 }
                 if self.changeAffectsDirectConversation(change) {
+                    self.pruneExpiredIfIncomingDirectChange(change)
+                    self.scheduleNextExpirationSweep()
                     self.schedulePersistPrivateHistory()
                 }
             }
@@ -1353,6 +1369,7 @@ final class ChatViewModel: ObservableObject, SynchronousMessageTransportEventDel
     func setDisappearingTimer(_ timer: DisappearingTimer, for peerID: PeerID) {
         encryptedHistoryStore.setTimer(timer, for: peerID)
         pruneExpiredPrivateMessages(for: peerID)
+        scheduleNextExpirationSweep()
         flushPersistedPrivateHistorySynchronously()
     }
 
@@ -1374,13 +1391,18 @@ final class ChatViewModel: ObservableObject, SynchronousMessageTransportEventDel
         if didRemove {
             schedulePersistPrivateHistory()
         }
+        scheduleNextExpirationSweep(now: now)
     }
 
     func flushPersistedPrivateHistorySynchronously() {
         historyPersistTask?.cancel()
         historyPersistTask = nil
         guard !isPanicResetting else { return }
-        encryptedHistoryStore.save(from: conversations, nostrKeyMapping: nostrKeyMapping)
+        encryptedHistoryStore.save(
+            from: conversations,
+            nostrKeyMapping: nostrKeyMapping,
+            synchronous: true
+        )
     }
 
     func clearPersistedPrivateHistory() {
@@ -1481,6 +1503,56 @@ final class ChatViewModel: ObservableObject, SynchronousMessageTransportEventDel
         conversations.removeMessages(from: .directPeer(peerID)) { $0.timestamp < cutoff }
     }
 
+    private func pruneExpiredIfIncomingDirectChange(_ change: ConversationChange, now: Date = Date()) {
+        let targetID: ConversationID
+        switch change {
+        case .appended(let id, _), .updated(let id, _):
+            targetID = id
+        default:
+            return
+        }
+        guard case .direct(let handle) = targetID else { return }
+        let peerID = handle.routingPeerID
+        let timer = encryptedHistoryStore.timer(for: peerID)
+        guard let duration = timer.duration, duration > 0 else { return }
+        let cutoff = now.addingTimeInterval(-duration)
+        guard let conversation = conversations.conversationsByID[targetID],
+              conversation.messages.contains(where: { $0.timestamp < cutoff }) else {
+            return
+        }
+        conversations.removeMessages(from: targetID) { $0.timestamp < cutoff }
+    }
+
+    private func scheduleNextExpirationSweep(now: Date = Date()) {
+        expirationSweepTask?.cancel()
+        expirationSweepTask = nil
+        guard !TestEnvironment.isRunningTests, !isPanicResetting else { return }
+
+        var earliestExpiration: Date?
+        for (id, conversation) in conversations.conversationsByID {
+            guard case .direct(let handle) = id else { continue }
+            let timer = encryptedHistoryStore.timer(for: handle.routingPeerID)
+            guard let duration = timer.duration, duration > 0 else { continue }
+            for message in conversation.messages {
+                let expiresAt = message.timestamp.addingTimeInterval(duration)
+                if let current = earliestExpiration {
+                    if expiresAt < current { earliestExpiration = expiresAt }
+                } else {
+                    earliestExpiration = expiresAt
+                }
+            }
+        }
+
+        guard let earliestExpiration else { return }
+        let delaySeconds = max(1.0, min(3_600.0, earliestExpiration.timeIntervalSince(now)))
+        expirationSweepTask = Task { @MainActor [weak self] in
+            let nanos = UInt64(delaySeconds * 1_000_000_000)
+            try? await Task.sleep(nanoseconds: nanos)
+            guard !Task.isCancelled, let self, !self.isPanicResetting else { return }
+            self.pruneAllExpiredPrivateMessages()
+        }
+    }
+
     private func restorePersistedPrivateHistoryIfEnabled() {
         if TestEnvironment.isRunningTests {
             guard let snapshot = encryptedHistoryStore.load() else { return }
@@ -1506,6 +1578,7 @@ final class ChatViewModel: ObservableObject, SynchronousMessageTransportEventDel
                 conversations.markUnread(convID)
             }
         }
+        scheduleNextExpirationSweep()
     }
 
     private func schedulePersistPrivateHistory() {
@@ -1587,14 +1660,14 @@ final class ChatViewModel: ObservableObject, SynchronousMessageTransportEventDel
         let signingPubKey = meshService.noiseSigningPublicKeyData()
         guard noisePubKey.count == 32,
               signingPubKey.count == 32,
-              let npub = try? idBridge.getCurrentNostrIdentity()?.npub else {
+              let nostrIdentity = try? idBridge.getCurrentNostrIdentity() else {
             return nil
         }
-        return FriendInvite(
+        return FriendInvite.makeSigned(
             nickname: nickname,
             noisePublicKey: noisePubKey,
             signingPublicKey: signingPubKey,
-            nostrNpub: npub
+            nostrIdentity: nostrIdentity
         )
     }
 
@@ -1617,7 +1690,8 @@ final class ChatViewModel: ObservableObject, SynchronousMessageTransportEventDel
         )
 
         // Accepting someone's personal invite link establishes mutual Nostr
-        // reachability immediately and notifies them with our npub.
+        // reachability immediately and sends our signed identity bundle so the
+        // remote inviter can verify and store our Noise/signing/Nostr keys.
         FavoritesPersistenceService.shared.addFavorite(
             peerNoisePublicKey: invite.noisePublicKey,
             peerNostrPublicKey: invite.nostrNpub,
@@ -1634,10 +1708,32 @@ final class ChatViewModel: ObservableObject, SynchronousMessageTransportEventDel
             registerNostrKeyMapping(data.hexEncodedString(), for: invite.stablePeerID)
         }
 
-        sendFavoriteNotificationViaNostr(noisePublicKey: invite.noisePublicKey, isFavorite: true)
+        if let myInvite = buildMyFriendInvite(),
+           let nostrTransport = messageRouter.nostrTransport {
+            nostrTransport.sendFriendInviteAcceptance(
+                to: invite.stablePeerID,
+                payload: myInvite.favoriteAcceptancePayload()
+            )
+        } else {
+            sendFavoriteNotificationViaNostr(noisePublicKey: invite.noisePublicKey, isFavorite: true)
+        }
         unifiedPeerService.refreshPeers()
         startPrivateChat(with: invite.stablePeerID)
         return .success(invite.stablePeerID)
+    }
+
+    @MainActor
+    func registerVerifiedFriendInviteIdentity(_ invite: FriendInvite) {
+        identityManager.upsertCryptographicIdentity(
+            fingerprint: invite.noiseFingerprint,
+            noisePublicKey: invite.noisePublicKey,
+            signingPublicKey: invite.signingPublicKey,
+            claimedNickname: invite.nickname
+        )
+        if let (hrp, data) = try? Bech32.decode(invite.nostrNpub), hrp == "npub" {
+            registerNostrKeyMapping(data.hexEncodedString(), for: invite.stablePeerID)
+        }
+        unifiedPeerService.refreshPeers()
     }
 
     // MARK: - Public Key and Identity Management
@@ -1924,6 +2020,8 @@ final class ChatViewModel: ObservableObject, SynchronousMessageTransportEventDel
         isPanicResetting = true
         defer { isPanicResetting = false }
 
+        let wasTorEnabledBeforePanic = NetworkActivationService.persistedTorPreference(in: userDefaults)
+
         // Stop internet and location-presence work before clearing identity or
         // state. These services cancel their subscriptions and delayed tasks,
         // so old callbacks cannot reconnect during the transaction.
@@ -2017,8 +2115,10 @@ final class ChatViewModel: ObservableObject, SynchronousMessageTransportEventDel
         // public history, and the counters describing all of it
         historyPersistTask?.cancel()
         historyPersistTask = nil
+        expirationSweepTask?.cancel()
+        expirationSweepTask = nil
         encryptedHistoryStore.wipe()
-        PrivacyModeSettings.resetForPanic(in: userDefaults)
+        PrivacyModeSettings.resetForPanic(in: userDefaults, wasTorEnabled: wasTorEnabledBeforePanic)
         CourierStore.shared.wipe()
         BridgeCourierService.shared.wipe()
         BridgeService.shared.resetForPanic()

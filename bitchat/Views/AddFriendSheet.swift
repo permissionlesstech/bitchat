@@ -87,7 +87,7 @@ struct AddFriendSheet: View {
                 .multilineTextAlignment(.center)
                 .fixedSize(horizontal: false, vertical: true)
 
-            if let invite, let urlString = invite.universalURL?.absoluteString {
+            if let invite, let urlString = invite.deepLinkURL?.absoluteString ?? invite.universalURL?.absoluteString {
                 ThemedCard(padding: 16, spacing: 12) {
                     VStack(spacing: 12) {
                         QRCodeImage(data: urlString, size: 220)

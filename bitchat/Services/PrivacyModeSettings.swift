@@ -171,10 +171,16 @@ enum PrivacyModeSettings {
         onClearPersistedHistory: (() -> Void)? = nil
     ) {
         let activation = networkActivation ?? .shared
+        let previousMode = currentMode(in: defaults)
+        let hasExplicitTorPreference = defaults.object(forKey: NetworkActivationService.torPreferenceKey) != nil
         setMode(newMode, in: defaults)
         switch newMode {
         case .everyday:
-            activation.setUserTorEnabled(false)
+            // Turn Tor off when switching away from Stealth or on initial setup,
+            // but preserve an explicit user Tor toggle if already in Everyday Mode.
+            if previousMode == .stealth || !hasExplicitTorPreference {
+                activation.setUserTorEnabled(false)
+            }
         case .stealth:
             activation.setUserTorEnabled(true)
             NotificationPrivacySettings.setHideMessagePreviews(true, in: defaults)
@@ -198,10 +204,11 @@ enum PrivacyModeSettings {
     /// does not misclassify the wiped container.
     static func resetForPanic(
         in defaults: UserDefaults = .standard,
+        wasTorEnabled: Bool? = nil,
         notificationCenter: NotificationCenter = .default
     ) {
         let wasStealthOrTor = currentMode(in: defaults) == .stealth
-            || NetworkActivationService.persistedTorPreference(in: defaults)
+            || (wasTorEnabled ?? NetworkActivationService.persistedTorPreference(in: defaults))
         defaults.removeObject(forKey: modeKey)
         defaults.removeObject(forKey: persistHistoryKey)
         defaults.set(true, forKey: migrationCompletedKey)

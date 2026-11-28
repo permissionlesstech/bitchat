@@ -634,7 +634,7 @@ struct ContentView: View {
                     String(localized: "app_info.settings.danger.panic_confirm_action", defaultValue: "wipe everything", comment: "Destructive confirmation button that performs the panic wipe")
                 )
             }
-            Button("common.cancel", role: .cancel) {}
+            Button(String(localized: "common.cancel"), role: .cancel) {}
         }
     }
 

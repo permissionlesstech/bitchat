@@ -58,6 +58,22 @@ enum DisappearingTimer: String, Codable, CaseIterable, Identifiable, Equatable {
         }
     }
 
+    /// Privacy strictness rank used when reconciling timers across peer ID
+    /// aliases: ephemeral (RAM-only) > 24h > 7d > off.
+    var strictnessRank: Int {
+        switch self {
+        case .off: return 0
+        case .days7: return 1
+        case .hours24: return 2
+        case .ephemeral: return 3
+        }
+    }
+
+    /// Returns the stricter (more privacy-preserving) of two timers.
+    static func stricter(_ lhs: DisappearingTimer, _ rhs: DisappearingTimer) -> DisappearingTimer {
+        lhs.strictnessRank >= rhs.strictnessRank ? lhs : rhs
+    }
+
     var iconName: String {
         switch self {
         case .off: return "clock.arrow.circlepath"
@@ -102,6 +118,34 @@ final class EncryptedHistoryStore: ObservableObject {
 
     @Published private(set) var timers: [PeerID: DisappearingTimer] = [:]
 
+    /// Thread-safe generation token shared between `@MainActor` callers and
+    /// `AppSupportFileStore.ioQueue` so a panic wipe provably invalidates any
+    /// in-flight reads AND queued writes.
+    private final class GenerationGate: @unchecked Sendable {
+        private let lock = NSLock()
+        private var value: UInt64 = 0
+
+        func current() -> UInt64 {
+            lock.lock()
+            defer { lock.unlock() }
+            return value
+        }
+
+        @discardableResult
+        func bump() -> UInt64 {
+            lock.lock()
+            defer { lock.unlock() }
+            value &+= 1
+            return value
+        }
+
+        func matches(_ expected: UInt64) -> Bool {
+            lock.lock()
+            defer { lock.unlock() }
+            return value == expected
+        }
+    }
+
     private let keychain: KeychainManagerProtocol
     private let fileStore: AppSupportFileStore
     private let persistenceEnabledProvider: () -> Bool
@@ -109,7 +153,7 @@ final class EncryptedHistoryStore: ObservableObject {
     /// True when a transient Keychain or disk failure prevented reading durable
     /// data at launch. Refuses to overwrite durable history until healthy.
     private var loadUnavailable = false
-    private var lifecycleGeneration: UInt64 = 0
+    private let generationGate = GenerationGate()
 
     init(
         keychain: KeychainManagerProtocol,
@@ -142,12 +186,32 @@ final class EncryptedHistoryStore: ObservableObject {
         }
     }
 
+    /// Moves a disappearing timer when a conversation migrates from one peer ID
+    /// alias to another (e.g. full 64-hex Noise key ↔ 16-hex short mesh ID),
+    /// keeping the stricter timer when both aliases already have settings so
+    /// RAM-only or short-retention messages can never silently lose protection.
+    func migrateTimer(from oldPeerID: PeerID, to newPeerID: PeerID) {
+        guard oldPeerID != newPeerID else { return }
+        let oldTimer = timer(for: oldPeerID)
+        let newTimer = timer(for: newPeerID)
+        timers.removeValue(forKey: oldPeerID)
+        let merged = DisappearingTimer.stricter(oldTimer, newTimer)
+        setTimer(merged, for: newPeerID)
+    }
+
+    /// Reconciles the destination peer ID's timer with the source peer ID's
+    /// timer without removing the source (used for partial migrations).
+    func reconcileTimer(from sourcePeerID: PeerID, to destinationPeerID: PeerID) {
+        guard sourcePeerID != destinationPeerID else { return }
+        let merged = DisappearingTimer.stricter(timer(for: sourcePeerID), timer(for: destinationPeerID))
+        setTimer(merged, for: destinationPeerID)
+    }
+
     // MARK: - Load & Save
 
-    /// Loads and decrypts persisted private conversations, pruning any messages
-    /// past their per-chat disappearing timer. Returns `nil` when persistence is
-    /// disabled or no history file exists.
-    func load(now: Date = Date()) -> Snapshot? {
+    /// Synchronous test-only loader (`Data(contentsOf:)` on `@MainActor`).
+    /// Production cold launch must use `loadAsync(now:completion:)`.
+    internal func load(now: Date = Date()) -> Snapshot? {
         guard persistenceEnabledProvider() else {
             return nil
         }
@@ -187,10 +251,10 @@ final class EncryptedHistoryStore: ObservableObject {
             completion(nil)
             return
         }
-        let generation = lifecycleGeneration
+        let generation = generationGate.current()
         fileStore.readRawAsync { [weak self] result in
             Task { @MainActor [weak self] in
-                guard let self, self.lifecycleGeneration == generation else {
+                guard let self, self.generationGate.matches(generation) else {
                     completion(nil)
                     return
                 }
@@ -238,10 +302,13 @@ final class EncryptedHistoryStore: ObservableObject {
 
     /// Seals and persists private conversations + disappearing timers to disk.
     /// Removes the file if persistence is disabled or the sanitized snapshot is empty.
+    /// Pass `synchronous: true` on lifecycle boundaries (`background` / `terminate`)
+    /// so the queued I/O write lands on disk before the call returns.
     func save(
         from store: ConversationStore,
         nostrKeyMapping: [PeerID: String],
-        now: Date = Date()
+        now: Date = Date(),
+        synchronous: Bool = false
     ) {
         guard persistenceEnabledProvider() else {
             clearDiskFileOnly()
@@ -291,11 +358,11 @@ final class EncryptedHistoryStore: ObservableObject {
             unreadPeerIDs: unreadPeerIDs,
             nostrKeyMapping: mappedKeys
         )
-        persistSnapshot(snapshot)
+        persistSnapshot(snapshot, synchronous: synchronous)
     }
 
     /// Persists an explicit snapshot (used by tests and direct callers).
-    func saveSnapshot(_ snapshot: Snapshot, now: Date = Date()) {
+    func saveSnapshot(_ snapshot: Snapshot, now: Date = Date(), synchronous: Bool = false) {
         guard persistenceEnabledProvider() else {
             clearDiskFileOnly()
             return
@@ -303,7 +370,7 @@ final class EncryptedHistoryStore: ObservableObject {
         guard !loadUnavailable else { return }
         let sanitized = Self.prunedSnapshot(snapshot, now: now)
         applyLoadedTimers(sanitized.timersByPeerID)
-        persistSnapshot(sanitized)
+        persistSnapshot(sanitized, synchronous: synchronous)
     }
 
     /// Removes persisted history from disk while leaving the encryption key
@@ -314,7 +381,7 @@ final class EncryptedHistoryStore: ObservableObject {
 
     /// Panic wipe: destroys disk file, Keychain encryption key, and timer state.
     func wipe() {
-        lifecycleGeneration &+= 1
+        generationGate.bump()
         loadUnavailable = false
         cachedKey = nil
         timers.removeAll()
@@ -386,10 +453,18 @@ final class EncryptedHistoryStore: ObservableObject {
         fileStore.removeIgnoringErrors()
     }
 
-    private func persistSnapshot(_ snapshot: Snapshot) {
+    private func persistSnapshot(_ snapshot: Snapshot, synchronous: Bool) {
         guard fileStore.fileURL != nil else { return }
+        let expectedGeneration = generationGate.current()
+        let gate = generationGate
+        let shouldExecute: @Sendable () -> Bool = {
+            gate.matches(expectedGeneration)
+        }
         if snapshot.isEmpty {
-            fileStore.removeOffMain()
+            fileStore.removeOffMain(shouldExecute: shouldExecute)
+            if synchronous {
+                AppSupportFileStore.drainPendingWrites()
+            }
             return
         }
         guard let key = resolveOrCreateKey() else {
@@ -398,7 +473,10 @@ final class EncryptedHistoryStore: ObservableObject {
         do {
             let plaintext = try JSONEncoder().encode(snapshot)
             let sealed = try ChaChaPoly.seal(plaintext, using: key)
-            try fileStore.writeRawOffMain(sealed.combined)
+            try fileStore.writeRawOffMain(sealed.combined, shouldExecute: shouldExecute)
+            if synchronous {
+                AppSupportFileStore.drainPendingWrites()
+            }
         } catch {
             SecureLogger.error("Failed to seal and persist private history: \(error)", category: .security)
         }

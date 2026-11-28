@@ -265,6 +265,22 @@ final class NetworkActivationServiceTests: XCTestCase {
         XCTAssertEqual(context.proxyController.proxyModes.last, true)
     }
 
+    func test_applyModeEveryday_preservesExplicitTorOnWhileSwitchingFromStealthDisablesTor() {
+        let context = makeService(permission: .authorized, favorites: [], torEnabled: true)
+        context.service.start()
+        PrivacyModeSettings.setMode(.everyday, in: context.storage)
+
+        // Already in Everyday Mode with explicit user Tor ON -> re-applying Everyday preserves Tor ON.
+        PrivacyModeSettings.applyMode(.everyday, in: context.storage, networkActivation: context.service)
+        XCTAssertTrue(context.service.userTorEnabled)
+
+        // Switching to Stealth forces Tor ON; switching FROM Stealth -> Everyday turns Tor OFF.
+        PrivacyModeSettings.applyMode(.stealth, in: context.storage, networkActivation: context.service)
+        XCTAssertTrue(context.service.userTorEnabled)
+        PrivacyModeSettings.applyMode(.everyday, in: context.storage, networkActivation: context.service)
+        XCTAssertFalse(context.service.userTorEnabled)
+    }
+
     private func makeService(
         permission: LocationChannelManager.PermissionState,
         favorites: Set<Data>,

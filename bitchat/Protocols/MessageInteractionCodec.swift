@@ -70,9 +70,18 @@ enum MessageInteractionCodec {
     /// Encodes a quoted reply in a human-readable format that degrades gracefully
     /// on older iOS/Android clients (`> @sender: snippet\nbody`).
     static func encodeReply(to target: MessageReplyTarget, body: String) -> String {
-        let cleanSender = target.sender
+        var cleanSender = target.sender
+            .replacingOccurrences(of: "\r\n", with: "")
             .replacingOccurrences(of: "\n", with: "")
+            .replacingOccurrences(of: "\r", with: "")
             .trimmingCharacters(in: .whitespacesAndNewlines)
+        while cleanSender.contains(": ") {
+            cleanSender = cleanSender.replacingOccurrences(of: ": ", with: " ")
+        }
+        while cleanSender.hasPrefix("> ") {
+            cleanSender = String(cleanSender.dropFirst(2)).trimmingCharacters(in: .whitespaces)
+        }
+        cleanSender = cleanSender.trimmingCharacters(in: .whitespacesAndNewlines)
         let cleanSnippet = makeSnippet(from: target.snippet)
         let cleanBody = body.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !cleanSender.isEmpty, !cleanSnippet.isEmpty else {

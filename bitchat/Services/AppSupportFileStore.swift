@@ -86,18 +86,29 @@ struct AppSupportFileStore {
     }
 
     /// Writes raw bytes off the main thread when invoked from the main thread,
-    /// or synchronously when already on a background queue.
-    func writeRawOffMain(_ data: Data) throws {
+    /// or synchronously when already on a background queue. An optional
+    /// `shouldExecute` predicate is checked on `ioQueue` right before writing so
+    /// a panic wipe can cancel in-flight writes enqueued before the wipe.
+    func writeRawOffMain(
+        _ data: Data,
+        shouldExecute: (@Sendable () -> Bool)? = nil
+    ) throws {
         guard fileURL != nil else { return }
         if Thread.isMainThread {
             let store = self
             Self.ioQueue.async {
+                if let shouldExecute, !shouldExecute() {
+                    return
+                }
                 do {
                     try store.writeRaw(data)
                 } catch {
                     SecureLogger.error("Background file write failed: \(error)", category: .session)
                 }
             }
+            return
+        }
+        if let shouldExecute, !shouldExecute() {
             return
         }
         try writeRaw(data)
@@ -188,12 +199,18 @@ struct AppSupportFileStore {
 
     /// Removes the file off the main thread when called on main; use
     /// `removeIgnoringErrors()` for synchronous panic-wipe deletion.
-    func removeOffMain() {
+    func removeOffMain(shouldExecute: (@Sendable () -> Bool)? = nil) {
         guard let fileURL else { return }
         if Thread.isMainThread {
             Self.ioQueue.async {
+                if let shouldExecute, !shouldExecute() {
+                    return
+                }
                 try? FileManager.default.removeItem(at: fileURL)
             }
+            return
+        }
+        if let shouldExecute, !shouldExecute() {
             return
         }
         try? FileManager.default.removeItem(at: fileURL)

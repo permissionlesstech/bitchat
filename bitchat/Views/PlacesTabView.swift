@@ -74,7 +74,7 @@ struct PlacesTabView<RoomContent: View>: View {
                 }
                 pendingShareGeohash = nil
             }
-            Button("common.cancel", role: .cancel) {
+            Button(String(localized: "common.cancel"), role: .cancel) {
                 pendingShareGeohash = nil
             }
         } message: {
@@ -193,11 +193,11 @@ struct PlacesTabView<RoomContent: View>: View {
 
         case .denied, .restricted:
             ThemedCard {
-                Text("location_channels.permission_denied")
+                Text(String(localized: "location_channels.permission_denied"))
                     .bitchatFont(size: 13)
                     .foregroundColor(palette.secondary)
                     .fixedSize(horizontal: false, vertical: true)
-                Button("location_channels.action.open_settings", action: SystemSettings.location.open)
+                Button(String(localized: "location_channels.action.open_settings"), action: SystemSettings.location.open)
                     .bitchatFont(size: 13, weight: .semibold)
                     .foregroundColor(palette.accent)
                     .buttonStyle(.plain)
@@ -246,7 +246,7 @@ struct PlacesTabView<RoomContent: View>: View {
             ThemedCard {
                 HStack(spacing: 10) {
                     ProgressView()
-                    Text("location_channels.loading_nearby")
+                    Text(String(localized: "location_channels.loading_nearby"))
                         .bitchatFont(size: 13)
                         .foregroundColor(palette.secondary)
                 }

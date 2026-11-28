@@ -437,7 +437,7 @@ struct GroupInfoSheet: View {
                 _ = privateConversationModel.leaveGroup(peerID: groupPeerID)
                 dismiss()
             }
-            Button("common.cancel", role: .cancel) {}
+            Button(String(localized: "common.cancel"), role: .cancel) {}
         }
         #if os(macOS)
         .frame(minWidth: 440, minHeight: 540)

@@ -141,7 +141,7 @@ struct ContactDetailSheet: View {
             ) {
                 privateConversationModel.clearHistory(for: conversationPeerID)
             }
-            Button("common.cancel", role: .cancel) {}
+            Button(String(localized: "common.cancel"), role: .cancel) {}
         }
         .confirmationDialog(
             String(
@@ -159,7 +159,7 @@ struct ContactDetailSheet: View {
                 privateConversationModel.toggleBlock(for: peerID, displayName: displayName)
                 dismiss()
             }
-            Button("common.cancel", role: .cancel) {}
+            Button(String(localized: "common.cancel"), role: .cancel) {}
         }
         #if os(macOS)
         .frame(minWidth: 420, minHeight: 540)
@@ -529,19 +529,19 @@ struct ContactDetailSheet: View {
 
                 if showFingerprints {
                     VStack(alignment: .leading, spacing: 8) {
-                        Text("fingerprint.their_label")
+                        Text(String(localized: "fingerprint.their_label"))
                             .bitchatFont(size: 11, weight: .bold)
                             .foregroundColor(palette.secondary)
 
                         if let fp = fpState.theirFingerprint {
                             fingerprintBlock(fp)
                         } else {
-                            Text("fingerprint.handshake_pending")
+                            Text(String(localized: "fingerprint.handshake_pending"))
                                 .bitchatFont(size: 12)
                                 .foregroundColor(.orange)
                         }
 
-                        Text("fingerprint.your_label")
+                        Text(String(localized: "fingerprint.your_label"))
                             .bitchatFont(size: 11, weight: .bold)
                             .foregroundColor(palette.secondary)
                             .padding(.top, 4)

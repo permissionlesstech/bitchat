@@ -76,6 +76,11 @@ struct BitchatApp: App {
                 .onOpenURL { url in
                     runtime.handleOpenURL(url)
                 }
+                .onContinueUserActivity(NSUserActivityTypeBrowsingWeb) { activity in
+                    if let url = activity.webpageURL {
+                        runtime.handleOpenURL(url)
+                    }
+                }
                 #if os(iOS)
                 .onChange(of: scenePhase) { newPhase in
                     runtime.handleScenePhaseChange(newPhase)

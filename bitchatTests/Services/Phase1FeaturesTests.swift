@@ -278,37 +278,139 @@ final class EncryptedHistoryStoreTests: XCTestCase {
         XCTAssertEqual(store.timer(for: peer), .off)
         XCTAssertNil(store.load())
     }
+
+    func test_synchronousSaveLandsOnDiskBeforeReturning() {
+        let keychain = MockKeychain()
+        let fileURL = makeTempFileURL()
+        defer { try? FileManager.default.removeItem(at: fileURL.deletingLastPathComponent()) }
+
+        let store = EncryptedHistoryStore(
+            keychain: keychain,
+            persistsToDisk: true,
+            fileURL: fileURL,
+            persistenceEnabledProvider: { true }
+        )
+        let peer = PeerID(str: "dddddddddddddddd")
+        let conversations = ConversationStore()
+        conversations.append(
+            BitchatMessage(id: "sync-1", sender: "d", content: "flush me now", timestamp: Date(), isRelay: false, isPrivate: true),
+            to: .directPeer(peer)
+        )
+
+        // Do NOT call drainPendingWrites(): synchronous save must land before return.
+        store.save(from: conversations, nostrKeyMapping: [:], synchronous: true)
+        XCTAssertTrue(FileManager.default.fileExists(atPath: fileURL.path))
+    }
+
+    func test_migrateTimerPreservesStricterRetentionAcrossAliases() {
+        let store = EncryptedHistoryStore(
+            keychain: MockKeychain(),
+            persistsToDisk: false,
+            persistenceEnabledProvider: { true }
+        )
+        let stableNostrID = PeerID(hexData: Data(repeating: 0xAA, count: 32))
+        let shortMeshID = PeerID(str: "1122334455667788")
+
+        // Ephemeral Nostr chat migrating to default (.off) short mesh ID stays ephemeral.
+        store.setTimer(.ephemeral, for: stableNostrID)
+        store.migrateTimer(from: stableNostrID, to: shortMeshID)
+        XCTAssertEqual(store.timer(for: stableNostrID), .off)
+        XCTAssertEqual(store.timer(for: shortMeshID), .ephemeral)
+
+        // Reconciling two aliases keeps the stricter (shorter) retention window.
+        let aliasA = PeerID(str: "aaaaaaaaaaaaaaaa")
+        let aliasB = PeerID(str: "bbbbbbbbbbbbbbbb")
+        store.setTimer(.days7, for: aliasA)
+        store.setTimer(.hours24, for: aliasB)
+        store.migrateTimer(from: aliasA, to: aliasB)
+        XCTAssertEqual(store.timer(for: aliasA), .off)
+        XCTAssertEqual(store.timer(for: aliasB), .hours24)
+    }
 }
 
 final class FriendInviteTests: XCTestCase {
-    private func sampleInvite(nickname: String = "alice") throws -> FriendInvite {
-        let noiseKey = Data(repeating: 0x11, count: 32)
-        let signingKey = Data(repeating: 0x22, count: 32)
-        let nostrPubKey = Data(repeating: 0x33, count: 32)
-        let npub = try Bech32.encode(hrp: "npub", data: nostrPubKey)
-        return FriendInvite(
-            nickname: nickname,
-            noisePublicKey: noiseKey,
-            signingPublicKey: signingKey,
-            nostrNpub: npub
+    private func sampleInvite(
+        nickname: String = "alice",
+        noiseByte: UInt8 = 0x11,
+        signingByte: UInt8 = 0x22
+    ) throws -> (invite: FriendInvite, identity: NostrIdentity) {
+        let noiseKey = Data(repeating: noiseByte, count: 32)
+        let signingKey = Data(repeating: signingByte, count: 32)
+        let identity = try NostrIdentity.generate()
+        let invite = try XCTUnwrap(
+            FriendInvite.makeSigned(
+                nickname: nickname,
+                noisePublicKey: noiseKey,
+                signingPublicKey: signingKey,
+                nostrIdentity: identity
+            )
         )
+        return (invite, identity)
     }
 
     func test_universalAndDeepLinkRoundTrip() throws {
-        let invite = try sampleInvite(nickname: "alice")
+        let (invite, _) = try sampleInvite(nickname: "alice")
         let universal = try XCTUnwrap(invite.universalURL)
         let deep = try XCTUnwrap(invite.deepLinkURL)
 
         XCTAssertEqual(universal.scheme, "https")
         XCTAssertEqual(universal.host, "bitchat.free")
+        XCTAssertEqual(deep.scheme, "bitchat")
         XCTAssertEqual(FriendInvite.parse(url: universal), invite)
         XCTAssertEqual(FriendInvite.parse(url: deep), invite)
     }
 
-    func test_parseExtractsInviteFromFullShareMessage() throws {
-        let invite = try sampleInvite(nickname: "bob")
+    func test_parseExtractsInviteFromFullShareMessageUsingDirectDeepLink() throws {
+        let (invite, _) = try sampleInvite(nickname: "bob")
+        XCTAssertTrue(invite.sharePayloadText.contains("bitchat://invite?"))
         let parsed = FriendInvite.parse(from: invite.sharePayloadText)
         XCTAssertEqual(parsed, invite)
+    }
+
+    func test_parseRejectsRecombinedVictimNpubAndUnsignedInvites() throws {
+        let (attacker, _) = try sampleInvite(nickname: "mallory", noiseByte: 0xAA, signingByte: 0xBB)
+        let victimIdentity = try NostrIdentity.generate()
+
+        // Swapping `p` to a victim's npub while keeping attacker's k/s/b must be rejected.
+        var components = try XCTUnwrap(URLComponents(url: try XCTUnwrap(attacker.deepLinkURL), resolvingAgainstBaseURL: false))
+        components.queryItems = components.queryItems?.map { item in
+            item.name == "p" ? URLQueryItem(name: "p", value: victimIdentity.npub) : item
+        }
+        let forgedURL = try XCTUnwrap(components.url)
+        XCTAssertNil(FriendInvite.parse(url: forgedURL))
+
+        // Removing the binding signature `b` must also be rejected.
+        components.queryItems = components.queryItems?.filter { $0.name != "b" }
+        let unsignedURL = try XCTUnwrap(components.url)
+        XCTAssertNil(FriendInvite.parse(url: unsignedURL))
+    }
+
+    func test_favoriteAcceptancePayloadVerifiesSenderBinding() throws {
+        let (bob, bobIdentity) = try sampleInvite(nickname: "bob")
+        let otherIdentity = try NostrIdentity.generate()
+        let payload = bob.favoriteAcceptancePayload()
+
+        // Legacy 1.x parser sees [FAVORITED] in parts[0] and npub in parts[1].
+        let parts = payload.split(separator: ":")
+        XCTAssertEqual(parts[0], "[FAVORITED]")
+        XCTAssertEqual(String(parts[1]), bobIdentity.npub)
+
+        // Valid when NIP-17 sender pubkey matches the embedded npub.
+        let parsed = FriendInvite.parseFavoriteAcceptancePayload(
+            payload,
+            expectedSenderPubkeyHex: bobIdentity.publicKeyHex,
+            nickname: "bob"
+        )
+        XCTAssertEqual(parsed, bob)
+
+        // Rejected when a different NIP-17 sender relays Bob's payload.
+        XCTAssertNil(
+            FriendInvite.parseFavoriteAcceptancePayload(
+                payload,
+                expectedSenderPubkeyHex: otherIdentity.publicKeyHex,
+                nickname: "bob"
+            )
+        )
     }
 
     func test_parseRejectsMalformedKeysAndWrongHost() {
@@ -327,7 +429,7 @@ final class HybridGroupDeliveryTests: XCTestCase {
         let groupStore: GroupStore
 
         let mySigningPrivateKey = Curve25519.Signing.PrivateKey()
-        let myFingerprint = Data(repeating: 0xAA, count: 32).sha256Fingerprint()
+        var myFingerprint = Data(repeating: 0xAA, count: 32).sha256Fingerprint()
 
         var identitiesByPeer: [PeerID: (fingerprint: String, signingKey: Data)] = [:]
         var nicknamesByPeer: [PeerID: String] = [:]
@@ -338,6 +440,9 @@ final class HybridGroupDeliveryTests: XCTestCase {
         var nostrInvites: [(Data, PeerID)] = []
         var bleGroupBroadcasts: [Data] = []
         var nostrGroupMessages: [(Data, PeerID)] = []
+        var nostrDirectPubkeyGroupMessages: [(Data, String)] = []
+        var nostrPubkeyByFingerprint: [String: String] = [:]
+        var ownNostrPubkeyHex: String?
         var conversations = ConversationStore()
 
         init(groupStore: GroupStore) {
@@ -360,6 +465,10 @@ final class HybridGroupDeliveryTests: XCTestCase {
         func nostrReachablePeerID(forFingerprint fingerprint: String) -> PeerID? {
             nostrPeerByFingerprint[fingerprint]
         }
+        func myNostrPubkeyHex() -> String? { ownNostrPubkeyHex }
+        func nostrPubkeyHex(forFingerprint fingerprint: String) -> String? {
+            nostrPubkeyByFingerprint[fingerprint]
+        }
         func isFingerprintBlocked(_ fingerprint: String) -> Bool { false }
         func sendGroupInvitePayload(_ payload: Data, to peerID: PeerID) { bleInvites.append((payload, peerID)) }
         func sendGroupKeyUpdatePayload(_ payload: Data, to peerID: PeerID) {}
@@ -367,6 +476,9 @@ final class HybridGroupDeliveryTests: XCTestCase {
         func sendGroupInviteViaNostr(_ payload: Data, to peerID: PeerID) { nostrInvites.append((payload, peerID)) }
         func sendGroupKeyUpdateViaNostr(_ payload: Data, to peerID: PeerID) {}
         func sendGroupMessageViaNostr(_ payload: Data, to peerID: PeerID) { nostrGroupMessages.append((payload, peerID)) }
+        func sendGroupMessageViaNostr(_ payload: Data, toPubkeyHex pubkeyHex: String) {
+            nostrDirectPubkeyGroupMessages.append((payload, pubkeyHex))
+        }
 
         @discardableResult
         func appendPrivateMessage(_ message: BitchatMessage, to peerID: PeerID) -> Bool {
@@ -413,6 +525,58 @@ final class HybridGroupDeliveryTests: XCTestCase {
         XCTAssertEqual(context.bleGroupBroadcasts.count, 1)
         XCTAssertEqual(context.nostrGroupMessages.count, 1)
         XCTAssertEqual(context.nostrGroupMessages.first?.1, remotePeerID)
+    }
+
+    func test_groupStateDistributesMemberNostrRoutingAndDeliversWithoutDirectFavorites() throws {
+        let keychain = MockKeychain()
+        let groupStore = GroupStore(keychain: keychain, persistsToDisk: false)
+        let context = MockHybridGroupContext(groupStore: groupStore)
+        let coordinator = ChatGroupCoordinator(context: context)
+
+        let alicePubkeyHex = Data(repeating: 0xA1, count: 32).hexEncodedString()
+        let bobPubkeyHex = Data(repeating: 0xB2, count: 32).hexEncodedString()
+        let creatorPubkeyHex = Data(repeating: 0xC3, count: 32).hexEncodedString()
+        context.ownNostrPubkeyHex = creatorPubkeyHex
+
+        let aliceNoiseKey = Data(repeating: 0x51, count: 32)
+        let alicePeerID = PeerID(hexData: aliceNoiseKey)
+        let aliceFp = aliceNoiseKey.sha256Fingerprint()
+        let aliceSigningKey = Curve25519.Signing.PrivateKey().publicKey.rawRepresentation
+        context.identitiesByPeer[alicePeerID] = (aliceFp, aliceSigningKey)
+        context.nicknamesByPeer[alicePeerID] = "alice"
+        context.nostrPeerByFingerprint[aliceFp] = alicePeerID
+        context.nostrPubkeyByFingerprint[aliceFp] = alicePubkeyHex
+
+        let bobNoiseKey = Data(repeating: 0x52, count: 32)
+        let bobPeerID = PeerID(hexData: bobNoiseKey)
+        let bobFp = bobNoiseKey.sha256Fingerprint()
+        let bobSigningKey = Curve25519.Signing.PrivateKey().publicKey.rawRepresentation
+        context.identitiesByPeer[bobPeerID] = (bobFp, bobSigningKey)
+        context.nicknamesByPeer[bobPeerID] = "bob"
+        context.nostrPeerByFingerprint[bobFp] = bobPeerID
+        context.nostrPubkeyByFingerprint[bobFp] = bobPubkeyHex
+
+        _ = coordinator.createGroup(named: "Trio", initialMemberPeerIDs: [alicePeerID, bobPeerID])
+        let lastInviteBytes = try XCTUnwrap(context.nostrInvites.last?.0)
+        let decodedState = try XCTUnwrap(GroupStatePayload.decode(lastInviteBytes))
+        XCTAssertTrue(decodedState.verifyCreatorSignature())
+        XCTAssertEqual(decodedState.members.first(where: { $0.fingerprint == aliceFp })?.nostrPubkeyHex, alicePubkeyHex)
+        XCTAssertEqual(decodedState.members.first(where: { $0.fingerprint == bobFp })?.nostrPubkeyHex, bobPubkeyHex)
+        XCTAssertEqual(decodedState.members.first(where: { $0.fingerprint == context.myFingerprint })?.nostrPubkeyHex, creatorPubkeyHex)
+
+        // Simulate Alice's device: Alice has NO local favorite for Bob, only the
+        // creator-distributed group state. Sending a group message must still
+        // fan out to Bob and the creator via their roster nostrPubkeyHex, while
+        // skipping Alice herself.
+        let aliceStore = GroupStore(keychain: MockKeychain(), persistsToDisk: false)
+        XCTAssertTrue(aliceStore.upsert(decodedState.asGroup, key: decodedState.key))
+        let aliceContext = MockHybridGroupContext(groupStore: aliceStore)
+        aliceContext.myFingerprint = aliceFp
+        let aliceCoordinator = ChatGroupCoordinator(context: aliceContext)
+        aliceCoordinator.sendGroupMessage("Hey Bob!", to: decodedState.asGroup.peerID)
+
+        let deliveredHexes = Set(aliceContext.nostrDirectPubkeyGroupMessages.map(\.1))
+        XCTAssertEqual(deliveredHexes, Set([bobPubkeyHex, creatorPubkeyHex]))
     }
 
     func test_nostrEmbeddedGroupStateAndMessagePacketsDecodeCleanly() throws {
@@ -746,5 +910,18 @@ final class InboxPinnedChatsTests: XCTestCase {
             to: .mesh
         )
         XCTAssertEqual(model.unreadMeshMessageCount, 0)
+    }
+
+    func test_replyCodecSanitizesColonSpaceAndLeadingQuoteInSenderNickname() {
+        let target = MessageReplyTarget(
+            messageID: "m-colon",
+            sender: "> alice: admin",
+            content: "Original body: with colon"
+        )
+        let encoded = MessageInteractionCodec.encodeReply(to: target, body: "Got it!")
+        let parsed = MessageInteractionCodec.parseReply(from: encoded)
+        XCTAssertEqual(parsed?.quotedSender, "alice admin")
+        XCTAssertEqual(parsed?.quotedSnippet, "Original body: with colon")
+        XCTAssertEqual(parsed?.body, "Got it!")
     }
 }

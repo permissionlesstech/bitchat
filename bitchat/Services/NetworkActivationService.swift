@@ -213,9 +213,12 @@ final class NetworkActivationService: ObservableObject {
     }
 
     func setUserTorEnabled(_ enabled: Bool) {
-        guard enabled != userTorEnabled else { return }
+        let changed = enabled != userTorEnabled
+        let hasStoredPreference = storage.object(forKey: Self.torPreferenceKey) != nil
+        guard changed || !hasStoredPreference else { return }
         userTorEnabled = enabled
         storage.set(enabled, forKey: Self.torPreferenceKey)
+        guard changed else { return }
         notificationCenter.post(
             name: .TorUserPreferenceChanged,
             object: nil,

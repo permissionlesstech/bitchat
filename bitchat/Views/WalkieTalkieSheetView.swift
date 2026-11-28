@@ -225,9 +225,9 @@ struct WalkieTalkieSheetView: View {
                 set: { if !$0 { voiceRecordingVM.showAlert = false } }
             ),
             actions: {
-                Button("common.ok", role: .cancel) {}
+                Button(String(localized: "common.ok"), role: .cancel) {}
                 if voiceRecordingVM.state == .permissionDenied {
-                    Button("location_channels.action.open_settings") {
+                    Button(String(localized: "location_channels.action.open_settings")) {
                         SystemSettings.microphone.open()
                     }
                 }
