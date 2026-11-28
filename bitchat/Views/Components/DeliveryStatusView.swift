@@ -10,6 +10,13 @@ import SwiftUI
 import BitFoundation
 
 extension DeliveryStatus {
+    private static let statusTimeFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.dateStyle = .none
+        formatter.timeStyle = .short
+        return formatter
+    }()
+
     /// Localized, user-facing description of the status. Used for macOS
     /// tooltips, the tap-to-reveal caption under a message, and VoiceOver —
     /// the glyphs alone are unexplained 10pt icons.
@@ -23,18 +30,20 @@ extension DeliveryStatus {
             return String(localized: "content.delivery.sent", comment: "Delivery status description for a sent but not yet confirmed private message")
         case .carried:
             return String(localized: "content.delivery.carried", defaultValue: "Carried by a friend who may meet them", comment: "Delivery status description for messages handed to a courier for physical delivery")
-        case .delivered(let nickname, _):
-            return String(
+        case .delivered(let nickname, let timestamp):
+            let base = String(
                 format: String(localized: "content.delivery.delivered_to", comment: "Tooltip for delivered private messages"),
                 locale: .current,
                 nickname
             )
-        case .read(let nickname, _):
-            return String(
+            return "\(base) · \(Self.statusTimeFormatter.string(from: timestamp))"
+        case .read(let nickname, let timestamp):
+            let base = String(
                 format: String(localized: "content.delivery.read_by", comment: "Tooltip for read private messages"),
                 locale: .current,
                 nickname
             )
+            return "\(base) · \(Self.statusTimeFormatter.string(from: timestamp))"
         case .failed(let reason):
             return String(
                 format: String(localized: "content.delivery.failed", comment: "Tooltip for failed message delivery"),

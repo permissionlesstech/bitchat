@@ -16,6 +16,9 @@ private final class MockChatLiveVoiceContext: ChatLiveVoiceContext {
     var nickname = "me"
     var myPeerID = PeerID(str: "0102030405060708")
     var selectedPrivateChatPeer: PeerID?
+    var isAppActive = true
+    var sendReadReceiptsEnabled = true
+    var routeReadReceiptResult = true
     var isViewingPublicMeshTimeline = false
     var blockedPeers: Set<PeerID> = []
 
@@ -51,6 +54,11 @@ private final class MockChatLiveVoiceContext: ChatLiveVoiceContext {
     }
     func markReadReceiptSent(_ messageID: String) -> Bool {
         readReceiptMessageIDs.insert(messageID).inserted
+    }
+    @discardableResult
+    func routeReadReceipt(_ receipt: ReadReceipt, to peerID: PeerID) -> Bool {
+        sentReadReceipts.append((receipt, peerID))
+        return routeReadReceiptResult
     }
     func sendMeshReadReceipt(_ receipt: ReadReceipt, to peerID: PeerID) {
         sentReadReceipts.append((receipt, peerID))
@@ -219,6 +227,55 @@ struct ChatLiveVoiceCoordinatorTests {
 
         // Absorption is one-shot.
         #expect(!coordinator.absorbFinalizedVoiceNote(note))
+    }
+
+    @Test func absorbDoesNotEmitReadReceiptWhenBackgroundedOrDisabled() throws {
+        let context = MockChatLiveVoiceContext()
+        let coordinator = ChatLiveVoiceCoordinator(context: context, sweepsOnInit: false)
+        coordinator.liveVoiceEnabled = { true }
+
+        let burstID = makeBurstID(0xC1)
+        send(try #require(VoiceBurstPacket(burstID: burstID, seq: 1, kind: .frames([Data(repeating: 7, count: 50)]))), to: coordinator, from: peer)
+        send(try #require(VoiceBurstPacket(burstID: burstID, seq: 2, kind: .end(totalDataPackets: 1, durationMs: 64))), to: coordinator, from: peer)
+
+        // Chat is selected, but app is backgrounded/locked: must NOT emit READ.
+        context.selectedPrivateChatPeer = peer
+        context.isAppActive = false
+        let fileName = "voice_\(burstID.hexEncodedString()).m4a"
+        let note = BitchatMessage(
+            id: "stable-bg-voice",
+            sender: "alice",
+            content: "[voice] \(fileName)",
+            timestamp: Date(),
+            isRelay: false,
+            isPrivate: true,
+            recipientNickname: "me",
+            senderPeerID: peer
+        )
+        #expect(coordinator.absorbFinalizedVoiceNote(note))
+        #expect(context.sentReadReceipts.isEmpty)
+        #expect(!context.hasSentReadReceipt("stable-bg-voice"))
+
+        // Active app, but read receipts disabled: also must NOT emit READ.
+        let burstID2 = makeBurstID(0xC2)
+        send(try #require(VoiceBurstPacket(burstID: burstID2, seq: 1, kind: .frames([Data(repeating: 7, count: 50)]))), to: coordinator, from: peer)
+        send(try #require(VoiceBurstPacket(burstID: burstID2, seq: 2, kind: .end(totalDataPackets: 1, durationMs: 64))), to: coordinator, from: peer)
+
+        context.isAppActive = true
+        context.sendReadReceiptsEnabled = false
+        let note2 = BitchatMessage(
+            id: "stable-disabled-voice",
+            sender: "alice",
+            content: "[voice] voice_\(burstID2.hexEncodedString()).m4a",
+            timestamp: Date(),
+            isRelay: false,
+            isPrivate: true,
+            recipientNickname: "me",
+            senderPeerID: peer
+        )
+        #expect(coordinator.absorbFinalizedVoiceNote(note2))
+        #expect(context.sentReadReceipts.isEmpty)
+        #expect(!context.hasSentReadReceipt("stable-disabled-voice"))
     }
 
     @Test func absorbIgnoresUnrelatedVoiceNotes() throws {

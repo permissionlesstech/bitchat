@@ -18,6 +18,8 @@ protocol ChatLiveVoiceContext: AnyObject {
     var nickname: String { get }
     var myPeerID: PeerID { get }
     var selectedPrivateChatPeer: PeerID? { get }
+    var isAppActive: Bool { get }
+    var sendReadReceiptsEnabled: Bool { get }
     /// Whether the public mesh timeline is what's on screen (autoplay gate
     /// for public bursts).
     var isViewingPublicMeshTimeline: Bool { get }
@@ -42,6 +44,8 @@ protocol ChatLiveVoiceContext: AnyObject {
     func hasSentReadReceipt(_ messageID: String) -> Bool
     @discardableResult
     func markReadReceiptSent(_ messageID: String) -> Bool
+    @discardableResult
+    func routeReadReceipt(_ receipt: ReadReceipt, to peerID: PeerID) -> Bool
     func sendMeshReadReceipt(_ receipt: ReadReceipt, to peerID: PeerID)
     /// Removes a message from whichever conversation holds it.
     func removeMessage(withID messageID: String, cleanupFile: Bool)
@@ -63,6 +67,13 @@ protocol ChatLiveVoiceContext: AnyObject {
 }
 
 extension ChatLiveVoiceContext {
+    var isAppActive: Bool { true }
+    var sendReadReceiptsEnabled: Bool { true }
+    @discardableResult
+    func routeReadReceipt(_ receipt: ReadReceipt, to peerID: PeerID) -> Bool {
+        sendMeshReadReceipt(receipt, to: peerID)
+        return true
+    }
     func setActiveDirectVoiceTalker(_ talker: LiveVoiceTalker?) {}
     func resolveAuthorizedGroupPeerID(forGroupID groupID: Data, senderPeerID: PeerID) -> PeerID? { nil }
     func appendGroupLiveVoiceMessage(_ message: BitchatMessage, to groupPeerID: PeerID) {}
@@ -476,9 +487,11 @@ final class ChatLiveVoiceCoordinator {
         case .directMessage:
             // Capture read state before rekeying. The user may have read the
             // live bubble and navigated away before the finalized .m4a lands.
-            let shouldSendAdoptedReadReceipt =
-                context.hasSentReadReceipt(finished.messageID)
-                || context.selectedPrivateChatPeer == finished.peerID
+            // Never emit a read receipt while backgrounded/locked or when read
+            // receipts are disabled.
+            let shouldSendAdoptedReadReceipt = context.sendReadReceiptsEnabled
+                && (context.hasSentReadReceipt(finished.messageID)
+                    || (context.isAppActive && context.selectedPrivateChatPeer == finished.peerID))
 
             // Insert first so replacing the only row in a DM never
             // transiently deletes its conversation, unread state, or current
@@ -491,13 +504,15 @@ final class ChatLiveVoiceCoordinator {
             // before the sender created its finalized media row. Re-emit once
             // for the adopted stable ID now that the file has arrived.
             if shouldSendAdoptedReadReceipt,
-               context.markReadReceiptSent(replacementID) {
+               !context.hasSentReadReceipt(replacementID) {
                 let receipt = ReadReceipt(
                     originalMessageID: replacementID,
                     readerID: context.myPeerID,
                     readerNickname: context.nickname
                 )
-                context.sendMeshReadReceipt(receipt, to: finished.peerID)
+                if context.routeReadReceipt(receipt, to: finished.peerID) {
+                    context.markReadReceiptSent(replacementID)
+                }
             }
         case .publicMesh:
             context.upsertPublicMeshMessage(replacement)

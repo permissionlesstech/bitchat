@@ -541,12 +541,19 @@ final class MessageRouter {
     }
 
     /// Returns true only when the receipt was handed to a reachable transport.
+    /// Prefers a transport that can deliver securely right now (established
+    /// Noise session on BLE, or connected DM relay on Nostr), then a connected
+    /// transport, then any reachable transport — avoiding throwing receipts
+    /// into a stale BLE reachability retention window when Nostr is live.
     /// A false result means it was dropped (no route) and must NOT be recorded
     /// as sent, or the sender's message would stay unread forever — the receipt
     /// is retried on the next read scan (chat open / foreground / reconnect).
     @discardableResult
     func sendReadReceipt(_ receipt: ReadReceipt, to peerID: PeerID) -> Bool {
-        if let transport = reachableTransport(for: peerID) {
+        let transport = transports.first { $0.isPeerReachable(peerID) && $0.canDeliverSecurely(to: peerID) }
+            ?? connectedTransport(for: peerID)
+            ?? reachableTransport(for: peerID)
+        if let transport {
             SecureLogger.debug("Routing READ ack via \(type(of: transport)) to \(peerID.id.prefix(8))… id=\(receipt.originalMessageID.prefix(8))…", category: .session)
             transport.sendReadReceipt(receipt, to: peerID)
             return true

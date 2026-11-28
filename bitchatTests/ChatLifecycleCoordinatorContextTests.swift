@@ -32,13 +32,22 @@ private final class MockChatLifecycleContext: ChatLifecycleContext {
     }
     var unreadPrivateMessages: Set<PeerID> = []
     var selectedPrivateChatPeer: PeerID?
+    var isAppActive = true
+    var sendReadReceiptsEnabled = true
+    var canSendGeohashReadReceipt = true
     var sentReadReceipts: Set<String> = []
     var nickname = "me"
     var myPeerID = PeerID(str: "0011223344556677")
     var activeChannel: ChannelID = .mesh
     var nostrKeyMapping: [PeerID: String] = [:]
+    var geoDMGeohashByPeerID: [PeerID: String] = [:]
+    private(set) var derivedGeohashes: [String] = []
     private(set) var ownerLevelReadPasses: [PeerID] = []
     private(set) var managerReadMarks: [PeerID] = []
+
+    func geohashForGeoDM(_ peerID: PeerID) -> String? {
+        geoDMGeohashByPeerID[peerID]
+    }
 
     // Conversation store intents
     @discardableResult
@@ -68,11 +77,16 @@ private final class MockChatLifecycleContext: ChatLifecycleContext {
         managerReadMarks.append(peerID)
     }
 
-    // Scheduled work runs synchronously so tests never poll wall-clock queues.
+    // Scheduled work runs synchronously by default so tests never poll wall-clock queues.
     private(set) var scheduledDelays: [TimeInterval] = []
+    var deferScheduledWork: ((@escaping @MainActor () -> Void) -> Void)?
     func scheduleOnMainAfter(_ delay: TimeInterval, _ work: @escaping @MainActor () -> Void) {
         scheduledDelays.append(delay)
-        work()
+        if let deferScheduledWork {
+            deferScheduledWork(work)
+        } else {
+            work()
+        }
     }
 
     // Peers & sessions
@@ -379,6 +393,92 @@ struct ChatLifecycleCoordinatorContextTests {
         coordinator.markPrivateMessagesAsRead(from: otherPeer)
         #expect(context.routedReadReceipts.map(\.messageID) == ["in-1", "in-2"])
         #expect(context.sentReadReceipts.contains("in-2"))
+    }
+
+    @Test @MainActor
+    func markPrivateMessagesAsRead_respectsSendReadReceiptsDisabledAndInactiveApp() {
+        let context = MockChatLifecycleContext()
+        let coordinator = ChatLifecycleCoordinator(context: context)
+        let peerID = PeerID(str: "1122334455667788")
+        context.privateChats[peerID] = [makePrivateMessage(id: "in-1", senderPeerID: peerID)]
+
+        // Inactive app: clears unread via manager, emits no read receipts.
+        context.isAppActive = false
+        coordinator.markPrivateMessagesAsRead(from: peerID)
+        #expect(context.managerReadMarks == [peerID])
+        #expect(context.routedReadReceipts.isEmpty)
+        #expect(context.sentReadReceipts.isEmpty)
+
+        // Active app, read receipts disabled: still emits nothing.
+        context.isAppActive = true
+        context.sendReadReceiptsEnabled = false
+        coordinator.markPrivateMessagesAsRead(from: peerID)
+        #expect(context.routedReadReceipts.isEmpty)
+        #expect(context.sentReadReceipts.isEmpty)
+
+        // Re-enabled: emits once.
+        context.sendReadReceiptsEnabled = true
+        coordinator.markPrivateMessagesAsRead(from: peerID)
+        #expect(context.routedReadReceipts.map(\.messageID) == ["in-1"])
+        #expect(context.sentReadReceipts == ["in-1"])
+    }
+
+    @Test @MainActor
+    func markPrivateMessagesAsRead_geoDM_usesBoundGeohashAndNeverFallsThroughToBLE() {
+        let context = MockChatLifecycleContext()
+        let coordinator = ChatLifecycleCoordinator(context: context)
+        let convKey = PeerID(nostr_: "feedface00112233")
+        let recipientHex = "feedface00112233"
+        context.nostrKeyMapping[convKey] = recipientHex
+        context.privateChats[convKey] = [makePrivateMessage(id: "geo-1", senderPeerID: convKey)]
+
+        // Active channel is .mesh and no geohash bound yet: must NEVER fall through
+        // into the BLE/favorite router path.
+        context.activeChannel = .mesh
+        coordinator.markPrivateMessagesAsRead(from: convKey)
+        #expect(context.routedReadReceipts.isEmpty)
+        #expect(context.geoReadReceipts.isEmpty)
+        #expect(context.sentReadReceipts.isEmpty)
+
+        // Bound geohash succeeds even while activeChannel is .mesh, unless
+        // network activation disallows sending.
+        context.geoDMGeohashByPeerID[convKey] = "u4pruy"
+        context.canSendGeohashReadReceipt = false
+        coordinator.markPrivateMessagesAsRead(from: convKey)
+        #expect(context.geoReadReceipts.isEmpty)
+        #expect(context.sentReadReceipts.isEmpty)
+
+        context.canSendGeohashReadReceipt = true
+        coordinator.markPrivateMessagesAsRead(from: convKey)
+        #expect(context.geoReadReceipts.map(\.messageID) == ["geo-1"])
+        #expect(context.routedReadReceipts.isEmpty)
+        #expect(context.sentReadReceipts == ["geo-1"])
+    }
+
+    @Test @MainActor
+    func handleDidBecomeActive_delayedPassGuardsActiveStateAndSelection() {
+        let context = MockChatLifecycleContext()
+        let coordinator = ChatLifecycleCoordinator(context: context)
+        let peerA = PeerID(str: "1111111111111111")
+        let peerB = PeerID(str: "2222222222222222")
+        var deferredWork: [@MainActor () -> Void] = []
+        context.selectedPrivateChatPeer = peerA
+        context.deferScheduledWork = { deferredWork.append($0) }
+
+        coordinator.handleDidBecomeActive()
+        #expect(deferredWork.count == 1)
+
+        // Switching away before the delayed pass fires suppresses the stale pass.
+        context.selectedPrivateChatPeer = peerB
+        deferredWork.removeFirst()()
+        #expect(context.ownerLevelReadPasses.isEmpty)
+
+        // Backgrounding before the delayed pass fires also suppresses it.
+        context.selectedPrivateChatPeer = peerA
+        coordinator.handleDidBecomeActive()
+        context.isAppActive = false
+        deferredWork.removeFirst()()
+        #expect(context.ownerLevelReadPasses.isEmpty)
     }
 
 }

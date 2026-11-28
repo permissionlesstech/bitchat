@@ -237,14 +237,64 @@ final class PanicWipeCoverageTests: XCTestCase {
         XCTAssertTrue(store.load().isEmpty)
     }
 
-    func test_privateChatManager_resetForPanic_clearsSentReadReceipts() {
-        let manager = PrivateChatManager()
-        manager.sentReadReceipts.insert("msg-1")
-        manager.sentReadReceipts.insert("msg-2")
+    func test_privacyModeSettings_resetForPanic_clearsSendReadReceiptsPreference() {
+        let suite = "PanicWipeReadReceipts-\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suite)!
+        defaults.removePersistentDomain(forName: suite)
+        defer { defaults.removePersistentDomain(forName: suite) }
 
-        manager.resetForPanic()
+        PrivacyModeSettings.setMode(.everyday, in: defaults)
+        PrivacyModeSettings.setSendReadReceipts(false, in: defaults)
+        XCTAssertFalse(PrivacyModeSettings.shouldSendReadReceipts(in: defaults))
 
-        XCTAssertTrue(manager.sentReadReceipts.isEmpty)
+        PrivacyModeSettings.resetForPanic(in: defaults, wasTorEnabled: false)
+        XCTAssertNil(defaults.object(forKey: PrivacyModeSettings.sendReadReceiptsKey))
+        XCTAssertTrue(PrivacyModeSettings.shouldSendReadReceipts(in: defaults))
+
+        // Stealth mode preserves read-receipts-off posture across panic wipe.
+        PrivacyModeSettings.setMode(.stealth, in: defaults)
+        XCTAssertFalse(PrivacyModeSettings.shouldSendReadReceipts(in: defaults))
+        PrivacyModeSettings.resetForPanic(in: defaults, wasTorEnabled: true)
+        XCTAssertFalse(PrivacyModeSettings.shouldSendReadReceipts(in: defaults))
+    }
+
+    func test_encryptedHistoryStore_wipe_clearsSealedReadReceipts() {
+        let fileURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("panic-history-receipts-\(UUID().uuidString).sealed")
+        defer { try? FileManager.default.removeItem(at: fileURL) }
+
+        let keychain = MockKeychain()
+        let historyStore = EncryptedHistoryStore(
+            keychain: keychain,
+            persistsToDisk: true,
+            fileURL: fileURL,
+            persistenceEnabledProvider: { true }
+        )
+        let conversations = ConversationStore()
+        let peerID = PeerID(str: "0102030405060708")
+        conversations.append(
+            BitchatMessage(
+                id: "msg-1",
+                sender: "Alice",
+                content: "Secret",
+                timestamp: Date(),
+                isRelay: false,
+                isPrivate: true,
+                senderPeerID: peerID
+            ),
+            to: .directPeer(peerID)
+        )
+        historyStore.save(
+            from: conversations,
+            nostrKeyMapping: [:],
+            sentReadReceipts: ["msg-1"],
+            synchronous: true
+        )
+        XCTAssertEqual(historyStore.load()?.sentReadReceipts, ["msg-1"])
+
+        historyStore.wipe()
+        XCTAssertFalse(FileManager.default.fileExists(atPath: fileURL.path))
+        XCTAssertNil(historyStore.load())
     }
 
     func test_nearbyNotesCounter_resetForPanic_clearsRevealedAndReleasesManager() {

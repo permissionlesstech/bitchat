@@ -226,6 +226,7 @@ private struct MessageListContentView: View {
     @State private var emptyStateViewportHeight: CGFloat = 0
     @State private var quoteHighlightMessageID: String?
     @State private var quoteHighlightTask: Task<Void, Never>?
+    @State private var readReceiptRetryTask: Task<Void, Never>?
 
     @Environment(\.appTheme) private var theme
     @ThemedPalette private var palette
@@ -472,17 +473,28 @@ private struct MessageListContentView: View {
                 Button(String(localized: "common.cancel"), role: .cancel) {}
             }
             .onAppear {
-                // Also check when view appears
+                // Also check when view appears; cancel pending retries if the
+                // user navigates away or backgrounds before they fire.
+                readReceiptRetryTask?.cancel()
+                readReceiptRetryTask = nil
                 if let peerID = privatePeer,
                    let privateConversationModel = appEnvironmentModels?.privateConversationModel {
-                    // Try multiple times to ensure read receipts are sent
                     privateConversationModel.markMessagesAsRead(from: peerID)
 
-                    DispatchQueue.main.asyncAfter(deadline: .now() + TransportConfig.uiReadReceiptRetryShortSeconds) {
+                    readReceiptRetryTask = Task { @MainActor in
+                        let shortNanos = UInt64(TransportConfig.uiReadReceiptRetryShortSeconds * 1_000_000_000)
+                        try? await Task.sleep(nanoseconds: shortNanos)
+                        guard !Task.isCancelled,
+                              privateConversationModel.selectedPeerID == peerID else { return }
                         privateConversationModel.markMessagesAsRead(from: peerID)
-                    }
 
-                    DispatchQueue.main.asyncAfter(deadline: .now() + TransportConfig.uiReadReceiptRetryLongSeconds) {
+                        let remainingSeconds = max(
+                            0,
+                            TransportConfig.uiReadReceiptRetryLongSeconds - TransportConfig.uiReadReceiptRetryShortSeconds
+                        )
+                        try? await Task.sleep(nanoseconds: UInt64(remainingSeconds * 1_000_000_000))
+                        guard !Task.isCancelled,
+                              privateConversationModel.selectedPeerID == peerID else { return }
                         privateConversationModel.markMessagesAsRead(from: peerID)
                     }
                 }
@@ -491,6 +503,8 @@ private struct MessageListContentView: View {
                 cancelFollowScroll()
                 quoteHighlightTask?.cancel()
                 quoteHighlightTask = nil
+                readReceiptRetryTask?.cancel()
+                readReceiptRetryTask = nil
             }
         }
         // Reset UIScrollView state when switching channels or DMs so a deep

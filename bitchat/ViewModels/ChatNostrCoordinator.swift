@@ -86,6 +86,9 @@ final class ChatNostrCoordinator {
         guard let context else { return }
         let convKey = PeerID(nostr_: hex)
         context.registerNostrKeyMapping(hex, for: convKey)
+        if let geohash = context.currentGeohash {
+            context.registerGeoDMGeohash(geohash, for: convKey)
+        }
         context.startPrivateChat(with: convKey)
     }
 

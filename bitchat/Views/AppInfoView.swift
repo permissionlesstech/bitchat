@@ -34,6 +34,7 @@ struct AppInfoView: View {
     @State private var showTopology = false
     @State private var privacyMode = PrivacyModeSettings.mode
     @State private var persistPrivateHistory = PrivacyModeSettings.persistPrivateHistory
+    @State private var sendReadReceipts = PrivacyModeSettings.sendReadReceipts
     @ObservedObject private var pttPreferences = PTTPreferences.shared
     @State private var locationNotesEnabled = LocationNotesSettings.enabled
     @State private var hideMessagePreviews = NotificationPrivacySettings.hideMessagePreviews
@@ -345,6 +346,7 @@ struct AppInfoView: View {
         .onReceive(NotificationCenter.default.publisher(for: PrivacyModeSettings.didChangeNotification)) { _ in
             privacyMode = PrivacyModeSettings.mode
             persistPrivateHistory = PrivacyModeSettings.persistPrivateHistory
+            sendReadReceipts = PrivacyModeSettings.sendReadReceipts
             hideMessagePreviews = NotificationPrivacySettings.hideMessagePreviews
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -466,6 +468,7 @@ struct AppInfoView: View {
                                     onClearPersistedHistory: onClearPersistedHistory
                                 )
                                 persistPrivateHistory = PrivacyModeSettings.persistPrivateHistory
+                                sendReadReceipts = PrivacyModeSettings.sendReadReceipts
                                 hideMessagePreviews = NotificationPrivacySettings.hideMessagePreviews
                             }
                         )
@@ -713,6 +716,21 @@ struct AppInfoView: View {
                                 if !newValue {
                                     onClearPersistedHistory?()
                                 }
+                            }
+                        )
+                    )
+                    .disabled(privacyMode == .stealth)
+                }
+
+                settingsCard {
+                    settingToggle(
+                        title: Text(String(localized: "app_info.settings.read_receipts.title", defaultValue: "Send Read Receipts", comment: "Title of the setting that controls whether private message read receipts are sent")),
+                        subtitle: Text(String(localized: "app_info.settings.read_receipts.subtitle", defaultValue: "Lets people know when you've viewed their private messages. Automatically off in Stealth Mode.", comment: "Subtitle explaining the read receipts toggle")),
+                        isOn: Binding(
+                            get: { sendReadReceipts && privacyMode == .everyday },
+                            set: { newValue in
+                                sendReadReceipts = newValue
+                                PrivacyModeSettings.setSendReadReceipts(newValue)
                             }
                         )
                     )

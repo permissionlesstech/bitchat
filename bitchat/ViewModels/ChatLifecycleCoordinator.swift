@@ -14,8 +14,14 @@ protocol ChatLifecycleContext: ChatIdentityContext, ChatDirectMessageStoreContex
     // MARK: Chat & receipt state
     var unreadPrivateMessages: Set<PeerID> { get }
     var selectedPrivateChatPeer: PeerID? { get }
+    var isAppActive: Bool { get }
+    var sendReadReceiptsEnabled: Bool { get }
     var sentReadReceipts: Set<String> { get }
     var nostrKeyMapping: [PeerID: String] { get }
+    /// Originating geohash bound to a GeoDM conversation, if recorded.
+    func geohashForGeoDM(_ peerID: PeerID) -> String?
+    /// Whether Nostr network activation permits sending a GeoDM read receipt now.
+    var canSendGeohashReadReceipt: Bool { get }
     /// Records that a read receipt is being sent for `messageID`.
     /// Returns `false` when one was already recorded — the caller must skip sending.
     @discardableResult
@@ -59,6 +65,13 @@ protocol ChatLifecycleContext: ChatIdentityContext, ChatDirectMessageStoreContex
     func verifyIdentityKeyExists() -> Bool
 }
 
+extension ChatLifecycleContext {
+    var isAppActive: Bool { true }
+    var sendReadReceiptsEnabled: Bool { true }
+    func geohashForGeoDM(_ peerID: PeerID) -> String? { nil }
+    var canSendGeohashReadReceipt: Bool { true }
+}
+
 extension ChatViewModel: ChatLifecycleContext {
     // `messages`, `privateMessages(for:)`, `unreadPrivateMessages`,
     // `selectedPrivateChatPeer`, `sentReadReceipts`, `nickname`, `myPeerID`,
@@ -75,6 +88,12 @@ extension ChatViewModel: ChatLifecycleContext {
 
     func markChatAsRead(from peerID: PeerID) {
         privateChatManager.markAsRead(from: peerID)
+    }
+
+    var canSendGeohashReadReceipt: Bool {
+        networkActivationAllowed
+            && NetworkActivationService.shared.activationAllowed
+            && NostrRelayManager.shared.isDMRelayConnected
     }
 
     func scheduleOnMainAfter(_ delay: TimeInterval, _ work: @escaping @MainActor () -> Void) {
@@ -122,7 +141,10 @@ final class ChatLifecycleCoordinator {
 
         let context = self.context
         context.scheduleOnMainAfter(TransportConfig.uiAnimationMediumSeconds) { [weak context] in
-            context?.markPrivateMessagesAsRead(from: peerID)
+            guard let context,
+                  context.isAppActive,
+                  context.selectedPrivateChatPeer == peerID else { return }
+            context.markPrivateMessagesAsRead(from: peerID)
         }
     }
 
@@ -164,10 +186,27 @@ final class ChatLifecycleCoordinator {
         // receipt matching can't silently start leaking receipts into groups.
         guard !peerID.isGroup else { return }
 
-        if peerID.isGeoDM,
-           let recipientHex = context.nostrKeyMapping[peerID],
-           case .location(let channel) = context.activeChannel,
-           let identity = try? context.deriveNostrIdentity(forGeohash: channel.geohash) {
+        if peerID.isGeoDM {
+            // GeoDMs are always handled exclusively on the Nostr path — never
+            // fall through into BLE/favorite routing even when the active
+            // channel is `.mesh` or read receipts are disabled.
+            guard context.isAppActive,
+                  context.sendReadReceiptsEnabled,
+                  context.canSendGeohashReadReceipt,
+                  let recipientHex = context.nostrKeyMapping[peerID] else {
+                return
+            }
+            let geohash: String? = context.geohashForGeoDM(peerID) ?? {
+                if case .location(let channel) = context.activeChannel {
+                    return channel.geohash
+                }
+                return nil
+            }()
+            guard let geohash,
+                  let identity = try? context.deriveNostrIdentity(forGeohash: geohash) else {
+                return
+            }
+
             let messages = context.privateMessages(for: peerID)
             for message in messages where message.senderPeerID == peerID && !message.isRelay {
                 guard !context.sentReadReceipts.contains(message.id) else { continue }
@@ -199,10 +238,14 @@ final class ChatLifecycleCoordinator {
             }
         }
 
+        // Unread state is already cleared above; only emit wire read receipts
+        // when the app is active in the foreground and the user's privacy
+        // posture permits read receipts.
+        guard context.isAppActive, context.sendReadReceiptsEnabled else { return }
+
         // No Nostr-key gate here: the router picks whatever transport can
         // reach the peer (mesh included), so read receipts must flow for
-        // non-favorite mesh peers too. `sentReadReceipts` dedups against the
-        // PrivateChatManager path; the router drops receipts it can't route.
+        // non-favorite mesh peers too. The router drops receipts it can't route.
 
         // A full-key conversation can contain mesh rows whose sender IDs stay short.
         let shortPeerID = peerID.toShort()

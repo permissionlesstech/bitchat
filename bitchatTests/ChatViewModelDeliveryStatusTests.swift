@@ -424,6 +424,11 @@ struct ChatViewModelDeliveryStatusTests {
         viewModel.cleanupOldReadReceipts()
 
         #expect(viewModel.sentReadReceipts == ["keep-receipt"])
+
+        // Clearing all private chats must prune sentReadReceipts all the way to empty.
+        viewModel.conversations.clear(.directPeer(peerID))
+        viewModel.cleanupOldReadReceipts()
+        #expect(viewModel.sentReadReceipts.isEmpty)
     }
 
     // MARK: - Relaunch-Restored Outbox Tests

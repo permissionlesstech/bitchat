@@ -61,7 +61,6 @@ private final class MockChatPeerIdentityContext: ChatPeerIdentityContext {
 
     // Private chat session lifecycle
     private(set) var consolidatedPeers: [PeerID] = []
-    private(set) var syncedReadReceiptPeers: [PeerID] = []
     private(set) var begunChatSessions: [PeerID] = []
     private(set) var markedReadPeers: [PeerID] = []
 
@@ -69,10 +68,6 @@ private final class MockChatPeerIdentityContext: ChatPeerIdentityContext {
     func consolidatePrivateMessages(for peerID: PeerID) -> Bool {
         consolidatedPeers.append(peerID)
         return false
-    }
-
-    func syncReadReceiptsForSentMessages(for peerID: PeerID) {
-        syncedReadReceiptPeers.append(peerID)
     }
 
     func beginPrivateChatSession(with peerID: PeerID) {
@@ -277,7 +272,6 @@ struct ChatPeerIdentityCoordinatorContextTests {
         #expect(context.consolidatedPeers == [peerID])
         // No Noise session yet -> handshake triggered.
         #expect(context.triggeredHandshakes == [peerID])
-        #expect(context.syncedReadReceiptPeers == [peerID])
         #expect(context.storedFingerprints.map(\.fingerprint) == ["fp-alice"])
         #expect(context.selectedPrivateChatFingerprint == "fp-alice")
         #expect(context.begunChatSessions == [peerID])

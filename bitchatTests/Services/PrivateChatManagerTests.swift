@@ -50,11 +50,12 @@ struct PrivateChatManagerTests {
     }
 
     @Test @MainActor
-    func markAsRead_sendsReadReceiptViaRouter() async {
+    func markAsRead_clearsUnreadWithoutSendingDuplicateReceipts() async {
+        // Read-receipt routing is owned solely by ChatLifecycleCoordinator;
+        // PrivateChatManager only clears the unread badge so opening a chat
+        // never emits duplicate receipts from two independent tracking sets.
         let transport = MockTransport()
-        let router = MessageRouter(transports: [transport])
         let (manager, store) = Self.makeManager(transport: transport)
-        manager.messageRouter = router
 
         let peerID = PeerID(str: "00000000000000BB")
         transport.reachablePeers.insert(peerID)
@@ -75,143 +76,9 @@ struct PrivateChatManagerTests {
         store.markUnread(.directPeer(peerID))
 
         manager.markAsRead(from: peerID)
-        try? await Task.sleep(nanoseconds: 100_000_000)
 
-        #expect(transport.sentReadReceipts.count == 1)
-        #expect(manager.sentReadReceipts.contains("pm-2"))
+        #expect(transport.sentReadReceipts.isEmpty)
         #expect(!manager.unreadMessages.contains(peerID))
-    }
-
-    @Test @MainActor
-    func markAsRead_withoutRouterFallsBackToTransport() async {
-        let transport = MockTransport()
-        let (manager, store) = Self.makeManager(transport: transport)
-        let peerID = PeerID(str: "00000000000000CC")
-
-        store.append(
-            BitchatMessage(
-                id: "pm-fallback",
-                sender: "Peer",
-                content: "Hi",
-                timestamp: Date(),
-                isRelay: false,
-                isPrivate: true,
-                recipientNickname: "Me",
-                senderPeerID: peerID
-            ),
-            to: .directPeer(peerID)
-        )
-
-        manager.markAsRead(from: peerID)
-
-        #expect(transport.sentReadReceipts.count == 1)
-        #expect(transport.sentReadReceipts.first?.receipt.originalMessageID == "pm-fallback")
-    }
-
-    @Test @MainActor
-    func markAsRead_calledTwiceSynchronously_routesOneReceiptPerMessage() async {
-        // Regression: opening a chat runs two read scans in the same
-        // synchronous MainActor stretch (beginPrivateChatSession and
-        // markPrivateMessagesAsRead). The receipt must be claimed before the
-        // routing task gets a chance to run, or both scans route a copy.
-        let transport = MockTransport()
-        let router = MessageRouter(transports: [transport])
-        let (manager, store) = Self.makeManager(transport: transport)
-        manager.messageRouter = router
-
-        let peerID = PeerID(str: "00000000000000DE")
-        transport.reachablePeers.insert(peerID)
-
-        store.append(
-            BitchatMessage(
-                id: "pm-double",
-                sender: "Peer",
-                content: "Hi",
-                timestamp: Date(),
-                isRelay: false,
-                isPrivate: true,
-                recipientNickname: "Me",
-                senderPeerID: peerID
-            ),
-            to: .directPeer(peerID)
-        )
-        store.markUnread(.directPeer(peerID))
-
-        manager.markAsRead(from: peerID)
-        manager.markAsRead(from: peerID)
-        try? await Task.sleep(nanoseconds: 100_000_000)
-
-        #expect(transport.sentReadReceipts.count == 1)
-        #expect(manager.sentReadReceipts.contains("pm-double"))
-    }
-
-    @Test @MainActor
-    func markAsRead_failedRouteReleasesClaimForRetry() async {
-        // No reachable transport: the receipt is not sent, and the eager
-        // claim must be released so a later read scan retries.
-        let transport = MockTransport()
-        let router = MessageRouter(transports: [transport])
-        let (manager, store) = Self.makeManager(transport: transport)
-        manager.messageRouter = router
-
-        let peerID = PeerID(str: "00000000000000DF")
-
-        store.append(
-            BitchatMessage(
-                id: "pm-unroutable",
-                sender: "Peer",
-                content: "Hi",
-                timestamp: Date(),
-                isRelay: false,
-                isPrivate: true,
-                recipientNickname: "Me",
-                senderPeerID: peerID
-            ),
-            to: .directPeer(peerID)
-        )
-        store.markUnread(.directPeer(peerID))
-
-        manager.markAsRead(from: peerID)
-        try? await Task.sleep(nanoseconds: 100_000_000)
-
-        #expect(transport.sentReadReceipts.isEmpty)
-        #expect(!manager.sentReadReceipts.contains("pm-unroutable"))
-    }
-
-    @Test @MainActor
-    func markAsRead_fullKeyChatIncludesShortSenderAndRetriesFailedRoute() async {
-        let transport = MockTransport()
-        let router = MessageRouter(transports: [transport])
-        let (manager, store) = Self.makeManager(transport: transport)
-        manager.messageRouter = router
-        let fullID = PeerID(hexData: Data(repeating: 0xCC, count: 32))
-        let shortID = fullID.toShort()
-        let otherID = PeerID(hexData: Data(repeating: 0xDD, count: 32)).toShort()
-        for (id, sender, relay) in [
-            ("mesh", Optional(shortID), false), ("courier", Optional(fullID), false),
-            ("other", Optional(otherID), false), ("self", Optional(transport.myPeerID), false),
-            ("relay", Optional(shortID), true), ("missing", nil, false)
-        ] {
-            store.append(BitchatMessage(id: id, sender: "bob", content: id,
-                timestamp: Date(), isRelay: relay, isPrivate: true, senderPeerID: sender),
-                to: .directPeer(fullID))
-        }
-
-        manager.startChat(with: fullID)
-        // The router runs in a queued main-actor task; wait for its failed claims to clear.
-        for _ in 0..<100 where !manager.sentReadReceipts.isEmpty { await Task.yield() }
-        #expect(manager.sentReadReceipts.isEmpty)
-        #expect(transport.sentReadReceipts.isEmpty)
-
-        transport.reachablePeers = [shortID, fullID]
-        manager.markAsRead(from: fullID)
-        manager.markAsRead(from: fullID)
-        for _ in 0..<100 where transport.sentReadReceipts.count < 2 { await Task.yield() }
-        #expect(Set(transport.sentReadReceipts.map { $0.receipt.originalMessageID }) == ["mesh", "courier"])
-        #expect(transport.sentReadReceipts.count == 2)
-        #expect(manager.sentReadReceipts == ["mesh", "courier"])
-        #expect(transport.sentReadReceipts.first { $0.receipt.originalMessageID == "mesh" }?.peerID == shortID)
-        #expect(manager.privateChats[fullID]?.first { $0.id == "mesh" }?.senderPeerID == shortID)
     }
 
     @Test @MainActor
@@ -369,12 +236,7 @@ struct PrivateChatManagerTests {
         // ...and no thread with the namesake appears.
         #expect(manager.privateChats[namesakePeerID] == nil)
 
-        // Opening the namesake's chat finds no sent rows of mine to sync
-        // receipts for, and sends none.
-        var externalReceipts = Set<String>()
-        manager.syncReadReceiptsForSentMessages(peerID: namesakePeerID, externalReceipts: &externalReceipts)
-        #expect(externalReceipts.isEmpty)
-        #expect(manager.sentReadReceipts.isEmpty)
+        // Opening the namesake's chat sends no read receipts.
         manager.markAsRead(from: namesakePeerID)
         #expect(transport.sentReadReceipts.isEmpty)
     }
@@ -473,58 +335,6 @@ struct PrivateChatManagerTests {
 
         #expect(manager.privateChats[thread]?.map(\.id) == ["their-geo-dm", "my-reply"])
         #expect(manager.privateChats[namesakePeerID] == nil)
-    }
-
-    @Test @MainActor
-    func syncReadReceiptsForSentMessages_onlyCopiesDeliveredAndRead() async {
-        let transport = MockTransport()
-        let (manager, store) = Self.makeManager(transport: transport)
-        let peerID = PeerID(str: "00000000000000DD")
-
-        let seeded = [
-            BitchatMessage(
-                id: "sent-read",
-                sender: "Me",
-                content: "One",
-                timestamp: Date(),
-                isRelay: false,
-                isPrivate: true,
-                recipientNickname: "Peer",
-                senderPeerID: transport.myPeerID,
-                deliveryStatus: .read(by: "Peer", at: Date())
-            ),
-            BitchatMessage(
-                id: "sent-delivered",
-                sender: "Me",
-                content: "Two",
-                timestamp: Date(),
-                isRelay: false,
-                isPrivate: true,
-                recipientNickname: "Peer",
-                senderPeerID: transport.myPeerID,
-                deliveryStatus: .delivered(to: "Peer", at: Date())
-            ),
-            BitchatMessage(
-                id: "sent-failed",
-                sender: "Me",
-                content: "Three",
-                timestamp: Date(),
-                isRelay: false,
-                isPrivate: true,
-                recipientNickname: "Peer",
-                senderPeerID: transport.myPeerID,
-                deliveryStatus: .failed(reason: "nope")
-            )
-        ]
-        for message in seeded {
-            store.append(message, to: .directPeer(peerID))
-        }
-
-        var externalReceipts = Set<String>()
-        manager.syncReadReceiptsForSentMessages(peerID: peerID, externalReceipts: &externalReceipts)
-
-        #expect(externalReceipts == Set(["sent-read", "sent-delivered"]))
-        #expect(manager.sentReadReceipts == Set(["sent-read", "sent-delivered"]))
     }
 
     /// The store replaces `sanitizeChat`: inserts keep chronological order,

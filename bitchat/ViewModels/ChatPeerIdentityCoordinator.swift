@@ -50,10 +50,6 @@ protocol ChatPeerIdentityContext: AnyObject {
     /// Returns `true` when unread messages were discovered during consolidation.
     @discardableResult
     func consolidatePrivateMessages(for peerID: PeerID) -> Bool
-    /// Marks read receipts as sent for own messages already delivered/read in
-    /// `peerID`'s chat. (Single mutation path into the owner's
-    /// `sentReadReceipts`; this coordinator never touches the raw set.)
-    func syncReadReceiptsForSentMessages(for peerID: PeerID)
     /// Re-targets the private chat session: selection mutates through the
     /// `ConversationStore` intent (the store owns selection).
     func beginPrivateChatSession(with peerID: PeerID)
@@ -404,8 +400,6 @@ final class ChatPeerIdentityCoordinator {
         } else {
             SecureLogger.debug("GeoDM: skipping mesh handshake for virtual peerID=\(peerID)", category: .session)
         }
-
-        context.syncReadReceiptsForSentMessages(for: peerID)
 
         if let fingerprint = getFingerprint(for: peerID) {
             context.setStoredFingerprint(fingerprint, for: peerID)

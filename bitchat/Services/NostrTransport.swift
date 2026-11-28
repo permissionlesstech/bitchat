@@ -548,7 +548,7 @@ extension NostrTransport {
                     SecureLogger.error("NostrTransport: failed to embed READ ack", category: .session)
                     return
                 }
-                sendWrappedMessage(content: ack, recipientHex: recipientHex, senderIdentity: senderIdentity, expectedGeneration: generation)
+                sendWrappedMessage(content: ack, recipientHex: recipientHex, senderIdentity: senderIdentity, registerPending: true, expectedGeneration: generation)
 
             case .deliveredDirect(let messageID, let peerID):
                 guard let recipientNpub = resolveRecipientNpub(for: peerID),
@@ -559,7 +559,7 @@ extension NostrTransport {
                     SecureLogger.error("NostrTransport: failed to embed DELIVERED ack", category: .session)
                     return
                 }
-                sendWrappedMessage(content: ack, recipientHex: recipientHex, senderIdentity: senderIdentity, expectedGeneration: generation)
+                sendWrappedMessage(content: ack, recipientHex: recipientHex, senderIdentity: senderIdentity, registerPending: true, expectedGeneration: generation)
 
             case .deliveredGeohash(let messageID, let recipientHex, let identity):
                 SecureLogger.debug("GeoDM: send DELIVERED mid=\(messageID.prefix(8))…", category: .session)

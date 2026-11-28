@@ -260,6 +260,7 @@ final class GeohashSubscriptionManager {
                 self?.inbound.handleGiftWrap(
                     giftWrap,
                     id: identity,
+                    geohash: channel.geohash,
                     outerSignatureAlreadyVerified: true
                 )
             }

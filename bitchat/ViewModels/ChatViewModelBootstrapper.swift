@@ -57,8 +57,19 @@ final class ChatViewModelBootstrapper {
         self.viewModel = viewModel
     }
 
+    /// One-time migration from legacy plaintext `UserDefaults["sentReadReceipts"]`.
+    /// Read receipts are now sealed inside `EncryptedHistoryStore` alongside private
+    /// history so Stealth/RAM-only mode never leaves message IDs on disk. Any legacy
+    /// plaintext key is always scrubbed from `UserDefaults`; its IDs are only loaded
+    /// into memory when private history persistence is enabled.
     static func loadPersistedReadReceipts(userDefaults: UserDefaults = .standard) -> Set<String> {
-        guard let data = userDefaults.data(forKey: "sentReadReceipts"),
+        defer {
+            if userDefaults.object(forKey: "sentReadReceipts") != nil {
+                userDefaults.removeObject(forKey: "sentReadReceipts")
+            }
+        }
+        guard PrivacyModeSettings.shouldPersistPrivateHistory(in: userDefaults),
+              let data = userDefaults.data(forKey: "sentReadReceipts"),
               let receipts = try? JSONDecoder().decode([String].self, from: data) else {
             return []
         }
@@ -87,7 +98,6 @@ final class ChatViewModelBootstrapper {
 private extension ChatViewModelBootstrapper {
     func wireServiceGraph() {
         viewModel.privateChatManager.conversationStore = viewModel.conversations
-        viewModel.privateChatManager.messageRouter = viewModel.messageRouter
         viewModel.privateChatManager.unifiedPeerService = viewModel.unifiedPeerService
         viewModel.unifiedPeerService.messageRouter = viewModel.messageRouter
         // Surface silent outbox drops (attempt cap, TTL expiry, overflow
