@@ -67,17 +67,33 @@ enum ComposerDraftStore {
         }
     }
 
-    static func load(_ key: Key) -> String {
-        lock.withLock { cache.value(for: key.storageString) ?? "" }
+    private static func storageKey(for key: Key, scope: UUID?) -> String {
+        guard let scope else { return key.storageString }
+        return "\(scope.uuidString.lowercased())|\(key.storageString)"
     }
 
-    static func save(_ text: String, for key: Key) {
+    static func load(_ key: Key, scope: UUID? = nil) -> String {
+        let resolvedKey = storageKey(for: key, scope: scope)
+        return lock.withLock { cache.value(for: resolvedKey) ?? "" }
+    }
+
+    static func save(_ text: String, for key: Key, scope: UUID? = nil) {
+        let resolvedKey = storageKey(for: key, scope: scope)
         lock.withLock {
             let trimmed = String(text.prefix(maxDraftLength))
             if trimmed.isEmpty {
-                cache.remove(key.storageString)
+                cache.remove(resolvedKey)
             } else {
-                cache.set(key.storageString, value: trimmed, refreshOrder: true)
+                cache.set(resolvedKey, value: trimmed, refreshOrder: true)
+            }
+        }
+    }
+
+    static func clear(scope: UUID) {
+        let prefix = "\(scope.uuidString.lowercased())|"
+        lock.withLock {
+            for key in cache.allValues.keys where key.hasPrefix(prefix) {
+                cache.remove(key)
             }
         }
     }

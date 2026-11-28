@@ -398,10 +398,11 @@ struct ContentView: View {
         .onChange(of: selectedPrivatePeerID) { newValue in
             syncNearbyViewingState()
             sharedContentImportModel.updateDestination(sharedContentDestination)
-            let uiModel = appEnvironmentModels.require("ContentView.selectedPrivatePeerID")?.conversationUIModel
+            let models = appEnvironmentModels.require("ContentView.selectedPrivatePeerID")
+            models?.composerAutocompleteModel.dismissAutocomplete(ownerID: draftModel.id)
             draftModel.switchDraft(to: ComposerDraftStore.Key.from(
                 peerID: newValue,
-                fingerprint: newValue.flatMap { uiModel?.getFingerprint(for: $0) },
+                fingerprint: newValue.flatMap { models?.conversationUIModel.getFingerprint(for: $0) },
                 channel: locationChannelsModel.selectedChannel
             ))
         }
@@ -431,6 +432,7 @@ struct ContentView: View {
             // Private drafts are keyed by peer; only public channel switches
             // need a draft swap while no DM is open.
             if selectedPrivatePeerID == nil {
+                appEnvironmentModels?.composerAutocompleteModel.dismissAutocomplete(ownerID: draftModel.id)
                 draftModel.switchDraft(to: ComposerDraftStore.Key.from(
                     peerID: nil,
                     fingerprint: nil,
@@ -624,6 +626,7 @@ struct ContentView: View {
         }
         .onDisappear {
             draftModel.cancelAutocompleteDebounce()
+            appEnvironmentModels?.composerAutocompleteModel.dismissAutocomplete(ownerID: draftModel.id)
             appChromeModel.setPanicPreparation(nil, id: draftHost.id)
         }
         // Hosted at the root so Stealth Mode triple-tap panic wipe works from
@@ -954,9 +957,11 @@ struct ContentView: View {
     }
 
     private func sendMessage() {
-        guard let uiModel = appEnvironmentModels.require("ContentView.sendMessage")?.conversationUIModel else { return }
+        guard let models = appEnvironmentModels.require("ContentView.sendMessage") else { return }
         guard let trimmed = draftModel.takeMessageToSend() else { return }
+        models.composerAutocompleteModel.dismissAutocomplete(ownerID: draftModel.id)
 
+        let uiModel = models.conversationUIModel
         DispatchQueue.main.async {
             uiModel.sendMessage(trimmed)
         }

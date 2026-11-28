@@ -8,8 +8,8 @@ import Foundation
 /// ID without subscribing `ContentView` to `ComposerDraftModel.objectWillChange`.
 @MainActor
 final class ComposerDraftHost: ObservableObject {
-    let id = UUID()
     let model = ComposerDraftModel()
+    var id: UUID { model.id }
 }
 
 /// Owns the composer's live text draft and autocomplete debounce task outside
@@ -24,12 +24,21 @@ final class ComposerDraftModel: ObservableObject {
     @Published var messageText = ""
     @Published var replyTarget: MessageReplyTarget?
 
+    let id: UUID
     private(set) var activeDraftKey: ComposerDraftStore.Key = .mesh
     private var autocompleteDebounceTask: Task<Void, Never>?
     private let autocompleteDebounceDuration: Duration
 
-    init(autocompleteDebounceDuration: Duration = .milliseconds(150)) {
+    init(
+        id: UUID = UUID(),
+        autocompleteDebounceDuration: Duration = .milliseconds(150)
+    ) {
+        self.id = id
         self.autocompleteDebounceDuration = autocompleteDebounceDuration
+    }
+
+    deinit {
+        ComposerDraftStore.clear(scope: id)
     }
 
     func setReplyTarget(_ target: MessageReplyTarget?) {
@@ -47,7 +56,7 @@ final class ComposerDraftModel: ObservableObject {
     func loadInitialDraft(for key: ComposerDraftStore.Key) {
         cancelAutocompleteDebounce()
         activeDraftKey = key
-        let loaded = ComposerDraftStore.load(key)
+        let loaded = ComposerDraftStore.load(key, scope: id)
         if messageText != loaded {
             messageText = loaded
         }
@@ -56,17 +65,17 @@ final class ComposerDraftModel: ObservableObject {
     func switchDraft(to newKey: ComposerDraftStore.Key) {
         guard newKey != activeDraftKey else { return }
         cancelAutocompleteDebounce()
-        ComposerDraftStore.save(messageText, for: activeDraftKey)
+        ComposerDraftStore.save(messageText, for: activeDraftKey, scope: id)
         activeDraftKey = newKey
         clearReplyTarget()
-        let loaded = ComposerDraftStore.load(newKey)
+        let loaded = ComposerDraftStore.load(newKey, scope: id)
         if messageText != loaded {
             messageText = loaded
         }
     }
 
     func saveCurrentDraft() {
-        ComposerDraftStore.save(messageText, for: activeDraftKey)
+        ComposerDraftStore.save(messageText, for: activeDraftKey, scope: id)
     }
 
     func replaceText(_ text: String) {
@@ -94,7 +103,7 @@ final class ComposerDraftModel: ObservableObject {
         cancelAutocompleteDebounce()
         messageText = ""
         replyTarget = nil
-        ComposerDraftStore.save("", for: activeDraftKey)
+        ComposerDraftStore.save("", for: activeDraftKey, scope: id)
         if let activeReply, !trimmed.hasPrefix("/") {
             return MessageInteractionCodec.encodeReply(to: activeReply, body: trimmed)
         }
@@ -104,6 +113,7 @@ final class ComposerDraftModel: ObservableObject {
     func resetForPanic() {
         cancelAutocompleteDebounce()
         clearReplyTarget()
+        ComposerDraftStore.clear(scope: id)
         if !messageText.isEmpty {
             messageText = ""
         }
@@ -117,17 +127,22 @@ final class ComposerDraftModel: ObservableObject {
         autocompleteDebounceTask?.cancel()
         autocompleteDebounceTask = nil
         // Ordinary typing without `@` can never open mention autocomplete; skip
-        // spawning a debounce Task on every keystroke once the panel is closed.
-        guard text.contains("@") || autocompleteModel.showAutocomplete else { return }
+        // spawning a debounce Task on every keystroke once this window's panel is closed.
+        guard text.contains("@") || autocompleteModel.hasActiveAutocomplete(for: id) else { return }
         let cursorPosition = text.count
         let debounceDuration = autocompleteDebounceDuration
+        let ownerID = id
         autocompleteDebounceTask = Task { @MainActor in
             do {
                 try await Task.sleep(for: debounceDuration)
             } catch {
                 return
             }
-            autocompleteModel.updateAutocomplete(for: text, cursorPosition: cursorPosition)
+            autocompleteModel.updateAutocomplete(
+                for: text,
+                cursorPosition: cursorPosition,
+                ownerID: ownerID
+            )
         }
     }
 
@@ -147,8 +162,10 @@ final class ComposerAutocompleteModel: ObservableObject {
     @Published private(set) var showAutocomplete = false
     @Published private(set) var autocompleteSuggestions: [String] = []
     @Published private(set) var selectedAutocompleteIndex = 0
+    @Published private(set) var activeOwnerID: UUID?
 
     private let chatViewModel: ChatViewModel
+    private var cancellables = Set<AnyCancellable>()
 
     init(chatViewModel: ChatViewModel) {
         self.chatViewModel = chatViewModel
@@ -159,41 +176,97 @@ final class ComposerAutocompleteModel: ObservableObject {
         bind()
     }
 
-    func updateAutocomplete(for text: String, cursorPosition: Int) {
-        chatViewModel.updateAutocomplete(for: text, cursorPosition: cursorPosition)
+    func isShowingAutocomplete(for ownerID: UUID? = nil) -> Bool {
+        guard showAutocomplete, !autocompleteSuggestions.isEmpty else { return false }
+        return ownsAutocomplete(ownerID: ownerID)
     }
 
-    func completeNickname(_ nickname: String, in text: inout String) -> Int {
-        chatViewModel.completeNickname(nickname, in: &text)
+    func hasActiveAutocomplete(for ownerID: UUID) -> Bool {
+        guard showAutocomplete || chatViewModel.showAutocomplete else { return false }
+        return ownsAutocomplete(ownerID: ownerID)
+    }
+
+    func updateAutocomplete(for text: String, cursorPosition: Int, ownerID: UUID? = nil) {
+        // Another window editing plain text without an `@` token must not
+        // dismiss or overwrite the owning window's active mention panel.
+        if let ownerID,
+           let currentOwner = activeOwnerID,
+           currentOwner != ownerID,
+           AutocompleteService.mentionPrefix(in: text, cursorPosition: cursorPosition) == nil {
+            return
+        }
+        chatViewModel.updateAutocomplete(for: text, cursorPosition: cursorPosition)
+        if chatViewModel.showAutocomplete && !chatViewModel.autocompleteSuggestions.isEmpty {
+            if activeOwnerID != ownerID {
+                activeOwnerID = ownerID
+            }
+        } else if activeOwnerID != nil {
+            activeOwnerID = nil
+        }
+    }
+
+    func completeNickname(_ nickname: String, in text: inout String, ownerID: UUID? = nil) -> Int {
+        guard ownsAutocomplete(ownerID: ownerID) else { return text.count }
+        let cursor = chatViewModel.completeNickname(nickname, in: &text)
+        if activeOwnerID != nil {
+            activeOwnerID = nil
+        }
+        return cursor
     }
 
     /// Accept the currently highlighted mention suggestion, if any.
-    func completeSelectedSuggestion(in text: inout String) -> Bool {
-        guard showAutocomplete,
+    func completeSelectedSuggestion(in text: inout String, ownerID: UUID? = nil) -> Bool {
+        guard isShowingAutocomplete(for: ownerID),
               autocompleteSuggestions.indices.contains(selectedAutocompleteIndex)
         else { return false }
-        _ = completeNickname(autocompleteSuggestions[selectedAutocompleteIndex], in: &text)
+        _ = completeNickname(
+            autocompleteSuggestions[selectedAutocompleteIndex],
+            in: &text,
+            ownerID: ownerID
+        )
         return true
     }
 
     /// Dismiss the mention suggestion panel without inserting (Escape).
-    func dismissAutocomplete() {
-        guard showAutocomplete else { return }
+    func dismissAutocomplete(ownerID: UUID? = nil) {
+        guard ownsAutocomplete(ownerID: ownerID) else { return }
+        if activeOwnerID != nil {
+            activeOwnerID = nil
+        }
+        guard showAutocomplete || chatViewModel.showAutocomplete else { return }
         chatViewModel.showAutocomplete = false
         chatViewModel.autocompleteSuggestions = []
         chatViewModel.autocompleteRange = nil
         chatViewModel.selectedAutocompleteIndex = 0
     }
 
-    func moveAutocompleteSelection(by delta: Int) {
-        guard showAutocomplete, !autocompleteSuggestions.isEmpty else { return }
+    func moveAutocompleteSelection(by delta: Int, ownerID: UUID? = nil) {
+        guard isShowingAutocomplete(for: ownerID) else { return }
         let count = min(4, autocompleteSuggestions.count)
         let next = (selectedAutocompleteIndex + delta + count) % count
         chatViewModel.selectedAutocompleteIndex = next
     }
 
+    private func ownsAutocomplete(ownerID: UUID?) -> Bool {
+        guard let ownerID, let activeOwnerID else { return true }
+        return activeOwnerID == ownerID
+    }
+
     private func bind() {
-        mirror(chatViewModel.$showAutocomplete, to: &$showAutocomplete)
+        chatViewModel.$showAutocomplete
+            .removeDuplicates()
+            .dropFirst()
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] show in
+                guard let self else { return }
+                if self.showAutocomplete != show {
+                    self.showAutocomplete = show
+                }
+                if !show, self.activeOwnerID != nil {
+                    self.activeOwnerID = nil
+                }
+            }
+            .store(in: &cancellables)
         mirror(chatViewModel.$autocompleteSuggestions, to: &$autocompleteSuggestions)
         mirror(chatViewModel.$selectedAutocompleteIndex, to: &$selectedAutocompleteIndex)
     }

@@ -946,6 +946,82 @@ struct AppArchitectureTests {
         #expect(hostA.model.messageText == "unsaved in window A")
         #expect(hostB.model.messageText.isEmpty)
         #expect(hostAPublishCount == 0)
+
+        // Switching channels in both windows saves each window's draft under its
+        // own scope instead of overwriting the shared `.mesh` key.
+        hostB.model.messageText = "unsaved in window B"
+        hostA.model.switchDraft(to: .location(geohash: "9q8yy"))
+        hostB.model.switchDraft(to: .location(geohash: "9q8yy"))
+
+        hostA.model.replaceText("window A geo")
+        hostA.model.switchDraft(to: .mesh)
+        hostB.model.switchDraft(to: .mesh)
+
+        #expect(hostA.model.messageText == "unsaved in window A")
+        #expect(hostB.model.messageText == "unsaved in window B")
+
+        ComposerDraftStore.reset()
+        hostA.model.loadInitialDraft(for: .mesh)
+        #expect(hostA.model.messageText.isEmpty)
+
+        // Deallocating a scoped draft model purges its window-scoped entries.
+        let orphanedKey = ComposerDraftStore.Key.location(geohash: "u4pruy")
+        var scopedModel: ComposerDraftModel? = ComposerDraftModel()
+        let orphanedID = scopedModel!.id
+        scopedModel?.replaceText("temp window draft")
+        scopedModel?.switchDraft(to: orphanedKey)
+        #expect(ComposerDraftStore.load(.mesh, scope: orphanedID) == "temp window draft")
+        scopedModel = nil
+        #expect(ComposerDraftStore.load(.mesh, scope: orphanedID).isEmpty)
+    }
+
+    @Test("ComposerAutocompleteModel isolates open mention suggestions and completion to the owning window")
+    @MainActor
+    func composerAutocompleteModelIsolatesSuggestionsPerWindow() async {
+        let viewModel = makeArchitectureViewModel()
+        guard let transport = viewModel.meshService as? MockTransport else {
+            Issue.record("Expected ChatViewModel meshService to be a MockTransport in architecture tests")
+            return
+        }
+        let peerID = PeerID(str: "0011223344556689")
+        transport.peerNicknames[peerID] = "alice"
+        transport.updatePeerSnapshots([
+            makeArchitectureSnapshot(
+                peerID: peerID,
+                nickname: "alice",
+                connected: true,
+                noisePublicKey: Data(repeating: 0x23, count: 32)
+            )
+        ])
+
+        let autocompleteModel = ComposerAutocompleteModel(chatViewModel: viewModel)
+        let hostA = ComposerDraftHost()
+        let hostB = ComposerDraftHost()
+
+        hostA.model.replaceText("hi @a")
+        hostB.model.replaceText("unrelated message")
+
+        autocompleteModel.updateAutocomplete(for: hostA.model.messageText, cursorPosition: hostA.model.messageText.count, ownerID: hostA.id)
+        await waitUntil { autocompleteModel.isShowingAutocomplete(for: hostA.id) }
+
+        #expect(autocompleteModel.isShowingAutocomplete(for: hostA.id))
+        #expect(!autocompleteModel.isShowingAutocomplete(for: hostB.id))
+
+        // Unrelated typing or dismissal from window B must not clobber window A.
+        autocompleteModel.updateAutocomplete(for: hostB.model.messageText, cursorPosition: hostB.model.messageText.count, ownerID: hostB.id)
+        autocompleteModel.dismissAutocomplete(ownerID: hostB.id)
+        #expect(autocompleteModel.isShowingAutocomplete(for: hostA.id))
+
+        // Return in window B must not complete window A's range into window B's draft.
+        let completedInB = autocompleteModel.completeSelectedSuggestion(in: &hostB.model.messageText, ownerID: hostB.id)
+        #expect(!completedInB)
+        #expect(hostB.model.messageText == "unrelated message")
+
+        // Accepting in the owning window completes into A and clears ownership.
+        let completedInA = autocompleteModel.completeSelectedSuggestion(in: &hostA.model.messageText, ownerID: hostA.id)
+        #expect(completedInA)
+        #expect(hostA.model.messageText == "hi @alice")
+        #expect(autocompleteModel.activeOwnerID == nil)
     }
 
     @Test("AppChromeModel re-presents Bluetooth alert across consecutive alertable states after local dismissal")
