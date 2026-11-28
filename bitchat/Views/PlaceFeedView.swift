@@ -25,9 +25,7 @@ struct PlaceFeedView: View {
     let injectedNotesManager: LocationNotesManager?
 
     @EnvironmentObject private var locationChannelsModel: LocationChannelsModel
-    @Environment(\.colorScheme) private var colorScheme
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
-    @Environment(\.appTheme) private var theme
     @ThemedPalette private var palette
 
     @State private var liveManager: LocationNotesManager?
@@ -45,8 +43,6 @@ struct PlaceFeedView: View {
     @State private var pendingAttachments: [NostrProtocol.MediaAttachment] = []
     @State private var isUploadingMedia = false
     @State private var mediaUploadError: String?
-
-    private static let permanentExpiry = 0
 
     init(
         channel: GeohashChannel,
@@ -784,7 +780,7 @@ private struct PlaceFeedContent: View {
             let expiresAt = expiryDays > 0
                 ? Date().addingTimeInterval(TimeInterval(expiryDays * 24 * 60 * 60))
                 : nil
-            manager.sendFeedPost(
+            if manager.sendFeedPost(
                 content: content,
                 nickname: postNickname,
                 expiresAt: expiresAt,
@@ -793,14 +789,15 @@ private struct PlaceFeedContent: View {
                 replyTo: nil,
                 identityMode: activeMode,
                 attachments: pendingAttachments
-            )
-            draft = ""
-            pendingAttachments.removeAll()
+            ) {
+                draft = ""
+                pendingAttachments.removeAll()
+            }
         } else {
             // Expiring per-place post: bridges to both mesh board (when nearby) and Nostr with NIP-40 expiry.
             let expiresAt = Date().addingTimeInterval(TimeInterval(expiryDays * 24 * 60 * 60))
             if isTeleported {
-                manager.sendFeedPost(
+                if manager.sendFeedPost(
                     content: content,
                     nickname: senderNickname,
                     expiresAt: expiresAt,
@@ -808,8 +805,9 @@ private struct PlaceFeedContent: View {
                     teleported: true,
                     replyTo: nil,
                     identityMode: .placePersona
-                )
-                draft = ""
+                ) {
+                    draft = ""
+                }
             } else {
                 let sent = board.createPost(
                     content: content,

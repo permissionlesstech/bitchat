@@ -68,15 +68,6 @@ struct NoticeItem: Identifiable, Equatable {
         nostrNote?.isTeleported ?? false
     }
 
-    var cellGeohash: String {
-        switch source {
-        case .nostr(let note):
-            return note.geohash
-        case .board(let post):
-            return post.geohash
-        }
-    }
-
     init(post: BoardPostPacket) {
         id = post.postID.hexEncodedString()
         author = post.authorNickname.trimmedOrNilIfEmpty ?? "anon"

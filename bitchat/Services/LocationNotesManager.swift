@@ -162,8 +162,6 @@ final class LocationNotesManager: ObservableObject {
             self.attachments = attachments
         }
 
-        var isReply: Bool { rootEventID != nil }
-        var effectiveThreadRootID: String { rootEventID ?? id }
         var authorSuffix: String { String(pubkey.suffix(4)) }
         var shortAuthorName: String { nickname?.trimmedOrNilIfEmpty ?? "anon" }
         var hasVerifiedPoW: Bool { powDifficulty >= NostrProtocol.verifiedPoWThresholdBits }
@@ -177,9 +175,8 @@ final class LocationNotesManager: ObservableObject {
         }
     }
 
-    private struct ReactionTargetKey: Hashable {
-        let targetID: String
-        let emoji: String
+    private static func reactionTargetKey(targetID: String, emoji: String) -> String {
+        "\(targetID)\u{0}\(emoji)"
     }
 
     /// Top-level posts, newest first.
@@ -207,8 +204,12 @@ final class LocationNotesManager: ObservableObject {
     private var reactionActorsByTarget: [String: [String: Set<String>]] = [:]
     /// targetEventID -> insertion order of emojis for stable UI pills
     private var reactionEmojiOrderByTarget: [String: [String]] = [:]
-    /// Latest own kind-7 reaction event ID per (target, emoji) so toggling off can emit NIP-09 delete.
-    private var ownReactionEventIDs: [ReactionTargetKey: String] = [:]
+    /// Latest own kind-7 reaction event ID per (target, emoji) key so toggling off can emit NIP-09 delete.
+    private var ownReactionEventIDs: [String: String] = [:]
+    /// Maps kind-7 reaction event ID -> (targetID, emoji, actorPubkey) so inbound NIP-09 deletions can retract reactions.
+    private var reactionMetaByEventID: [String: (targetID: String, emoji: String, actorPubkey: String)] = [:]
+    /// Event IDs retracted by verified NIP-09 kind-5 deletions (prevents out-of-order replay resurrection).
+    private var deletedEventIDs = Set<String>()
 
     private var directoryUpdateCancellable: AnyCancellable?
     private var expiryPruneTimer: Timer?
@@ -423,6 +424,8 @@ final class LocationNotesManager: ObservableObject {
             if let matchedGeohash = ingestReaction(event, validGeohashes: validGeohashes), !fromGateway {
                 dependencies.rebroadcastToMesh(event, matchedGeohash)
             }
+        case NostrProtocol.EventKind.deletion.rawValue:
+            ingestDeletion(event)
         default:
             return
         }
@@ -431,7 +434,7 @@ final class LocationNotesManager: ObservableObject {
     @discardableResult
     private func ingestTextNote(_ event: NostrEvent, validGeohashes: Set<String>) -> String? {
         let normalizedID = event.id.lowercased()
-        guard !noteIDs.contains(normalizedID) else { return nil }
+        guard !noteIDs.contains(normalizedID), !deletedEventIDs.contains(normalizedID) else { return nil }
 
         // Single pass over tags: match any of our 9 cells + extract nick/expiration/urgent/teleport.
         var matchedGeohash: String?
@@ -519,7 +522,10 @@ final class LocationNotesManager: ObservableObject {
     @discardableResult
     private func ingestReaction(_ event: NostrEvent, validGeohashes: Set<String>) -> String? {
         let normalizedEventID = event.id.lowercased()
-        guard !reactionEventIDs.contains(normalizedEventID) else { return nil }
+        guard !reactionEventIDs.contains(normalizedEventID),
+              !deletedEventIDs.contains(normalizedEventID) else {
+            return nil
+        }
 
         // Require the reaction to belong to one of our 9 subscribed cells.
         guard let matchedGeohash = event.tags.first(where: { tag in
@@ -541,6 +547,72 @@ final class LocationNotesManager: ObservableObject {
         return matchedGeohash
     }
 
+    /// Processes an inbound NIP-09 kind-5 deletion event. Verifies that the
+    /// deletion author matches the original reaction or note author before
+    /// retracting the reaction or removing the note.
+    private func ingestDeletion(_ event: NostrEvent) {
+        let deleterPubkey = event.pubkey.lowercased()
+        for tag in event.tags where tag.count >= 2 && tag[0].lowercased() == "e" {
+            let targetID = tag[1].trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+            guard targetID.count == 64 else { continue }
+
+            // 1. Retract a tracked kind-7 reaction if signed by the same author.
+            if let meta = reactionMetaByEventID[targetID] {
+                guard meta.actorPubkey == deleterPubkey else { continue }
+                deletedEventIDs.insert(targetID)
+                reactionMetaByEventID.removeValue(forKey: targetID)
+                removeReaction(targetID: meta.targetID, emoji: meta.emoji, actorPubkey: meta.actorPubkey)
+                let ownKey = Self.reactionTargetKey(targetID: meta.targetID, emoji: meta.emoji)
+                if ownReactionEventIDs[ownKey] == targetID {
+                    ownReactionEventIDs.removeValue(forKey: ownKey)
+                }
+                continue
+            }
+
+            // 2. Remove a top-level note or reply if signed by the same author.
+            if let noteIndex = notes.firstIndex(where: { $0.id == targetID }) {
+                guard notes[noteIndex].pubkey.lowercased() == deleterPubkey else { continue }
+                deletedEventIDs.insert(targetID)
+                notes.remove(at: noteIndex)
+                continue
+            }
+            for (rootID, replies) in repliesByRootID {
+                if let replyIndex = replies.firstIndex(where: { $0.id == targetID }) {
+                    guard replies[replyIndex].pubkey.lowercased() == deleterPubkey else { break }
+                    deletedEventIDs.insert(targetID)
+                    var updated = replies
+                    updated.remove(at: replyIndex)
+                    if updated.isEmpty {
+                        repliesByRootID.removeValue(forKey: rootID)
+                    } else {
+                        repliesByRootID[rootID] = updated
+                    }
+                    break
+                }
+            }
+        }
+    }
+
+    private func removeReaction(targetID: String, emoji: String, actorPubkey: String) {
+        let normalizedTarget = targetID.lowercased()
+        guard var byEmoji = reactionActorsByTarget[normalizedTarget],
+              var actors = byEmoji[emoji] else {
+            return
+        }
+        actors.remove(actorPubkey)
+        if actors.isEmpty {
+            byEmoji.removeValue(forKey: emoji)
+        } else {
+            byEmoji[emoji] = actors
+        }
+        if byEmoji.isEmpty {
+            reactionActorsByTarget.removeValue(forKey: normalizedTarget)
+        } else {
+            reactionActorsByTarget[normalizedTarget] = byEmoji
+        }
+        rebuildAggregatedReactions(forTargetID: normalizedTarget)
+    }
+
     private func isOwnPubkey(_ pubkeyHex: String) -> Bool {
         let lower = pubkeyHex.lowercased()
         if let ownPubkey, lower == ownPubkey.lowercased() { return true }
@@ -550,6 +622,7 @@ final class LocationNotesManager: ObservableObject {
 
     private func applyReaction(targetID: String, emoji: String, actorPubkey: String, eventID: String) {
         let normalizedTarget = targetID.lowercased()
+        reactionMetaByEventID[eventID] = (targetID: normalizedTarget, emoji: emoji, actorPubkey: actorPubkey)
         var byEmoji = reactionActorsByTarget[normalizedTarget, default: [:]]
         var actors = byEmoji[emoji, default: []]
         let inserted = actors.insert(actorPubkey).inserted
@@ -564,7 +637,7 @@ final class LocationNotesManager: ObservableObject {
             }
         }
         if isOwnPubkey(actorPubkey) {
-            ownReactionEventIDs[ReactionTargetKey(targetID: normalizedTarget, emoji: emoji)] = eventID
+            ownReactionEventIDs[Self.reactionTargetKey(targetID: normalizedTarget, emoji: emoji)] = eventID
         }
         rebuildAggregatedReactions(forTargetID: normalizedTarget)
     }
@@ -643,6 +716,10 @@ final class LocationNotesManager: ObservableObject {
         if reactionEventIDs.count > maxTrackedReactionEvents {
             let ownIDs = Set(ownReactionEventIDs.values)
             reactionEventIDs = ownIDs.union([id])
+            reactionMetaByEventID = reactionMetaByEventID.filter { reactionEventIDs.contains($0.key) }
+        }
+        if deletedEventIDs.count > maxTrackedReactionEvents {
+            deletedEventIDs.removeAll(keepingCapacity: false)
         }
     }
 
@@ -853,47 +930,40 @@ final class LocationNotesManager: ObservableObject {
     }
 
     /// Toggles a NIP-25 emoji reaction on a note. Adding publishes a kind-7
-    /// reaction; removing sends a NIP-09 deletion of our own kind-7 event.
+    /// reaction (with automatic BLE gateway uplink when relays are offline);
+    /// removing sends a geohash-tagged NIP-09 deletion of our own kind-7 event.
     @discardableResult
     func toggleReaction(emoji: String, on note: Note) -> Bool {
         guard let normalizedEmoji = NostrProtocol.normalizeReactionContent(emoji) else {
             return false
         }
         let relays = dependencies.relayLookup(geohash, TransportConfig.nostrGeoRelayCount)
-        guard !relays.isEmpty else {
-            state = .noRelays
-            errorMessage = Strings.noRelays
-            return false
-        }
         do {
             let identity = try dependencies.deriveIdentity(geohash)
             let ownHex = identity.publicKeyHex.lowercased()
             ownPubkey = ownHex
             let targetID = note.id.lowercased()
-            let key = ReactionTargetKey(targetID: targetID, emoji: normalizedEmoji)
+            let key = Self.reactionTargetKey(targetID: targetID, emoji: normalizedEmoji)
 
-            var byEmoji = reactionActorsByTarget[targetID, default: [:]]
-            var actors = byEmoji[normalizedEmoji, default: []]
+            let byEmoji = reactionActorsByTarget[targetID, default: [:]]
+            let actors = byEmoji[normalizedEmoji, default: []]
 
             if actors.contains(ownHex) {
-                // Toggle off: remove locally and emit NIP-09 deletion when we know the reaction event ID.
-                actors.remove(ownHex)
-                if actors.isEmpty {
-                    byEmoji.removeValue(forKey: normalizedEmoji)
-                } else {
-                    byEmoji[normalizedEmoji] = actors
+                guard !relays.isEmpty else {
+                    state = .noRelays
+                    errorMessage = Strings.noRelays
+                    return false
                 }
-                if byEmoji.isEmpty {
-                    reactionActorsByTarget.removeValue(forKey: targetID)
-                } else {
-                    reactionActorsByTarget[targetID] = byEmoji
-                }
-                rebuildAggregatedReactions(forTargetID: targetID)
+                // Toggle off: remove locally and emit geohash-tagged NIP-09 deletion.
+                removeReaction(targetID: targetID, emoji: normalizedEmoji, actorPubkey: ownHex)
 
                 if let reactionEventID = ownReactionEventIDs.removeValue(forKey: key) {
+                    reactionMetaByEventID.removeValue(forKey: reactionEventID)
+                    deletedEventIDs.insert(reactionEventID)
                     let deletion = try NostrProtocol.createDeleteEvent(
                         ofEventID: reactionEventID,
-                        senderIdentity: identity
+                        senderIdentity: identity,
+                        geohash: geohash
                     )
                     dependencies.sendEvent(deletion, relays)
                 }
@@ -907,7 +977,16 @@ final class LocationNotesManager: ObservableObject {
                     senderIdentity: identity,
                     createdAt: dependencies.now()
                 )
-                dependencies.sendEvent(reactionEvent, relays)
+                let hasConnectedRelays = !relays.isEmpty && dependencies.anyRelayConnected(relays)
+                let uplinked = !hasConnectedRelays && dependencies.uplinkViaMesh(reactionEvent, geohash)
+                guard hasConnectedRelays || uplinked || !relays.isEmpty else {
+                    state = .noRelays
+                    errorMessage = Strings.noRelays
+                    return false
+                }
+                if !relays.isEmpty {
+                    dependencies.sendEvent(reactionEvent, relays)
+                }
                 let reactionID = reactionEvent.id.lowercased()
                 recordReactionEventID(reactionID)
                 applyReaction(
@@ -949,7 +1028,11 @@ final class LocationNotesManager: ObservableObject {
             } else {
                 identity = try dependencies.deriveIdentity(geohash)
             }
-            let deletion = try NostrProtocol.createDeleteEvent(ofEventID: note.id, senderIdentity: identity)
+            let deletion = try NostrProtocol.createDeleteEvent(
+                ofEventID: note.id,
+                senderIdentity: identity,
+                geohash: geohash
+            )
             dependencies.sendEvent(deletion, relays)
             if usedPublicHandle {
                 dependencies.sendToDefaultRelays(deletion)
@@ -1046,6 +1129,8 @@ final class LocationNotesManager: ObservableObject {
         reactionActorsByTarget.removeAll(keepingCapacity: false)
         reactionEmojiOrderByTarget.removeAll(keepingCapacity: false)
         ownReactionEventIDs.removeAll(keepingCapacity: false)
+        reactionMetaByEventID.removeAll(keepingCapacity: false)
+        deletedEventIDs.removeAll(keepingCapacity: false)
         ownPubkey = nil
         ownPublicPubkey = nil
         initialLoadComplete = false

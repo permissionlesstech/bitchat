@@ -14,6 +14,9 @@ import BitFoundation
 import BitLogger
 import Combine
 import Foundation
+#if os(iOS)
+import UIKit
+#endif
 
 @MainActor
 final class NostrFollowsStore: ObservableObject {
@@ -43,6 +46,16 @@ final class NostrFollowsStore: ObservableObject {
     private let keychain: KeychainManagerProtocol
     private let favoritesProvider: () -> [FavoritesPersistenceService.FavoriteRelationship]
     private var favoritesCancellable: AnyCancellable?
+    #if os(iOS)
+    private var unlockObserver: NSObjectProtocol?
+    #endif
+    /// True when the initial keychain read failed due to a transient error
+    /// (e.g. locked boot) rather than `.itemNotFound`. While true, writes are
+    /// deferred and replayed once the Keychain becomes readable so existing
+    /// follows are never clobbered.
+    private var loadUnavailable = false
+    private var pendingFollows: [String: FollowedAuthor] = [:]
+    private var pendingUnfollows: Set<String> = []
 
     init(
         keychain: KeychainManagerProtocol = KeychainManager.makeDefault(),
@@ -63,11 +76,69 @@ final class NostrFollowsStore: ObservableObject {
         }
         loadExplicitFollows()
         refreshMergedFollows()
+        #if os(iOS)
+        unlockObserver = NotificationCenter.default.addObserver(
+            forName: UIApplication.protectedDataDidBecomeAvailableNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor [weak self] in
+                self?.retryDeferredLoad()
+            }
+        }
+        #endif
+    }
+
+    #if os(iOS)
+    deinit {
+        if let unlockObserver {
+            NotificationCenter.default.removeObserver(unlockObserver)
+        }
+    }
+    #endif
+
+    /// Re-attempts reading the Keychain follow list after a locked-boot failure
+    /// and replays any queued follow/unfollow mutations without clobbering.
+    func retryDeferredLoad() {
+        guard loadUnavailable else { return }
+        loadExplicitFollows()
+        guard !loadUnavailable else { return }
+
+        var mutated = false
+        if !pendingUnfollows.isEmpty {
+            let unfollows = pendingUnfollows
+            pendingUnfollows.removeAll(keepingCapacity: false)
+            let before = explicitFollows.count
+            explicitFollows.removeAll { unfollows.contains($0.pubkeyHex) }
+            if explicitFollows.count != before { mutated = true }
+        }
+        if !pendingFollows.isEmpty {
+            let queued = pendingFollows.values.sorted { $0.followedAt < $1.followedAt }
+            pendingFollows.removeAll(keepingCapacity: false)
+            for entry in queued {
+                if let index = explicitFollows.firstIndex(where: { $0.pubkeyHex == entry.pubkeyHex }) {
+                    if let alias = entry.alias, explicitFollows[index].alias != alias {
+                        explicitFollows[index].alias = alias
+                        mutated = true
+                    }
+                } else if explicitFollows.count < Self.maxExplicitFollows {
+                    explicitFollows.insert(entry, at: 0)
+                    mutated = true
+                }
+            }
+        }
+        if mutated {
+            saveExplicitFollows()
+        }
+        refreshMergedFollows()
     }
 
     /// Follow a Nostr author by 64-char hex pubkey or `npub1...`.
     @discardableResult
     func follow(_ pubkeyOrNpub: String, alias: String? = nil) -> Bool {
+        if loadUnavailable {
+            retryDeferredLoad()
+        }
         guard let hex = NostrProtocol.normalizePubkeyHex(pubkeyOrNpub) else {
             return false
         }
@@ -75,27 +146,44 @@ final class NostrFollowsStore: ObservableObject {
         if let index = explicitFollows.firstIndex(where: { $0.pubkeyHex == hex }) {
             if let cleanAlias, explicitFollows[index].alias != cleanAlias {
                 explicitFollows[index].alias = cleanAlias
-                saveExplicitFollows()
+                if loadUnavailable {
+                    pendingFollows[hex] = explicitFollows[index]
+                    pendingUnfollows.remove(hex)
+                } else {
+                    saveExplicitFollows()
+                }
             }
             return true
         }
         guard explicitFollows.count < Self.maxExplicitFollows else {
             return false
         }
-        explicitFollows.insert(
-            FollowedAuthor(pubkeyHex: hex, alias: cleanAlias, followedAt: Date()),
-            at: 0
-        )
-        saveExplicitFollows()
+        let entry = FollowedAuthor(pubkeyHex: hex, alias: cleanAlias, followedAt: Date())
+        explicitFollows.insert(entry, at: 0)
+        if loadUnavailable {
+            pendingFollows[hex] = entry
+            pendingUnfollows.remove(hex)
+        } else {
+            saveExplicitFollows()
+        }
         refreshMergedFollows()
         return true
     }
 
     /// Remove an explicitly followed pubkey.
     func unfollow(_ pubkeyHex: String) {
+        if loadUnavailable {
+            retryDeferredLoad()
+        }
         let normalized = NostrProtocol.normalizePubkeyHex(pubkeyHex) ?? pubkeyHex.lowercased()
         let before = explicitFollows.count
         explicitFollows.removeAll { $0.pubkeyHex == normalized }
+        if loadUnavailable {
+            pendingFollows.removeValue(forKey: normalized)
+            pendingUnfollows.insert(normalized)
+            refreshMergedFollows()
+            return
+        }
         guard explicitFollows.count != before else { return }
         saveExplicitFollows()
         refreshMergedFollows()
@@ -168,6 +256,9 @@ final class NostrFollowsStore: ObservableObject {
 
     /// Panic-wipe hook: erase all explicitly followed pubkeys from memory and Keychain.
     func resetForPanic() {
+        loadUnavailable = false
+        pendingFollows.removeAll(keepingCapacity: false)
+        pendingUnfollows.removeAll(keepingCapacity: false)
         explicitFollows.removeAll(keepingCapacity: false)
         favoriteFollowPubkeys.removeAll(keepingCapacity: false)
         allFollowedPubkeys.removeAll(keepingCapacity: false)
@@ -177,7 +268,17 @@ final class NostrFollowsStore: ObservableObject {
     // MARK: - Persistence
 
     private func loadExplicitFollows() {
-        guard let data = keychain.load(key: Self.storageKey, service: Self.keychainService) else {
+        let data: Data
+        switch keychain.loadWithResult(key: Self.storageKey, service: Self.keychainService) {
+        case .success(let loadedData):
+            loadUnavailable = false
+            data = loadedData
+        case .itemNotFound:
+            loadUnavailable = false
+            return
+        case .deviceLocked, .authenticationFailed, .accessDenied, .otherError:
+            loadUnavailable = true
+            SecureLogger.warning("NostrFollowsStore: keychain read unavailable at launch; deferring writes to prevent overwrite", category: .security)
             return
         }
         do {
@@ -200,6 +301,10 @@ final class NostrFollowsStore: ObservableObject {
     }
 
     private func saveExplicitFollows() {
+        guard !loadUnavailable else {
+            SecureLogger.warning("NostrFollowsStore: skipping keychain save while initial load is unavailable", category: .security)
+            return
+        }
         do {
             let data = try JSONEncoder().encode(explicitFollows)
             keychain.save(

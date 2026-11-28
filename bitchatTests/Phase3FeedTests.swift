@@ -123,6 +123,19 @@ struct Phase3FeedTests {
         #expect(uplinked.count == 1)
         #expect(uplinked[0].1 == "9q8yy")
         #expect(manager.notes.first?.content == "sent over BLE gateway")
+
+        // Offline reaction also uplinks through the BLE gateway when relays are disconnected.
+        let note = try #require(manager.notes.first)
+        #expect(manager.toggleReaction(emoji: "🔥", on: note))
+        #expect(uplinked.count == 2)
+        #expect(uplinked[1].0.kind == NostrProtocol.EventKind.reaction.rawValue)
+        #expect(manager.reactions(forNoteID: note.id).first?.emoji == "🔥")
+
+        // When neither relays nor BLE gateway are available, reaction returns false with no optimistic echo.
+        deps.uplinkViaMesh = { _, _ in false }
+        let offlineNoGateway = LocationNotesManager(geohash: "9q8yy", dependencies: deps)
+        #expect(!offlineNoGateway.toggleReaction(emoji: "🔥", on: note))
+        #expect(offlineNoGateway.reactions(forNoteID: note.id).isEmpty)
     }
 
     @Test

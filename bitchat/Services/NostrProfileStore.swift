@@ -16,6 +16,9 @@ import BitFoundation
 import BitLogger
 import Combine
 import Foundation
+#if os(iOS)
+import UIKit
+#endif
 
 struct NostrProfileStoreDependencies {
     typealias Subscribe = @MainActor (_ filter: NostrFilter, _ id: String, _ handler: @escaping (NostrEvent) -> Void, _ onEOSE: (() -> Void)?) -> Void
@@ -27,6 +30,9 @@ struct NostrProfileStoreDependencies {
     var sendEvent: SendEvent
     var currentIdentity: () throws -> NostrIdentity?
     var now: () -> Date
+    /// Whether at least one default relay is currently connected. Used on EOSE
+    /// to distinguish a real empty response from a pre-Tor connectivity timeout.
+    var isAnyDefaultRelayConnected: @MainActor () -> Bool = { true }
 
     static let live = NostrProfileStoreDependencies(
         subscribe: { filter, id, handler, onEOSE in
@@ -47,7 +53,10 @@ struct NostrProfileStoreDependencies {
         currentIdentity: {
             try NostrIdentityBridge.shared.getCurrentNostrIdentity()
         },
-        now: Date.init
+        now: Date.init,
+        isAnyDefaultRelayConnected: {
+            NostrRelayManager.shared.isConnected
+        }
     )
 }
 
@@ -89,6 +98,12 @@ final class NostrProfileStore: ObservableObject {
     private var fetchOrder: [String] = []
     private var lastRequestedAt: [String: Date] = [:]
     private var activeSubscriptionIDs: Set<String> = []
+    private var pendingRetryPubkeys: Set<String> = []
+    private var connectivityRetryTimer: Timer?
+    private var loadUnavailable = false
+    #if os(iOS)
+    private var unlockObserver: NSObjectProtocol?
+    #endif
 
     init(
         keychain: KeychainManagerProtocol = KeychainManager.makeDefault(),
@@ -97,9 +112,26 @@ final class NostrProfileStore: ObservableObject {
         self.keychain = keychain
         self.dependencies = dependencies
         loadOwnProfile()
+        #if os(iOS)
+        unlockObserver = NotificationCenter.default.addObserver(
+            forName: UIApplication.protectedDataDidBecomeAvailableNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor [weak self] in
+                self?.retryDeferredLoad()
+            }
+        }
+        #endif
     }
 
     deinit {
+        connectivityRetryTimer?.invalidate()
+        #if os(iOS)
+        if let unlockObserver {
+            NotificationCenter.default.removeObserver(unlockObserver)
+        }
+        #endif
         let subs = activeSubscriptionIDs
         let unsubscribe = dependencies.unsubscribe
         if !subs.isEmpty {
@@ -109,6 +141,11 @@ final class NostrProfileStore: ObservableObject {
                 }
             }
         }
+    }
+
+    private func retryDeferredLoad() {
+        guard loadUnavailable else { return }
+        loadOwnProfile()
     }
 
     // MARK: - Own Opt-In Public Handle
@@ -121,10 +158,6 @@ final class NostrProfileStore: ObservableObject {
         try? dependencies.currentIdentity()
     }
 
-    var ownPublicPubkeyHex: String? {
-        ownPublicIdentity()?.publicKeyHex.lowercased()
-    }
-
     var ownPublicNpub: String? {
         ownPublicIdentity()?.npub
     }
@@ -133,6 +166,9 @@ final class NostrProfileStore: ObservableObject {
     /// enabled, signs and publishes a NIP-01 kind-0 event to default relays.
     @discardableResult
     func saveAndPublishOwnProfile(_ updated: OwnPublicProfile) -> Bool {
+        if loadUnavailable {
+            retryDeferredLoad()
+        }
         ownProfile = updated
         saveOwnProfile()
 
@@ -202,14 +238,51 @@ final class NostrProfileStore: ObservableObject {
 
         let subID = "profiles-\(UUID().uuidString.prefix(8))"
         activeSubscriptionIDs.insert(subID)
+        var receivedPubkeys = Set<String>()
         let filter = NostrFilter.authorProfiles(toFetch)
         dependencies.subscribe(filter, subID, { [weak self] event in
+            receivedPubkeys.insert(event.pubkey.lowercased())
             self?.ingestMetadataEvent(event)
         }, { [weak self] in
             guard let self else { return }
             self.activeSubscriptionIDs.remove(subID)
             self.dependencies.unsubscribe(subID)
+            // When Tor or default relays are still disconnected, NostrRelayManager's
+            // 10s EOSE fallback fires before any relay responded. Clear the cooldown
+            // for unreceived pubkeys and retry once connectivity comes up.
+            if !self.dependencies.isAnyDefaultRelayConnected() {
+                let unreceived = toFetch.filter { !receivedPubkeys.contains($0) }
+                for key in unreceived {
+                    self.lastRequestedAt.removeValue(forKey: key)
+                    self.pendingRetryPubkeys.insert(key)
+                }
+                if !self.pendingRetryPubkeys.isEmpty {
+                    self.scheduleConnectivityRetry()
+                }
+            }
         })
+    }
+
+    private func scheduleConnectivityRetry() {
+        guard connectivityRetryTimer == nil else { return }
+        let timer = Timer.scheduledTimer(withTimeInterval: 5, repeats: true) { [weak self] _ in
+            Task { @MainActor [weak self] in
+                guard let self else { return }
+                guard !self.pendingRetryPubkeys.isEmpty else {
+                    self.connectivityRetryTimer?.invalidate()
+                    self.connectivityRetryTimer = nil
+                    return
+                }
+                guard self.dependencies.isAnyDefaultRelayConnected() else { return }
+                let retryList = Array(self.pendingRetryPubkeys)
+                self.pendingRetryPubkeys.removeAll(keepingCapacity: false)
+                self.connectivityRetryTimer?.invalidate()
+                self.connectivityRetryTimer = nil
+                self.ensureProfiles(for: retryList)
+            }
+        }
+        timer.tolerance = 1.0
+        connectivityRetryTimer = timer
     }
 
     func ingestMetadataEvent(_ event: NostrEvent) {
@@ -231,6 +304,10 @@ final class NostrProfileStore: ObservableObject {
     /// Panic-wipe hook: close active profile REQs, clear cached profiles, and
     /// delete the opt-in public profile from Keychain.
     func resetForPanic() {
+        connectivityRetryTimer?.invalidate()
+        connectivityRetryTimer = nil
+        pendingRetryPubkeys.removeAll(keepingCapacity: false)
+        loadUnavailable = false
         for subID in activeSubscriptionIDs {
             dependencies.unsubscribe(subID)
         }
@@ -245,7 +322,17 @@ final class NostrProfileStore: ObservableObject {
     // MARK: - Persistence
 
     private func loadOwnProfile() {
-        guard let data = keychain.load(key: Self.storageKey, service: Self.keychainService) else {
+        let data: Data
+        switch keychain.loadWithResult(key: Self.storageKey, service: Self.keychainService) {
+        case .success(let loadedData):
+            loadUnavailable = false
+            data = loadedData
+        case .itemNotFound:
+            loadUnavailable = false
+            return
+        case .deviceLocked, .authenticationFailed, .accessDenied, .otherError:
+            loadUnavailable = true
+            SecureLogger.warning("NostrProfileStore: keychain read unavailable at launch; deferring writes to prevent overwrite", category: .security)
             return
         }
         if let decoded = try? JSONDecoder().decode(OwnPublicProfile.self, from: data) {
@@ -254,6 +341,10 @@ final class NostrProfileStore: ObservableObject {
     }
 
     private func saveOwnProfile() {
+        guard !loadUnavailable else {
+            SecureLogger.warning("NostrProfileStore: skipping keychain save while initial load is unavailable", category: .security)
+            return
+        }
         do {
             let data = try JSONEncoder().encode(ownProfile)
             keychain.save(

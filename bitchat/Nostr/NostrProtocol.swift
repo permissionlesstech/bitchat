@@ -745,26 +745,26 @@ struct NostrProtocol {
         return nil
     }
 
-    /// Parse a NIP-25 kind-7 reaction event into its target event ID (last `e`
-    /// tag per NIP-25) and normalized display emoji.
+    /// Parse a NIP-25 kind-7 reaction event into its target event ID (first
+    /// valid `e` tag, ignoring any additional appended `e` tags) and normalized
+    /// display emoji.
     static func parseReactionTarget(from event: NostrEvent) -> (targetEventID: String, emoji: String)? {
         guard event.kind == EventKind.reaction.rawValue,
               let emoji = normalizeReactionContent(event.content) else {
             return nil
         }
-        var targetEventID: String?
         for tag in event.tags where tag.count >= 2 && tag[0].lowercased() == "e" {
             let candidate = tag[1].trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
             if isValidHexIdentifier(candidate) {
-                targetEventID = candidate
+                return (candidate, emoji)
             }
         }
-        guard let targetEventID else { return nil }
-        return (targetEventID, emoji)
+        return nil
     }
 
     /// Normalizes NIP-25 reaction content: empty or `"+"` maps to `"❤️"`,
-    /// `"-"` is ignored, and custom emoji strings are bounded defensively.
+    /// `"-"` is ignored, and custom emoji strings are restricted to a single
+    /// emoji grapheme cluster so arbitrary text cannot render as an emoji chip.
     static func normalizeReactionContent(_ raw: String) -> String? {
         let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
         if trimmed.isEmpty || trimmed == "+" {
@@ -773,7 +773,15 @@ struct NostrProtocol {
         if trimmed == "-" {
             return nil
         }
-        guard trimmed.count <= 2, trimmed.utf8.count <= 16 else {
+        guard trimmed.count == 1, trimmed.utf8.count <= 16 else {
+            return nil
+        }
+        let hasEmojiScalar = trimmed.unicodeScalars.contains { scalar in
+            scalar.properties.isEmojiPresentation
+                || (scalar.properties.isEmoji && !scalar.isASCII)
+                || scalar.value == 0xFE0F
+        }
+        guard hasEmojiScalar else {
             return nil
         }
         return trimmed
@@ -949,13 +957,18 @@ struct NostrProtocol {
     /// key that signed the original.
     static func createDeleteEvent(
         ofEventID eventID: String,
-        senderIdentity: NostrIdentity
+        senderIdentity: NostrIdentity,
+        geohash: String? = nil
     ) throws -> NostrEvent {
+        var tags: [[String]] = [["e", eventID]]
+        if let geohash = geohash?.trimmedOrNilIfEmpty {
+            tags.append(["g", geohash.lowercased()])
+        }
         let event = NostrEvent(
             pubkey: senderIdentity.publicKeyHex,
             createdAt: Date(),
             kind: .deletion,
-            tags: [["e", eventID]],
+            tags: tags,
             content: ""
         )
         let schnorrKey = try senderIdentity.schnorrSigningKey()

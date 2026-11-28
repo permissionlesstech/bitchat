@@ -25,7 +25,6 @@ struct HomeFeedView: View {
     @EnvironmentObject private var locationChannelsModel: LocationChannelsModel
     @ObservedObject private var followsStore = NostrFollowsStore.shared
     @ObservedObject private var profileStore = NostrProfileStore.shared
-    @Environment(\.colorScheme) private var colorScheme
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @ThemedPalette private var palette
 
@@ -486,8 +485,9 @@ struct HomeFeedView: View {
     private func submitGlobalPost() {
         guard let content = draft.trimmedOrNilIfEmpty else { return }
         let handle = profileStore.ownProfile.displayName.trimmedOrNilIfEmpty ?? senderNickname
-        feedManager.sendGlobalPost(content: content, nickname: handle)
-        draft = ""
+        if feedManager.sendGlobalPost(content: content, nickname: handle) {
+            draft = ""
+        }
     }
 
     private func scopeTitle(_ option: HomeFeedScope) -> String {

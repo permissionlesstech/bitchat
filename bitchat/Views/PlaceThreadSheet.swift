@@ -334,15 +334,16 @@ struct PlaceThreadSheet: View {
             replyEventID: target.id == rootNote.id ? nil : target.id,
             replyAuthorPubkey: target.pubkey
         )
-        manager.sendFeedPost(
+        if manager.sendFeedPost(
             content: content,
             nickname: senderNickname,
             expiresAt: nil,
             urgent: false,
             teleported: isTeleported,
             replyTo: reference
-        )
-        replyDraft = ""
-        replyTarget = nil
+        ) {
+            replyDraft = ""
+            replyTarget = nil
+        }
     }
 }

@@ -92,12 +92,15 @@ struct NostrFilter: Encodable {
     }
 
     // For Place Feed: kind-1 notes/replies and kind-7 NIP-25 reactions on one
-    // per-place relay subscription (avoids opening a second socket/REQ over Tor).
+    // For Place Feed: fetches kind-1 notes/replies, kind-7 NIP-25 reactions,
+    // and kind-5 NIP-09 deletions in one per-place relay subscription (avoids
+    // opening extra sockets/REQs over Tor).
     static func geohashFeed(_ geohashes: [String], since: Date? = nil, limit: Int = 200) -> NostrFilter {
         var filter = NostrFilter()
         filter.kinds = [
             NostrProtocol.EventKind.textNote.rawValue,
-            NostrProtocol.EventKind.reaction.rawValue
+            NostrProtocol.EventKind.reaction.rawValue,
+            NostrProtocol.EventKind.deletion.rawValue
         ]
         filter.since = since?.timeIntervalSince1970.toInt()
         filter.tagFilters = ["g": geohashes]
@@ -121,15 +124,6 @@ struct NostrFilter: Encodable {
         filter.kinds = [NostrProtocol.EventKind.metadata.rawValue]
         filter.authors = pubkeys
         filter.limit = limit ?? max(pubkeys.count * 2, 20)
-        return filter
-    }
-
-    // For NIP-25 reactions targeting specific event IDs (used on non-geohash followed notes).
-    static func reactionsForEvents(_ eventIDs: [String], limit: Int = 200) -> NostrFilter {
-        var filter = NostrFilter()
-        filter.kinds = [NostrProtocol.EventKind.reaction.rawValue]
-        filter.tagFilters = ["e": eventIDs]
-        filter.limit = limit
         return filter
     }
 

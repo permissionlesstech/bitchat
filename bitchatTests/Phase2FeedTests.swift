@@ -117,6 +117,128 @@ struct Phase2StoresAndHomeFeedTests {
     }
 
     @Test
+    func followsStore_lockedBootDefersWritesAndReplaysOnUnlock() throws {
+        let keychain = MockKeychain()
+        let existingPeer = try NostrIdentity.generate()
+        let newPeer = try NostrIdentity.generate()
+
+        let initial = NostrFollowsStore(keychain: keychain, favoritesProvider: { [] })
+        #expect(initial.follow(existingPeer.publicKeyHex, alias: "existing"))
+
+        // Boot while device is locked: load fails with .deviceLocked.
+        keychain.simulatedGenericReadError = .deviceLocked
+        let lockedStore = NostrFollowsStore(keychain: keychain, favoritesProvider: { [] })
+        #expect(lockedStore.explicitFollows.isEmpty)
+
+        // Mutating while locked must NOT overwrite existing Keychain entry.
+        #expect(lockedStore.follow(newPeer.publicKeyHex, alias: "added-while-locked"))
+
+        keychain.simulatedGenericReadError = nil
+        let rawBeforeReplay = NostrFollowsStore(keychain: keychain, favoritesProvider: { [] })
+        #expect(rawBeforeReplay.explicitFollows.map(\.pubkeyHex) == [existingPeer.publicKeyHex])
+
+        // Unlocking and retrying loads existing follow, replays queued follow, and persists both.
+        lockedStore.retryDeferredLoad()
+        #expect(Set(lockedStore.explicitFollows.map(\.pubkeyHex)) == [existingPeer.publicKeyHex, newPeer.publicKeyHex])
+
+        let afterReplay = NostrFollowsStore(keychain: keychain, favoritesProvider: { [] })
+        #expect(Set(afterReplay.explicitFollows.map(\.pubkeyHex)) == [existingPeer.publicKeyHex, newPeer.publicKeyHex])
+    }
+
+    @Test
+    func profileStore_clearsCooldownWhenEOSEFiresBeforeTorConnects() throws {
+        let keychain = MockKeychain()
+        let remote = try NostrIdentity.generate()
+        var isConnected = false
+        var subscribeCount = 0
+        var lastEOSE: (() -> Void)?
+
+        let deps = NostrProfileStoreDependencies(
+            subscribe: { _, _, _, onEOSE in
+                subscribeCount += 1
+                lastEOSE = onEOSE
+            },
+            unsubscribe: { _ in },
+            sendEvent: { _ in },
+            currentIdentity: { nil },
+            now: { Date(timeIntervalSince1970: 1_700_000_000) },
+            isAnyDefaultRelayConnected: { isConnected }
+        )
+
+        let store = NostrProfileStore(keychain: keychain, dependencies: deps)
+        store.ensureProfiles(for: [remote.publicKeyHex])
+        #expect(subscribeCount == 1)
+
+        // 10s EOSE fallback fires while Tor/relays are still disconnected.
+        lastEOSE?()
+
+        // Once relays connect, cooldown must NOT block re-fetching the missing profile.
+        isConnected = true
+        store.ensureProfiles(for: [remote.publicKeyHex])
+        #expect(subscribeCount == 2)
+        store.resetForPanic()
+    }
+
+    @Test
+    func homeFeedManager_prunesExpiredFollowingPostsWithoutResurrectingPlacePosts() throws {
+        var currentNow = Date(timeIntervalSince1970: 1_700_000_000)
+        let author = try NostrIdentity.generate()
+        var placeHandler: ((NostrEvent) -> Void)?
+        var followingHandler: ((NostrEvent) -> Void)?
+        var placeManager: LocationNotesManager?
+
+        let homeDeps = HomeFeedDependencies(
+            acquirePlaceManager: { gh in
+                let mgr = LocationNotesManager(geohash: gh, dependencies: LocationNotesDependencies(
+                    relayLookup: { _, _ in ["wss://geo.relay"] },
+                    subscribe: { _, _, _, onEvent, onEOSE in
+                        placeHandler = onEvent
+                        onEOSE?()
+                    },
+                    unsubscribe: { _ in },
+                    sendEvent: { _, _ in },
+                    deriveIdentity: { _ in try NostrIdentity.generate() },
+                    now: { currentNow }
+                ))
+                placeManager = mgr
+                return mgr
+            },
+            releasePlaceManager: { $0?.cancel() },
+            subscribeDefaultRelays: { _, _, onEvent, onEOSE in
+                followingHandler = onEvent
+                onEOSE?()
+            },
+            unsubscribe: { _ in },
+            sendDefaultRelays: { _ in },
+            publicIdentity: { nil },
+            ensureProfiles: { _ in },
+            now: { currentNow }
+        )
+
+        let feed = HomeFeedManager(dependencies: homeDeps)
+        feed.activate(bookmarks: ["9q8yy"], followedPubkeys: [author.publicKeyHex])
+
+        let expiring = try NostrProtocol.createGeohashTextNote(
+            content: "short-lived drop",
+            geohash: "9q8yy",
+            senderIdentity: author,
+            nickname: "alice",
+            expiresAt: currentNow.addingTimeInterval(60),
+            createdAt: currentNow
+        )
+        placeHandler?(expiring)
+        followingHandler?(expiring)
+        #expect(feed.items.count == 1)
+
+        // Advance past expiration: place manager prunes AND HomeFeedManager prunes Following cache.
+        currentNow = currentNow.addingTimeInterval(120)
+        placeManager?.pruneExpiredNotes()
+        feed.pruneExpiredFollowingNotes()
+        #expect(feed.items.isEmpty)
+        feed.resetForPanic()
+    }
+
+    @Test
     func profileStore_defaultsOffPublishesKind0BatchesRemoteAndWipesOnPanic() throws {
         let keychain = PreviewKeychainManager()
         let me = try NostrIdentity.generate()

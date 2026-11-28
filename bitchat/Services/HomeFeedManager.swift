@@ -89,6 +89,7 @@ final class HomeFeedManager: ObservableObject {
     private var followingSubscriptionID: String?
     private var subscribedBookmarks: [String] = []
     private var subscribedFollows: [String] = []
+    private var expiryPruneTimer: Timer?
     private var isActive = false
 
     init(dependencies: HomeFeedDependencies = .live) {
@@ -96,6 +97,7 @@ final class HomeFeedManager: ObservableObject {
     }
 
     deinit {
+        expiryPruneTimer?.invalidate()
         if let sub = followingSubscriptionID {
             let unsubscribe = dependencies.unsubscribe
             Task { @MainActor in
@@ -117,6 +119,7 @@ final class HomeFeedManager: ObservableObject {
 
     func activate(bookmarks: [String], followedPubkeys: [String]) {
         isActive = true
+        startExpiryPruneTimer()
         updateSources(bookmarks: bookmarks, followedPubkeys: followedPubkeys)
     }
 
@@ -148,6 +151,7 @@ final class HomeFeedManager: ObservableObject {
 
     func deactivate() {
         isActive = false
+        stopExpiryPruneTimer()
         releaseAllPlaceManagers()
         closeFollowingSubscription()
         subscribedBookmarks = []
@@ -309,6 +313,7 @@ final class HomeFeedManager: ObservableObject {
     func resetForPanic() {
         isSending = false
         isActive = false
+        stopExpiryPruneTimer()
         releaseAllPlaceManagers()
         closeFollowingSubscription()
         followingNotes.removeAll(keepingCapacity: false)
@@ -458,7 +463,73 @@ final class HomeFeedManager: ObservableObject {
         rebuildItems()
     }
 
+    /// Drops NIP-40 expired entries from the Following cache and triggers a
+    /// feed rebuild so expired followed posts cannot linger or resurrect
+    /// expired Saved Place posts.
+    func pruneExpiredFollowingNotes() {
+        let now = dependencies.now()
+        var removedIDs: [String] = []
+        followingNotes.removeAll { note in
+            if let expiresAt = note.expiresAt, expiresAt <= now {
+                removedIDs.append(note.id)
+                return true
+            }
+            return false
+        }
+        for (rootID, replies) in followingRepliesByRootID {
+            let kept = replies.filter { reply in
+                if let expiresAt = reply.expiresAt, expiresAt <= now {
+                    removedIDs.append(reply.id)
+                    return false
+                }
+                return true
+            }
+            if kept.isEmpty {
+                followingRepliesByRootID.removeValue(forKey: rootID)
+            } else if kept.count != replies.count {
+                followingRepliesByRootID[rootID] = kept
+            }
+        }
+        if !removedIDs.isEmpty {
+            for id in removedIDs {
+                followingNoteIDs.remove(id)
+            }
+            rebuildItems()
+        }
+    }
+
+    private func startExpiryPruneTimer() {
+        guard expiryPruneTimer == nil else { return }
+        let timer = Timer.scheduledTimer(withTimeInterval: 60, repeats: true) { [weak self] _ in
+            Task { @MainActor [weak self] in
+                self?.pruneExpiredFollowingNotes()
+            }
+        }
+        timer.tolerance = 10.0
+        expiryPruneTimer = timer
+    }
+
+    private func stopExpiryPruneTimer() {
+        expiryPruneTimer?.invalidate()
+        expiryPruneTimer = nil
+    }
+
     private func rebuildItems() {
+        let now = dependencies.now()
+        // Drop any expired following entries before merging so an expired
+        // saved-place post cannot be resurrected from the Following cache.
+        var expiredFollowingIDs: [String] = []
+        followingNotes.removeAll { note in
+            if let expiresAt = note.expiresAt, expiresAt <= now {
+                expiredFollowingIDs.append(note.id)
+                return true
+            }
+            return false
+        }
+        for id in expiredFollowingIDs {
+            followingNoteIDs.remove(id)
+        }
+
         let followedSet = Set(subscribedFollows)
         let ownPublicHex = (try? dependencies.publicIdentity())?.publicKeyHex.lowercased()
         var mergedByID: [String: HomeFeedItem] = [:]
@@ -467,6 +538,7 @@ final class HomeFeedManager: ObservableObject {
         // 1. Saved Places notes
         for (bookmarkGeohash, manager) in placeManagers {
             for note in manager.notes {
+                if let expiresAt = note.expiresAt, expiresAt <= now { continue }
                 let pubkey = note.pubkey.lowercased()
                 authorPubkeys.insert(pubkey)
                 let isFollowed = followedSet.contains(pubkey) || (ownPublicHex == pubkey)

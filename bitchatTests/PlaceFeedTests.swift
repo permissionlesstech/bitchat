@@ -88,7 +88,7 @@ struct PlaceFeedProtocolTests {
     }
 
     @Test
-    func nip25_reactionCreateAndParseUsesLastETagAndNormalizesContent() throws {
+    func nip25_reactionCreateAndParseUsesFirstETagAndValidatesEmoji() throws {
         let author = try NostrIdentity.generate()
         let targetID = String(repeating: "a", count: 64)
         let targetAuthor = String(repeating: "b", count: 64)
@@ -110,13 +110,13 @@ struct PlaceFeedProtocolTests {
         #expect(parsed.targetEventID == targetID)
         #expect(parsed.emoji == "🔥")
 
-        // NIP-25: "+" and empty map to ❤️, "-" is ignored, last `e` tag wins.
-        let otherID = String(repeating: "9", count: 64)
+        // First valid `e` tag wins so appended extra `e` tags cannot retarget a reaction.
+        let extraID = String(repeating: "9", count: 64)
         let plusEvent = try NostrEvent(
             pubkey: author.publicKeyHex,
             createdAt: Date(),
             kind: .reaction,
-            tags: [["g", "9q8yy"], ["e", otherID], ["e", targetID]],
+            tags: [["g", "9q8yy"], ["e", targetID], ["e", extraID]],
             content: "+"
         ).sign(with: author.schnorrSigningKey())
         let parsedPlus = try #require(NostrProtocol.parseReactionTarget(from: plusEvent))
@@ -131,6 +131,13 @@ struct PlaceFeedProtocolTests {
             content: "-"
         ).sign(with: author.schnorrSigningKey())
         #expect(NostrProtocol.parseReactionTarget(from: minusEvent) == nil)
+
+        // Plain ASCII text and multi-grapheme strings are rejected as emoji chips.
+        #expect(NostrProtocol.normalizeReactionContent("ok") == nil)
+        #expect(NostrProtocol.normalizeReactionContent("ab") == nil)
+        #expect(NostrProtocol.normalizeReactionContent("1") == nil)
+        #expect(NostrProtocol.normalizeReactionContent("🔥🔥") == nil)
+        #expect(NostrProtocol.normalizeReactionContent("❤️") == "❤️")
     }
 
     @Test
@@ -249,14 +256,36 @@ struct PlaceFeedManagerTests {
             AggregatedReaction(emoji: "🔥", count: 2, includesCurrentUser: true)
         ])
 
-        // We toggle 🔥 off -> publishes NIP-09 kind 5 deletion of our reaction and returns count to 1
+        // We toggle 🔥 off -> publishes geohash-tagged NIP-09 kind 5 deletion and returns count to 1
         #expect(manager.toggleReaction(emoji: "🔥", on: rootNote))
         #expect(sentEvents.count == 2)
         #expect(sentEvents[1].kind == NostrProtocol.EventKind.deletion.rawValue)
         #expect(sentEvents[1].tags.contains(["e", ourReactionID]))
+        #expect(sentEvents[1].tags.contains(["g", "9q8yy"]))
         #expect(manager.reactions(forNoteID: rootNote.id) == [
             AggregatedReaction(emoji: "🔥", count: 1, includesCurrentUser: false)
         ])
+
+        // Forged NIP-09 deletion from another author is ignored.
+        let imposter = try NostrIdentity.generate()
+        let forgedDelete = try NostrProtocol.createDeleteEvent(
+            ofEventID: peerReaction.id,
+            senderIdentity: imposter,
+            geohash: "9q8yy"
+        )
+        handler?(forgedDelete)
+        #expect(manager.reactions(forNoteID: rootNote.id) == [
+            AggregatedReaction(emoji: "🔥", count: 1, includesCurrentUser: false)
+        ])
+
+        // Legitimate NIP-09 deletion from the reaction author retracts the reaction live.
+        let peerDelete = try NostrProtocol.createDeleteEvent(
+            ofEventID: peerReaction.id,
+            senderIdentity: peer,
+            geohash: "9q8yy"
+        )
+        handler?(peerDelete)
+        #expect(manager.reactions(forNoteID: rootNote.id).isEmpty)
     }
 
     @Test
