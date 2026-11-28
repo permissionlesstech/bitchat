@@ -36,9 +36,12 @@
 # Fails when:
 #   - any benchmark reports throughput below its floor on every attempt
 #     (exit 1), or
-#   - PERF lines are present but a floored benchmark is missing — a
-#     silently-dropped benchmark must be an explicit floors-file change and
-#     is not retried (exit 3).
+#   - the floors file is missing, unreadable or malformed — a setup error
+#     that no re-measurement can fix, so it is not retried (exit 2), or
+#   - PERF lines are present but a floored benchmark is missing, or a
+#     benchmark reports with no floor — the floors file and the benchmark
+#     suite must change together in both directions, and neither drift is
+#     retried (exit 3).
 
 set -euo pipefail
 
@@ -80,10 +83,12 @@ case "$OUTPUT_FILE" in
 esac
 
 # Exit codes: 0 = all floors met, 1 = below floor (retryable — noise vs
-# regression undecided), 3 = floored benchmark missing (not retryable).
+# regression undecided), 2 = unreadable or malformed floors file, 3 = floors
+# and benchmarks out of step (neither retryable).
 check_floors() {
     OUTPUT_FILE="$OUTPUT_FILE" FLOORS_FILE="$FLOORS_FILE" python3 - <<'PYEOF'
 import json
+import math
 import os
 import re
 import sys
@@ -91,8 +96,24 @@ import sys
 output_file = os.environ["OUTPUT_FILE"]
 floors_file = os.environ["FLOORS_FILE"]
 
-with open(floors_file) as f:
-    floors = json.load(f)["floors"]
+def malformed(detail):
+    # A setup error, not runner noise: exit 2 so the loop does not re-measure.
+    print(f"perf-floors: unreadable or malformed floors file '{floors_file}': {detail}", file=sys.stderr)
+    sys.exit(2)
+
+try:
+    with open(floors_file) as f:
+        document = json.load(f)
+except (OSError, ValueError) as error:
+    malformed(error)
+floors = document.get("floors") if isinstance(document, dict) else None
+if not isinstance(floors, dict):
+    malformed('it needs a "floors" object')
+for name, floor in floors.items():
+    # NaN would fail every comparison, so a below-floor value would pass.
+    is_number = isinstance(floor, (int, float)) and not isinstance(floor, bool)
+    if not is_number or not math.isfinite(floor):
+        malformed(f'the floor for "{name}" is not a finite number')
 
 # PERF[delivery.storeUpdate]: 158862 updates/sec (avg 3.147 ms per pass of 500, 10 passes)
 pattern = re.compile(r"PERF\[([^\]]+)\]:\s*([0-9]+(?:\.[0-9]+)?)\s*(\S+)/sec")
@@ -111,6 +132,7 @@ with open(output_file, errors="replace") as f:
 
 below_floor = []
 missing = []
+unfloored = []
 print(f"perf-floors: checking {len(measured)} benchmark(s) against {len(floors)} floor(s)")
 for name in sorted(set(floors) | set(measured)):
     floor = floors.get(name)
@@ -121,7 +143,9 @@ for name in sorted(set(floors) | set(measured)):
         continue
     value, unit = measured[name]
     if floor is None:
-        print(f"  NO-FLOOR {name}: {value:.0f} {unit}/sec (consider adding a floor)")
+        unfloored.append(
+            f"  NO-FLOOR {name}: {value:.0f} {unit}/sec reports a PERF line but has "
+            f"no floor (add one to perf-floors.json in the same change)")
         continue
     status = "OK" if value >= floor else "BELOW"
     line = f"  {status:8} {name}: {value:.0f} {unit}/sec (floor {floor})"
@@ -131,9 +155,9 @@ for name in sorted(set(floors) | set(measured)):
             f"  BELOW    {name}: {value:.0f} {unit}/sec is under floor {floor} "
             f"({value / floor * 100:.0f}% of floor)")
 
-if missing:
-    print("\nperf-floors: FAILED — floored benchmark(s) missing from the output:")
-    print("\n".join(missing + below_floor))
+if missing or unfloored:
+    print("\nperf-floors: FAILED — floors and benchmarks are out of step:")
+    print("\n".join(missing + unfloored + below_floor))
     sys.exit(3)
 
 if below_floor:
@@ -161,7 +185,8 @@ while true; do
             # Below floor: retry to separate runner noise from regression.
             ;;
         *)
-            # Missing benchmark or parse/setup error: re-measuring can't help.
+            # Floors and benchmarks out of step, or a setup error such as a
+            # malformed floors file: re-measuring can't help.
             exit "$gate_status"
             ;;
     esac
