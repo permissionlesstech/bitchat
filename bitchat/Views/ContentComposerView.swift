@@ -22,8 +22,20 @@ struct ContentComposerView: View {
     let onSendMessage: () -> Void
     @Binding var mediaPickerMode: MediaPickerMode?
 
+    @State private var meshPlaintextNoticeDismissed = MeshPlaintextNoticeSettings.isDismissed
+
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
+            if showsMeshPlaintextNotice {
+                MeshPlaintextNoticeView(
+                    bridgeEnabled: bridgeService.isEnabled,
+                    nearbyOnly: bridgeService.nearbyOnly
+                ) {
+                    meshPlaintextNoticeDismissed = true
+                    MeshPlaintextNoticeSettings.isDismissed = true
+                }
+            }
+
             if autocompleteModel.showAutocomplete && !autocompleteModel.autocompleteSuggestions.isEmpty {
                 VStack(alignment: .leading, spacing: 0) {
                     ForEach(Array(autocompleteModel.autocompleteSuggestions.prefix(4).enumerated()), id: \.element) { index, suggestion in
@@ -135,10 +147,27 @@ struct ContentComposerView: View {
         .onDisappear {
             draftModel.cancelAutocompleteDebounce()
         }
+        .onReceive(NotificationCenter.default.publisher(for: .meshPlaintextNoticeSettingsChanged)) { _ in
+            meshPlaintextNoticeDismissed = MeshPlaintextNoticeSettings.isDismissed
+        }
     }
 }
 
 private extension ContentComposerView {
+    var showsMeshPlaintextNotice: Bool {
+        let onPublicMesh: Bool
+        if privateConversationModel.selectedHeaderState == nil,
+           case .mesh = locationChannelsModel.selectedChannel {
+            onPublicMesh = true
+        } else {
+            onPublicMesh = false
+        }
+        return MeshPlaintextNoticeSettings.shouldShow(
+            dismissed: meshPlaintextNoticeDismissed,
+            isPublicMesh: onPublicMesh
+        )
+    }
+
     /// Static localized strings hoisted out of `body` so each keystroke in the
     /// composer doesn't perform repeated bundle lookups.
     enum Strings {
