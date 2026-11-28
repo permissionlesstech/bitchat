@@ -21,6 +21,8 @@ struct PlacesTabView<RoomContent: View>: View {
     @Environment(\.appTheme) private var theme
     @ThemedPalette private var palette
 
+    let navItems: [SectionNavItem<AppRootTab>]
+    let onSelectTab: (AppRootTab) -> Void
     @Binding var activeLocationChannel: GeohashChannel?
     @Binding var activeLocationTitle: String?
     @ViewBuilder let roomContent: (GeohashChannel) -> RoomContent
@@ -103,36 +105,57 @@ struct PlacesTabView<RoomContent: View>: View {
     }
 
     private var placesDirectory: some View {
-        VStack(spacing: 0) {
-            AppTopBar {
-                Text(String(localized: "tab.places", defaultValue: "Places", comment: "Navigation title for the Places tab"))
-                    .bitchatFont(size: 19, weight: .bold)
-                    .foregroundColor(palette.primary)
-            } trailing: {
-                EmptyView()
-            }
+        let topBar = AppTopBar {
+            SectionNavMenu(
+                currentTab: .places,
+                items: navItems,
+                onSelect: onSelectTab
+            )
+        } trailing: {
+            EmptyView()
+        }
 
-            if appChromeModel.torBlocked {
-                ConnectivityStatusBanner(issue: .torBlocked)
-            }
-
-            ScrollView {
-                VStack(alignment: .leading, spacing: 20) {
-                    locationPermissionCard
-                    nearbyPlacesSection
-                    localPlaceNotesCard
-
-                    if let suggestion = QuickJoinSuggestion.current() {
-                        quickJoinCard(suggestion)
-                    }
-
-                    if !locationChannelsModel.bookmarks.isEmpty {
-                        bookmarksSection(locationChannelsModel.bookmarks)
-                    }
-
-                    teleportSection
+        let scrollBody = ScrollView {
+            VStack(alignment: .leading, spacing: 20) {
+                if appChromeModel.torBlocked {
+                    ConnectivityStatusBanner(issue: .torBlocked)
                 }
-                .padding(16)
+
+                locationPermissionCard
+                localPlaceNotesCard
+                nearbyPlacesSection
+
+                if let suggestion = QuickJoinSuggestion.current() {
+                    quickJoinCard(suggestion)
+                }
+
+                if !locationChannelsModel.bookmarks.isEmpty {
+                    bookmarksSection(locationChannelsModel.bookmarks)
+                }
+
+                teleportSection
+            }
+            .padding(16)
+        }
+
+        return Group {
+            if theme.usesGlassChrome {
+                if #available(iOS 17.0, macOS 14.0, *) {
+                    scrollBody
+                        .contentMargins(.top, ChromeMetrics.barHeight + 10, for: .scrollContent)
+                        .contentMargins(.top, ChromeMetrics.barHeight + 10, for: .scrollIndicators)
+                        .overlay(alignment: .top) { topBar }
+                } else {
+                    VStack(spacing: 0) {
+                        topBar
+                        scrollBody
+                    }
+                }
+            } else {
+                VStack(spacing: 0) {
+                    topBar
+                    scrollBody
+                }
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)

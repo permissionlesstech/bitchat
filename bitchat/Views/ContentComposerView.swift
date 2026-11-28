@@ -106,8 +106,8 @@ struct ContentComposerView: View {
                     // dismissed keyboard, so it stays out of this.
                     isTextFieldFocused.wrappedValue = true
                 }
-                .padding(.vertical, theme.usesGlassChrome ? 8 : 6)
-                .padding(.horizontal, 12)
+                .padding(.vertical, theme.usesGlassChrome ? 8 : 4)
+                .padding(.horizontal, theme.usesGlassChrome ? 8 : 6)
                 .themedInputBackground()
                 .modifier(FocusEffectDisabledModifier())
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -128,9 +128,9 @@ struct ContentComposerView: View {
                 }
             }
         }
-        .padding(.horizontal, 12)
-        .padding(.top, 8)
-        .padding(.bottom, 8)
+        .padding(.horizontal, 8)
+        .padding(.top, theme.usesGlassChrome ? 6 : 6)
+        .padding(.bottom, 6)
         .themedChromePanel(edge: .bottom)
         .onDisappear {
             draftModel.cancelAutocompleteDebounce()

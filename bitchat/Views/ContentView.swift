@@ -198,7 +198,7 @@ struct ContentView: View {
     @ScaledMetric(relativeTo: .subheadline) private var headerPeerCountFontSize: CGFloat = 12
     @State private var windowCountPublic: Int = TransportConfig.uiWindowInitialCountPublic
     @State private var windowCountPrivate: [PeerID: Int] = [:]
-    @State private var topChromeHeight: CGFloat = ChromeMetrics.barHeight
+    @State private var topChromeHeight: CGFloat = ChromeMetrics.barHeight + 4
     @State private var bottomChromeHeight: CGFloat = 54
 
     init(initialTab: AppRootTab = .chats) {
@@ -533,103 +533,100 @@ struct ContentView: View {
         privateInboxModel.unreadPeerIDs.count
     }
 
-    private var showBottomBar: Bool {
-        !(selectedTab == .places && activePlaceChannel != nil)
-    }
-
-    private var rootTabItems: [SlimTabItem<AppRootTab>] {
+    private var rootNavItems: [SectionNavItem<AppRootTab>] {
         [
-            SlimTabItem(
+            SectionNavItem(
                 tab: .chats,
-                title: String(localized: "tab.chats", defaultValue: "Chats", comment: "Tab bar label for Chats inbox"),
+                title: String(localized: "tab.chats", defaultValue: "Chats", comment: "Navigation item for Chats inbox"),
                 systemImage: "bubble.left.and.bubble.right.fill",
                 badgeCount: unreadChatsCount
             ),
-            SlimTabItem(
+            SectionNavItem(
                 tab: .nearby,
-                title: String(localized: "tab.nearby", defaultValue: "Nearby", comment: "Tab bar label for Nearby Bluetooth mesh"),
+                title: String(localized: "tab.nearby", defaultValue: "Nearby", comment: "Navigation item for Nearby Bluetooth mesh"),
                 systemImage: "antenna.radiowaves.left.and.right",
                 badgeCount: peerListModel.reachableMeshPeerCount
             ),
-            SlimTabItem(
+            SectionNavItem(
                 tab: .places,
-                title: String(localized: "tab.places", defaultValue: "Places", comment: "Tab bar label for Places location channels"),
+                title: String(localized: "tab.places", defaultValue: "Places", comment: "Navigation item for Places location channels"),
                 systemImage: "globe.americas.fill"
             ),
-            SlimTabItem(
+            SectionNavItem(
                 tab: .settings,
-                title: String(localized: "chats.accessibility.settings", defaultValue: "Settings", comment: "Tab bar label for Settings"),
+                title: String(localized: "chats.accessibility.settings", defaultValue: "Settings", comment: "Navigation item for Settings"),
                 systemImage: "gearshape.fill"
             )
         ]
     }
 
+    private func selectRootTab(_ tab: AppRootTab) {
+        isTextFieldFocused = false
+        if tab == .settings {
+            AppInfoView.setSelectedPane(.settings)
+        }
+        if selectedTab != tab {
+            selectedTab = tab
+        }
+    }
+
     private var tabRootView: some View {
-        VStack(spacing: 0) {
-            Group {
-                switch selectedTab {
-                case .chats:
-                    ChatsInboxView(
-                        onOpenAddFriend: { showAddFriendSheet = true },
-                        onOpenCreateGroup: { showCreateGroupSheet = true },
-                        onSwitchToNearby: { selectedTab = .nearby },
-                        onSwitchToPlaces: {
+        Group {
+            switch selectedTab {
+            case .chats:
+                ChatsInboxView(
+                    navItems: rootNavItems,
+                    onSelectTab: selectRootTab,
+                    onOpenAddFriend: { showAddFriendSheet = true },
+                    onOpenCreateGroup: { showCreateGroupSheet = true },
+                    onSwitchToNearby: { selectRootTab(.nearby) },
+                    onSwitchToPlaces: {
+                        activePlaceChannel = nil
+                        activePlaceTitle = nil
+                        selectRootTab(.places)
+                    }
+                )
+
+            case .nearby:
+                mainContent(onBack: nil, placeTitle: nil)
+
+            case .places:
+                PlacesTabView(
+                    navItems: rootNavItems,
+                    onSelectTab: selectRootTab,
+                    activeLocationChannel: $activePlaceChannel,
+                    activeLocationTitle: $activePlaceTitle
+                ) { channel in
+                    let placeName = locationChannelsModel.displayTitle(
+                        for: channel,
+                        explicitTitle: activePlaceTitle
+                    )
+                    mainContent(
+                        onBack: {
                             activePlaceChannel = nil
                             activePlaceTitle = nil
-                            selectedTab = .places
-                        }
-                    )
-
-                case .nearby:
-                    mainContent(onBack: nil, placeTitle: nil)
-
-                case .places:
-                    PlacesTabView(
-                        activeLocationChannel: $activePlaceChannel,
-                        activeLocationTitle: $activePlaceTitle
-                    ) { channel in
-                        let placeName = locationChannelsModel.displayTitle(
-                            for: channel,
-                            explicitTitle: activePlaceTitle
-                        )
-                        mainContent(
-                            onBack: {
-                                activePlaceChannel = nil
-                                activePlaceTitle = nil
-                            },
-                            placeTitle: placeName
-                        )
-                    }
-
-                case .settings:
-                    AppInfoView(
-                        topologyProvider: { appChromeModel.meshTopologyDisplayModel() },
-                        onPanicWipe: { appChromeModel.panicClearAllData() },
-                        onClearPersistedHistory: { appChromeModel.clearPersistedPrivateHistory() },
-                        nicknameBinding: Binding(
-                            get: { appChromeModel.nickname },
-                            set: { appChromeModel.setNickname($0) }
-                        ),
-                        onCommitNickname: { appChromeModel.validateAndSaveNickname() },
-                        isEmbeddedInTab: true
+                        },
+                        placeTitle: placeName
                     )
                 }
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
 
-            if showBottomBar {
-                SlimBottomTabBar(
-                    selection: $selectedTab,
-                    items: rootTabItems,
-                    onSelect: { tab in
-                        isTextFieldFocused = false
-                        if tab == .settings {
-                            AppInfoView.setSelectedPane(.settings)
-                        }
-                    }
+            case .settings:
+                AppInfoView(
+                    topologyProvider: { appChromeModel.meshTopologyDisplayModel() },
+                    onPanicWipe: { appChromeModel.panicClearAllData() },
+                    onClearPersistedHistory: { appChromeModel.clearPersistedPrivateHistory() },
+                    nicknameBinding: Binding(
+                        get: { appChromeModel.nickname },
+                        set: { appChromeModel.setNickname($0) }
+                    ),
+                    onCommitNickname: { appChromeModel.validateAndSaveNickname() },
+                    isEmbeddedInTab: true,
+                    navItems: rootNavItems,
+                    onSelectTab: selectRootTab
                 )
             }
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     /// Matrix: classic opaque bars with dividers. Glass on iOS 17+/macOS 14+:
@@ -697,6 +694,8 @@ struct ContentView: View {
                 headerHeight: headerHeight,
                 headerPeerIconSize: headerPeerIconSize,
                 headerPeerCountFontSize: headerPeerCountFontSize,
+                navItems: rootNavItems,
+                onSelectTab: selectRootTab,
                 onBack: onBack,
                 placeTitle: placeTitle
             )

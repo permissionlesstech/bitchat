@@ -12,16 +12,15 @@
 
 import SwiftUI
 
-/// Standard height and icon metrics shared across all top and bottom bars.
+/// Standard height and icon metrics shared across all top bars.
 enum ChromeMetrics {
-    static let barHeight: CGFloat = 48
-    static let bottomBarHeight: CGFloat = 40
+    static let barHeight: CGFloat = 46
     static let iconSize: CGFloat = 16
     static let iconTapSize: CGFloat = 36
 }
 
-/// Descriptor for one item in `SlimBottomTabBar`.
-struct SlimTabItem<Tab: Hashable>: Identifiable {
+/// Descriptor for one destination in the top-left section dropdown menu.
+struct SectionNavItem<Tab: Hashable>: Identifiable {
     let tab: Tab
     let title: String
     let systemImage: String
@@ -30,82 +29,102 @@ struct SlimTabItem<Tab: Hashable>: Identifiable {
     var id: Tab { tab }
 }
 
-/// Compact 40pt bottom navigation bar shared across iOS and macOS: renders as
-/// a sleek floating Liquid Glass capsule in Liquid Glass mode and a flat
-/// hairline bar in Matrix mode.
-struct SlimBottomTabBar<Tab: Hashable>: View {
-    @Binding var selection: Tab
-    let items: [SlimTabItem<Tab>]
-    var onSelect: ((Tab) -> Void)? = nil
+/// Top-left section switcher dropdown replacing a bottom tab bar so every
+/// screen maximizes vertical space with zero bottom navigation chrome.
+struct SectionNavMenu<Tab: Hashable>: View {
+    let currentTab: Tab
+    let items: [SectionNavItem<Tab>]
+    let onSelect: (Tab) -> Void
 
-    @Environment(\.appTheme) private var theme
     @ThemedPalette private var palette
 
+    private var currentTitle: String {
+        items.first(where: { $0.tab == currentTab })?.title ?? ""
+    }
+
+    private var hasUnreadElsewhere: Bool {
+        items.contains { $0.tab != currentTab && $0.badgeCount > 0 }
+    }
+
     var body: some View {
-        HStack(spacing: 2) {
+        Menu {
             ForEach(items) { item in
-                let isSelected = selection == item.tab
                 Button {
-                    if selection != item.tab {
-                        selection = item.tab
-                    }
-                    onSelect?(item.tab)
+                    onSelect(item.tab)
                 } label: {
-                    VStack(spacing: 2) {
-                        ZStack(alignment: .topTrailing) {
-                            Image(systemName: item.systemImage)
-                                .font(.system(size: 14, weight: isSelected ? .semibold : .regular))
-                                .frame(height: 16)
-
-                            if item.badgeCount > 0 {
-                                Text(verbatim: item.badgeCount > 99 ? "99+" : "\(item.badgeCount)")
-                                    .font(.system(size: 8.5, weight: .bold))
-                                    .foregroundColor(.white)
-                                    .padding(.horizontal, 4)
-                                    .frame(minWidth: 14, minHeight: 13)
-                                    .background(palette.alertRed)
-                                    .clipShape(Capsule())
-                                    .offset(x: 11, y: -4)
-                            }
+                    if item.badgeCount > 0 {
+                        Label {
+                            Text(verbatim: "\(item.title) (\(item.badgeCount))")
+                        } icon: {
+                            Image(systemName: item.tab == currentTab ? "checkmark" : item.systemImage)
                         }
-
-                        Text(item.title)
-                            .bitchatFont(size: 9.5, weight: isSelected ? .semibold : .medium)
-                            .lineLimit(1)
+                    } else {
+                        Label(
+                            item.title,
+                            systemImage: item.tab == currentTab ? "checkmark" : item.systemImage
+                        )
                     }
-                    .foregroundColor(isSelected ? palette.accent : palette.secondary)
-                    .frame(maxWidth: .infinity)
-                    .frame(height: ChromeMetrics.bottomBarHeight)
-                    .background(
-                        Group {
-                            if isSelected && theme.usesGlassChrome {
-                                Capsule()
-                                    .fill(palette.accent.opacity(0.14))
-                            }
-                        }
-                    )
-                    .contentShape(Rectangle())
                 }
-                .buttonStyle(.plain)
-                .accessibilityLabel(item.title)
-                .accessibilityAddTraits(isSelected ? .isSelected : [])
             }
+        } label: {
+            HStack(spacing: 5) {
+                Text(currentTitle)
+                    .bitchatFont(size: 19, weight: .bold)
+                    .foregroundColor(palette.primary)
+                    .lineLimit(1)
+
+                ZStack(alignment: .topTrailing) {
+                    Image(systemName: "chevron.down")
+                        .font(.system(size: 11, weight: .bold))
+                        .foregroundColor(palette.secondary)
+                        .padding(.top, 2)
+
+                    if hasUnreadElsewhere {
+                        Circle()
+                            .fill(palette.alertRed)
+                            .frame(width: 6, height: 6)
+                            .offset(x: 4, y: -2)
+                    }
+                }
+            }
+            .contentShape(Rectangle())
         }
-        .themedBottomBarSurface()
+        .menuStyle(.borderlessButton)
+        .menuIndicator(.hidden)
+        .buttonStyle(.plain)
+        .accessibilityLabel(currentTitle)
     }
 }
 
-/// Unified floating/flat top navigation bar used by Chats, Nearby, Places,
-/// and active Place rooms so switching tabs never jumps header style or height.
+/// Surface style for `AppTopBar`. Root tabs float as Liquid Glass pills with
+/// zero divider lines; sheets sit flush inside native rounded sheet corners.
+enum AppTopBarStyle {
+    case floating
+    case sheet
+}
+
+/// Unified top navigation bar used across root tabs, active Place rooms, and
+/// DM/group sheets.
 struct AppTopBar<Leading: View, Trailing: View>: View {
     @ThemedPalette private var palette
     @ScaledMetric(relativeTo: .body) private var barHeight: CGFloat = ChromeMetrics.barHeight
 
+    let style: AppTopBarStyle
     @ViewBuilder let leading: () -> Leading
     @ViewBuilder let trailing: () -> Trailing
 
+    init(
+        style: AppTopBarStyle = .floating,
+        @ViewBuilder leading: @escaping () -> Leading,
+        @ViewBuilder trailing: @escaping () -> Trailing
+    ) {
+        self.style = style
+        self.leading = leading
+        self.trailing = trailing
+    }
+
     var body: some View {
-        HStack(spacing: 8) {
+        let bar = HStack(spacing: 8) {
             leading()
             Spacer(minLength: 4)
             HStack(spacing: 2) {
@@ -115,7 +134,15 @@ struct AppTopBar<Leading: View, Trailing: View>: View {
         }
         .frame(height: barHeight)
         .padding(.horizontal, 14)
-        .themedChromePanel(edge: .top)
+
+        switch style {
+        case .floating:
+            bar.themedChromePanel(edge: .top)
+        case .sheet:
+            bar
+                .padding(.top, 4)
+                .themedSurface()
+        }
     }
 }
 
@@ -152,8 +179,8 @@ struct TopBarIconButton: View {
     }
 }
 
-/// Unified sheet header: same height, surface, and hairline as `AppTopBar` so
-/// modal sheets seamlessly match root tabs with zero corner collision.
+/// Unified sheet header: flush with native rounded sheet corners and borderless
+/// so there are zero double-rounded corner collisions or heavy divider lines.
 struct ThemedSheetHeader<Trailing: View>: View {
     let title: String
     var subtitle: String? = nil
@@ -195,9 +222,10 @@ struct ThemedSheetHeader<Trailing: View>: View {
                 .foregroundColor(palette.primary)
         }
         .frame(minHeight: barHeight)
-        .padding(.horizontal, 14)
-        .padding(.vertical, 4)
-        .themedChromePanel(edge: .top)
+        .padding(.horizontal, 16)
+        .padding(.top, 8)
+        .padding(.bottom, 4)
+        .themedSurface()
     }
 }
 

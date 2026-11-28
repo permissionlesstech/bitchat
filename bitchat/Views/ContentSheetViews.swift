@@ -413,7 +413,7 @@ private struct ContentPrivateChatSheetView: View {
     var body: some View {
         VStack(spacing: 0) {
             if let headerState = privateConversationModel.selectedHeaderState {
-                AppTopBar {
+                AppTopBar(style: .sheet) {
                     HStack(spacing: 6) {
                         Button(action: {
                             withAnimation(.easeInOut(duration: TransportConfig.uiAnimationMediumSeconds)) {

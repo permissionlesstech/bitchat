@@ -21,6 +21,8 @@ struct ChatsInboxView: View {
     @Environment(\.appTheme) private var theme
     @ThemedPalette private var palette
 
+    let navItems: [SectionNavItem<AppRootTab>]
+    let onSelectTab: (AppRootTab) -> Void
     let onOpenAddFriend: () -> Void
     let onOpenCreateGroup: () -> Void
     let onSwitchToNearby: () -> Void
@@ -33,40 +35,64 @@ struct ChatsInboxView: View {
     }()
 
     var body: some View {
-        VStack(spacing: 0) {
-            topBar
-
-            if appChromeModel.panicWipeBlocked {
-                ConnectivityStatusBanner(issue: .panicWipeBlocked)
-            }
-            if let issue = ConnectivityIssue.resolve(
-                bluetoothState: appChromeModel.bluetoothState,
-                torBlocked: appChromeModel.torBlocked
-            ) {
-                ConnectivityStatusBanner(issue: issue)
-            }
-
-            if peerListModel.reachableMeshPeerCount > 0 {
-                nearbyBanner
-            }
-
+        let content = Group {
             if peerListModel.inboxRows.isEmpty {
-                emptyInboxState
+                VStack(spacing: 0) {
+                    banners
+                    if peerListModel.reachableMeshPeerCount > 0 {
+                        nearbyBanner
+                    }
+                    emptyInboxState
+                }
+                .padding(.top, theme.usesGlassChrome ? ChromeMetrics.barHeight + 10 : 0)
             } else {
                 inboxList
+            }
+        }
+
+        Group {
+            if theme.usesGlassChrome {
+                if #available(iOS 17.0, macOS 14.0, *) {
+                    content
+                        .overlay(alignment: .top) { topBar }
+                } else {
+                    VStack(spacing: 0) {
+                        topBar
+                        content
+                    }
+                }
+            } else {
+                VStack(spacing: 0) {
+                    topBar
+                    content
+                }
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(ThemedRootBackground())
     }
 
+    @ViewBuilder
+    private var banners: some View {
+        if appChromeModel.panicWipeBlocked {
+            ConnectivityStatusBanner(issue: .panicWipeBlocked)
+        }
+        if let issue = ConnectivityIssue.resolve(
+            bluetoothState: appChromeModel.bluetoothState,
+            torBlocked: appChromeModel.torBlocked
+        ) {
+            ConnectivityStatusBanner(issue: issue)
+        }
+    }
+
     private var topBar: some View {
         AppTopBar {
             HStack(spacing: 8) {
-                Text(String(localized: "tab.chats", defaultValue: "Chats", comment: "Navigation title for the Chats inbox tab"))
-                    .bitchatFont(size: 19, weight: .bold)
-                    .foregroundColor(palette.primary)
-                    .lineLimit(1)
+                SectionNavMenu(
+                    currentTab: .chats,
+                    items: navItems,
+                    onSelect: onSelectTab
+                )
 
                 Button {
                     appChromeModel.presentAppInfo(pane: .settings)
@@ -135,9 +161,14 @@ struct ChatsInboxView: View {
         .buttonStyle(.plain)
     }
 
+    @ViewBuilder
     private var inboxList: some View {
-        ScrollView {
+        let list = ScrollView {
             LazyVStack(spacing: 0) {
+                banners
+                if peerListModel.reachableMeshPeerCount > 0 {
+                    nearbyBanner
+                }
                 ForEach(peerListModel.inboxRows) { row in
                     Button {
                         privateConversationModel.openConversation(for: row.peerID)
@@ -153,6 +184,18 @@ struct ChatsInboxView: View {
                 }
             }
             .padding(.top, 6)
+        }
+
+        if theme.usesGlassChrome {
+            if #available(iOS 17.0, macOS 14.0, *) {
+                list
+                    .contentMargins(.top, ChromeMetrics.barHeight + 10, for: .scrollContent)
+                    .contentMargins(.top, ChromeMetrics.barHeight + 10, for: .scrollIndicators)
+            } else {
+                list
+            }
+        } else {
+            list
         }
     }
 

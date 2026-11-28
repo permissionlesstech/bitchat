@@ -26,6 +26,8 @@ struct ContentHeaderView: View {
     let headerHeight: CGFloat
     let headerPeerIconSize: CGFloat
     let headerPeerCountFontSize: CGFloat
+    var navItems: [SectionNavItem<AppRootTab>] = []
+    var onSelectTab: ((AppRootTab) -> Void)? = nil
     var onBack: (() -> Void)? = nil
     var placeTitle: String? = nil
 
@@ -76,15 +78,20 @@ struct ContentHeaderView: View {
                 .layoutPriority(2)
             } else {
                 HStack(spacing: 8) {
-                    Text(String(localized: "tab.nearby", defaultValue: "Nearby", comment: "Header title for the Nearby mesh tab"))
-                        .bitchatFont(size: 19, weight: .bold)
-                        .lineLimit(1)
-                        .foregroundColor(palette.primary)
+                    if !navItems.isEmpty, let onSelectTab {
+                        SectionNavMenu(
+                            currentTab: .nearby,
+                            items: navItems,
+                            onSelect: onSelectTab
+                        )
                         .layoutPriority(2)
-                        .onTapGesture(count: 3) {
-                            guard PrivacyModeSettings.isTripleTapPanicEnabled() else { return }
-                            appChromeModel.requestPanicWipe()
-                        }
+                    } else {
+                        Text(String(localized: "tab.nearby", defaultValue: "Nearby", comment: "Header title for the Nearby mesh tab"))
+                            .bitchatFont(size: 19, weight: .bold)
+                            .lineLimit(1)
+                            .foregroundColor(palette.primary)
+                            .layoutPriority(2)
+                    }
 
                     Button {
                         withAnimation(.easeInOut(duration: TransportConfig.uiAnimationMediumSeconds)) {

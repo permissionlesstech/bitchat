@@ -240,107 +240,47 @@ private struct GlassPanel<S: Shape>: ViewModifier {
     }
 }
 
-/// Unified edge-to-edge chrome surface for top bars, sheet headers, and the
-/// chat composer. Full-bleed translucent material in Liquid Glass and crisp
-/// opaque surface in Matrix, separated from content by one subtle hairline —
-/// never floating nested rounded boxes that collide with screen or sheet corners.
+/// Floating Liquid Glass chrome for root top bars and the chat composer — no
+/// full-width divider lines, maximizing vertical space while content scrolls
+/// underneath. Matrix keeps its classic flat bar wash.
 private struct ThemedChromePanelModifier: ViewModifier {
     @Environment(\.appTheme) private var theme
     @ThemedPalette private var palette
     let edge: VerticalEdge
 
-    private var hairlineHeight: CGFloat {
-        theme.usesGlassChrome ? 0.5 : 1
-    }
-
     @ViewBuilder
     func body(content: Content) -> some View {
-        VStack(spacing: 0) {
-            if edge == .bottom {
-                Rectangle()
-                    .fill(palette.divider)
-                    .frame(height: hairlineHeight)
-            }
-
+        if theme.usesGlassChrome {
             content
-
-            if edge == .top {
-                Rectangle()
-                    .fill(palette.divider)
-                    .frame(height: hairlineHeight)
-            }
-        }
-        .background {
-            if theme.usesGlassChrome {
-                Rectangle()
-                    .fill(.ultraThinMaterial)
-                    .ignoresSafeArea(edges: edge == .top ? .top : .bottom)
-            } else {
-                palette.background.opacity(0.96)
-                    .ignoresSafeArea(edges: edge == .top ? .top : .bottom)
-            }
+                .modifier(GlassPanel(shape: RoundedRectangle(cornerRadius: 22, style: .continuous)))
+                .padding(.horizontal, 10)
+                .padding(edge == .top ? .top : .bottom, 4)
+        } else {
+            content.background(palette.background.opacity(0.95))
         }
     }
 }
 
-/// Floating Liquid Glass bubble for the slim bottom tab bar in Liquid Glass
-/// mode, and a crisp flat hairline bar in Matrix mode.
-private struct ThemedBottomBarSurfaceModifier: ViewModifier {
+/// Background for the composer input field. Liquid Glass leaves it clear so
+/// the field sits directly inside the single floating glass capsule (no nested
+/// box-in-box); Matrix keeps its subtle rounded fill.
+private struct ThemedInputBackgroundModifier: ViewModifier {
     @Environment(\.appTheme) private var theme
-    @ThemedPalette private var palette
+    @Environment(\.colorScheme) private var colorScheme
+
+    private var shape: RoundedRectangle {
+        RoundedRectangle(cornerRadius: 14, style: .continuous)
+    }
 
     @ViewBuilder
     func body(content: Content) -> some View {
         if theme.usesGlassChrome {
             content
-                .padding(.horizontal, 6)
-                .padding(.vertical, 3)
-                .modifier(GlassPanel(shape: Capsule()))
-                .padding(.horizontal, 14)
-                .padding(.top, 4)
-                #if os(macOS)
-                .padding(.bottom, 8)
-                #else
-                .padding(.bottom, 2)
-                #endif
         } else {
-            VStack(spacing: 0) {
-                Rectangle()
-                    .fill(palette.divider)
-                    .frame(height: 1)
-
-                content
-                    .padding(.horizontal, 8)
-                    .padding(.top, 3)
-                    #if os(macOS)
-                    .padding(.bottom, 5)
-                    #else
-                    .padding(.bottom, 2)
-                    #endif
-            }
-            .background {
-                palette.background.opacity(0.97)
-                    .ignoresSafeArea(edges: .bottom)
-            }
+            content.background(
+                shape.fill(colorScheme == .dark ? Color.black.opacity(0.35) : Color.white.opacity(0.7))
+            )
         }
-    }
-}
-
-/// Pill-shaped composer input container sitting cleanly inside the edge-to-edge
-/// composer bar in both Liquid Glass and Matrix themes.
-private struct ThemedInputBackgroundModifier: ViewModifier {
-    @Environment(\.appTheme) private var theme
-    @ThemedPalette private var palette
-
-    private var shape: RoundedRectangle {
-        RoundedRectangle(cornerRadius: theme.usesGlassChrome ? 18 : 10, style: .continuous)
-    }
-
-    @ViewBuilder
-    func body(content: Content) -> some View {
-        content
-            .background(shape.fill(palette.cardBackground))
-            .overlay(shape.stroke(palette.cardBorder, lineWidth: 1))
     }
 }
 
@@ -351,10 +291,6 @@ extension View {
 
     func themedChromePanel(edge: VerticalEdge) -> some View {
         modifier(ThemedChromePanelModifier(edge: edge))
-    }
-
-    func themedBottomBarSurface() -> some View {
-        modifier(ThemedBottomBarSurfaceModifier())
     }
 
     func themedInputBackground() -> some View {

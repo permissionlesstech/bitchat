@@ -24,9 +24,11 @@ struct AppInfoView: View {
     /// in Settings from any tab.
     var nicknameBinding: Binding<String>? = nil
     var onCommitNickname: (@MainActor () -> Void)? = nil
-    /// When true, renders as a native root tab using `AppTopBar` and
+    /// When true, renders as a native root section using `AppTopBar` and
     /// `ThemedRootBackground` instead of a modal sheet with a Close button.
     var isEmbeddedInTab: Bool = false
+    var navItems: [SectionNavItem<AppRootTab>] = []
+    var onSelectTab: ((AppRootTab) -> Void)? = nil
 
     @State private var showTopology = false
     @State private var privacyMode = PrivacyModeSettings.mode
@@ -286,8 +288,14 @@ struct AppInfoView: View {
     }
 
     private var tabBody: some View {
-        VStack(spacing: 0) {
-            AppTopBar {
+        let topBar = AppTopBar {
+            if !navItems.isEmpty, let onSelectTab {
+                SectionNavMenu(
+                    currentTab: .settings,
+                    items: navItems,
+                    onSelect: onSelectTab
+                )
+            } else {
                 Text(
                     selectedPane == .settings
                         ? String(localized: "chats.accessibility.settings", defaultValue: "Settings", comment: "Title for Settings tab")
@@ -296,18 +304,39 @@ struct AppInfoView: View {
                 .bitchatFont(size: 19, weight: .bold)
                 .foregroundColor(palette.primary)
                 .lineLimit(1)
-            } trailing: {
-                Picker(Strings.Settings.tabPickerLabel, selection: $selectedPane) {
-                    Text(Strings.Settings.tabSettings.capitalized).tag(Pane.settings)
-                    Text(Strings.Settings.tabInfo.capitalized).tag(Pane.info)
-                }
-                .pickerStyle(.segmented)
-                .labelsHidden()
-                .frame(width: 156)
             }
+        } trailing: {
+            Picker(Strings.Settings.tabPickerLabel, selection: $selectedPane) {
+                Text(Strings.Settings.tabSettings.capitalized).tag(Pane.settings)
+                Text(Strings.Settings.tabInfo.capitalized).tag(Pane.info)
+            }
+            .pickerStyle(.segmented)
+            .labelsHidden()
+            .frame(width: 156)
+        }
 
-            ScrollView {
-                paneContent
+        let scrollBody = ScrollView {
+            paneContent
+        }
+
+        return Group {
+            if theme.usesGlassChrome {
+                if #available(iOS 17.0, macOS 14.0, *) {
+                    scrollBody
+                        .contentMargins(.top, ChromeMetrics.barHeight + 10, for: .scrollContent)
+                        .contentMargins(.top, ChromeMetrics.barHeight + 10, for: .scrollIndicators)
+                        .overlay(alignment: .top) { topBar }
+                } else {
+                    VStack(spacing: 0) {
+                        topBar
+                        scrollBody
+                    }
+                }
+            } else {
+                VStack(spacing: 0) {
+                    topBar
+                    scrollBody
+                }
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
