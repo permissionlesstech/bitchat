@@ -2,9 +2,8 @@
 // MeshEmptyStateView.swift
 // bitchat
 //
-// The empty mesh timeline: shows concise guidance, the daily sightings tally
-// when peers were seen nearby today, and the liveliest nearby geohash
-// conversation one tap away.
+// The empty mesh timeline: shows concise guidance and the liveliest nearby
+// geohash conversation one tap away.
 // This is free and unencumbered software released into the public domain.
 //
 
@@ -12,23 +11,16 @@ import Combine
 import SwiftUI
 
 struct MeshEmptyStateView: View {
-    /// Visible chat height to fill; the radar centers in the space left
-    /// below the narration. Zero (previews) keeps a compact layout.
+    /// Visible chat height to fill. Zero (previews) keeps a compact layout.
     var fillHeight: CGFloat = 0
     /// Ambient-footer mode, appended below archived echoes: skips the
-    /// intro/help narration (the timeline isn't empty) and shrinks the
-    /// radar, keeping the sightings tally and the live hints visible.
+    /// intro/help narration (the timeline isn't empty), keeping live hints visible.
     var compact: Bool = false
-    /// Whether the radio can actually scan. With Bluetooth off or denied the
-    /// sweep must not run — an animated "searching" over a dead radio is an
-    /// actively false status display. Defaults to true for previews.
+    /// Preserved for call-site compatibility.
     var bluetoothAvailable: Bool = true
 
     @EnvironmentObject private var locationChannelsModel: LocationChannelsModel
-    @EnvironmentObject private var peerListModel: PeerListModel
     @ObservedObject private var activityTracker = GeohashChatActivityTracker.shared
-    @ObservedObject private var sightingsTracker = MeshSightingsTracker.shared
-    @ObservedObject private var nearbyNotes = NearbyNotesCounter.shared
 
     @Environment(\.scenePhase) private var scenePhase
     @ThemedPalette private var palette
@@ -49,16 +41,6 @@ struct MeshEmptyStateView: View {
     private enum Strings {
         static let meshIntro = String(localized: "content.empty.mesh_intro", comment: "First line of the empty mesh timeline explaining what the mesh channel is")
         static let switchHint = String(localized: "content.empty.switch_hint", comment: "Empty timeline hint pointing at the channel switcher and the help screen")
-        static let sightingsOne = String(localized: "content.empty.sightings_one", comment: "Empty mesh timeline stat when exactly one device came within range today")
-        static let checkNotes = String(localized: "content.empty.check_notes", comment: "Empty mesh timeline action that starts looking for notes left at this place; before tapping, no lookup runs")
-
-        static func sightingsMany(_ count: Int) -> String {
-            String(
-                format: String(localized: "content.empty.sightings_many", comment: "Empty mesh timeline stat counting devices that came within range today"),
-                locale: .current,
-                count
-            )
-        }
 
         static func activityOne(_ geohash: String) -> String {
             String(
@@ -75,34 +57,17 @@ struct MeshEmptyStateView: View {
                 geohash
             )
         }
-
-    }
-
-    /// The radar means "searching for people": once anyone is connected or
-    /// reachable on the mesh, the search is over and the sweep goes away.
-    /// And it only means that while the radio is actually on — the
-    /// connectivity banner carries the message when it isn't.
-    private var isSearchingForPeers: Bool {
-        bluetoothAvailable
-            && peerListModel.connectedMeshPeerCount == 0
-            && peerListModel.reachableMeshPeerCount == 0
     }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             if compact {
-                if isSearchingForPeers, sightingsTracker.todayCount > 0 {
-                    narrationLine(sightingsText)
-                }
                 if let conversation = nearbyConversation {
                     conversationHint(conversation)
                 }
             } else {
                 narrationLine(Strings.meshIntro)
                 narrationLine(Strings.switchHint)
-                if isSearchingForPeers, sightingsTracker.todayCount > 0 {
-                    narrationLine(sightingsText)
-                }
                 if let conversation = nearbyConversation {
                     conversationHint(conversation)
                 }
@@ -112,8 +77,6 @@ struct MeshEmptyStateView: View {
         .onReceive(refreshTimer) { _ in
             guard scenePhase == .active else { return }
             refreshTick += 1
-            // Roll the tally over if the local day changed while idle.
-            sightingsTracker.refreshForDisplay()
         }
     }
 }
@@ -121,37 +84,6 @@ struct MeshEmptyStateView: View {
 private extension MeshEmptyStateView {
     var nearbyConversation: NearbyConversation? {
         activityTracker.mostActiveConversation(among: locationChannelsModel.availableChannels)
-    }
-
-    /// Tap-to-reveal: the nearby-notes counter never subscribes on its own —
-    /// looking at the mesh timeline must not open a building-precision relay
-    /// REQ (a passive location side-channel). This static line is the one
-    /// explicit act that unlocks it; nothing touches the network until the
-    /// tap. It only renders when location permission is already granted
-    /// (the tap never prompts, so without permission it would dead-end
-    /// silently). Once revealed it yields to today's live strip and count,
-    /// and the app-info setting stays the kill switch.
-    var showsCheckNotesHint: Bool {
-        nearbyNotes.offersRevealHint(permissionState: locationChannelsModel.permissionState)
-    }
-
-    var checkNotesHint: some View {
-        Button {
-            NearbyNotesCounter.shared.reveal()
-        } label: {
-            actionLine("📍 \(Strings.checkNotes)")
-                .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        // The visual label carries decorative asterisks and an emoji; expose
-        // just the localized action text to assistive tech.
-        .accessibilityLabel(Strings.checkNotes)
-    }
-
-    var sightingsText: String {
-        sightingsTracker.todayCount == 1
-            ? Strings.sightingsOne
-            : Strings.sightingsMany(sightingsTracker.todayCount)
     }
 
     func conversationHint(_ conversation: NearbyConversation) -> some View {
