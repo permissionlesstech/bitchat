@@ -359,9 +359,6 @@ final class ChatViewModel: ObservableObject, SynchronousMessageTransportEventDel
         get { conversations.activeChannel }
         set {
             guard conversations.activeChannel != newValue else { return }
-            // Leaving a channel expedites any in-flight NIP-13 mining: the
-            // pending message still sends, at the difficulty already reached.
-            outgoingCoordinator.expeditePendingGeohashMining()
             conversations.setActiveChannel(newValue)
             visibleMessagesCache = nil
         }
@@ -1725,8 +1722,18 @@ final class ChatViewModel: ObservableObject, SynchronousMessageTransportEventDel
         // Clear through SecureIdentityStateManager instead of directly
         identityManager.clearAllIdentityData()
         peerIdentityStore.clearAll()
+        unifiedPeerService.resetForPanic()
+        allPeers = []
+        peerIndex.removeAll(keepingCapacity: false)
         locationPresenceStore.reset()
         publicRateLimiter.reset()
+        TransferProgressManager.shared.resetForPanic()
+        messageFormatter.resetForPanic()
+        lastGeoNotificationAt.removeAll(keepingCapacity: false)
+        sentGeoDeliveryAcks.removeAll(keepingCapacity: false)
+        if !TestEnvironment.isRunningTests {
+            ClipboardHelper.clearForPanic()
+        }
 
         // Clear persistent favorites from keychain
         FavoritesPersistenceService.shared.clearAllFavorites()
@@ -2352,13 +2359,6 @@ final class ChatViewModel: ObservableObject, SynchronousMessageTransportEventDel
         // into the existing bubble instead of appearing twice.
         if liveVoiceCoordinator.absorbFinalizedVoiceNote(message) { return }
         publicConversationCoordinator.handlePublicMessage(message)
-    }
-
-    /// Handle an incoming public Nostr message with its validated NIP-13
-    /// difficulty; sufficient PoW relaxes the per-sender rate limit.
-    @MainActor
-    func handlePublicMessage(_ message: BitchatMessage, powBits: Int) {
-        publicConversationCoordinator.handlePublicMessage(message, powBits: powBits)
     }
 
     /// Check for mentions and send notifications

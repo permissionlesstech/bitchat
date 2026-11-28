@@ -4456,7 +4456,7 @@ extension BLEService {
             handleCourierEnvelope(packet, from: peerID)
 
         case .groupMessage:
-            handleGroupMessage(packet, from: senderID)
+            guard handleGroupMessage(packet, from: senderID) else { return }
 
         case .prekeyBundle:
             guard handlePrekeyBundle(packet, from: senderID) else { return }
@@ -4487,10 +4487,10 @@ extension BLEService {
             guard handleLeave(packet, from: senderID) else { return }
 
         case .none:
-            // Unknown/future wire types stay relayable (subject to dedup,
-            // TTL clamp, and PacketPayloadLimits's default cap) for
-            // forward compatibility with newer iOS/Android clients.
-            SecureLogger.warning("⚠️ Unknown message type: \(packet.type)", category: .session)
+            // Drop unrecognized wire types instead of blindly relaying up to
+            // the default 128 KiB payload limit with no authentication.
+            SecureLogger.warning("⚠️ Dropping unknown message type: \(packet.type)", category: .session)
+            return
         }
         
         if forwardAlongRouteIfNeeded(packet) {
@@ -5179,13 +5179,23 @@ extension BLEService {
         )
     }
 
-    /// Group broadcasts are opaque ciphertext to this layer: track them for
-    /// gossip backfill and hand the payload to the UI layer, where the group
-    /// coordinator decrypts and authenticates against the roster. Non-members
-    /// still relay (generic broadcast relay path) but never decode.
-    private func handleGroupMessage(_ packet: BitchatPacket, from _: PeerID) {
+    /// Group broadcasts are opaque ciphertext to this layer: validate the
+    /// outer envelope framing and freshness before admitting them into gossip
+    /// backfill, relaying, or forwarding to the UI layer, where the group
+    /// coordinator decrypts and authenticates against the roster.
+    private func handleGroupMessage(_ packet: BitchatPacket, from _: PeerID) -> Bool {
+        let now = Date()
+        let nowMs = UInt64(now.timeIntervalSince1970 * 1000)
         guard BLEPacketFreshnessPolicy.isBroadcastRecipient(packet.recipientID),
-              !packet.payload.isEmpty else { return }
+              !packet.payload.isEmpty,
+              packet.timestamp <= nowMs &+ TransportConfig.bleMaxTimestampSkewMs,
+              !BLEPacketFreshnessPolicy.isStale(
+                  timestampMilliseconds: packet.timestamp,
+                  now: now,
+                  maxAgeSeconds: 6 * 3600
+              ),
+              let envelope = GroupMessageEnvelope.decode(packet.payload),
+              envelope.ciphertext.count > 16 else { return false }
 
         gossipSyncManager?.onPublicPacketSeen(packet)
 
@@ -5194,6 +5204,7 @@ extension BLEService {
         notifyUI { [weak self] in
             self?.deliverTransportEvent(.groupMessageReceived(payload: payload, timestamp: timestamp))
         }
+        return true
     }
 
     /// Inbound public live-voice packet: broadcast-only, freshness-gated, and

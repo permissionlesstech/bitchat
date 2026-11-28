@@ -84,10 +84,14 @@ final class BLERadioController {
     // MARK: - Scanning
 
     private var desiredAllowDuplicates: Bool {
-        // Allow duplicates while active for faster discovery, except under
-        // Low Power Mode where coalesced CoreBluetooth discoveries avoid
-        // waking the CPU on every BLE advertising beacon.
-        (delegate?.radioIsAppActive() ?? true) && !ProcessInfo.processInfo.isLowPowerModeEnabled
+        // Allow duplicates while active and below the central link budget for
+        // fast discovery. Under Low Power Mode, in background, or once all
+        // central link slots are saturated, coalesced CoreBluetooth discoveries
+        // avoid waking the CPU on every nearby BLE advertising beacon.
+        let isSaturated = linkStateStore.connectedOrConnectingPeripheralCount >= TransportConfig.bleMaxCentralLinks
+        return (delegate?.radioIsAppActive() ?? true)
+            && !ProcessInfo.processInfo.isLowPowerModeEnabled
+            && !isSaturated
     }
 
     func startScanning() {
@@ -549,8 +553,12 @@ enum BLEScanDutyPolicy {
             )
         }
 
-        let forceContinuousScan = connectedCount <= 2 || hasRecentTraffic
-        let shouldDutyCycle = appIsActive && connectedCount > 0 && !forceContinuousScan
+        // Duty-cycle whenever the app is active and idle—including solo and
+        // 1–2 peer meshes—so idle phones don't run continuous foreground scans.
+        // Recent active traffic briefly holds continuous scanning for snappy
+        // convergence; background scans stay continuous because CoreBluetooth
+        // already hardware-coalesces them.
+        let shouldDutyCycle = appIsActive && !hasRecentTraffic
 
         guard shouldDutyCycle else {
             return .continuous

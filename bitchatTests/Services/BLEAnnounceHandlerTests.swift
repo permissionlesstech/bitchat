@@ -186,19 +186,13 @@ struct BLEAnnounceHandlerTests {
         #expect(recorder.upsertCalls.isEmpty)
         #expect(recorder.topologyUpdates.isEmpty)
         #expect(recorder.afterglowDelays.isEmpty)
-        // Original behavior: list refresh and announce-back still occur for
-        // unverified announces.
-        #expect(recorder.uiEventDeliveries.count == 1)
-        #expect(recorder.uiEventDeliveries.first?.notifyPeerConnected == false)
-        #expect(recorder.uiEventDeliveries.first?.scheduleInitialSync == false)
-        // Identity persistence MUST NOT occur for unverified announces:
-        // persisting would let an attacker who replays a victim's noisePublicKey
-        // overwrite the victim's stored signing key/nickname (identity poisoning).
+        // Unverified announces MUST NOT trigger UI refreshes, announce-backs,
+        // identity persistence, or gossip tracking (prevents spoofed announce
+        // floods from amplifying broadcasts and churning the main thread).
+        #expect(recorder.uiEventDeliveries.isEmpty)
         #expect(recorder.persistedIdentities.isEmpty)
-        // Nor gossip tracking: an unsigned announce is free to mint, so
-        // tracking it let junk identities fill the sync store and filter.
         #expect(recorder.trackedPackets.isEmpty)
-        #expect(recorder.announceBacks == 1)
+        #expect(recorder.announceBacks == 0)
     }
 
     @Test
@@ -222,8 +216,8 @@ struct BLEAnnounceHandlerTests {
         #expect(result?.isVerified == false)
         #expect(recorder.verifySignatureCalls.count == 1)
         #expect(recorder.upsertCalls.isEmpty)
-        #expect(recorder.uiEventDeliveries.count == 1)
-        #expect(recorder.uiEventDeliveries.first?.notifyPeerConnected == false)
+        #expect(recorder.uiEventDeliveries.isEmpty)
+        #expect(recorder.announceBacks == 0)
         #expect(recorder.trackedPackets.isEmpty)
     }
 
@@ -543,8 +537,8 @@ struct BLEAnnounceHandlerTests {
         #expect(recorder.upsertCalls.isEmpty)
         #expect(recorder.persistedIdentities.isEmpty)
         #expect(recorder.topologyUpdates.isEmpty)
-        #expect(recorder.uiEventDeliveries.count == 1)
-        #expect(recorder.uiEventDeliveries.first?.notifyPeerConnected == false)
+        #expect(recorder.uiEventDeliveries.isEmpty)
+        #expect(recorder.announceBacks == 0)
         // The impersonation announce is not carried for sync either.
         #expect(recorder.trackedPackets.isEmpty)
     }
@@ -577,8 +571,8 @@ struct BLEAnnounceHandlerTests {
         #expect(recorder.upsertCalls.isEmpty)
         #expect(recorder.persistedIdentities.isEmpty)
         #expect(recorder.topologyUpdates.isEmpty)
-        #expect(recorder.uiEventDeliveries.count == 1)
-        #expect(recorder.uiEventDeliveries.first?.notifyPeerConnected == false)
+        #expect(recorder.uiEventDeliveries.isEmpty)
+        #expect(recorder.announceBacks == 0)
     }
 
     @Test
@@ -653,8 +647,8 @@ struct BLEAnnounceHandlerTests {
         #expect(recorder.upsertCalls.count == 1)
         #expect(recorder.persistedIdentities.isEmpty)
         #expect(recorder.topologyUpdates.isEmpty)
-        #expect(recorder.uiEventDeliveries.count == 1)
-        #expect(recorder.uiEventDeliveries.first?.notifyPeerConnected == false)
+        #expect(recorder.uiEventDeliveries.isEmpty)
+        #expect(recorder.announceBacks == 0)
         #expect(recorder.afterglowDelays.isEmpty)
     }
 
@@ -678,8 +672,8 @@ struct BLEAnnounceHandlerTests {
 
         #expect(result?.isVerified == false)
         #expect(recorder.upsertCalls.isEmpty)
-        #expect(recorder.uiEventDeliveries.count == 1)
-        #expect(recorder.uiEventDeliveries.first?.notifyPeerConnected == false)
+        #expect(recorder.uiEventDeliveries.isEmpty)
+        #expect(recorder.announceBacks == 0)
     }
 
     @Test

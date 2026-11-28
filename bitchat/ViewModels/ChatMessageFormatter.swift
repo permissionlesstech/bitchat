@@ -47,6 +47,16 @@ final class ChatMessageFormatter {
         self.viewModel = viewModel
     }
 
+    /// Panic-wipe hook: clears cached pre-wipe geohash identity and peer-ID
+    /// color palettes from memory.
+    func resetForPanic() {
+        cachedOwnGeoChatPeerID = nil
+        nostrPaletteKey = nil
+        meshPaletteKey = nil
+        meshPalette.reset()
+        nostrPalette.reset()
+    }
+
     func formatMessageAsText(_ message: BitchatMessage, colorScheme: ColorScheme, theme: AppTheme = .matrix) -> AttributedString {
         let design = theme.bodyFontDesign
         let isSelf = isSelfMessage(message)

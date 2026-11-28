@@ -75,9 +75,7 @@ protocol ChatPublicConversationContext: ChatIdentityContext {
     // MARK: Inbound public message processing
     func processActionMessage(_ message: BitchatMessage) -> BitchatMessage
     func isMessageBlocked(_ message: BitchatMessage) -> Bool
-    /// `powBits` is the validated NIP-13 difficulty of the source Nostr event
-    /// (0 for mesh messages); sufficient PoW relaxes the per-sender bucket.
-    func allowPublicMessage(senderKey: String, contentKey: String, powBits: Int) -> Bool
+    func allowPublicMessage(senderKey: String, contentKey: String) -> Bool
     /// Buffers a visible-channel message for the batched (~80 ms) pipeline
     /// flush, which commits it to `conversationID` in the store.
     func enqueuePublicMessage(_ message: BitchatMessage, to conversationID: ConversationID)
@@ -138,8 +136,8 @@ extension ChatViewModel: ChatPublicConversationContext {
         meshService.sendMessage(content, mentions: mentions, messageID: messageID, timestamp: timestamp)
     }
 
-    func allowPublicMessage(senderKey: String, contentKey: String, powBits: Int) -> Bool {
-        publicRateLimiter.allow(senderKey: senderKey, contentKey: contentKey, powBits: powBits)
+    func allowPublicMessage(senderKey: String, contentKey: String) -> Bool {
+        publicRateLimiter.allow(senderKey: senderKey, contentKey: contentKey)
     }
 
     func enqueuePublicMessage(_ message: BitchatMessage, to conversationID: ConversationID) {
@@ -387,7 +385,7 @@ final class ChatPublicConversationCoordinator: PublicMessagePipelineDelegate {
                 guard let context else { return }
                 do {
                     let identity = try context.deriveNostrIdentity(forGeohash: channel.geohash)
-                    let event = try await NostrProtocol.createMinedEphemeralGeohashEvent(
+                    let event = try NostrProtocol.createEphemeralGeohashEvent(
                         content: content,
                         geohash: channel.geohash,
                         senderIdentity: identity,
@@ -443,7 +441,7 @@ final class ChatPublicConversationCoordinator: PublicMessagePipelineDelegate {
         return "\(senderPeerID?.id ?? "")|\(msKey)|\(content)"
     }
 
-    func handlePublicMessage(_ message: BitchatMessage, powBits: Int = 0) {
+    func handlePublicMessage(_ message: BitchatMessage) {
         let finalMessage = context.processActionMessage(message)
         if context.isMessageBlocked(finalMessage) { return }
 
@@ -453,7 +451,7 @@ final class ChatPublicConversationCoordinator: PublicMessagePipelineDelegate {
         if shouldRateLimit {
             let senderKey = normalizedSenderKey(for: finalMessage)
             let contentKey = context.normalizedContentKey(finalMessage.content)
-            if !context.allowPublicMessage(senderKey: senderKey, contentKey: contentKey, powBits: powBits) {
+            if !context.allowPublicMessage(senderKey: senderKey, contentKey: contentKey) {
                 return
             }
         }

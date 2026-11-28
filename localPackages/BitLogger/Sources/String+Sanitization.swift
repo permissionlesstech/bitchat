@@ -13,8 +13,8 @@ extension String {
     func sanitized() -> String {
         let key = self as NSString
         
-        // Check cache first
-        if let cached = Self.queue.sync(execute: { Self.cache.object(forKey: key) }) {
+        // Check cache first (NSCache is thread-safe)
+        if let cached = Self.cache.object(forKey: key) {
             return cached as String
         }
         
@@ -45,10 +45,8 @@ extension String {
             "peerID: \(match.1)..."
         }
         
-        // Cache the result
-        Self.queue.sync {
-            Self.cache.setObject(sanitized as NSString, forKey: key)
-        }
+        // Cache the result (NSCache is thread-safe)
+        Self.cache.setObject(sanitized as NSString, forKey: key)
         
         return sanitized
     }
@@ -57,8 +55,6 @@ extension String {
 // MARK: - Cache Helpers
 
 private extension String {
-    static let queue = DispatchQueue(label: "chat.bitchat.securelogger.cache", attributes: .concurrent)
-
     static let cache: NSCache<NSString, NSString> = {
         let cache = NSCache<NSString, NSString>()
         cache.countLimit = 100 // Keep last 100 sanitized strings

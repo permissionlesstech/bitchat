@@ -382,4 +382,26 @@ struct BoardStoreTests {
         #expect(store.syncCandidates().isEmpty)
         #expect(!FileManager.default.fileExists(atPath: fileURL.path))
     }
+
+    @Test func orphanTombstoneFromWrongAuthorDoesNotBlockRealAuthorDelete() throws {
+        let clock = MutableClock(now: baseDate)
+        let store = makeStore(clock: clock)
+        let author = Curve25519.Signing.PrivateKey()
+        let attacker = Curve25519.Signing.PrivateKey()
+
+        let entry = try makePost(author: author, createdAt: baseMs)
+        let forgedTombstone = try makeTombstone(for: entry.post, author: attacker, deletedAt: baseMs + 500)
+        // Attacker plants an orphan tombstone before the real post arrives.
+        #expect(store.ingest(forgedTombstone.wire, packet: forgedTombstone.packet) == .accepted)
+
+        // Real post arrives; wrong-key orphan must not suppress it.
+        #expect(store.ingest(entry.wire, packet: entry.packet) == .accepted)
+        #expect(store.posts(forGeohash: "9q8yy").count == 1)
+
+        // Real author's tombstone must NOT be treated as a duplicate of the
+        // attacker's orphan tombstone — it must delete the post.
+        let genuineTombstone = try makeTombstone(for: entry.post, author: author, deletedAt: baseMs + 1000)
+        #expect(store.ingest(genuineTombstone.wire, packet: genuineTombstone.packet) == .accepted)
+        #expect(store.posts(forGeohash: "9q8yy").isEmpty)
+    }
 }

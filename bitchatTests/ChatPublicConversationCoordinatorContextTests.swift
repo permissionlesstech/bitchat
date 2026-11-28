@@ -177,7 +177,7 @@ private final class MockChatPublicConversationContext: ChatPublicConversationCon
     // Inbound public message processing
     var blockedMessageIDs: Set<String> = []
     var rateLimitAllowed = true
-    private(set) var rateLimitChecks: [(senderKey: String, contentKey: String, powBits: Int)] = []
+    private(set) var rateLimitChecks: [(senderKey: String, contentKey: String)] = []
     private(set) var enqueuedMessages: [(messageID: String, conversationID: ConversationID)] = []
     var enqueuedMessageIDs: [String] { enqueuedMessages.map(\.messageID) }
     var stablePeerIDs: [PeerID: PeerID] = [:]
@@ -190,8 +190,8 @@ private final class MockChatPublicConversationContext: ChatPublicConversationCon
         blockedMessageIDs.contains(message.id)
     }
 
-    func allowPublicMessage(senderKey: String, contentKey: String, powBits: Int) -> Bool {
-        rateLimitChecks.append((senderKey, contentKey, powBits))
+    func allowPublicMessage(senderKey: String, contentKey: String) -> Bool {
+        rateLimitChecks.append((senderKey, contentKey))
         return rateLimitAllowed
     }
 

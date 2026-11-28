@@ -3,16 +3,10 @@ import Testing
 
 struct BLEScanDutyPolicyTests {
     @Test
-    func continuousScanWhenInactiveDisconnectedOrTrafficIsRecent() {
+    func continuousScanWhenInactiveOrTrafficIsRecent() {
         #expect(BLEScanDutyPolicy.plan(
             appIsActive: false,
             connectedCount: 4,
-            hasRecentTraffic: false
-        ) == .continuous)
-
-        #expect(BLEScanDutyPolicy.plan(
-            appIsActive: true,
-            connectedCount: 0,
             hasRecentTraffic: false
         ) == .continuous)
 
@@ -24,26 +18,18 @@ struct BLEScanDutyPolicyTests {
     }
 
     @Test
-    func continuousScanForSmallMeshes() {
-        #expect(BLEScanDutyPolicy.plan(
-            appIsActive: true,
-            connectedCount: 2,
-            hasRecentTraffic: false
-        ) == .continuous)
-    }
-
-    @Test
-    func dutyCyclesSparseActiveMeshes() {
-        let plan = BLEScanDutyPolicy.plan(
-            appIsActive: true,
-            connectedCount: 3,
-            hasRecentTraffic: false
-        )
-
-        #expect(plan == .dutyCycle(
-            onDuration: TransportConfig.bleDutyOnDuration,
-            offDuration: TransportConfig.bleDutyOffDuration
-        ))
+    func dutyCyclesWhenActiveAndIdleIncludingSoloAndSmallMeshes() {
+        for count in [0, 1, 2, 3] {
+            let plan = BLEScanDutyPolicy.plan(
+                appIsActive: true,
+                connectedCount: count,
+                hasRecentTraffic: false
+            )
+            #expect(plan == .dutyCycle(
+                onDuration: TransportConfig.bleDutyOnDuration,
+                offDuration: TransportConfig.bleDutyOffDuration
+            ))
+        }
     }
 
     @Test

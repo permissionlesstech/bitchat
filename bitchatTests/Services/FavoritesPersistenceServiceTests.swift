@@ -130,4 +130,34 @@ final class FavoritesPersistenceServiceTests: XCTestCase {
         XCTAssertNil(service.noisePublicKey(forNostrPubkey: identity.npub))
         XCTAssertNil(service.noisePublicKey(forNostrPubkey: identity.publicKeyHex))
     }
+
+    func test_lockedBoot_doesNotOverwriteExistingFavoritesOnLaterMutation() throws {
+        let keychain = MockKeychain()
+        let existingKey = Data((200..<232).map(UInt8.init))
+        let existing = FavoritesPersistenceService.FavoriteRelationship(
+            peerNoisePublicKey: existingKey,
+            peerNostrPublicKey: "npub1existing",
+            peerNickname: "Existing",
+            isFavorite: true,
+            theyFavoritedUs: true,
+            favoritedAt: Date(),
+            lastUpdated: Date()
+        )
+        let encoded = try JSONEncoder().encode([existing])
+        keychain.save(key: storageKey, data: encoded, service: serviceKey, accessible: nil)
+
+        // Launch while locked: load fails with .deviceLocked.
+        keychain.simulatedGenericReadError = .deviceLocked
+        let service = FavoritesPersistenceService(keychain: keychain)
+        XCTAssertTrue(service.favorites.isEmpty)
+
+        // A mutation during locked boot must NOT overwrite the existing keychain entry.
+        let newKey = Data((220..<252).map(UInt8.init))
+        service.addFavorite(peerNoisePublicKey: newKey, peerNickname: "NewDuringLock")
+
+        keychain.simulatedGenericReadError = nil
+        let reloaded = FavoritesPersistenceService(keychain: keychain)
+        XCTAssertEqual(reloaded.favorites.count, 1)
+        XCTAssertEqual(reloaded.getFavoriteStatus(for: existingKey)?.peerNickname, "Existing")
+    }
 }

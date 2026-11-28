@@ -82,6 +82,7 @@ struct PaymentChipView: View {
     /// cheap, and rows re-render often enough that lazy decode in `body`
     /// would just repeat the work.
     private let cashuInfo: CashuTokenDecoder.TokenInfo?
+    @State private var showWebRedeemConfirmation = false
 
     init(paymentType: PaymentType) {
         self.paymentType = paymentType
@@ -152,14 +153,32 @@ struct PaymentChipView: View {
                 } label: {
                     Label(String(localized: "content.payment.redeem_wallet", comment: "Context menu action opening a Cashu token in an ecash wallet app"), systemImage: "wallet.pass")
                 }
-                if let webURL = paymentType.cashuWebRedeemURL {
+                if paymentType.cashuWebRedeemURL != nil {
                     Button {
-                        openExternalURL(webURL)
+                        showWebRedeemConfirmation = true
                     } label: {
                         Label(String(localized: "content.payment.redeem_web", comment: "Context menu action opening a Cashu token in the web redemption page"), systemImage: "safari")
                     }
                 }
             }
+        }
+        .alert(
+            String(localized: "content.payment.redeem_web", comment: "Context menu action opening a Cashu token in the web redemption page"),
+            isPresented: $showWebRedeemConfirmation
+        ) {
+            if let token = paymentType.cashuToken {
+                Button(String(localized: "content.payment.copy_token", comment: "Context menu action copying a Cashu token to the pasteboard")) {
+                    copyToPasteboard(token)
+                }
+            }
+            if let webURL = paymentType.cashuWebRedeemURL {
+                Button(String(localized: "content.payment.redeem_web", comment: "Context menu action opening a Cashu token in the web redemption page")) {
+                    openExternalURL(webURL)
+                }
+            }
+            Button(String(localized: "common.cancel", comment: "Cancel button"), role: .cancel) {}
+        } message: {
+            Text(verbatim: "https://redeem.cashu.me")
         }
         .accessibilityLabel(Text(verbatim: accessibilityText))
     }
@@ -185,31 +204,28 @@ struct PaymentChipView: View {
         }
     }
 
-    /// Redemption is delegated: try a wallet registered for `cashu:` URLs
-    /// first, then fall back to the web redemption page. Uses the platform
-    /// opener directly (not the `openURL` environment) because the message
-    /// list overrides that action for cashu/lightning schemes without a
-    /// fallback path.
+    /// Redemption is delegated to a local `cashu:` wallet app first. Never
+    /// fall back silently to a clearnet web URL (which would send the bearer
+    /// ecash token and device IP outside Tor); prompt the user explicitly.
     private func redeemCashu() {
         let walletURL = paymentType.url
-        let webURL = paymentType.cashuWebRedeemURL
         #if os(iOS)
         if let walletURL {
             UIApplication.shared.open(walletURL, options: [:]) { accepted in
-                if !accepted, let webURL {
-                    UIApplication.shared.open(webURL)
+                if !accepted, paymentType.cashuWebRedeemURL != nil {
+                    DispatchQueue.main.async {
+                        showWebRedeemConfirmation = true
+                    }
                 }
             }
-        } else if let webURL {
-            UIApplication.shared.open(webURL)
+        } else if paymentType.cashuWebRedeemURL != nil {
+            showWebRedeemConfirmation = true
         }
         #else
         if let walletURL, NSWorkspace.shared.urlForApplication(toOpen: walletURL) != nil {
             NSWorkspace.shared.open(walletURL)
-        } else if let webURL {
-            NSWorkspace.shared.open(webURL)
-        } else if let walletURL {
-            NSWorkspace.shared.open(walletURL)
+        } else if paymentType.cashuWebRedeemURL != nil {
+            showWebRedeemConfirmation = true
         }
         #endif
     }
