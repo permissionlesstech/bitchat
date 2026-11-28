@@ -2,9 +2,8 @@
 // AddFriendSheet.swift
 // bitchat
 //
-// Two-tab sheet for adding friends remotely or in person:
-// - My Invite: shareable Universal Link, copy button, and scannable QR code
-// - Add Friend: live QR scanner + paste invite link field
+// Two-tab sheet for adding friends remotely or in person, using the unified
+// ThemedSheetHeader and ThemedCard design system.
 //
 // This is free and unencumbered software released into the public domain.
 // For more information, see <https://unlicense.org>
@@ -41,45 +40,40 @@ struct AddFriendSheet: View {
     }
 
     var body: some View {
-        NavigationStack {
-            VStack(spacing: 0) {
-                Picker("", selection: $selectedTab) {
-                    Text(String(localized: "friend_invite.tab.my_invite", defaultValue: "My Invite", comment: "Tab label for showing your own invite link and QR"))
-                        .tag(Tab.myInvite)
-                    Text(String(localized: "friend_invite.tab.add_friend", defaultValue: "Add Friend", comment: "Tab label for scanning or pasting a friend's invite"))
-                        .tag(Tab.addFriend)
-                }
-                .pickerStyle(.segmented)
-                .labelsHidden()
-                .padding(.horizontal, 16)
-                .padding(.top, 12)
-                .padding(.bottom, 8)
+        VStack(spacing: 0) {
+            ThemedSheetHeader(
+                title: String(localized: "friend_invite.sheet.title", defaultValue: "Invite & Add Friends", comment: "Title of the add friend sheet"),
+                onClose: { dismiss() }
+            )
 
-                ScrollView {
-                    switch selectedTab {
-                    case .myInvite:
-                        myInviteContent
-                    case .addFriend:
-                        addFriendContent
-                    }
-                }
+            Picker("", selection: $selectedTab) {
+                Text(String(localized: "friend_invite.tab.my_invite", defaultValue: "My Invite", comment: "Tab label for showing your own invite link and QR"))
+                    .tag(Tab.myInvite)
+                Text(String(localized: "friend_invite.tab.add_friend", defaultValue: "Add Friend", comment: "Tab label for scanning or pasting a friend's invite"))
+                    .tag(Tab.addFriend)
             }
-            .themedSheetBackground()
-            .navigationTitle(String(localized: "friend_invite.sheet.title", defaultValue: "Invite & Add Friends", comment: "Title of the add friend sheet"))
-            #if os(iOS)
-            .navigationBarTitleDisplayMode(.inline)
-            #endif
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    SheetCloseButton { dismiss() }
+            .pickerStyle(.segmented)
+            .labelsHidden()
+            .padding(.horizontal, 16)
+            .padding(.top, 12)
+            .padding(.bottom, 8)
+
+            ScrollView {
+                switch selectedTab {
+                case .myInvite:
+                    myInviteContent
+                case .addFriend:
+                    addFriendContent
                 }
-            }
-            .sheet(item: $sharePayload) { payload in
-                ShareActivityView(text: payload.text)
             }
         }
+        .themedSheetBackground()
+        .foregroundColor(palette.primary)
+        .sheet(item: $sharePayload) { payload in
+            ShareActivityView(text: payload.text)
+        }
         #if os(macOS)
-        .frame(minWidth: 420, minHeight: 540)
+        .frame(minWidth: 440, minHeight: 560)
         #endif
     }
 
@@ -94,20 +88,19 @@ struct AddFriendSheet: View {
                 .fixedSize(horizontal: false, vertical: true)
 
             if let invite, let urlString = invite.universalURL?.absoluteString {
-                VStack(spacing: 12) {
-                    QRCodeImage(data: urlString, size: 220)
-                        .padding(12)
-                        .background(Color.white)
-                        .cornerRadius(14)
+                ThemedCard(padding: 16, spacing: 12) {
+                    VStack(spacing: 12) {
+                        QRCodeImage(data: urlString, size: 220)
+                            .padding(12)
+                            .background(Color.white)
+                            .clipShape(RoundedRectangle(cornerRadius: palette.cardRadius, style: .continuous))
 
-                    Text("@\(invite.nickname)")
-                        .bitchatFont(size: 16, weight: .semibold)
-                        .foregroundColor(palette.primary)
+                        Text(verbatim: "@\(invite.nickname)")
+                            .bitchatFont(size: 16, weight: .semibold)
+                            .foregroundColor(palette.primary)
+                    }
+                    .frame(maxWidth: .infinity)
                 }
-                .padding(16)
-                .frame(maxWidth: .infinity)
-                .background(palette.secondary.opacity(0.1))
-                .cornerRadius(14)
 
                 VStack(spacing: 10) {
                     Button {
@@ -121,8 +114,8 @@ struct AddFriendSheet: View {
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 12)
                         .background(palette.accent)
-                        .foregroundColor(.white)
-                        .cornerRadius(12)
+                        .foregroundColor(palette.accentForeground)
+                        .clipShape(RoundedRectangle(cornerRadius: palette.buttonRadius, style: .continuous))
                     }
                     .buttonStyle(.plain)
 
@@ -141,18 +134,23 @@ struct AddFriendSheet: View {
                         )
                         .bitchatFont(size: 14, weight: .medium)
                         .frame(maxWidth: .infinity)
-                        .padding(.vertical, 10)
-                        .background(palette.secondary.opacity(0.14))
+                        .padding(.vertical, 11)
+                        .background(palette.cardBackground)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: palette.buttonRadius, style: .continuous)
+                                .stroke(palette.cardBorder, lineWidth: 1)
+                        )
                         .foregroundColor(palette.primary)
-                        .cornerRadius(12)
+                        .clipShape(RoundedRectangle(cornerRadius: palette.buttonRadius, style: .continuous))
                     }
                     .buttonStyle(.plain)
                 }
             } else {
-                Text(FriendInviteError.missingOwnIdentity.localizedDescription)
-                    .bitchatFont(size: 13)
-                    .foregroundColor(palette.secondary)
-                    .padding()
+                ThemedCard {
+                    Text(FriendInviteError.missingOwnIdentity.localizedDescription)
+                        .bitchatFont(size: 13)
+                        .foregroundColor(palette.secondary)
+                }
             }
         }
         .padding(16)
@@ -181,51 +179,53 @@ struct AddFriendSheet: View {
                 }
             }
             .frame(height: 220)
-            .background(palette.secondary.opacity(0.08))
-            .clipShape(RoundedRectangle(cornerRadius: 12))
+            .background(palette.cardBackground)
+            .overlay(
+                RoundedRectangle(cornerRadius: palette.cardRadius, style: .continuous)
+                    .stroke(palette.cardBorder, lineWidth: 1)
+            )
+            .clipShape(RoundedRectangle(cornerRadius: palette.cardRadius, style: .continuous))
 
             VStack(alignment: .leading, spacing: 8) {
-                Text(String(localized: "friend_invite.paste_label", defaultValue: "Or paste an invite link", comment: "Header above paste invite field"))
-                    .bitchatFont(size: 13, weight: .semibold)
-                    .foregroundColor(palette.primary)
+                ThemedSectionLabel(text: String(localized: "friend_invite.paste_label", defaultValue: "Or paste an invite link", comment: "Header above paste invite field").uppercased())
 
-                HStack(spacing: 8) {
-                    TextField(
-                        String(localized: "friend_invite.paste_placeholder", defaultValue: "https://bitchat.free/invite?...", comment: "Placeholder for pasting a friend invite link"),
-                        text: $inviteInput
-                    )
-                    .textFieldStyle(.plain)
-                    .bitchatFont(size: 14)
-                    .padding(10)
-                    .background(palette.secondary.opacity(0.12))
-                    .cornerRadius(10)
-                    #if os(iOS)
-                    .textInputAutocapitalization(.never)
-                    .autocorrectionDisabled(true)
-                    .keyboardType(.URL)
-                    #endif
-                    .onSubmit { handleCandidate(inviteInput) }
+                ThemedCard(padding: 10, spacing: 8) {
+                    HStack(spacing: 8) {
+                        TextField(
+                            String(localized: "friend_invite.paste_placeholder", defaultValue: "https://bitchat.free/invite?...", comment: "Placeholder for pasting a friend invite link"),
+                            text: $inviteInput
+                        )
+                        .textFieldStyle(.plain)
+                        .bitchatFont(size: 14)
+                        .foregroundColor(palette.primary)
+                        #if os(iOS)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled(true)
+                        .keyboardType(.URL)
+                        #endif
+                        .onSubmit { handleCandidate(inviteInput) }
 
-                    Button {
-                        handleCandidate(inviteInput)
-                    } label: {
-                        Text(String(localized: "friend_invite.action.add", defaultValue: "Add", comment: "Button to add a friend from a pasted invite link"))
-                            .bitchatFont(size: 14, weight: .semibold)
-                            .padding(.horizontal, 14)
-                            .padding(.vertical, 10)
-                            .background(inviteInput.trimmed.isEmpty ? palette.secondary.opacity(0.2) : palette.accent)
-                            .foregroundColor(inviteInput.trimmed.isEmpty ? palette.secondary : .white)
-                            .cornerRadius(10)
+                        Button {
+                            handleCandidate(inviteInput)
+                        } label: {
+                            Text(String(localized: "friend_invite.action.add", defaultValue: "Add", comment: "Button to add a friend from a pasted invite link"))
+                                .bitchatFont(size: 13, weight: .semibold)
+                                .padding(.horizontal, 14)
+                                .padding(.vertical, 8)
+                                .background(inviteInput.trimmed.isEmpty ? palette.cardBackground : palette.accent)
+                                .foregroundColor(inviteInput.trimmed.isEmpty ? palette.secondary : palette.accentForeground)
+                                .clipShape(RoundedRectangle(cornerRadius: palette.buttonRadius, style: .continuous))
+                        }
+                        .buttonStyle(.plain)
+                        .disabled(inviteInput.trimmed.isEmpty)
                     }
-                    .buttonStyle(.plain)
-                    .disabled(inviteInput.trimmed.isEmpty)
-                }
 
-                if let errorMessage {
-                    Text(errorMessage)
-                        .bitchatFont(size: 12)
-                        .foregroundColor(palette.alertRed)
-                        .fixedSize(horizontal: false, vertical: true)
+                    if let errorMessage {
+                        Text(errorMessage)
+                            .bitchatFont(size: 12)
+                            .foregroundColor(palette.alertRed)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
                 }
             }
         }

@@ -359,40 +359,37 @@ struct NoticesView: View {
     }
 
     private var headerSection: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 12) {
-                Text(verbatim: scopeTitle)
-                    .bitchatFont(size: 18)
-                Spacer()
-                SheetCloseButton { dismiss() }
-                    .accessibilityLabel(Strings.closeHint)
+        VStack(alignment: .leading, spacing: 0) {
+            ThemedSheetHeader(
+                title: Strings.title.capitalized,
+                subtitle: scopeSubtitle,
+                onClose: { dismiss() }
+            )
+
+            VStack(alignment: .leading, spacing: 8) {
+                Picker(Strings.scopePicker, selection: $tab) {
+                    Text(Strings.geoTab.capitalized).tag(Tab.geo)
+                    Text(Strings.meshTab.capitalized).tag(Tab.mesh)
+                }
+                .pickerStyle(.segmented)
+                .accessibilityLabel(Strings.scopePicker)
+                Text(tab == .geo ? Strings.geoDescription : Strings.meshDescription)
+                    .bitchatFont(size: 12)
+                    .foregroundColor(palette.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
             }
-            Picker(Strings.scopePicker, selection: $tab) {
-                Text(Strings.geoTab).tag(Tab.geo)
-                Text(Strings.meshTab).tag(Tab.mesh)
-            }
-            .pickerStyle(.segmented)
-            .accessibilityLabel(Strings.scopePicker)
-            Text(tab == .geo ? Strings.geoDescription : Strings.meshDescription)
-                .bitchatFont(size: 12)
-                .foregroundColor(palette.secondary)
-                .fixedSize(horizontal: false, vertical: true)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 12)
+            .themedSurface()
         }
-        .padding(.horizontal, 16)
-        .padding(.top, 16)
-        .padding(.bottom, 12)
-        .themedSurface()
     }
 
-    private var scopeTitle: String {
+    private var scopeSubtitle: String? {
         switch tab {
         case .mesh:
-            return "\(Strings.title) @ #mesh"
+            return "#mesh"
         case .geo:
-            if let geohash = geoGeohash {
-                return "\(Strings.title) @ #\(geohash)"
-            }
-            return Strings.title
+            return geoGeohash.map { "#\($0)" }
         }
     }
 

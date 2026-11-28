@@ -4,7 +4,7 @@
 //
 // Inbox-first everyday home tab: displays all private direct messages,
 // mutual friends, and hybrid encrypted groups sorted by unread & recency,
-// with 1-tap access to Add Friend, New Group, and Settings.
+// using the unified AppTopBar and ThemedCard design system.
 //
 // This is free and unencumbered software released into the public domain.
 // For more information, see <https://unlicense.org>
@@ -18,6 +18,7 @@ struct ChatsInboxView: View {
     @EnvironmentObject private var peerListModel: PeerListModel
     @EnvironmentObject private var privateConversationModel: PrivateConversationModel
     @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.appTheme) private var theme
     @ThemedPalette private var palette
 
     let onOpenAddFriend: () -> Void
@@ -32,59 +33,81 @@ struct ChatsInboxView: View {
     }()
 
     var body: some View {
-        NavigationStack {
-            VStack(spacing: 0) {
-                if appChromeModel.panicWipeBlocked {
-                    ConnectivityStatusBanner(issue: .panicWipeBlocked)
-                }
-                if let issue = ConnectivityIssue.resolve(
-                    bluetoothState: appChromeModel.bluetoothState,
-                    torBlocked: appChromeModel.torBlocked
-                ) {
-                    ConnectivityStatusBanner(issue: issue)
-                }
+        VStack(spacing: 0) {
+            topBar
 
-                if peerListModel.reachableMeshPeerCount > 0 {
-                    nearbyBanner
-                }
-
-                if peerListModel.inboxRows.isEmpty {
-                    emptyInboxState
-                } else {
-                    inboxList
-                }
+            if !theme.usesGlassChrome {
+                Rectangle()
+                    .fill(palette.divider)
+                    .frame(height: 1)
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .background(ThemedRootBackground())
-            .navigationTitle(String(localized: "tab.chats", defaultValue: "Chats", comment: "Navigation title for the Chats inbox tab"))
-            #if os(iOS)
-            .navigationBarTitleDisplayMode(.large)
-            #endif
-            .toolbar {
-                ToolbarItem(placement: .navigation) {
-                    Button {
-                        appChromeModel.presentAppInfo(pane: .settings)
-                    } label: {
-                        Image(systemName: "gearshape")
-                            .foregroundColor(palette.primary)
-                    }
-                    .accessibilityLabel(String(localized: "chats.accessibility.settings", defaultValue: "Settings", comment: "Accessibility label for the settings gear button"))
-                }
 
-                ToolbarItemGroup(placement: .primaryAction) {
-                    Button(action: onOpenAddFriend) {
-                        Image(systemName: "person.badge.plus")
-                            .foregroundColor(palette.primary)
-                    }
-                    .accessibilityLabel(String(localized: "chats.accessibility.add_friend", defaultValue: "Invite or add friend", comment: "Accessibility label for add friend toolbar button"))
-
-                    Button(action: onOpenCreateGroup) {
-                        Image(systemName: "square.and.pencil")
-                            .foregroundColor(palette.primary)
-                    }
-                    .accessibilityLabel(String(localized: "chats.accessibility.new_group", defaultValue: "New group", comment: "Accessibility label for new group toolbar button"))
-                }
+            if appChromeModel.panicWipeBlocked {
+                ConnectivityStatusBanner(issue: .panicWipeBlocked)
             }
+            if let issue = ConnectivityIssue.resolve(
+                bluetoothState: appChromeModel.bluetoothState,
+                torBlocked: appChromeModel.torBlocked
+            ) {
+                ConnectivityStatusBanner(issue: issue)
+            }
+
+            if peerListModel.reachableMeshPeerCount > 0 {
+                nearbyBanner
+            }
+
+            if peerListModel.inboxRows.isEmpty {
+                emptyInboxState
+            } else {
+                inboxList
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(ThemedRootBackground())
+    }
+
+    private var topBar: some View {
+        AppTopBar {
+            HStack(spacing: 8) {
+                Text(String(localized: "tab.chats", defaultValue: "Chats", comment: "Navigation title for the Chats inbox tab"))
+                    .bitchatFont(size: 19, weight: .bold)
+                    .foregroundColor(palette.primary)
+                    .lineLimit(1)
+
+                Button {
+                    appChromeModel.presentAppInfo(pane: .settings)
+                } label: {
+                    Text(verbatim: "@\(appChromeModel.nickname)")
+                        .bitchatFont(size: 12, weight: .medium)
+                        .foregroundColor(palette.secondary)
+                        .lineLimit(1)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 3)
+                        .background(palette.cardBackground)
+                        .clipShape(Capsule())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(String(localized: "chats.accessibility.settings", defaultValue: "Settings", comment: "Accessibility label for profile and settings"))
+            }
+        } trailing: {
+            TopBarIconButton(
+                systemImage: "person.badge.plus",
+                accessibilityLabel: String(localized: "chats.accessibility.add_friend", defaultValue: "Invite or add friend", comment: "Accessibility label for add friend toolbar button"),
+                action: onOpenAddFriend
+            )
+
+            TopBarIconButton(
+                systemImage: "person.3.fill",
+                accessibilityLabel: String(localized: "chats.accessibility.new_group", defaultValue: "New group", comment: "Accessibility label for new group toolbar button"),
+                action: onOpenCreateGroup
+            )
+
+            TopBarIconButton(
+                systemImage: "gearshape",
+                accessibilityLabel: String(localized: "chats.accessibility.settings", defaultValue: "Settings", comment: "Accessibility label for the settings gear button"),
+                color: palette.secondary,
+                action: { appChromeModel.presentAppInfo(pane: .settings) }
+            )
         }
     }
 
@@ -112,10 +135,14 @@ struct ChatsInboxView: View {
             }
             .padding(.horizontal, 14)
             .padding(.vertical, 10)
-            .background(palette.accentBlue.opacity(0.1))
-            .cornerRadius(12)
-            .padding(.horizontal, 16)
-            .padding(.top, 8)
+            .background(palette.accentBlue.opacity(0.12))
+            .overlay(
+                RoundedRectangle(cornerRadius: palette.cardRadius, style: .continuous)
+                    .stroke(palette.accentBlue.opacity(0.22), lineWidth: 1)
+            )
+            .clipShape(RoundedRectangle(cornerRadius: palette.cardRadius, style: .continuous))
+            .padding(.horizontal, 14)
+            .padding(.top, 10)
             .padding(.bottom, 4)
         }
         .buttonStyle(.plain)
@@ -132,11 +159,13 @@ struct ChatsInboxView: View {
                     }
                     .buttonStyle(.plain)
 
-                    Divider()
+                    Rectangle()
+                        .fill(palette.divider)
+                        .frame(height: 1)
                         .padding(.leading, 72)
                 }
             }
-            .padding(.top, 4)
+            .padding(.top, 6)
         }
     }
 
@@ -147,18 +176,18 @@ struct ChatsInboxView: View {
             VStack(alignment: .leading, spacing: 3) {
                 HStack(spacing: 6) {
                     Text(row.displayName)
-                        .bitchatFont(size: 16, weight: row.hasUnread ? .bold : .semibold)
+                        .bitchatFont(size: 15, weight: row.hasUnread ? .bold : .semibold)
                         .foregroundColor(palette.primary)
                         .lineLimit(1)
 
                     if row.isGroup {
-                        Text("\(row.memberCount)")
+                        Text(verbatim: "\(row.memberCount)")
                             .bitchatFont(size: 11, weight: .medium)
                             .foregroundColor(palette.secondary)
                             .padding(.horizontal, 5)
                             .padding(.vertical, 1)
-                            .background(palette.secondary.opacity(0.14))
-                            .cornerRadius(6)
+                            .background(palette.cardBackground)
+                            .clipShape(Capsule())
                     }
 
                     if row.disappearingTimer != .off {
@@ -179,14 +208,14 @@ struct ChatsInboxView: View {
                 HStack(spacing: 6) {
                     reachabilityGlyph(for: row.reachability)
                     Text(row.subtitle)
-                        .bitchatFont(size: 14)
+                        .bitchatFont(size: 13)
                         .foregroundColor(row.hasUnread ? palette.primary : palette.secondary)
                         .lineLimit(1)
                     Spacer(minLength: 4)
                     if row.hasUnread {
                         Circle()
                             .fill(Color.orange)
-                            .frame(width: 9, height: 9)
+                            .frame(width: 8, height: 8)
                     }
                 }
             }
@@ -203,14 +232,14 @@ struct ChatsInboxView: View {
         return ZStack {
             Circle()
                 .fill(tint.opacity(0.18))
-                .frame(width: 46, height: 46)
+                .frame(width: 44, height: 44)
             if row.isGroup {
                 Image(systemName: "person.3.fill")
-                    .font(.system(size: 17, weight: .semibold))
+                    .font(.system(size: 16, weight: .semibold))
                     .foregroundColor(tint)
             } else {
                 Text(String(row.displayName.prefix(1)).uppercased())
-                    .bitchatFont(size: 18, weight: .bold)
+                    .bitchatFont(size: 17, weight: .bold)
                     .foregroundColor(tint)
             }
         }
@@ -243,13 +272,13 @@ struct ChatsInboxView: View {
     private var emptyInboxState: some View {
         ScrollView {
             VStack(spacing: 20) {
-                Spacer(minLength: 32)
+                Spacer(minLength: 36)
 
                 Image(systemName: "bubble.left.and.bubble.right.fill")
-                    .font(.system(size: 46))
+                    .font(.system(size: 42))
                     .foregroundColor(palette.accent)
                     .padding(18)
-                    .background(palette.accent.opacity(0.12))
+                    .background(palette.accent.opacity(0.14))
                     .clipShape(Circle())
 
                 VStack(spacing: 8) {
@@ -274,10 +303,10 @@ struct ChatsInboxView: View {
                         )
                         .bitchatFont(size: 15, weight: .semibold)
                         .frame(maxWidth: .infinity)
-                        .padding(.vertical, 13)
+                        .padding(.vertical, 12)
                         .background(palette.accent)
-                        .foregroundColor(.white)
-                        .cornerRadius(13)
+                        .foregroundColor(palette.accentForeground)
+                        .clipShape(RoundedRectangle(cornerRadius: palette.buttonRadius, style: .continuous))
                     }
                     .buttonStyle(.plain)
 
@@ -289,15 +318,19 @@ struct ChatsInboxView: View {
                         .bitchatFont(size: 15, weight: .medium)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 12)
-                        .background(palette.secondary.opacity(0.14))
+                        .background(palette.cardBackground)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: palette.buttonRadius, style: .continuous)
+                                .stroke(palette.cardBorder, lineWidth: 1)
+                        )
                         .foregroundColor(palette.primary)
-                        .cornerRadius(13)
+                        .clipShape(RoundedRectangle(cornerRadius: palette.buttonRadius, style: .continuous))
                     }
                     .buttonStyle(.plain)
                 }
                 .padding(.horizontal, 28)
 
-                HStack(spacing: 12) {
+                HStack(spacing: 10) {
                     Button(action: onSwitchToNearby) {
                         Label(
                             String(localized: "chats.empty.nearby_shortcut", defaultValue: "Nearby Mesh", comment: "Shortcut pill to Nearby tab"),
@@ -306,9 +339,13 @@ struct ChatsInboxView: View {
                         .bitchatFont(size: 13, weight: .medium)
                         .padding(.horizontal, 12)
                         .padding(.vertical, 8)
-                        .background(palette.secondary.opacity(0.1))
+                        .background(palette.cardBackground)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: palette.buttonRadius, style: .continuous)
+                                .stroke(palette.cardBorder, lineWidth: 1)
+                        )
                         .foregroundColor(palette.primary)
-                        .cornerRadius(10)
+                        .clipShape(RoundedRectangle(cornerRadius: palette.buttonRadius, style: .continuous))
                     }
                     .buttonStyle(.plain)
 
@@ -320,13 +357,17 @@ struct ChatsInboxView: View {
                         .bitchatFont(size: 13, weight: .medium)
                         .padding(.horizontal, 12)
                         .padding(.vertical, 8)
-                        .background(palette.secondary.opacity(0.1))
+                        .background(palette.cardBackground)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: palette.buttonRadius, style: .continuous)
+                                .stroke(palette.cardBorder, lineWidth: 1)
+                        )
                         .foregroundColor(palette.primary)
-                        .cornerRadius(10)
+                        .clipShape(RoundedRectangle(cornerRadius: palette.buttonRadius, style: .continuous))
                     }
                     .buttonStyle(.plain)
                 }
-                .padding(.top, 4)
+                .padding(.top, 2)
 
                 Spacer(minLength: 24)
             }

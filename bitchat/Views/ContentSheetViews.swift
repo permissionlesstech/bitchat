@@ -248,73 +248,31 @@ private struct ContentPeopleListView: View {
 
     @Binding var showSidebar: Bool
     @Binding var showVerifySheet: Bool
-    @State private var showAddFriendSheet = false
-    @State private var showCreateGroupSheet = false
 
     var body: some View {
         VStack(spacing: 0) {
-            VStack(alignment: .leading, spacing: 8) {
-                HStack(spacing: 12) {
-                    Text(peopleSheetTitle)
-                        .bitchatFont(size: 18)
-                        .foregroundColor(palette.primary)
-                    Spacer()
+            ThemedSheetHeader(
+                title: peopleSheetTitle,
+                subtitle: peopleSheetSubtitle,
+                trailing: {
                     if case .mesh = locationChannelsModel.selectedChannel {
-                        Button(action: { showAddFriendSheet = true }) {
-                            Image(systemName: "person.badge.plus")
-                                .font(.bitchatSystem(size: 14))
-                        }
-                        .buttonStyle(.plain)
-                        .accessibilityLabel(
-                            String(localized: "chats.accessibility.add_friend", defaultValue: "Invite or add friend", comment: "Accessibility label for add friend button")
+                        TopBarIconButton(
+                            systemImage: "qrcode",
+                            accessibilityLabel: String(localized: "content.accessibility.verification", comment: "Accessibility label for the verification QR button"),
+                            action: { showVerifySheet = true }
                         )
-
-                        Button(action: { showCreateGroupSheet = true }) {
-                            Image(systemName: "person.3.fill")
-                                .font(.bitchatSystem(size: 13))
-                        }
-                        .buttonStyle(.plain)
-                        .accessibilityLabel(
-                            String(localized: "chats.accessibility.new_group", defaultValue: "New group", comment: "Accessibility label for new group button")
-                        )
-
-                        Button(action: { showVerifySheet = true }) {
-                            Image(systemName: "qrcode")
-                                .font(.bitchatSystem(size: 14))
-                        }
-                        .buttonStyle(.plain)
-                        // .help maps to the accessibility *hint* on iOS, so the
-                        // button still needs a spoken name.
-                        .accessibilityLabel(
-                            String(localized: "content.accessibility.verification", comment: "Accessibility label for the verification QR button")
-                        )
-                        .help(
-                            String(localized: "content.help.verification", comment: "Help text for verification button")
-                        )
+                        .help(String(localized: "content.help.verification", comment: "Help text for verification button"))
                     }
-                    SheetCloseButton {
-                        withAnimation(.easeInOut(duration: TransportConfig.uiAnimationMediumSeconds)) {
-                            dismiss()
-                            showSidebar = false
-                            showVerifySheet = false
-                            privateConversationModel.endConversation()
-                        }
+                },
+                onClose: {
+                    withAnimation(.easeInOut(duration: TransportConfig.uiAnimationMediumSeconds)) {
+                        dismiss()
+                        showSidebar = false
+                        showVerifySheet = false
+                        privateConversationModel.endConversation()
                     }
                 }
-
-                // The mesh sheet titles its sections inline (#mesh / across
-                // the bridge / groups) — no subtitle or count up here.
-                // Location channels keep their geohash subtitle.
-                if case .location(let channel) = locationChannelsModel.selectedChannel {
-                    Text(verbatim: "#\(channel.geohash.lowercased())")
-                        .bitchatFont(size: 12)
-                        .foregroundColor(palette.locationAccent)
-                }
-            }
-            .padding(.horizontal, 16)
-            .padding(.top, 16)
-            .padding(.bottom, 12)
-            .themedSurface()
+            )
 
             ScrollView {
                 // spacing 0: every section supplies its own rhythm (header
@@ -406,27 +364,20 @@ private struct ContentPeopleListView: View {
                     .environmentObject(verificationModel)
             }
         }
-        .sheet(isPresented: $showAddFriendSheet) {
-            AddFriendSheet { _ in
-                showSidebar = true
-            }
-            .environmentObject(appChromeModel)
-        }
-        .sheet(isPresented: $showCreateGroupSheet) {
-            CreateGroupSheet(
-                onRequestAddFriend: { showAddFriendSheet = true },
-                onGroupCreated: { showSidebar = true }
-            )
-            .environmentObject(peerListModel)
-        }
     }
 }
 
 private extension ContentPeopleListView {
     var peopleSheetTitle: String {
-        String(localized: "content.header.people", comment: "Title for the people list sheet").lowercased()
+        String(localized: "content.header.people", comment: "Title for the people list sheet")
     }
 
+    var peopleSheetSubtitle: String? {
+        if case .location(let channel) = locationChannelsModel.selectedChannel {
+            return "#\(channel.geohash.lowercased())"
+        }
+        return nil
+    }
 }
 
 private struct ContentPrivateChatSheetView: View {
@@ -533,8 +484,8 @@ private struct ContentPrivateChatSheetView: View {
 
                     SheetCloseButton {
                         withAnimation(.easeInOut(duration: TransportConfig.uiAnimationMediumSeconds)) {
+                            showSidebar = false
                             privateConversationModel.endConversation()
-                            showSidebar = true
                         }
                     }
                 }
@@ -597,7 +548,6 @@ private struct ContentPrivateChatSheetView: View {
                 let vertical = abs(value.translation.height)
                 guard horizontal > 80, vertical < 60 else { return }
                 withAnimation(.easeInOut(duration: TransportConfig.uiAnimationMediumSeconds)) {
-                    showSidebar = true
                     privateConversationModel.endConversation()
                 }
             }

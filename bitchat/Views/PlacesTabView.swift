@@ -2,9 +2,9 @@
 // PlacesTabView.swift
 // bitchat
 //
-// First-class Places tab: surfaces human-readable local location channels,
-// quick join, bookmarks, and the 3D globe picker — and switches seamlessly
-// into the selected place's live public room.
+// First-class Places tab using the unified AppTopBar and ThemedCard system:
+// surfaces human-readable local location channels, quick join, bookmarks, and
+// the 3D globe picker, switching cleanly into the selected place's room.
 //
 // This is free and unencumbered software released into the public domain.
 // For more information, see <https://unlicense.org>
@@ -18,6 +18,7 @@ struct PlacesTabView<RoomContent: View>: View {
     @EnvironmentObject private var locationChannelsModel: LocationChannelsModel
     @EnvironmentObject private var peerListModel: PeerListModel
     @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.appTheme) private var theme
     @ThemedPalette private var palette
 
     @Binding var activeLocationChannel: GeohashChannel?
@@ -89,15 +90,40 @@ struct PlacesTabView<RoomContent: View>: View {
     }
 
     private var placesDirectory: some View {
-        NavigationStack {
+        VStack(spacing: 0) {
+            AppTopBar {
+                Text(String(localized: "tab.places", defaultValue: "Places", comment: "Navigation title for the Places tab"))
+                    .bitchatFont(size: 19, weight: .bold)
+                    .foregroundColor(palette.primary)
+            } trailing: {
+                TopBarIconButton(
+                    systemImage: "globe.americas.fill",
+                    accessibilityLabel: String(localized: "location_channels.accessibility.open_map", defaultValue: "open map", comment: "Accessibility label for opening the globe picker"),
+                    color: palette.locationAccent,
+                    action: { showGlobePicker = true }
+                )
+
+                TopBarIconButton(
+                    systemImage: "gearshape",
+                    accessibilityLabel: String(localized: "chats.accessibility.settings", defaultValue: "Settings", comment: "Accessibility label for the settings gear button"),
+                    color: palette.secondary,
+                    action: { appChromeModel.presentAppInfo(pane: .settings) }
+                )
+            }
+
+            if !theme.usesGlassChrome {
+                Rectangle()
+                    .fill(palette.divider)
+                    .frame(height: 1)
+            }
+
+            if appChromeModel.torBlocked {
+                ConnectivityStatusBanner(issue: .torBlocked)
+            }
+
             ScrollView {
-                VStack(alignment: .leading, spacing: 18) {
-                    if appChromeModel.torBlocked {
-                        ConnectivityStatusBanner(issue: .torBlocked)
-                    }
-
+                VStack(alignment: .leading, spacing: 20) {
                     locationPermissionCard
-
                     nearbyPlacesSection
 
                     if let suggestion = QuickJoinSuggestion.current() {
@@ -112,46 +138,23 @@ struct PlacesTabView<RoomContent: View>: View {
                 }
                 .padding(16)
             }
-            .background(ThemedRootBackground())
-            .navigationTitle(String(localized: "tab.places", defaultValue: "Places", comment: "Navigation title for the Places tab"))
-            #if os(iOS)
-            .navigationBarTitleDisplayMode(.large)
-            #endif
-            .toolbar {
-                ToolbarItem(placement: .navigation) {
-                    Button {
-                        appChromeModel.presentAppInfo(pane: .settings)
-                    } label: {
-                        Image(systemName: "gearshape")
-                            .foregroundColor(palette.primary)
-                    }
-                    .accessibilityLabel(String(localized: "chats.accessibility.settings", defaultValue: "Settings", comment: "Accessibility label for the settings gear button"))
-                }
-
-                ToolbarItem(placement: .primaryAction) {
-                    Button {
-                        showGlobePicker = true
-                    } label: {
-                        Image(systemName: "globe.americas.fill")
-                            .foregroundColor(palette.locationAccent)
-                    }
-                    .accessibilityLabel(String(localized: "location_channels.accessibility.open_map", defaultValue: "open map", comment: "Accessibility label for opening the globe picker"))
-                }
-            }
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(ThemedRootBackground())
     }
 
     @ViewBuilder
     private var locationPermissionCard: some View {
         switch locationChannelsModel.permissionState {
         case .notDetermined:
-            VStack(alignment: .leading, spacing: 10) {
+            ThemedCard {
                 Text(String(localized: "places.permission.title", defaultValue: "Discover rooms around you", comment: "Headline prompting for location permission in Places tab"))
                     .bitchatFont(size: 16, weight: .semibold)
                     .foregroundColor(palette.primary)
                 Text(String(localized: "places.permission.subtitle", defaultValue: "Your exact coordinates never leave your device — bitchat only computes broad area rooms like your neighborhood or city.", comment: "Explanation of privacy-preserving location rooms"))
                     .bitchatFont(size: 13)
                     .foregroundColor(palette.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
                 Button {
                     locationChannelsModel.enableLocationChannels()
                 } label: {
@@ -159,29 +162,24 @@ struct PlacesTabView<RoomContent: View>: View {
                         .bitchatFont(size: 14, weight: .semibold)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 10)
-                        .background(palette.locationAccent)
-                        .foregroundColor(.white)
-                        .cornerRadius(10)
+                        .background(palette.accent)
+                        .foregroundColor(palette.accentForeground)
+                        .clipShape(RoundedRectangle(cornerRadius: palette.buttonRadius, style: .continuous))
                 }
                 .buttonStyle(.plain)
             }
-            .padding(14)
-            .background(palette.secondary.opacity(0.1))
-            .cornerRadius(14)
 
         case .denied, .restricted:
-            VStack(alignment: .leading, spacing: 8) {
+            ThemedCard {
                 Text("location_channels.permission_denied")
                     .bitchatFont(size: 13)
                     .foregroundColor(palette.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
                 Button("location_channels.action.open_settings", action: SystemSettings.location.open)
                     .bitchatFont(size: 13, weight: .semibold)
                     .foregroundColor(palette.accent)
                     .buttonStyle(.plain)
             }
-            .padding(14)
-            .background(palette.secondary.opacity(0.1))
-            .cornerRadius(14)
 
         case .authorized:
             EmptyView()
@@ -193,11 +191,9 @@ struct PlacesTabView<RoomContent: View>: View {
         let nearby = locationChannelsModel.availableChannels.filter { $0.level != .building }
         if !nearby.isEmpty {
             VStack(alignment: .leading, spacing: 8) {
-                Text(String(localized: "places.section.around_you", defaultValue: "AROUND YOU", comment: "Section header for local place channels"))
-                    .bitchatFont(size: 11, weight: .semibold)
-                    .foregroundColor(palette.secondary)
+                ThemedSectionLabel(text: String(localized: "places.section.around_you", defaultValue: "AROUND YOU", comment: "Section header for local place channels"))
 
-                VStack(spacing: 0) {
+                ThemedCard(padding: 0, spacing: 0) {
                     ForEach(Array(nearby.enumerated()), id: \.element.id) { index, channel in
                         let placeName = locationChannelsModel.locationName(for: channel.level)
                         let primaryTitle = (placeName?.isEmpty == false ? placeName! : channel.level.displayName)
@@ -215,57 +211,53 @@ struct PlacesTabView<RoomContent: View>: View {
                             activeLocationChannel = channel
                         }
                         if index < nearby.count - 1 {
-                            Divider().padding(.leading, 14)
+                            Rectangle()
+                                .fill(palette.divider)
+                                .frame(height: 1)
+                                .padding(.leading, 14)
                         }
                     }
                 }
-                .background(palette.secondary.opacity(0.08))
-                .cornerRadius(14)
             }
         } else if locationChannelsModel.permissionState == .authorized {
-            HStack(spacing: 10) {
-                ProgressView()
-                Text("location_channels.loading_nearby")
-                    .bitchatFont(size: 13)
-                    .foregroundColor(palette.secondary)
+            ThemedCard {
+                HStack(spacing: 10) {
+                    ProgressView()
+                    Text("location_channels.loading_nearby")
+                        .bitchatFont(size: 13)
+                        .foregroundColor(palette.secondary)
+                }
             }
-            .padding(14)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(palette.secondary.opacity(0.08))
-            .cornerRadius(14)
         }
     }
 
     private func quickJoinCard(_ suggestion: QuickJoinSuggestion) -> some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text(String(localized: "places.section.regional", defaultValue: "POPULAR REGION", comment: "Section header for quick join region"))
-                .bitchatFont(size: 11, weight: .semibold)
-                .foregroundColor(palette.secondary)
+            ThemedSectionLabel(text: String(localized: "places.section.regional", defaultValue: "POPULAR REGION", comment: "Section header for quick join region"))
 
             Button {
                 locationChannelsModel.teleport(to: suggestion.geohash)
                 let level = GeohashCoverage.level(forLength: suggestion.geohash.count)
                 activeLocationChannel = GeohashChannel(level: level, geohash: suggestion.geohash)
             } label: {
-                HStack(spacing: 12) {
-                    Text(suggestion.flag)
-                        .font(.system(size: 24))
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(suggestion.localizedName)
-                            .bitchatFont(size: 15, weight: .semibold)
-                            .foregroundColor(palette.primary)
-                        Text("#\(suggestion.geohash)")
-                            .bitchatFont(size: 12)
+                ThemedCard {
+                    HStack(spacing: 12) {
+                        Text(suggestion.flag)
+                            .font(.system(size: 22))
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(suggestion.localizedName)
+                                .bitchatFont(size: 15, weight: .semibold)
+                                .foregroundColor(palette.primary)
+                            Text(verbatim: "#\(suggestion.geohash)")
+                                .bitchatFont(size: 12)
+                                .foregroundColor(palette.secondary)
+                        }
+                        Spacer()
+                        Image(systemName: "chevron.right")
+                            .font(.system(size: 12, weight: .semibold))
                             .foregroundColor(palette.secondary)
                     }
-                    Spacer()
-                    Image(systemName: "chevron.right")
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundColor(palette.secondary)
                 }
-                .padding(14)
-                .background(palette.secondary.opacity(0.08))
-                .cornerRadius(14)
             }
             .buttonStyle(.plain)
         }
@@ -273,11 +265,9 @@ struct PlacesTabView<RoomContent: View>: View {
 
     private func bookmarksSection(_ bookmarks: [String]) -> some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text(String(localized: "places.section.saved", defaultValue: "SAVED PLACES", comment: "Section header for bookmarked places"))
-                .bitchatFont(size: 11, weight: .semibold)
-                .foregroundColor(palette.secondary)
+            ThemedSectionLabel(text: String(localized: "places.section.saved", defaultValue: "SAVED PLACES", comment: "Section header for bookmarked places"))
 
-            VStack(spacing: 0) {
+            ThemedCard(padding: 0, spacing: 0) {
                 ForEach(Array(bookmarks.enumerated()), id: \.element) { index, gh in
                     let level = GeohashCoverage.level(forLength: gh.count)
                     let channel = GeohashChannel(level: level, geohash: gh)
@@ -300,22 +290,21 @@ struct PlacesTabView<RoomContent: View>: View {
                     .onAppear { locationChannelsModel.resolveBookmarkNameIfNeeded(for: gh) }
 
                     if index < bookmarks.count - 1 {
-                        Divider().padding(.leading, 14)
+                        Rectangle()
+                            .fill(palette.divider)
+                            .frame(height: 1)
+                            .padding(.leading, 14)
                     }
                 }
             }
-            .background(palette.secondary.opacity(0.08))
-            .cornerRadius(14)
         }
     }
 
     private var teleportSection: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text(String(localized: "places.section.explore", defaultValue: "EXPLORE ANYWHERE", comment: "Section header for globe and geohash teleport"))
-                .bitchatFont(size: 11, weight: .semibold)
-                .foregroundColor(palette.secondary)
+            ThemedSectionLabel(text: String(localized: "places.section.explore", defaultValue: "EXPLORE ANYWHERE", comment: "Section header for globe and geohash teleport"))
 
-            VStack(alignment: .leading, spacing: 10) {
+            ThemedCard(spacing: 12) {
                 Button {
                     showGlobePicker = true
                 } label: {
@@ -331,11 +320,13 @@ struct PlacesTabView<RoomContent: View>: View {
                             .font(.system(size: 12))
                             .foregroundColor(palette.secondary)
                     }
-                    .padding(12)
-                    .background(palette.secondary.opacity(0.1))
-                    .cornerRadius(10)
+                    .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
+
+                Rectangle()
+                    .fill(palette.divider)
+                    .frame(height: 1)
 
                 HStack(spacing: 8) {
                     Text(verbatim: "#")
@@ -344,6 +335,7 @@ struct PlacesTabView<RoomContent: View>: View {
                     TextField("geohash", text: $customGeohash)
                         .textFieldStyle(.plain)
                         .bitchatFont(size: 14)
+                        .foregroundColor(palette.primary)
                         #if os(iOS)
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled(true)
@@ -381,15 +373,12 @@ struct PlacesTabView<RoomContent: View>: View {
                             .bitchatFont(size: 13, weight: .semibold)
                             .padding(.horizontal, 12)
                             .padding(.vertical, 6)
-                            .background(palette.secondary.opacity(0.15))
-                            .foregroundColor(palette.primary)
-                            .cornerRadius(8)
+                            .background(palette.accent)
+                            .foregroundColor(palette.accentForeground)
+                            .clipShape(RoundedRectangle(cornerRadius: palette.buttonRadius, style: .continuous))
                     }
                     .buttonStyle(.plain)
                 }
-                .padding(10)
-                .background(palette.secondary.opacity(0.08))
-                .cornerRadius(10)
 
                 if let customError {
                     Text(customError)
@@ -417,15 +406,15 @@ struct PlacesTabView<RoomContent: View>: View {
                         .lineLimit(1)
 
                     if count > 0 {
-                        Text("\(count)")
+                        Text(verbatim: "\(count)")
                             .bitchatFont(size: 11, weight: .semibold)
                             .foregroundColor(palette.locationAccent)
                             .padding(.horizontal, 6)
                             .padding(.vertical, 2)
                             .background(palette.locationAccent.opacity(0.14))
-                            .cornerRadius(8)
+                            .clipShape(Capsule())
                     } else if isHighPrecision {
-                        Text("?")
+                        Text(verbatim: "?")
                             .bitchatFont(size: 11)
                             .foregroundColor(palette.secondary)
                     }
@@ -442,7 +431,8 @@ struct PlacesTabView<RoomContent: View>: View {
                 Image(systemName: locationChannelsModel.isBookmarked(geohash) ? "bookmark.fill" : "bookmark")
                     .font(.system(size: 14))
                     .foregroundColor(locationChannelsModel.isBookmarked(geohash) ? palette.locationAccent : palette.secondary)
-                    .frame(width: 32, height: 32)
+                    .frame(width: 34, height: 34)
+                    .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
         }

@@ -19,6 +19,10 @@ struct AppInfoView: View {
     var onPanicWipe: (@MainActor () -> Void)?
     /// Clears persisted encrypted chat history when switching to Stealth Mode or disabling history.
     var onClearPersistedHistory: (@MainActor () -> Void)?
+    /// Optional nickname binding so users can edit their display name directly
+    /// in Settings from any tab.
+    var nicknameBinding: Binding<String>? = nil
+    var onCommitNickname: (@MainActor () -> Void)? = nil
 
     @State private var showTopology = false
     @State private var privacyMode = PrivacyModeSettings.mode
@@ -279,6 +283,16 @@ struct AppInfoView: View {
 
     private var sheetBody: some View {
         VStack(spacing: 0) {
+            ThemedSheetHeader(
+                title: selectedPane == .settings
+                    ? String(localized: "chats.accessibility.settings", defaultValue: "Settings", comment: "Title for Settings sheet")
+                    : String(localized: "app_info.tab.info", defaultValue: "Info", comment: "Title for Info sheet"),
+                onClose: {
+                    onCommitNickname?()
+                    dismiss()
+                }
+            )
+
             panePicker
 
             ScrollView {
@@ -289,55 +303,30 @@ struct AppInfoView: View {
     }
 
     var body: some View {
-        Group {
+        sheetBody
+            .foregroundColor(textColor)
             #if os(macOS)
-            VStack(spacing: 0) {
-                // Custom header for macOS
-                HStack {
-                    Spacer()
-                    Button("app_info.done") {
-                        dismiss()
-                    }
-                    .buttonStyle(.plain)
-                    .foregroundColor(textColor)
-                    .padding()
-                }
-                .themedSurface(opacity: 0.95)
-
-                sheetBody
-            }
-            .frame(width: 600, height: 700)
-            #else
-            NavigationView {
-                sheetBody
-                    .navigationBarTitleDisplayMode(.inline)
-                    .toolbar {
-                        ToolbarItem(placement: .navigationBarTrailing) {
-                            SheetCloseButton { dismiss() }
-                                .foregroundColor(textColor)
-                        }
-                    }
-            }
+            .frame(minWidth: 520, idealWidth: 580, minHeight: 620, idealHeight: 680)
             #endif
-        }
-        .sheet(isPresented: $showTopology) {
-            if let topologyProvider {
-                MeshTopologyView(provider: topologyProvider)
+            .sheet(isPresented: $showTopology) {
+                if let topologyProvider {
+                    MeshTopologyView(provider: topologyProvider)
+                }
             }
-        }
     }
 
     // MARK: - Pane switching
 
     private var panePicker: some View {
         Picker(Strings.Settings.tabPickerLabel, selection: $selectedPane) {
-            Text(Strings.Settings.tabInfo).tag(Pane.info)
-            Text(Strings.Settings.tabSettings).tag(Pane.settings)
+            Text(Strings.Settings.tabSettings.capitalized).tag(Pane.settings)
+            Text(Strings.Settings.tabInfo.capitalized).tag(Pane.info)
         }
         .pickerStyle(.segmented)
         .labelsHidden()
-        .padding(.horizontal)
+        .padding(.horizontal, 16)
         .padding(.top, 12)
+        .padding(.bottom, 4)
     }
 
     @ViewBuilder
@@ -355,6 +344,33 @@ struct AppInfoView: View {
     @ViewBuilder
     private var settingsContent: some View {
         VStack(alignment: .leading, spacing: 24) {
+            if let nicknameBinding {
+                VStack(alignment: .leading, spacing: 10) {
+                    SectionHeader(verbatim: String(localized: "app_info.settings.profile.title", defaultValue: "PROFILE", comment: "Section header for display nickname in settings"))
+
+                    settingsCard {
+                        HStack(spacing: 6) {
+                            Text(verbatim: "@")
+                                .bitchatFont(size: 15, weight: .semibold)
+                                .foregroundColor(secondaryTextColor)
+                            TextField("content.input.nickname_placeholder", text: nicknameBinding)
+                                .textFieldStyle(.plain)
+                                .bitchatFont(size: 15, weight: .medium)
+                                .foregroundColor(textColor)
+                                .autocorrectionDisabled(true)
+                                #if os(iOS)
+                                .textInputAutocapitalization(.never)
+                                #endif
+                                .onSubmit { onCommitNickname?() }
+                        }
+                        Text(String(localized: "app_info.settings.profile.subtitle", defaultValue: "Shown to nearby mesh peers, in places, and on your friend invite links.", comment: "Caption under nickname field in settings"))
+                            .bitchatFont(size: 11)
+                            .foregroundColor(secondaryTextColor)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+            }
+
             // Privacy Mode — Everyday (instant, persisted encrypted chats) vs Stealth (Tor + RAM-only + hidden previews)
             VStack(alignment: .leading, spacing: 12) {
                 SectionHeader(verbatim: String(localized: "app_info.settings.privacy_mode.title", defaultValue: "PRIVACY MODE", comment: "Section header for Everyday vs Stealth privacy mode"))
@@ -807,13 +823,9 @@ struct AppInfoView: View {
         )
     }
 
-    /// The padded card every connectivity setting sits in (moved look from
-    /// LocationChannelsSheet's toggle sections).
+    /// Unified card container matching Places, Groups, and Add Friend sheets.
     private func settingsCard<Content: View>(@ViewBuilder _ content: () -> Content) -> some View {
-        VStack(alignment: .leading, spacing: 8, content: content)
-            .padding(12)
-            .background(palette.secondary.opacity(0.12))
-            .cornerRadius(8)
+        ThemedCard(padding: 14, spacing: 8, content: content)
     }
 
     /// A title+subtitle row driving an IRC-style on/off pill — the one

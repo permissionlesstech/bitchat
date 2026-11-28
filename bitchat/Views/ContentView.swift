@@ -335,9 +335,6 @@ struct ContentView: View {
         .frame(minWidth: 600, minHeight: 400)
         #endif
         .onChange(of: selectedPrivatePeerID) { newValue in
-            if newValue != nil {
-                showSidebar = true
-            }
             sharedContentImportModel.updateDestination(sharedContentDestination)
             let uiModel = appEnvironmentModels?.conversationUIModel
             appEnvironmentModels?.composerDraftModel.switchDraft(to: ComposerDraftStore.Key.from(
@@ -436,7 +433,12 @@ struct ContentView: View {
             AppInfoView(
                 topologyProvider: { appChromeModel.meshTopologyDisplayModel() },
                 onPanicWipe: { appChromeModel.panicClearAllData() },
-                onClearPersistedHistory: { appChromeModel.clearPersistedPrivateHistory() }
+                onClearPersistedHistory: { appChromeModel.clearPersistedPrivateHistory() },
+                nicknameBinding: Binding(
+                    get: { appChromeModel.nickname },
+                    set: { appChromeModel.setNickname($0) }
+                ),
+                onCommitNickname: { appChromeModel.validateAndSaveNickname() }
             )
             .environmentObject(locationChannelsModel)
         }

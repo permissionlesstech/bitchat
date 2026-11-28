@@ -72,6 +72,8 @@ struct ThemePalette {
     let secondary: Color
     /// Interactive tint (buttons, toggles, selection).
     let accent: Color
+    /// High-contrast text/icon color rendered on top of `accent` fills.
+    let accentForeground: Color
     /// Location/geohash channel accent (badges, counts, subtitles).
     let locationAccent: Color
     /// Informational accent (links, read receipts, teleport markers).
@@ -80,6 +82,14 @@ struct ThemePalette {
     let alertRed: Color
     /// Hairline separators.
     let divider: Color
+    /// Unified card fill across tabs and sheets.
+    let cardBackground: Color
+    /// Subtle hairline border around cards.
+    let cardBorder: Color
+    /// Consistent corner radius for grouped cards.
+    let cardRadius: CGFloat
+    /// Consistent corner radius for primary/secondary action buttons.
+    let buttonRadius: CGFloat
 
     static func matrix(_ colorScheme: ColorScheme) -> ThemePalette {
         let isDark = colorScheme == .dark
@@ -89,23 +99,34 @@ struct ThemePalette {
             primary: green,
             secondary: green.opacity(0.8),
             accent: green,
+            accentForeground: isDark ? Color.black : Color.white,
             locationAccent: green,
             accentBlue: Color(red: 0.0, green: 0.478, blue: 1.0),
             alertRed: Color(red: 0.75, green: 0.1, blue: 0.1),
-            divider: isDark ? Color.white.opacity(0.12) : Color.black.opacity(0.08)
+            divider: isDark ? Color.white.opacity(0.12) : Color.black.opacity(0.08),
+            cardBackground: green.opacity(isDark ? 0.10 : 0.07),
+            cardBorder: green.opacity(isDark ? 0.25 : 0.18),
+            cardRadius: 8,
+            buttonRadius: 6
         )
     }
 
-    static func liquidGlass(_: ColorScheme) -> ThemePalette {
-        ThemePalette(
+    static func liquidGlass(_ colorScheme: ColorScheme) -> ThemePalette {
+        let isDark = colorScheme == .dark
+        return ThemePalette(
             background: systemBackground,
             primary: .primary,
             secondary: .secondary,
             accent: .blue,
+            accentForeground: .white,
             locationAccent: .green,
             accentBlue: .blue,
             alertRed: .red,
-            divider: separator
+            divider: separator,
+            cardBackground: isDark ? Color.white.opacity(0.08) : Color.black.opacity(0.05),
+            cardBorder: isDark ? Color.white.opacity(0.12) : Color.black.opacity(0.07),
+            cardRadius: 14,
+            buttonRadius: 12
         )
     }
 
