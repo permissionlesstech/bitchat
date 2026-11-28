@@ -272,8 +272,14 @@ private struct MessageListContentView: View {
     /// out from around ScrollView prevents double top safe-area insets under
     /// Liquid Glass's `.safeAreaInset` chrome.
     @State private var emptyStateViewportHeight: CGFloat = 0
+    @State private var threadSearchQuery = ""
+    @State private var isThreadSearchFieldVisible = false
 
     @ThemedPalette private var palette
+
+    private var isThreadSearching: Bool {
+        !threadSearchQuery.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
 
     var body: some View {
         let currentWindowCount = liveWindowCount(privatePeer)
@@ -291,20 +297,36 @@ private struct MessageListContentView: View {
                 in: messages
             )
         let windowedSlice = messages.suffix(renderedWindowCount)
+        let searchMatches = isThreadSearching
+            ? ThreadMessageSearch.matchingMessages(in: messages, query: threadSearchQuery, limit: 0)
+            : []
+        let searchTruncated = ThreadMessageSearch.didTruncate(matchCount: searchMatches.count)
+        let displayedMessages = isThreadSearching
+            ? Array(searchMatches.suffix(ThreadMessageSearch.resultLimit))
+            : Array(windowedSlice)
 
-        let messageItems: [MessageDisplayItem] = windowedSlice.compactMap { message in
+        let messageItems: [MessageDisplayItem] = displayedMessages.compactMap { message in
             guard message.content.hasNonWhitespaceContent else { return nil }
             return MessageDisplayItem(id: "\(contextKey)|\(message.id)", message: message)
         }
-        let hasEarlierMessages = messages.count > windowedSlice.count
+        let hasEarlierMessages = !isThreadSearching && messages.count > windowedSlice.count
         // Top edge of the rendered window (whitespace-only messages get no
         // row, so they could never report reaching it).
         let firstRowID = messageItems.first?.id
-        let isEmptyPublic = messageItems.isEmpty && privatePeer == nil
+        let isEmptyPublic = messageItems.isEmpty && privatePeer == nil && !isThreadSearching
 
+        VStack(spacing: 0) {
+        threadSearchBar
+        if searchTruncated {
+            threadSearchTruncationNotice(matchCount: searchMatches.count)
+        }
         ScrollViewReader { proxy in
             ScrollView {
-                if isEmptyPublic {
+                if messageItems.isEmpty && isThreadSearching {
+                    threadSearchEmptyState(
+                        fillHeight: max(0, emptyStateViewportHeight - topContentInset - bottomContentInset)
+                    )
+                } else if isEmptyPublic {
                     publicEmptyState(
                         fillHeight: max(0, emptyStateViewportHeight - topContentInset - bottomContentInset)
                     )
@@ -329,7 +351,7 @@ private struct MessageListContentView: View {
                                     // was last. Only rows of the timeline the list
                                     // has landed in may move its state, checked
                                     // against live state rather than the render's.
-                                    guard isLandedRow(item.id) else { return }
+                                    guard !isThreadSearching, isLandedRow(item.id) else { return }
                                     if item.id == newestRowID(for: privatePeer) {
                                         isAtBottom = true
                                         unseenCount = 0
@@ -353,7 +375,7 @@ private struct MessageListContentView: View {
                                 .onDisappear {
                                     // A row of the landed timeline shares this
                                     // closure's peer, so newestRowID is live here.
-                                    guard isLandedRow(item.id) else { return }
+                                    guard !isThreadSearching, isLandedRow(item.id) else { return }
                                     if item.id == newestRowID(for: privatePeer) || item.id == bottomRowID {
                                         isAtBottom = false
                                         bottomRowID = nil
@@ -398,7 +420,7 @@ private struct MessageListContentView: View {
                 }
             }
             .overlay(alignment: .bottomTrailing) {
-                if !isAtBottom && !messageItems.isEmpty {
+                if !isThreadSearching && !isAtBottom && !messageItems.isEmpty {
                     jumpToLatestPill(proxy: proxy)
                         .padding(.bottom, bottomContentInset)
                 }
@@ -430,8 +452,18 @@ private struct MessageListContentView: View {
             // signature too, so landing in the new timeline happens here,
             // ahead of that update's row callbacks.
             .onChange(of: TimelineSignature(privatePeer: privatePeer, contextKey: contextKey, messages: messages)) { signature in
+                if isThreadSearching, contextMark(for: signature.contextKey) != nil { return }
                 onTimelineChange(signature, proxy: proxy)
             }
+            .onChange(of: isThreadSearching) { searching in
+                if searching {
+                    cancelFollowScroll()
+                } else {
+                    land(on: proxy, privatePeer: privatePeer)
+                }
+            }
+            .onChange(of: contextKey) { _ in resetThreadSearch() }
+            .onChange(of: privatePeer) { _ in resetThreadSearch() }
             .confirmationDialog(
                 selectedMessageSender.map { "@\($0)" } ?? String(localized: "content.actions.title", comment: "Fallback title for the message action sheet"),
                 isPresented: $showMessageActions,
@@ -510,6 +542,7 @@ private struct MessageListContentView: View {
             }
             return .systemAction
         })
+        }
     }
 }
 
@@ -568,6 +601,105 @@ private extension MessageListContentView {
     /// next. Rendered inside the ScrollView; disappears with the first row.
     /// The mesh case fills the visible chat height so its radar can center
     /// in the space below the text.
+    func resetThreadSearch() {
+        threadSearchQuery = ""
+        isThreadSearchFieldVisible = false
+    }
+
+    @ViewBuilder
+    func threadSearchEmptyState(fillHeight: CGFloat) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            emptyStateLine(
+                String(localized: "thread.search.no_results", comment: "Empty state when in-thread search finds no matching messages")
+            )
+        }
+        .padding(.horizontal, 12)
+        .padding(.top, 12)
+        .frame(maxWidth: .infinity, minHeight: max(0, fillHeight - 24), alignment: .topLeading)
+    }
+
+    @ViewBuilder
+    func threadSearchTruncationNotice(matchCount: Int) -> some View {
+        Text(
+            String(
+                format: String(
+                    localized: "thread.search.truncated",
+                    defaultValue: "showing the newest %lld of %lld matches",
+                    comment: "Shown when in-thread search results were capped; first %lld is the cap, second is the total match count"
+                ),
+                locale: .current,
+                ThreadMessageSearch.resultLimit,
+                matchCount
+            )
+        )
+        .bitchatFont(size: 11)
+        .foregroundColor(palette.secondary)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 12)
+        .padding(.bottom, 4)
+    }
+
+    @ViewBuilder
+    var threadSearchBar: some View {
+        if isThreadSearchFieldVisible {
+            threadSearchField
+        } else {
+            HStack {
+                Spacer()
+                Button {
+                    isThreadSearchFieldVisible = true
+                } label: {
+                    Image(systemName: "magnifyingglass")
+                        .font(.bitchatSystem(size: 12))
+                        .foregroundColor(palette.secondary)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(
+                    String(localized: "thread.search.accessibility.label", comment: "Accessibility label for in-thread message search")
+                )
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 4)
+        }
+    }
+
+    @ViewBuilder
+    var threadSearchField: some View {
+        HStack(spacing: 6) {
+            Image(systemName: "magnifyingglass")
+                .font(.bitchatSystem(size: 12))
+                .foregroundColor(palette.secondary)
+            TextField(
+                String(localized: "thread.search.placeholder", comment: "Placeholder for the in-thread message search field"),
+                text: $threadSearchQuery
+            )
+            .textFieldStyle(.plain)
+            .bitchatFont(size: 13)
+            .foregroundColor(palette.primary)
+            .autocorrectionDisabled(true)
+            #if os(iOS)
+            .textInputAutocapitalization(.never)
+            #endif
+            .accessibilityLabel(
+                String(localized: "thread.search.accessibility.label", comment: "Accessibility label for in-thread message search")
+            )
+            Button {
+                threadSearchQuery = ""
+                isThreadSearchFieldVisible = false
+            } label: {
+                Image(systemName: "xmark.circle.fill")
+                    .font(.bitchatSystem(size: 12))
+                    .foregroundColor(palette.secondary)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(
+                String(localized: "thread.search.close", defaultValue: "close search", comment: "Accessibility label for the button that closes the in-thread search field")
+            )
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+    }
+
     func publicEmptyState(fillHeight: CGFloat) -> some View {
         VStack(alignment: .leading, spacing: 6) {
             switch selectedPublicChannel {
@@ -727,6 +859,7 @@ private extension MessageListContentView {
             proxy.scrollTo(target, anchor: .bottom)
         }
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+            guard !self.isThreadSearching else { return }
             // Retry only a scroll that has not landed. Once the newest row is
             // on screen the retry would be a no-op, and a no-op scrollTo stays
             // queued until the next layout pass: the reader's next drag.
