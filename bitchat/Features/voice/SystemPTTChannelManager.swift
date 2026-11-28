@@ -115,7 +115,7 @@ final class SystemPTTChannelManager: ObservableObject {
             do {
                 let manager = try await self.ensureChannelManager()
                 if let current = self.activeChannel, current.channelUUID != info.channelUUID {
-                    try? await manager.leaveChannel(channelUUID: current.channelUUID)
+                    manager.leaveChannel(channelUUID: current.channelUUID)
                 }
                 let descriptor = PTChannelDescriptor(
                     name: info.displayName,
@@ -154,9 +154,7 @@ final class SystemPTTChannelManager: ObservableObject {
         isSystemTransmitting = false
         status = .idle
         if let manager = channelManager, let uuid = previousUUID {
-            Task {
-                try? await manager.leaveChannel(channelUUID: uuid)
-            }
+            manager.leaveChannel(channelUUID: uuid)
         }
         #else
         activeChannel = nil

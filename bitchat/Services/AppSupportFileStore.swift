@@ -157,7 +157,7 @@ struct AppSupportFileStore {
             }
             do {
                 let data = try Data(contentsOf: fileURL)
-                let decoded = try JSONDecoder().decode(type, from: data)
+                let decoded = try JSONDecoder().decode(T.self, from: data)
                 completion(.success(decoded))
             } catch {
                 completion(.failure(error))
