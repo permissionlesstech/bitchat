@@ -30,6 +30,7 @@ protocol SecureIdentityStateManagerProtocol {
     // MARK: Geohash (Nostr) Blocking
     func isNostrBlocked(pubkeyHexLowercased: String) -> Bool
     func setNostrBlocked(_ pubkeyHexLowercased: String, isBlocked: Bool)
+    func setAssociatedNostrBlock(forFingerprint fingerprint: String, nostrPubkeyHex: String)
     func getBlockedNostrPubkeys() -> Set<String>
 
     // MARK: Cleanup
@@ -466,15 +467,15 @@ final class SecureIdentityStateManager: SecureIdentityStateManagerProtocol {
         SecureLogger.info("User \(isBlocked ? "blocked" : "unblocked"): \(fingerprint)", category: .security)
         
         queue.sync(flags: .barrier) {
+            var changed = false
             if var identity = self.cache.socialIdentities[fingerprint] {
                 let nextFavorite = isBlocked ? false : identity.isFavorite
-                let changed = identity.isBlocked != isBlocked || identity.isFavorite != nextFavorite
-                if changed {
+                if identity.isBlocked != isBlocked || identity.isFavorite != nextFavorite {
                     identity.isBlocked = isBlocked
                     identity.isFavorite = nextFavorite
                     self.cache.socialIdentities[fingerprint] = identity
+                    changed = true
                 }
-                guard changed || self.pendingSave else { return }
             } else {
                 // Create new social identity for this fingerprint
                 let newIdentity = SocialIdentity(
@@ -487,7 +488,20 @@ final class SecureIdentityStateManager: SecureIdentityStateManagerProtocol {
                     notes: nil
                 )
                 self.cache.socialIdentities[fingerprint] = newIdentity
+                changed = true
             }
+
+            if !isBlocked,
+               var mapping = self.cache.blockedNostrPubkeysByFingerprint,
+               let associatedHex = mapping.removeValue(forKey: fingerprint) {
+                self.cache.blockedNostrPubkeysByFingerprint = mapping.isEmpty ? nil : mapping
+                if !mapping.values.contains(associatedHex) {
+                    self.cache.blockedNostrPubkeys.remove(associatedHex)
+                }
+                changed = true
+            }
+
+            guard changed || self.pendingSave else { return }
             self.saveIdentityCache()
         }
     }
@@ -503,11 +517,34 @@ final class SecureIdentityStateManager: SecureIdentityStateManagerProtocol {
     func setNostrBlocked(_ pubkeyHexLowercased: String, isBlocked: Bool) {
         let key = pubkeyHexLowercased.lowercased()
         queue.sync(flags: .barrier) {
-            let changed: Bool
+            var changed: Bool
             if isBlocked {
                 changed = self.cache.blockedNostrPubkeys.insert(key).inserted
             } else {
                 changed = self.cache.blockedNostrPubkeys.remove(key) != nil
+                if var mapping = self.cache.blockedNostrPubkeysByFingerprint {
+                    let beforeCount = mapping.count
+                    mapping = mapping.filter { $0.value != key }
+                    if mapping.count != beforeCount {
+                        self.cache.blockedNostrPubkeysByFingerprint = mapping.isEmpty ? nil : mapping
+                        changed = true
+                    }
+                }
+            }
+            guard changed || self.pendingSave else { return }
+            self.saveIdentityCache()
+        }
+    }
+
+    func setAssociatedNostrBlock(forFingerprint fingerprint: String, nostrPubkeyHex: String) {
+        let key = nostrPubkeyHex.lowercased()
+        queue.sync(flags: .barrier) {
+            var changed = self.cache.blockedNostrPubkeys.insert(key).inserted
+            var mapping = self.cache.blockedNostrPubkeysByFingerprint ?? [:]
+            if mapping[fingerprint] != key {
+                mapping[fingerprint] = key
+                self.cache.blockedNostrPubkeysByFingerprint = mapping
+                changed = true
             }
             guard changed || self.pendingSave else { return }
             self.saveIdentityCache()

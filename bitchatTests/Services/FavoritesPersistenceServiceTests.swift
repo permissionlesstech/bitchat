@@ -200,6 +200,78 @@ final class FavoritesPersistenceServiceTests: XCTestCase {
         XCTAssertEqual(reloadedAfterRecovery.favorites.count, 2)
     }
 
+    /// Replaying deferred mutations during locked boot must preserve durable
+    /// fields that were NOT modified during the locked window (e.g., receiving
+    /// `[FAVORITED]` from an already-favorited peer must upgrade to mutual,
+    /// not overwrite `isFavorite` with `false`; and receiving `[UNFAVORITED]`
+    /// must clear `theyFavoritedUs`).
+    func test_lockedBoot_replaysPeerFavoriteNotificationsWithoutClobberingDurableFlags() throws {
+        let keychain = MockKeychain()
+        let peerAKey = Data((10..<42).map(UInt8.init))
+        let peerBKey = Data((50..<82).map(UInt8.init))
+        let peerANpub = try NostrIdentity.generate().npub
+        let peerBNpub = try NostrIdentity.generate().npub
+        let durableRecords = [
+            FavoritesPersistenceService.FavoriteRelationship(
+                peerNoisePublicKey: peerAKey,
+                peerNostrPublicKey: nil,
+                peerNickname: "Alice",
+                isFavorite: true,
+                theyFavoritedUs: false,
+                favoritedAt: Date(timeIntervalSince1970: 100),
+                lastUpdated: Date(timeIntervalSince1970: 100)
+            ),
+            FavoritesPersistenceService.FavoriteRelationship(
+                peerNoisePublicKey: peerBKey,
+                peerNostrPublicKey: peerBNpub,
+                peerNickname: "Bob",
+                isFavorite: true,
+                theyFavoritedUs: true,
+                favoritedAt: Date(timeIntervalSince1970: 100),
+                lastUpdated: Date(timeIntervalSince1970: 100)
+            )
+        ]
+        keychain.save(
+            key: storageKey,
+            data: try JSONEncoder().encode(durableRecords),
+            service: serviceKey,
+            accessible: nil
+        )
+
+        keychain.simulatedGenericReadError = .deviceLocked
+        let service = FavoritesPersistenceService(keychain: keychain)
+        XCTAssertTrue(service.favorites.isEmpty)
+
+        // While locked, Alice sends [FAVORITED] and Bob sends [UNFAVORITED].
+        service.updatePeerFavoritedUs(
+            peerNoisePublicKey: peerAKey,
+            favorited: true,
+            peerNickname: "Unknown",
+            peerNostrPublicKey: peerANpub
+        )
+        service.updatePeerFavoritedUs(
+            peerNoisePublicKey: peerBKey,
+            favorited: false,
+            peerNickname: "Bob"
+        )
+
+        keychain.simulatedGenericReadError = nil
+        service.retryDeferredLoad()
+
+        let recoveredA = try XCTUnwrap(service.getFavoriteStatus(for: peerAKey))
+        XCTAssertTrue(recoveredA.isFavorite)
+        XCTAssertTrue(recoveredA.theyFavoritedUs)
+        XCTAssertTrue(recoveredA.isMutual)
+        XCTAssertEqual(recoveredA.peerNickname, "Alice")
+        XCTAssertEqual(recoveredA.peerNostrPublicKey, peerANpub)
+
+        let recoveredB = try XCTUnwrap(service.getFavoriteStatus(for: peerBKey))
+        XCTAssertTrue(recoveredB.isFavorite)
+        XCTAssertFalse(recoveredB.theyFavoritedUs)
+        XCTAssertFalse(recoveredB.isMutual)
+        XCTAssertEqual(recoveredB.peerNostrPublicKey, peerBNpub)
+    }
+
     func test_establishMutualFavorite_atomicallySetsBothSides() throws {
         let service = FavoritesPersistenceService(keychain: MockKeychain())
         let peerKey = Data((1..<33).map(UInt8.init))

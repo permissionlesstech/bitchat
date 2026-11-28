@@ -38,14 +38,22 @@ final class FavoritesPersistenceService: ObservableObject {
     private static let storageKey = "chat.bitchat.favorites"
     private static let keychainService = "chat.bitchat.favorites"
     private let keychain: KeychainManagerProtocol
+    private enum DeferredMutation {
+        case addFavorite(noiseKey: Data, nostrPublicKey: String?, nickname: String, at: Date)
+        case establishMutualFavorite(noiseKey: Data, nostrPublicKey: String?, nickname: String, at: Date)
+        case removeFavorite(noiseKey: Data, at: Date)
+        case updatePeerFavoritedUs(noiseKey: Data, favorited: Bool, nickname: String?, nostrPublicKey: String?, at: Date)
+    }
+
     /// True when the initial keychain read failed due to a transient error
     /// (e.g. locked boot) rather than `.itemNotFound`. While true, `saveFavorites()`
     /// refuses to overwrite the Keychain with an incomplete in-memory map so
     /// existing favorites are never clobbered.
     private var loadUnavailable = false
-    /// Keys mutated in memory while `loadUnavailable` was true so they can be
-    /// merged into durable Keychain state once protected data unlocks.
-    private var deferredMutatedKeys: Set<Data> = []
+    /// Ordered log of mutations received while `loadUnavailable` was true so
+    /// `retryDeferredLoad()` can replay them directly onto the durable Keychain
+    /// baseline without clobbering untouched fields (e.g. `isFavorite`).
+    private var deferredMutations: [DeferredMutation] = []
     #if os(iOS)
     private var protectedDataObserver: NSObjectProtocol?
     #endif
@@ -194,32 +202,27 @@ final class FavoritesPersistenceService: ObservableObject {
             return false
         }
 
-        let existing = favorites[peerNoisePublicKey]
-        let displayName = Self.resolveDisplayNickname(incoming: peerNickname, existing: existing?.peerNickname)
-        let validatedNostrKey = Self.normalizeNostrNpub(peerNostrPublicKey)
-            ?? Self.normalizeNostrNpub(existing?.peerNostrPublicKey)
-
-        SecureLogger.info("⭐️ Adding favorite: \(displayName) (\(peerNoisePublicKey.hexEncodedString()))", category: .session)
-        
-        let relationship = FavoriteRelationship(
-            peerNoisePublicKey: peerNoisePublicKey,
-            peerNostrPublicKey: validatedNostrKey,
-            peerNickname: displayName,
-            isFavorite: true,
-            theyFavoritedUs: existing?.theyFavoritedUs ?? false,
-            favoritedAt: existing?.favoritedAt ?? Date(),
-            lastUpdated: Date()
-        )
-        
-        // Log if this creates a mutual favorite
-        if relationship.isMutual {
-            SecureLogger.info("💕 Mutual favorite relationship established with \(displayName)!", category: .session)
-        }
-        
+        let now = Date()
         if loadUnavailable {
-            deferredMutatedKeys.insert(peerNoisePublicKey)
+            deferredMutations.append(.addFavorite(
+                noiseKey: peerNoisePublicKey,
+                nostrPublicKey: peerNostrPublicKey,
+                nickname: peerNickname,
+                at: now
+            ))
         }
-        favorites[peerNoisePublicKey] = relationship
+
+        let relationship = Self.applyAddFavorite(
+            to: &favorites,
+            peerNoisePublicKey: peerNoisePublicKey,
+            peerNostrPublicKey: peerNostrPublicKey,
+            peerNickname: peerNickname,
+            at: now
+        )
+        SecureLogger.info("⭐️ Adding favorite: \(relationship.peerNickname) (\(peerNoisePublicKey.hexEncodedString()))", category: .session)
+        if relationship.isMutual {
+            SecureLogger.info("💕 Mutual favorite relationship established with \(relationship.peerNickname)!", category: .session)
+        }
         saveFavorites()
         
         // Notify observers
@@ -245,27 +248,24 @@ final class FavoritesPersistenceService: ObservableObject {
             return false
         }
 
-        let existing = favorites[peerNoisePublicKey]
-        let displayName = Self.resolveDisplayNickname(incoming: peerNickname, existing: existing?.peerNickname)
-        let validatedNostrKey = Self.normalizeNostrNpub(peerNostrPublicKey)
-            ?? Self.normalizeNostrNpub(existing?.peerNostrPublicKey)
-
-        SecureLogger.info("💕 Establishing mutual favorite: \(displayName) (\(peerNoisePublicKey.hexEncodedString()))", category: .session)
-
-        let relationship = FavoriteRelationship(
-            peerNoisePublicKey: peerNoisePublicKey,
-            peerNostrPublicKey: validatedNostrKey,
-            peerNickname: displayName,
-            isFavorite: true,
-            theyFavoritedUs: true,
-            favoritedAt: existing?.favoritedAt ?? Date(),
-            lastUpdated: Date()
-        )
-
+        let now = Date()
         if loadUnavailable {
-            deferredMutatedKeys.insert(peerNoisePublicKey)
+            deferredMutations.append(.establishMutualFavorite(
+                noiseKey: peerNoisePublicKey,
+                nostrPublicKey: peerNostrPublicKey,
+                nickname: peerNickname,
+                at: now
+            ))
         }
-        favorites[peerNoisePublicKey] = relationship
+
+        let relationship = Self.applyEstablishMutualFavorite(
+            to: &favorites,
+            peerNoisePublicKey: peerNoisePublicKey,
+            peerNostrPublicKey: peerNostrPublicKey,
+            peerNickname: peerNickname,
+            at: now
+        )
+        SecureLogger.info("💕 Establishing mutual favorite: \(relationship.peerNickname) (\(peerNoisePublicKey.hexEncodedString()))", category: .session)
         saveFavorites()
 
         NotificationCenter.default.post(
@@ -279,32 +279,16 @@ final class FavoritesPersistenceService: ObservableObject {
     /// Remove a favorite
     func removeFavorite(peerNoisePublicKey: Data) {
         guard peerNoisePublicKey.count == Self.expectedNoiseKeyLength else { return }
+
+        let now = Date()
+        if loadUnavailable {
+            deferredMutations.append(.removeFavorite(noiseKey: peerNoisePublicKey, at: now))
+        }
+
         guard let existing = favorites[peerNoisePublicKey] else { return }
-        
         SecureLogger.info("⭐️ Removing favorite: \(existing.peerNickname) (\(peerNoisePublicKey.hexEncodedString()))", category: .session)
         
-        if loadUnavailable {
-            deferredMutatedKeys.insert(peerNoisePublicKey)
-        }
-        // If they still favorite us, keep the record but mark us as not favoriting
-        if existing.theyFavoritedUs {
-            let updated = FavoriteRelationship(
-                peerNoisePublicKey: existing.peerNoisePublicKey,
-                peerNostrPublicKey: existing.peerNostrPublicKey,
-                peerNickname: existing.peerNickname,
-                isFavorite: false,
-                theyFavoritedUs: true,
-                favoritedAt: existing.favoritedAt,
-                lastUpdated: Date()
-            )
-            favorites[peerNoisePublicKey] = updated
-            // Keeping record - they still favorite us
-        } else {
-            // Neither side favorites, remove completely
-            favorites.removeValue(forKey: peerNoisePublicKey)
-            // Completely removed from favorites
-        }
-        
+        Self.applyRemoveFavorite(to: &favorites, peerNoisePublicKey: peerNoisePublicKey, at: now)
         saveFavorites()
         
         // Notify observers
@@ -327,40 +311,33 @@ final class FavoritesPersistenceService: ObservableObject {
             return
         }
 
-        let existing = favorites[peerNoisePublicKey]
-        // Callers that can't resolve the live nickname pass the "Unknown"
-        // placeholder (e.g. a notification arriving before the announce);
-        // never let it clobber a real stored nickname.
-        let displayName = Self.resolveDisplayNickname(incoming: peerNickname, existing: existing?.peerNickname)
-        let validatedNostrKey = Self.normalizeNostrNpub(peerNostrPublicKey)
-            ?? Self.normalizeNostrNpub(existing?.peerNostrPublicKey)
-        
+        let now = Date()
+        if loadUnavailable {
+            deferredMutations.append(.updatePeerFavoritedUs(
+                noiseKey: peerNoisePublicKey,
+                favorited: favorited,
+                nickname: peerNickname,
+                nostrPublicKey: peerNostrPublicKey,
+                at: now
+            ))
+        }
+
+        let displayName = Self.resolveDisplayNickname(
+            incoming: peerNickname,
+            existing: favorites[peerNoisePublicKey]?.peerNickname
+        )
         SecureLogger.info("📨 Received favorite notification: \(displayName) \(favorited ? "favorited" : "unfavorited") us", category: .session)
         
-        let relationship = FavoriteRelationship(
+        let updated = Self.applyUpdatePeerFavoritedUs(
+            to: &favorites,
             peerNoisePublicKey: peerNoisePublicKey,
-            peerNostrPublicKey: validatedNostrKey,
-            peerNickname: displayName,
-            isFavorite: existing?.isFavorite ?? false,
-            theyFavoritedUs: favorited,
-            favoritedAt: existing?.favoritedAt ?? Date(),
-            lastUpdated: Date()
+            favorited: favorited,
+            peerNickname: peerNickname,
+            peerNostrPublicKey: peerNostrPublicKey,
+            at: now
         )
-        
-        if loadUnavailable {
-            deferredMutatedKeys.insert(peerNoisePublicKey)
-        }
-        if !relationship.isFavorite && !relationship.theyFavoritedUs {
-            // Neither side favorites, remove completely
-            favorites.removeValue(forKey: peerNoisePublicKey)
-            // Removed - neither side favorites anymore
-        } else {
-            favorites[peerNoisePublicKey] = relationship
-            
-            // Check if this creates a mutual favorite
-            if relationship.isMutual {
-                SecureLogger.info("💕 Mutual favorite relationship established with \(displayName)!", category: .session)
-            }
+        if updated?.isMutual == true {
+            SecureLogger.info("💕 Mutual favorite relationship established with \(displayName)!", category: .session)
         }
         
         saveFavorites()
@@ -371,6 +348,105 @@ final class FavoritesPersistenceService: ObservableObject {
             object: nil,
             userInfo: ["peerPublicKey": peerNoisePublicKey]
         )
+    }
+
+    private static func applyAddFavorite(
+        to map: inout [Data: FavoriteRelationship],
+        peerNoisePublicKey: Data,
+        peerNostrPublicKey: String?,
+        peerNickname: String,
+        at now: Date
+    ) -> FavoriteRelationship {
+        let existing = map[peerNoisePublicKey]
+        let displayName = resolveDisplayNickname(incoming: peerNickname, existing: existing?.peerNickname)
+        let validatedNostrKey = normalizeNostrNpub(peerNostrPublicKey)
+            ?? normalizeNostrNpub(existing?.peerNostrPublicKey)
+        let relationship = FavoriteRelationship(
+            peerNoisePublicKey: peerNoisePublicKey,
+            peerNostrPublicKey: validatedNostrKey,
+            peerNickname: displayName,
+            isFavorite: true,
+            theyFavoritedUs: existing?.theyFavoritedUs ?? false,
+            favoritedAt: existing?.favoritedAt ?? now,
+            lastUpdated: now
+        )
+        map[peerNoisePublicKey] = relationship
+        return relationship
+    }
+
+    private static func applyEstablishMutualFavorite(
+        to map: inout [Data: FavoriteRelationship],
+        peerNoisePublicKey: Data,
+        peerNostrPublicKey: String?,
+        peerNickname: String,
+        at now: Date
+    ) -> FavoriteRelationship {
+        let existing = map[peerNoisePublicKey]
+        let displayName = resolveDisplayNickname(incoming: peerNickname, existing: existing?.peerNickname)
+        let validatedNostrKey = normalizeNostrNpub(peerNostrPublicKey)
+            ?? normalizeNostrNpub(existing?.peerNostrPublicKey)
+        let relationship = FavoriteRelationship(
+            peerNoisePublicKey: peerNoisePublicKey,
+            peerNostrPublicKey: validatedNostrKey,
+            peerNickname: displayName,
+            isFavorite: true,
+            theyFavoritedUs: true,
+            favoritedAt: existing?.favoritedAt ?? now,
+            lastUpdated: now
+        )
+        map[peerNoisePublicKey] = relationship
+        return relationship
+    }
+
+    private static func applyRemoveFavorite(
+        to map: inout [Data: FavoriteRelationship],
+        peerNoisePublicKey: Data,
+        at now: Date
+    ) {
+        guard let existing = map[peerNoisePublicKey] else { return }
+        if existing.theyFavoritedUs {
+            map[peerNoisePublicKey] = FavoriteRelationship(
+                peerNoisePublicKey: existing.peerNoisePublicKey,
+                peerNostrPublicKey: existing.peerNostrPublicKey,
+                peerNickname: existing.peerNickname,
+                isFavorite: false,
+                theyFavoritedUs: true,
+                favoritedAt: existing.favoritedAt,
+                lastUpdated: now
+            )
+        } else {
+            map.removeValue(forKey: peerNoisePublicKey)
+        }
+    }
+
+    @discardableResult
+    private static func applyUpdatePeerFavoritedUs(
+        to map: inout [Data: FavoriteRelationship],
+        peerNoisePublicKey: Data,
+        favorited: Bool,
+        peerNickname: String?,
+        peerNostrPublicKey: String?,
+        at now: Date
+    ) -> FavoriteRelationship? {
+        let existing = map[peerNoisePublicKey]
+        let displayName = resolveDisplayNickname(incoming: peerNickname, existing: existing?.peerNickname)
+        let validatedNostrKey = normalizeNostrNpub(peerNostrPublicKey)
+            ?? normalizeNostrNpub(existing?.peerNostrPublicKey)
+        let relationship = FavoriteRelationship(
+            peerNoisePublicKey: peerNoisePublicKey,
+            peerNostrPublicKey: validatedNostrKey,
+            peerNickname: displayName,
+            isFavorite: existing?.isFavorite ?? false,
+            theyFavoritedUs: favorited,
+            favoritedAt: existing?.favoritedAt ?? now,
+            lastUpdated: now
+        )
+        if !relationship.isFavorite && !relationship.theyFavoritedUs {
+            map.removeValue(forKey: peerNoisePublicKey)
+            return nil
+        }
+        map[peerNoisePublicKey] = relationship
+        return relationship
     }
     
     /// Check if a peer is favorited by us
@@ -404,7 +480,7 @@ final class FavoritesPersistenceService: ObservableObject {
         SecureLogger.warning("🧹 Clearing all favorites (panic mode)", category: .session)
         
         loadUnavailable = false
-        deferredMutatedKeys.removeAll()
+        deferredMutations.removeAll()
         favorites.removeAll()
         
         // Delete from keychain directly
@@ -418,8 +494,8 @@ final class FavoritesPersistenceService: ObservableObject {
     }
 
     /// Re-attempts loading favorites from Keychain after a locked-boot
-    /// `.deviceLocked` / transient failure, merging any in-session mutations
-    /// made while Keychain was unavailable.
+    /// `.deviceLocked` / transient failure, replaying any in-session mutations
+    /// in order onto the recovered durable baseline.
     func retryDeferredLoad() {
         guard loadUnavailable else { return }
         let data: Data
@@ -431,8 +507,8 @@ final class FavoritesPersistenceService: ObservableObject {
             data = loadedData
         case .itemNotFound:
             loadUnavailable = false
-            let hadDeferredMutations = !deferredMutatedKeys.isEmpty
-            deferredMutatedKeys.removeAll()
+            let hadDeferredMutations = !deferredMutations.isEmpty
+            deferredMutations.removeAll()
             if hadDeferredMutations {
                 saveFavorites()
                 NotificationCenter.default.post(name: .favoriteStatusChanged, object: nil)
@@ -446,32 +522,44 @@ final class FavoritesPersistenceService: ObservableObject {
             return
         }
 
-        let mutatedKeys = deferredMutatedKeys
+        let pendingMutations = deferredMutations
         var merged = durable
-        for key in mutatedKeys {
-            if let inSession = favorites[key] {
-                if let durableExisting = durable[key] {
-                    merged[key] = FavoriteRelationship(
-                        peerNoisePublicKey: key,
-                        peerNostrPublicKey: inSession.peerNostrPublicKey ?? durableExisting.peerNostrPublicKey,
-                        peerNickname: Self.resolveDisplayNickname(incoming: inSession.peerNickname, existing: durableExisting.peerNickname),
-                        isFavorite: inSession.isFavorite,
-                        theyFavoritedUs: inSession.theyFavoritedUs || durableExisting.theyFavoritedUs,
-                        favoritedAt: min(inSession.favoritedAt, durableExisting.favoritedAt),
-                        lastUpdated: max(inSession.lastUpdated, durableExisting.lastUpdated)
-                    )
-                } else {
-                    merged[key] = inSession
-                }
-            } else {
-                merged.removeValue(forKey: key)
+        for mutation in pendingMutations {
+            switch mutation {
+            case .addFavorite(let noiseKey, let nostrPublicKey, let nickname, let at):
+                _ = Self.applyAddFavorite(
+                    to: &merged,
+                    peerNoisePublicKey: noiseKey,
+                    peerNostrPublicKey: nostrPublicKey,
+                    peerNickname: nickname,
+                    at: at
+                )
+            case .establishMutualFavorite(let noiseKey, let nostrPublicKey, let nickname, let at):
+                _ = Self.applyEstablishMutualFavorite(
+                    to: &merged,
+                    peerNoisePublicKey: noiseKey,
+                    peerNostrPublicKey: nostrPublicKey,
+                    peerNickname: nickname,
+                    at: at
+                )
+            case .removeFavorite(let noiseKey, let at):
+                Self.applyRemoveFavorite(to: &merged, peerNoisePublicKey: noiseKey, at: at)
+            case .updatePeerFavoritedUs(let noiseKey, let favorited, let nickname, let nostrPublicKey, let at):
+                Self.applyUpdatePeerFavoritedUs(
+                    to: &merged,
+                    peerNoisePublicKey: noiseKey,
+                    favorited: favorited,
+                    peerNickname: nickname,
+                    peerNostrPublicKey: nostrPublicKey,
+                    at: at
+                )
             }
         }
 
         loadUnavailable = false
-        deferredMutatedKeys.removeAll()
+        deferredMutations.removeAll()
         favorites = merged
-        if needsCleanup || !mutatedKeys.isEmpty {
+        if needsCleanup || !pendingMutations.isEmpty {
             saveFavorites()
         }
         NotificationCenter.default.post(name: .favoriteStatusChanged, object: nil)

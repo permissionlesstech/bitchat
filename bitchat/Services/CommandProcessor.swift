@@ -362,12 +362,13 @@ final class CommandProcessor {
                 )
                 identityManager.updateSocialIdentity(blockedIdentity)
             }
-            // Remove from favorites and block any associated Nostr key so a
-            // blocked peer cannot keep reaching us over Nostr or as a courier.
+            // Remove from favorites and persist the linked Nostr block under
+            // the peer's fingerprint so unblocking a one-sided favorite (whose
+            // favorites entry is deleted) still clears both blocklists.
             for (noiseKey, rel) in FavoritesPersistenceService.shared.favorites
             where noiseKey.sha256Fingerprint() == fingerprint {
                 if let nostrHex = FavoritesPersistenceService.nostrPubkeyHex(from: rel.peerNostrPublicKey) {
-                    identityManager.setNostrBlocked(nostrHex, isBlocked: true)
+                    identityManager.setAssociatedNostrBlock(forFingerprint: fingerprint, nostrPubkeyHex: nostrHex)
                 }
                 if rel.isFavorite {
                     FavoritesPersistenceService.shared.removeFavorite(peerNoisePublicKey: noiseKey)

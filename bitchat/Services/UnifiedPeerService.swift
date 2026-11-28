@@ -339,10 +339,17 @@ final class UnifiedPeerService: ObservableObject, TransportPeerEventsDelegate {
 
         // Keep favorites and Nostr blocks aligned with Noise identity blocks.
         // Never send a network [UNFAVORITED] signal on block (no liveness leak).
+        // Record the fingerprint->Nostr link in `identityManager` before
+        // removing the favorite so unblocking a one-sided favorite (whose
+        // favorites entry is deleted) still clears the Nostr block cleanly.
         let matchingFavorite = resolveFavoriteRelationship(for: peerID, fingerprint: fingerprint)
         if let rel = matchingFavorite {
             if let nostrHex = FavoritesPersistenceService.nostrPubkeyHex(from: rel.peerNostrPublicKey) {
-                identityManager.setNostrBlocked(nostrHex, isBlocked: blocked)
+                if blocked {
+                    identityManager.setAssociatedNostrBlock(forFingerprint: fingerprint, nostrPubkeyHex: nostrHex)
+                } else {
+                    identityManager.setNostrBlocked(nostrHex, isBlocked: false)
+                }
             }
             if blocked && rel.isFavorite {
                 favoritesService.removeFavorite(peerNoisePublicKey: rel.peerNoisePublicKey)

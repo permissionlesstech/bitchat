@@ -13,6 +13,7 @@ import BitFoundation
 final class MockIdentityManager: SecureIdentityStateManagerProtocol {
     private var blockedFingerprints: Set<String> = []
     private var blockedNostrPubkeys: Set<String> = []
+    private var blockedNostrByFingerprint: [String: String] = [:]
     private var socialIdentities: [String: SocialIdentity] = [:]
     private var privateMediaCapableFingerprints: Set<String> = []
     private var authenticatedSigningKeys: [String: Data] = [:]
@@ -64,19 +65,31 @@ final class MockIdentityManager: SecureIdentityStateManagerProtocol {
             blockedFingerprints.insert(fingerprint)
         } else {
             blockedFingerprints.remove(fingerprint)
+            if let associated = blockedNostrByFingerprint.removeValue(forKey: fingerprint),
+               !blockedNostrByFingerprint.values.contains(associated) {
+                blockedNostrPubkeys.remove(associated)
+            }
         }
     }
     
     func isNostrBlocked(pubkeyHexLowercased: String) -> Bool {
-        blockedNostrPubkeys.contains(pubkeyHexLowercased)
+        blockedNostrPubkeys.contains(pubkeyHexLowercased.lowercased())
     }
     
     func setNostrBlocked(_ pubkeyHexLowercased: String, isBlocked: Bool) {
+        let key = pubkeyHexLowercased.lowercased()
         if isBlocked {
-            blockedNostrPubkeys.insert(pubkeyHexLowercased)
+            blockedNostrPubkeys.insert(key)
         } else {
-            blockedNostrPubkeys.remove(pubkeyHexLowercased)
+            blockedNostrPubkeys.remove(key)
+            blockedNostrByFingerprint = blockedNostrByFingerprint.filter { $0.value != key }
         }
+    }
+
+    func setAssociatedNostrBlock(forFingerprint fingerprint: String, nostrPubkeyHex: String) {
+        let key = nostrPubkeyHex.lowercased()
+        blockedNostrPubkeys.insert(key)
+        blockedNostrByFingerprint[fingerprint] = key
     }
     
     func getBlockedNostrPubkeys() -> Set<String> {

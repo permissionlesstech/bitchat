@@ -378,6 +378,48 @@ struct CommandProcessorTests {
     }
 
     @MainActor
+    @Test func blockAndUnblockCommandClearsAssociatedNostrBlockForOneSidedFavorite() async throws {
+        let identityManager = MockIdentityManager(MockKeychain())
+        let transport = MockTransport()
+        let context = MockCommandContextProvider()
+        let processor = CommandProcessor(
+            contextProvider: context,
+            meshService: transport,
+            identityManager: identityManager
+        )
+
+        let noiseKey = Data(repeating: 0x6D, count: 32)
+        let peerID = PeerID(publicKey: noiseKey)
+        let fingerprint = noiseKey.sha256Fingerprint()
+        let nostrIdentity = try NostrIdentity.generate()
+        let nostrHex = nostrIdentity.publicKeyHex.lowercased()
+
+        context.nicknameToPeerID["oneSided"] = peerID
+        transport.peerFingerprints[peerID] = fingerprint
+        FavoritesPersistenceService.shared.addFavorite(
+            peerNoisePublicKey: noiseKey,
+            peerNostrPublicKey: nostrIdentity.npub,
+            peerNickname: "oneSided"
+        )
+        defer {
+            FavoritesPersistenceService.shared.removeFavorite(peerNoisePublicKey: noiseKey)
+        }
+
+        _ = await withSelectedChannel(.mesh, context: context) {
+            processor.process("/block oneSided")
+        }
+        #expect(FavoritesPersistenceService.shared.getFavoriteStatus(for: noiseKey) == nil)
+        #expect(identityManager.isBlocked(fingerprint: fingerprint))
+        #expect(identityManager.isNostrBlocked(pubkeyHexLowercased: nostrHex))
+
+        _ = await withSelectedChannel(.mesh, context: context) {
+            processor.process("/unblock oneSided")
+        }
+        #expect(!identityManager.isBlocked(fingerprint: fingerprint))
+        #expect(!identityManager.isNostrBlocked(pubkeyHexLowercased: nostrHex))
+    }
+
+    @MainActor
     @Test func favoriteCommandIsRejectedOutsideMesh() async {
         let identityManager = MockIdentityManager(MockKeychain())
         let context = MockCommandContextProvider()
