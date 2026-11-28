@@ -353,10 +353,9 @@ struct CommandProcessorTests {
     }
 
     @MainActor
-    @Test func favoriteCommandReturnsErrorWhenToggleFails() async {
+    @Test func favoriteCommandSurfacesNotFoundAndAmbiguousOutcomes() async {
         let identityManager = MockIdentityManager(MockKeychain())
         let context = MockCommandContextProvider()
-        context.toggleFavoriteResult = false
         let processor = CommandProcessor(
             contextProvider: context,
             meshService: MockTransport(),
@@ -365,15 +364,26 @@ struct CommandProcessorTests {
         let peerID = PeerID(str: "00aa00bb00cc00ee")
         context.nicknameToPeerID["ghost"] = peerID
 
-        let result = await withSelectedChannel(.mesh, context: context) {
+        context.toggleFavoriteOutcome = .notFound
+        let notFoundResult = await withSelectedChannel(.mesh, context: context) {
             processor.process("/fav ghost")
         }
-
-        switch result {
-        case .error:
-            break
+        switch notFoundResult {
+        case .error(let msg):
+            #expect(msg.contains("can't find peer"))
         default:
-            Issue.record("Expected error result when toggleFavorite returns false")
+            Issue.record("Expected error result when toggleFavorite returns .notFound")
+        }
+
+        context.toggleFavoriteOutcome = .ambiguous
+        let ambiguousResult = await withSelectedChannel(.mesh, context: context) {
+            processor.process("/fav ghost")
+        }
+        switch ambiguousResult {
+        case .error(let msg):
+            #expect(msg.contains("ambiguous"))
+        default:
+            Issue.record("Expected error result when toggleFavorite returns .ambiguous")
         }
     }
 
@@ -771,12 +781,12 @@ private final class MockCommandContextProvider: CommandContextProvider {
         commandOutputDestinations.append(destination)
     }
 
-    var toggleFavoriteResult = true
+    var toggleFavoriteOutcome: FavoriteToggleOutcome = .toggled
 
     @discardableResult
-    func toggleFavorite(peerID: PeerID) -> Bool {
+    func toggleFavorite(peerID: PeerID) -> FavoriteToggleOutcome {
         toggledFavorites.append(peerID)
-        return toggleFavoriteResult
+        return toggleFavoriteOutcome
     }
 
     // Groups: record the parsed subcommand + argument the processor forwarded.

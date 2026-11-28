@@ -791,23 +791,22 @@ final class ChatPrivateConversationCoordinator {
         let isFavorite = content.hasPrefix("[FAVORITED]")
         let parts = content.split(separator: ":", omittingEmptySubsequences: false)
         let expectedSenderHex = senderNostrPubkeyHex?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        let isAuthenticatedNostrSender = (expectedSenderHex?.isEmpty == false)
 
         var nostrPubkey: String?
-        if parts.count > 1 {
+        if isAuthenticatedNostrSender, let expectedHex = expectedSenderHex, parts.count > 1 {
             let rawNostr = String(parts[1]).trimmingCharacters(in: .whitespacesAndNewlines)
             if !rawNostr.isEmpty {
                 if let normalizedNpub = FavoritesPersistenceService.normalizeNostrNpub(rawNostr) {
-                    if let expectedHex = expectedSenderHex, !expectedHex.isEmpty {
-                        // Over Nostr, the embedded npub must match the NIP-17
-                        // authenticated sender so a peer cannot spoof another
-                        // person's npub into our favorites index.
-                        guard FavoritesPersistenceService.nostrPubkeyHex(from: normalizedNpub) == expectedHex else {
-                            SecureLogger.warning(
-                                "🚫 Rejecting favorite notification with mismatched npub for sender \(expectedHex.prefix(8))…",
-                                category: .security
-                            )
-                            return
-                        }
+                    // Over Nostr, the embedded npub must match the NIP-17
+                    // authenticated sender so a peer cannot spoof another
+                    // person's npub into our favorites index.
+                    guard FavoritesPersistenceService.nostrPubkeyHex(from: normalizedNpub) == expectedHex else {
+                        SecureLogger.warning(
+                            "🚫 Rejecting favorite notification with mismatched npub for sender \(expectedHex.prefix(8))…",
+                            category: .security
+                        )
+                        return
                     }
                     nostrPubkey = normalizedNpub
                     SecureLogger.info("📝 Received Nostr npub in favorite notification: \(normalizedNpub.prefix(16))…", category: .session)
@@ -853,6 +852,32 @@ final class ChatPrivateConversationCoordinator {
         let stablePeerID = PeerID(hexData: finalNoiseKey)
         if context.isPeerBlocked(peerID) || context.isPeerBlocked(stablePeerID) {
             return
+        }
+
+        // Over BLE mesh (no NIP-17 sender authentication), never bind a bare
+        // unauthenticated npub — a mesh peer could claim a victim's unbound
+        // npub. Require a valid Schnorr binding proof matching `finalNoiseKey`.
+        if !isAuthenticatedNostrSender, isFavorite {
+            if let verifiedInvite = FriendInvite.parseFavoriteAcceptancePayload(
+                content,
+                expectedSenderPubkeyHex: nil,
+                nickname: senderNickname
+            ) {
+                if verifiedInvite.noisePublicKey == finalNoiseKey {
+                    nostrPubkey = verifiedInvite.nostrNpub
+                    SecureLogger.info("📝 Verified signed Nostr npub over mesh: \(verifiedInvite.nostrNpub.prefix(16))…", category: .session)
+                } else {
+                    SecureLogger.warning(
+                        "🚫 Ignoring mesh favorite npub binding with mismatched Noise key for \(peerID.id.prefix(8))…",
+                        category: .security
+                    )
+                }
+            } else if parts.count > 1, !String(parts[1]).trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                SecureLogger.debug(
+                    "⚠️ Ignoring unauthenticated bare npub in mesh [FAVORITED] from \(peerID.id.prefix(8))…",
+                    category: .security
+                )
+            }
         }
 
         // Prevent a peer from overwriting/hijacking another known peer's npub.

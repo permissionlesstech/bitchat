@@ -1136,15 +1136,23 @@ struct ChatPrivateConversationCoordinatorContextTests {
         let context = MockChatPrivateConversationContext()
         let coordinator = ChatPrivateConversationCoordinator(context: context)
         let noiseKey = Data(repeating: 0xAB, count: 32)
+        let signingKey = Data(repeating: 0xBC, count: 32)
         let peerID = PeerID(hexData: noiseKey)
-        let aliceNpub = try NostrIdentity.generate().npub
+        let aliceIdentity = try NostrIdentity.generate()
+        let signedInvite = try #require(FriendInvite.makeSigned(
+            nickname: "alice",
+            noisePublicKey: noiseKey,
+            signingPublicKey: signingKey,
+            nostrIdentity: aliceIdentity
+        ))
+        let signedPayload = signedInvite.favoriteAcceptancePayload()
 
-        // First [FAVORITED] flips theyFavoritedUs: store write + announcement.
-        coordinator.handleFavoriteNotification("[FAVORITED]:\(aliceNpub)", from: peerID, senderNickname: "alice")
+        // First signed mesh [FAVORITED] flips theyFavoritedUs and binds the verified npub.
+        coordinator.handleFavoriteNotification(signedPayload, from: peerID, senderNickname: "alice")
         #expect(context.peerFavoritedUsUpdates.count == 1)
         #expect(context.peerFavoritedUsUpdates.first?.noiseKey == noiseKey)
         #expect(context.peerFavoritedUsUpdates.first?.favorited == true)
-        #expect(context.peerFavoritedUsUpdates.first?.nostrPublicKey == aliceNpub)
+        #expect(context.peerFavoritedUsUpdates.first?.nostrPublicKey == aliceIdentity.npub)
         #expect(context.meshOnlySystemMessages == ["alice favorited you"])
 
         // Same state again: store write still happens, but no repeat announcement.
@@ -1152,7 +1160,7 @@ struct ChatPrivateConversationCoordinatorContextTests {
             noiseKey: noiseKey,
             theyFavoritedUs: true
         )
-        coordinator.handleFavoriteNotification("[FAVORITED]:\(aliceNpub)", from: peerID, senderNickname: "alice")
+        coordinator.handleFavoriteNotification(signedPayload, from: peerID, senderNickname: "alice")
         #expect(context.peerFavoritedUsUpdates.count == 2)
         #expect(context.meshOnlySystemMessages == ["alice favorited you"])
 
@@ -1163,13 +1171,15 @@ struct ChatPrivateConversationCoordinatorContextTests {
     }
 
     @Test @MainActor
-    func handleFavoriteNotification_rejectsSpoofedAndHijackedNpubs() async throws {
+    func handleFavoriteNotification_rejectsUnauthenticatedMeshAndSpoofedNostrNpubs() async throws {
         let context = MockChatPrivateConversationContext()
         let coordinator = ChatPrivateConversationCoordinator(context: context)
         let aliceKey = Data(repeating: 0xA1, count: 32)
         let bobKey = Data(repeating: 0xB2, count: 32)
+        let signingKey = Data(repeating: 0xC3, count: 32)
         let aliceIdentity = try NostrIdentity.generate()
         let bobIdentity = try NostrIdentity.generate()
+        let victimIdentity = try NostrIdentity.generate()
         context.favoriteNoiseKeysByNostrKey[bobIdentity.npub] = bobKey
 
         // Over Nostr: Alice cannot claim Bob's npub (mismatched with NIP-17 senderPubkey).
@@ -1181,15 +1191,49 @@ struct ChatPrivateConversationCoordinatorContextTests {
         )
         #expect(context.peerFavoritedUsUpdates.isEmpty)
 
-        // Over BLE: Alice cannot hijack Bob's already-bound npub — favorite still
-        // records, but the hijacked npub is stripped.
+        // Over BLE mesh: an unsigned bare [FAVORITED]:<victim_npub> must NEVER
+        // bind even an unbound victim npub; theyFavoritedUs still updates for
+        // legacy 1.x mesh compatibility, with nostrPublicKey == nil.
         coordinator.handleFavoriteNotification(
-            "[FAVORITED]:\(bobIdentity.npub)",
+            "[FAVORITED]:\(victimIdentity.npub)",
             from: PeerID(hexData: aliceKey),
             senderNickname: "alice"
         )
         #expect(context.peerFavoritedUsUpdates.count == 1)
-        #expect(context.peerFavoritedUsUpdates.first?.nostrPublicKey == nil)
+        #expect(context.peerFavoritedUsUpdates.last?.favorited == true)
+        #expect(context.peerFavoritedUsUpdates.last?.nostrPublicKey == nil)
+
+        // Over BLE mesh: replaying a valid signed bundle belonging to a
+        // DIFFERENT Noise key must not bind that npub to Alice's Noise key.
+        let victimsSignedBundle = try #require(FriendInvite.makeSigned(
+            nickname: "victim",
+            noisePublicKey: Data(repeating: 0xD4, count: 32),
+            signingPublicKey: signingKey,
+            nostrIdentity: victimIdentity
+        )).favoriteAcceptancePayload()
+        coordinator.handleFavoriteNotification(
+            victimsSignedBundle,
+            from: PeerID(hexData: aliceKey),
+            senderNickname: "alice"
+        )
+        #expect(context.peerFavoritedUsUpdates.count == 2)
+        #expect(context.peerFavoritedUsUpdates.last?.nostrPublicKey == nil)
+
+        // Over BLE mesh: a signed bundle matching Alice's Noise key binds
+        // cleanly, unless the npub is already owned by another peer.
+        let bobSignedForAliceKey = try #require(FriendInvite.makeSigned(
+            nickname: "alice",
+            noisePublicKey: aliceKey,
+            signingPublicKey: signingKey,
+            nostrIdentity: bobIdentity
+        )).favoriteAcceptancePayload()
+        coordinator.handleFavoriteNotification(
+            bobSignedForAliceKey,
+            from: PeerID(hexData: aliceKey),
+            senderNickname: "alice"
+        )
+        #expect(context.peerFavoritedUsUpdates.count == 3)
+        #expect(context.peerFavoritedUsUpdates.last?.nostrPublicKey == nil)
     }
 
     @Test @MainActor

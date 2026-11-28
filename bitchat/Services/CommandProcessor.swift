@@ -76,9 +76,8 @@ protocol CommandContextProvider: AnyObject {
     // MARK: - Favorites
     /// Toggles the favorite via the unified peer flow, which persists by the
     /// real noise key and notifies the peer over mesh or Nostr.
-    /// Returns `true` if the toggle succeeded.
     @discardableResult
-    func toggleFavorite(peerID: PeerID) -> Bool
+    func toggleFavorite(peerID: PeerID) -> FavoriteToggleOutcome
 
     // MARK: - Groups
     // Group logic lives in `ChatGroupCoordinator`; these forward the parsed
@@ -594,13 +593,16 @@ final class CommandProcessor {
         }
 
         // toggleFavorite persists by the real noise key and notifies the peer.
-        guard contextProvider?.toggleFavorite(peerID: peerID) == true else {
+        switch contextProvider?.toggleFavorite(peerID: peerID) {
+        case .toggled:
+            return .success(message: add
+                ? String(format: String(localized: "command.fav.added", defaultValue: "added %@ to favorites", comment: "Confirmation after /fav"), locale: .current, nickname)
+                : String(format: String(localized: "command.fav.removed", defaultValue: "removed %@ from favorites", comment: "Confirmation after /unfav"), locale: .current, nickname))
+        case .ambiguous:
+            return .error(message: String(format: String(localized: "command.fav.ambiguous", defaultValue: "ambiguous peer %@ — open the chat or tap the peer row directly", comment: "Error when /fav or /unfav matches multiple offline peer identities"), locale: .current, nickname))
+        case .notFound, .none:
             return .error(message: String(format: String(localized: "command.fav.not_found", defaultValue: "can't find peer: %@", comment: "Error when /fav or /unfav can't resolve the nickname"), locale: .current, nickname))
         }
-
-        return .success(message: add
-            ? String(format: String(localized: "command.fav.added", defaultValue: "added %@ to favorites", comment: "Confirmation after /fav"), locale: .current, nickname)
-            : String(format: String(localized: "command.fav.removed", defaultValue: "removed %@ from favorites", comment: "Confirmation after /unfav"), locale: .current, nickname))
     }
     
 }
