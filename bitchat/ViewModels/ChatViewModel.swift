@@ -1756,6 +1756,7 @@ final class ChatViewModel: ObservableObject, SynchronousMessageTransportEventDel
         MeshEchoSettings.reset()
         NotificationPrivacySettings.reset()
         ComposerDraftStore.reset()
+        ConversationNotificationMuteStore.reset()
         // A hand-added relay names an operator someone chose to route through,
         // which is the kind of trace a wipe should not leave behind.
         NostrRelaySettings.reset()
