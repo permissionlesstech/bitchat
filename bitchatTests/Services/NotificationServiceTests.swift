@@ -131,6 +131,60 @@ final class NotificationServiceTests: XCTestCase {
         XCTAssertEqual(requests[1].content.body, "2 people around")
     }
 
+    func test_sendPrivateMessageNotification_skipsWhenConversationMuted() {
+        var requests: [UNNotificationRequest] = []
+        var deps = NotificationService.Dependencies.noop
+        deps.deliver = { requests.append($0) }
+        let peerID = PeerID(str: "deadbeefdeadbeef")
+        let scope = ConversationNotificationMuteStore.Scope.direct(fingerprint: "fp1")
+        let service = NotificationService(
+            isRunningTestsProvider: { false },
+            dependencies: deps,
+            conversationMutedProvider: { $0 == scope }
+        )
+
+        service.sendPrivateMessageNotification(from: "Alice", message: "hi", peerID: peerID, fingerprint: "fp1")
+
+        XCTAssertTrue(requests.isEmpty)
+    }
+
+    /// No fingerprint means no mute can have been keyed (the toggle is disabled
+    /// until one exists), so the notification must still be delivered rather
+    /// than suppressed by a peer-ID guess that rotation would invalidate.
+    func test_sendPrivateMessageNotification_deliversWhenNoFingerprintIsKnown() {
+        var requests: [UNNotificationRequest] = []
+        var deps = NotificationService.Dependencies.noop
+        deps.deliver = { requests.append($0) }
+        let peerID = PeerID(str: "deadbeefdeadbeef")
+        let service = NotificationService(
+            isRunningTestsProvider: { false },
+            dependencies: deps,
+            conversationMutedProvider: { _ in true }
+        )
+
+        service.sendPrivateMessageNotification(from: "Alice", message: "hi", peerID: peerID, fingerprint: nil)
+
+        XCTAssertEqual(requests.count, 1)
+    }
+
+    func test_sendGeohashActivityNotification_skipsWhenChannelMuted() {
+        var requests: [UNNotificationRequest] = []
+        var deps = NotificationService.Dependencies.noop
+        deps.deliver = { requests.append($0) }
+        let service = NotificationService(
+            isRunningTestsProvider: { false },
+            dependencies: deps,
+            conversationMutedProvider: {
+                if case .geohash("u4pru") = $0 { return true }
+                return false
+            }
+        )
+
+        service.sendGeohashActivityNotification(geohash: "u4pru", bodyPreview: "hello")
+
+        XCTAssertTrue(requests.isEmpty)
+    }
+
     func test_clearAllNotificationsForPanic_clearsPendingAndDelivered() {
         var removePendingCalls = 0
         var removeDeliveredCalls = 0
