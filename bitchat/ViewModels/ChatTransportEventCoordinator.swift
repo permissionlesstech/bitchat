@@ -230,6 +230,17 @@ final class ChatTransportEventCoordinator {
             stablePeerID = derivedPeerID
         }
 
+        // Capture recent incoming message IDs BEFORE migrating the selected
+        // conversation (migration removes the short-ID chat), and bound the
+        // retry window so a disconnect never triggers a full-history receipt
+        // burst for older already-acknowledged messages on reconnect.
+        let retryCutoff = Date().addingTimeInterval(
+            -TransportConfig.bleReadReceiptDisconnectRetryWindowSeconds
+        )
+        let recentReceiptIDs = context.privateMessages(for: peerID)
+            .filter { $0.senderPeerID == peerID && $0.timestamp >= retryCutoff }
+            .map(\.id)
+
         if let currentPeerID = context.selectedPrivateChatPeer,
            currentPeerID == peerID,
            let stablePeerID {
@@ -240,10 +251,9 @@ final class ChatTransportEventCoordinator {
             )
         }
 
-        let receiptIDs = context.privateMessages(for: peerID)
-            .filter { $0.senderPeerID == peerID }
-            .map(\.id)
-        context.unmarkReadReceiptsSent(receiptIDs)
+        if !recentReceiptIDs.isEmpty {
+            context.unmarkReadReceiptsSent(recentReceiptIDs)
+        }
     }
 }
 

@@ -93,19 +93,46 @@ final class EncryptedHistoryStore: ObservableObject {
         var timersByPeerID: [String: DisappearingTimer]
         var unreadPeerIDs: [String]
         var nostrKeyMapping: [String: String]
+        var geoDMGeohashByPeerID: [String: String]
+        var sentReadReceipts: [String]
 
         init(
             version: Int = currentVersion,
             messagesByPeerID: [String: [BitchatMessage]] = [:],
             timersByPeerID: [String: DisappearingTimer] = [:],
             unreadPeerIDs: [String] = [],
-            nostrKeyMapping: [String: String] = [:]
+            nostrKeyMapping: [String: String] = [:],
+            geoDMGeohashByPeerID: [String: String] = [:],
+            sentReadReceipts: [String] = []
         ) {
             self.version = version
             self.messagesByPeerID = messagesByPeerID
             self.timersByPeerID = timersByPeerID
             self.unreadPeerIDs = unreadPeerIDs
             self.nostrKeyMapping = nostrKeyMapping
+            self.geoDMGeohashByPeerID = geoDMGeohashByPeerID
+            self.sentReadReceipts = sentReadReceipts
+        }
+
+        private enum CodingKeys: String, CodingKey {
+            case version
+            case messagesByPeerID
+            case timersByPeerID
+            case unreadPeerIDs
+            case nostrKeyMapping
+            case geoDMGeohashByPeerID
+            case sentReadReceipts
+        }
+
+        init(from decoder: Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            self.version = try container.decode(Int.self, forKey: .version)
+            self.messagesByPeerID = try container.decode([String: [BitchatMessage]].self, forKey: .messagesByPeerID)
+            self.timersByPeerID = try container.decode([String: DisappearingTimer].self, forKey: .timersByPeerID)
+            self.unreadPeerIDs = try container.decode([String].self, forKey: .unreadPeerIDs)
+            self.nostrKeyMapping = try container.decode([String: String].self, forKey: .nostrKeyMapping)
+            self.geoDMGeohashByPeerID = try container.decodeIfPresent([String: String].self, forKey: .geoDMGeohashByPeerID) ?? [:]
+            self.sentReadReceipts = try container.decodeIfPresent([String].self, forKey: .sentReadReceipts) ?? []
         }
 
         var isEmpty: Bool {
@@ -307,6 +334,8 @@ final class EncryptedHistoryStore: ObservableObject {
     func save(
         from store: ConversationStore,
         nostrKeyMapping: [PeerID: String],
+        geoDMGeohashByPeerID: [PeerID: String] = [:],
+        sentReadReceipts: Set<String> = [],
         now: Date = Date(),
         synchronous: Bool = false
     ) {
@@ -323,6 +352,8 @@ final class EncryptedHistoryStore: ObservableObject {
         var messagesByPeerID: [String: [BitchatMessage]] = [:]
         var unreadPeerIDs: [String] = []
         var mappedKeys: [String: String] = [:]
+        var mappedGeohashes: [String: String] = [:]
+        var persistedMessageIDs = Set<String>()
 
         for (id, conversation) in store.conversationsByID {
             guard case .direct(let handle) = id else { continue }
@@ -338,12 +369,18 @@ final class EncryptedHistoryStore: ObservableObject {
                 ? Array(retained.suffix(Self.maxMessagesPerConversation))
                 : retained
             messagesByPeerID[rawPeerID] = bounded
+            for message in bounded {
+                persistedMessageIDs.insert(message.id)
+            }
 
             if conversation.isUnread {
                 unreadPeerIDs.append(rawPeerID)
             }
             if let nostrKey = nostrKeyMapping[peerID] {
                 mappedKeys[rawPeerID] = nostrKey
+            }
+            if let geohash = geoDMGeohashByPeerID[peerID] {
+                mappedGeohashes[rawPeerID] = geohash
             }
         }
 
@@ -352,11 +389,17 @@ final class EncryptedHistoryStore: ObservableObject {
             timersByPeerID[peerID.id] = timer
         }
 
+        // Only seal read-receipt IDs for retained non-ephemeral messages so
+        // RAM-only or disappeared chats never leak message IDs onto disk.
+        let retainedReadReceipts = sentReadReceipts.intersection(persistedMessageIDs).sorted()
+
         let snapshot = Snapshot(
             messagesByPeerID: messagesByPeerID,
             timersByPeerID: timersByPeerID,
             unreadPeerIDs: unreadPeerIDs,
-            nostrKeyMapping: mappedKeys
+            nostrKeyMapping: mappedKeys,
+            geoDMGeohashByPeerID: mappedGeohashes,
+            sentReadReceipts: retainedReadReceipts
         )
         persistSnapshot(snapshot, synchronous: synchronous)
     }
@@ -400,13 +443,18 @@ final class EncryptedHistoryStore: ObservableObject {
 
         let activeTimers = snapshot.timersByPeerID.filter { $0.value != .off }
         let keptKeys = snapshot.nostrKeyMapping.filter { prunedMessages[$0.key] != nil }
+        let keptGeohashes = snapshot.geoDMGeohashByPeerID.filter { prunedMessages[$0.key] != nil }
+        let retainedIDs = Set(prunedMessages.values.flatMap { $0.map(\.id) })
+        let keptReadReceipts = snapshot.sentReadReceipts.filter { retainedIDs.contains($0) }
 
         return Snapshot(
             version: Snapshot.currentVersion,
             messagesByPeerID: prunedMessages,
             timersByPeerID: activeTimers,
             unreadPeerIDs: validUnread,
-            nostrKeyMapping: keptKeys
+            nostrKeyMapping: keptKeys,
+            geoDMGeohashByPeerID: keptGeohashes,
+            sentReadReceipts: keptReadReceipts
         )
     }
 

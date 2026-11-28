@@ -25,6 +25,7 @@ enum PrivacyMode: String, CaseIterable, Identifiable {
 enum PrivacyModeSettings {
     static let modeKey = "bitchat.privacyMode"
     static let persistHistoryKey = "bitchat.persistPrivateHistory"
+    static let sendReadReceiptsKey = "bitchat.sendReadReceipts"
     static let migrationCompletedKey = "bitchat.privacyMode.migrationV2Completed"
     static let didChangeNotification = Notification.Name("bitchat.privacyModeDidChange")
 
@@ -140,6 +141,33 @@ enum PrivacyModeSettings {
         notificationCenter.post(name: didChangeNotification, object: nil)
     }
 
+    /// Whether outbound read receipts are emitted when viewing private messages.
+    /// Defaults to `true` in Everyday Mode and is always `false` in Stealth Mode
+    /// so high-risk users never broadcast live reading or foreground activity.
+    static func shouldSendReadReceipts(in defaults: UserDefaults = .standard) -> Bool {
+        if currentMode(in: defaults) == .stealth {
+            return false
+        }
+        if let stored = defaults.object(forKey: sendReadReceiptsKey) as? Bool {
+            return stored
+        }
+        return true
+    }
+
+    static var sendReadReceipts: Bool {
+        get { shouldSendReadReceipts() }
+        set { setSendReadReceipts(newValue) }
+    }
+
+    static func setSendReadReceipts(
+        _ enabled: Bool,
+        in defaults: UserDefaults = .standard,
+        notificationCenter: NotificationCenter = .default
+    ) {
+        defaults.set(enabled, forKey: sendReadReceiptsKey)
+        notificationCenter.post(name: didChangeNotification, object: nil)
+    }
+
     /// Whether the hidden triple-tap panic wipe gesture on the header logo is armed.
     /// Armed in Stealth Mode; in Everyday Mode panic wipe remains available in Settings.
     static func isTripleTapPanicEnabled(in defaults: UserDefaults = .standard) -> Bool {
@@ -194,6 +222,7 @@ enum PrivacyModeSettings {
     ) {
         defaults.removeObject(forKey: modeKey)
         defaults.removeObject(forKey: persistHistoryKey)
+        defaults.removeObject(forKey: sendReadReceiptsKey)
         notificationCenter.post(name: didChangeNotification, object: nil)
     }
 
@@ -211,6 +240,7 @@ enum PrivacyModeSettings {
             || (wasTorEnabled ?? NetworkActivationService.persistedTorPreference(in: defaults))
         defaults.removeObject(forKey: modeKey)
         defaults.removeObject(forKey: persistHistoryKey)
+        defaults.removeObject(forKey: sendReadReceiptsKey)
         defaults.set(true, forKey: migrationCompletedKey)
         if wasStealthOrTor {
             defaults.set(true, forKey: NetworkActivationService.torPreferenceKey)

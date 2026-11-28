@@ -25,6 +25,7 @@ private final class MockChatPrivateConversationContext: ChatPrivateConversationC
     var unreadPrivateMessages: Set<PeerID> = []
     var selectedPrivateChatPeer: PeerID?
     var isAppActive = true
+    var sendReadReceiptsEnabled = true
     var nickname = "me"
     var activeChannel: ChannelID = .mesh
     var nostrKeyMapping: [PeerID: String] = [:]
@@ -168,6 +169,7 @@ private final class MockChatPrivateConversationContext: ChatPrivateConversationC
     // Routing & acknowledgements
     private(set) var routedPrivateMessages: [(content: String, peerID: PeerID, messageID: String)] = []
     private(set) var meshReadReceipts: [(messageID: String, peerID: PeerID)] = []
+    var routeReadReceiptResult = true
     private(set) var geoPrivateMessages: [(content: String, recipientHex: String, messageID: String)] = []
     private(set) var geoDeliveryAcks: [(messageID: String, recipientHex: String)] = []
     private(set) var geoReadReceipts: [(messageID: String, recipientHex: String)] = []
@@ -193,6 +195,12 @@ private final class MockChatPrivateConversationContext: ChatPrivateConversationC
             deliveredMessageIDs.append(messageID)
         }
         return cleared
+    }
+
+    @discardableResult
+    func routeReadReceipt(_ receipt: ReadReceipt, to peerID: PeerID) -> Bool {
+        meshReadReceipts.append((receipt.originalMessageID, peerID))
+        return routeReadReceiptResult
     }
 
     func sendMeshReadReceipt(_ receipt: ReadReceipt, to peerID: PeerID) {
@@ -366,8 +374,8 @@ struct ChatPrivateConversationCoordinatorContextTests {
         let senderPubkey = "feedface00112233"
         context.displayNamesByPubkey[senderPubkey] = "alice#1234"
         context.privateChats[convKey] = [
-            makeIncomingMessage(id: "mine-1", sender: "me"),
-            makeIncomingMessage(id: "mine-2", sender: "me")
+            makeIncomingMessage(id: "mine-1", sender: "me", senderPeerID: context.myPeerID),
+            makeIncomingMessage(id: "mine-2", sender: "me", senderPeerID: context.myPeerID)
         ]
 
         coordinator.handleDelivered(
@@ -405,8 +413,8 @@ struct ChatPrivateConversationCoordinatorContextTests {
         context.displayNamesByPubkey[senderPubkey] = "alice"
         context.selectedPrivateChatPeer = shortPeerID
         context.privateChats[shortPeerID] = [
-            makeIncomingMessage(id: "mine-short-1", sender: "me"),
-            makeIncomingMessage(id: "mine-short-2", sender: "me")
+            makeIncomingMessage(id: "mine-short-1", sender: "me", senderPeerID: context.myPeerID),
+            makeIncomingMessage(id: "mine-short-2", sender: "me", senderPeerID: context.myPeerID)
         ]
         context.queuedMessageIDsByPeerID[shortPeerID] = ["mine-short-1", "mine-short-2"]
 
@@ -435,7 +443,7 @@ struct ChatPrivateConversationCoordinatorContextTests {
         let stablePeerID = PeerID(hexData: Data(repeating: 0xC1, count: 32))
         let unrelatedPeerID = PeerID(str: "1111222233334444")
         context.privateChats[unrelatedPeerID] = [
-            makeIncomingMessage(id: "collision", sender: "me")
+            makeIncomingMessage(id: "collision", sender: "me", senderPeerID: context.myPeerID)
         ]
         context.queuedMessageIDsByPeerID[unrelatedPeerID] = ["collision"]
 
@@ -1129,6 +1137,88 @@ struct ChatPrivateConversationCoordinatorContextTests {
         #expect(context.geoReadReceipts.isEmpty)
         #expect(context.unreadPrivateMessages.contains(geoConvKey))
         #expect(context.privateMessageNotifications.count == 2)
+    }
+
+    @Test @MainActor
+    func nostrReceipts_rejectBlockedSenderAndNonOutgoingMessagesAndPreferFavoriteNickname() async {
+        let context = MockChatPrivateConversationContext()
+        let coordinator = ChatPrivateConversationCoordinator(context: context)
+        let noiseKey = Data(repeating: 0xE1, count: 32)
+        let stablePeerID = PeerID(hexData: noiseKey)
+        let senderPubkey = "feedface00112233"
+        context.displayNamesByPubkey[senderPubkey] = "anon#2233"
+        context.favoriteRelationshipsByNoiseKey[noiseKey] = makeFavoriteRelationship(
+            noiseKey: noiseKey,
+            nickname: "Alice"
+        )
+        let outgoing = BitchatMessage(
+            id: "out-1",
+            sender: "me",
+            content: "hello",
+            timestamp: Date(),
+            isRelay: false,
+            isPrivate: true,
+            recipientNickname: "Alice",
+            senderPeerID: context.myPeerID,
+            deliveryStatus: .sent
+        )
+        let incoming = makeIncomingMessage(
+            id: "in-1",
+            sender: "Alice",
+            content: "reply",
+            senderPeerID: stablePeerID
+        )
+        context.privateChats[stablePeerID] = [outgoing, incoming]
+
+        // Blocked sender cannot mutate delivery/read status.
+        context.blockedNostrPubkeys = [senderPubkey]
+        coordinator.handleReadReceipt(
+            NoisePayload(type: .readReceipt, data: Data("out-1".utf8)),
+            senderPubkey: senderPubkey,
+            convKey: stablePeerID
+        )
+        #expect(context.privateChats[stablePeerID]?.first?.deliveryStatus == .sent)
+
+        // Unblocked sender cannot forge a read receipt against their own incoming message.
+        context.blockedNostrPubkeys = []
+        coordinator.handleReadReceipt(
+            NoisePayload(type: .readReceipt, data: Data("in-1".utf8)),
+            senderPubkey: senderPubkey,
+            convKey: stablePeerID
+        )
+        #expect(!isRead(context.privateChats[stablePeerID]?.last?.deliveryStatus, by: "Alice"))
+        #expect(!isRead(context.privateChats[stablePeerID]?.last?.deliveryStatus, by: "anon#2233"))
+
+        // Valid outgoing message uses favorite nickname ("Alice"), not "anon#2233".
+        coordinator.handleReadReceipt(
+            NoisePayload(type: .readReceipt, data: Data("out-1".utf8)),
+            senderPubkey: senderPubkey,
+            convKey: stablePeerID
+        )
+        #expect(isRead(context.privateChats[stablePeerID]?.first?.deliveryStatus, by: "Alice"))
+    }
+
+    @Test @MainActor
+    func handlePrivateMessage_sendReadReceiptsDisabledAndUnroutableMeshRetry() async {
+        let context = MockChatPrivateConversationContext()
+        let coordinator = ChatPrivateConversationCoordinator(context: context)
+        let peerID = PeerID(str: "0102030405060708")
+        context.selectedPrivateChatPeer = peerID
+
+        // Disabled read receipts: viewing suppresses unread/notification, sends no receipt.
+        context.sendReadReceiptsEnabled = false
+        coordinator.handlePrivateMessage(makeIncomingMessage(id: "pm-muted-rr", senderPeerID: peerID))
+        #expect(context.meshReadReceipts.isEmpty)
+        #expect(!context.sentReadReceipts.contains("pm-muted-rr"))
+        #expect(!context.unreadPrivateMessages.contains(peerID))
+
+        // Enabled read receipts but router reports unroutable (e.g. courier mail with peer offline):
+        // must not mark sent so a later read scan retries once a route returns.
+        context.sendReadReceiptsEnabled = true
+        context.routeReadReceiptResult = false
+        coordinator.handlePrivateMessage(makeIncomingMessage(id: "pm-unroutable-live", senderPeerID: peerID))
+        #expect(context.meshReadReceipts.map(\.messageID) == ["pm-unroutable-live"])
+        #expect(!context.sentReadReceipts.contains("pm-unroutable-live"))
     }
 
     @Test @MainActor

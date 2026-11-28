@@ -123,7 +123,6 @@ final class ChatDeliveryCoordinator {
     func cleanupOldReadReceipts() {
         guard !context.isStartupPhase else { return }
         let validMessageIDs = context.privateMessageIDs()
-        guard !validMessageIDs.isEmpty else { return }
 
         let removedCount = context.pruneSentReadReceipts(keeping: validMessageIDs)
         if removedCount > 0 {

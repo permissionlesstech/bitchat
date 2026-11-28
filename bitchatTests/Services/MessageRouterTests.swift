@@ -429,6 +429,26 @@ struct MessageRouterTests {
     }
 
     @Test @MainActor
+    func sendReadReceipt_prefersSecurelyDeliverableTransportOverStaleReachable() async {
+        let peerID = PeerID(str: "0000000000000003")
+        let staleBLE = MockTransport()
+        staleBLE.reachablePeers.insert(peerID)
+        staleBLE.securePeers = [] // e.g. 60s stale BLE retention window, no active session
+
+        let liveNostr = MockTransport()
+        liveNostr.reachablePeers.insert(peerID)
+        liveNostr.securePeers = [peerID] // relay connected and ready
+
+        let router = MessageRouter(transports: [staleBLE, liveNostr])
+        let receipt = ReadReceipt(originalMessageID: "m-prefer-live", readerID: staleBLE.myPeerID, readerNickname: "Me")
+        let routed = router.sendReadReceipt(receipt, to: peerID)
+
+        #expect(routed)
+        #expect(staleBLE.sentReadReceipts.isEmpty)
+        #expect(liveNostr.sentReadReceipts.map(\.receipt.originalMessageID) == ["m-prefer-live"])
+    }
+
+    @Test @MainActor
     func sendFavoriteNotification_usesConnectedOrReachable() async {
         let peerID = PeerID(str: "0000000000000004")
         let transport = MockTransport()

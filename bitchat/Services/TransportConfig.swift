@@ -154,6 +154,9 @@ enum TransportConfig {
     static let uiStartupPhaseDurationSeconds: TimeInterval = 2.0
     static let uiReadReceiptRetryShortSeconds: TimeInterval = 0.1
     static let uiReadReceiptRetryLongSeconds: TimeInterval = 0.5
+    // Only unmark recent incoming messages on BLE disconnect so reconnects
+    // recover receipts lost mid-drop without replaying full chat history.
+    static let bleReadReceiptDisconnectRetryWindowSeconds: TimeInterval = 5 * 60
     static let uiBatchDispatchStaggerSeconds: TimeInterval = 0.15
     static let uiScrollThrottleSeconds: TimeInterval = 0.15
     static let uiAnimationMediumSeconds: TimeInterval = 0.2

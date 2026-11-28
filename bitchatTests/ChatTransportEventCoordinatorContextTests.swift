@@ -186,6 +186,7 @@ private func makeMessage(
     id: String,
     sender: String = "alice",
     content: String = "hello",
+    timestamp: Date = Date(),
     isPrivate: Bool = false,
     senderPeerID: PeerID? = nil
 ) -> BitchatMessage {
@@ -193,7 +194,7 @@ private func makeMessage(
         id: id,
         sender: sender,
         content: content,
-        timestamp: Date(),
+        timestamp: timestamp,
         isRelay: false,
         isPrivate: isPrivate,
         recipientNickname: isPrivate ? "me" : nil,
@@ -378,12 +379,31 @@ struct ChatTransportEventCoordinatorContextTests {
 
         #expect(context.privateChats[peerID] == nil)
         #expect(context.privateChats[stablePeerID]?.map(\.id) == ["m1", "mine"])
+        // Recent incoming receipt IDs must be captured BEFORE migration deletes the short-ID chat.
+        #expect(context.unmarkedReadReceiptBatches == [["m1"]])
         // Sender IDs migrate to the stable peer ID, except our own.
         #expect(context.privateChats[stablePeerID]?.first?.senderPeerID == stablePeerID)
         #expect(context.privateChats[stablePeerID]?.last?.senderPeerID == context.myPeerID)
         #expect(context.selectedPrivateChatPeer == stablePeerID)
         #expect(context.unreadPrivateMessages == [stablePeerID])
         #expect(context.stablePeerIDCache[peerID] == stablePeerID)
+    }
+
+    @Test @MainActor
+    func didDisconnect_skipsHistoricalMessagesOutsideRetryWindow() {
+        let context = MockChatTransportEventContext()
+        let coordinator = ChatTransportEventCoordinator(context: context)
+        let peerID = PeerID(str: "1122334455667788")
+        let oldTimestamp = Date().addingTimeInterval(-(TransportConfig.bleReadReceiptDisconnectRetryWindowSeconds + 60))
+
+        context.privateChats[peerID] = [
+            makeMessage(id: "old-msg", timestamp: oldTimestamp, isPrivate: true, senderPeerID: peerID),
+            makeMessage(id: "recent-msg", timestamp: Date(), isPrivate: true, senderPeerID: peerID)
+        ]
+
+        coordinator.didDisconnectFromPeerSynchronously(peerID)
+
+        #expect(context.unmarkedReadReceiptBatches == [["recent-msg"]])
     }
 
     @Test @MainActor

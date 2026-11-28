@@ -482,83 +482,30 @@ final class ChatViewModel: ObservableObject, SynchronousMessageTransportEventDel
         return scratch
     }
 
-    // Track sent read receipts to avoid duplicates (persisted across launches).
-    // Mutations coalesce into a debounced off-main encode/write so rapid bursts
-    // (opening a chat, reconnecting) do not re-encode the whole set on MainActor.
-    private final class ReadReceiptPersistGate: @unchecked Sendable {
-        private let lock = NSLock()
-        private var generation: UInt64 = 0
-
-        func nextGeneration() -> UInt64 {
-            lock.lock()
-            defer { lock.unlock() }
-            generation &+= 1
-            return generation
-        }
-
-        func commitIfCurrent(data: Data, expectedGeneration: UInt64, defaults: UserDefaults) {
-            lock.lock()
-            defer { lock.unlock() }
-            guard generation == expectedGeneration else { return }
-            defaults.set(data, forKey: "sentReadReceipts")
-        }
-
-        func flushSynchronously(receipts: [String], defaults: UserDefaults) {
-            lock.lock()
-            defer { lock.unlock() }
-            generation &+= 1
-            if receipts.isEmpty {
-                defaults.removeObject(forKey: "sentReadReceipts")
-            } else if let data = try? JSONEncoder().encode(receipts) {
-                defaults.set(data, forKey: "sentReadReceipts")
-            } else {
-                SecureLogger.error("❌ Failed to encode read receipts for persistence", category: .session)
-            }
-        }
-    }
-
-    private var readReceiptPersistTask: Task<Void, Never>?
-    private let readReceiptPersistGate = ReadReceiptPersistGate()
-
+    // Track sent read receipts to avoid duplicates. Persisted exclusively inside
+    // `EncryptedHistoryStore` (sealed with the Keychain history key and gated on
+    // `PrivacyModeSettings.persistPrivateHistory`) so Stealth / RAM-only mode and
+    // ephemeral chats never write message IDs to plaintext `UserDefaults`.
     var sentReadReceipts: Set<String> = [] {  // messageID set
         didSet {
             guard oldValue != sentReadReceipts else { return }
-            schedulePersistSentReadReceipts()
+            schedulePersistPrivateHistory()
         }
     }
 
-    private func schedulePersistSentReadReceipts() {
-        readReceiptPersistTask?.cancel()
-        let gate = readReceiptPersistGate
-        let generation = gate.nextGeneration()
-        let snapshot = Array(sentReadReceipts)
-        let defaults = readReceiptsDefaults
-        readReceiptPersistTask = Task.detached(priority: .utility) { [weak self] in
-            try? await Task.sleep(nanoseconds: 250_000_000)
-            guard !Task.isCancelled else { return }
-            if let data = try? JSONEncoder().encode(snapshot) {
-                gate.commitIfCurrent(data: data, expectedGeneration: generation, defaults: defaults)
-            } else {
-                SecureLogger.error("❌ Failed to encode read receipts for persistence", category: .session)
-            }
-            await MainActor.run { [weak self] in
-                guard let self else { return }
-                if self.readReceiptPersistTask?.isCancelled == false {
-                    self.readReceiptPersistTask = nil
-                }
-            }
-        }
+    /// Whether outbound read receipts are currently enabled for this app's privacy posture.
+    var sendReadReceiptsEnabled: Bool {
+        PrivacyModeSettings.shouldSendReadReceipts(in: readReceiptsDefaults)
     }
 
-    /// Cancels any pending debounced write and persists `sentReadReceipts`
-    /// synchronously (used on termination and panic wipe).
+    /// Scrubs any legacy plaintext `UserDefaults["sentReadReceipts"]` key and
+    /// flushes the sealed history store synchronously (used on backgrounding,
+    /// termination, and panic wipe).
     func flushPersistedReadReceiptsSynchronously() {
-        readReceiptPersistTask?.cancel()
-        readReceiptPersistTask = nil
-        readReceiptPersistGate.flushSynchronously(
-            receipts: Array(sentReadReceipts),
-            defaults: readReceiptsDefaults
-        )
+        if readReceiptsDefaults.object(forKey: "sentReadReceipts") != nil {
+            readReceiptsDefaults.removeObject(forKey: "sentReadReceipts")
+        }
+        flushPersistedPrivateHistorySynchronously()
     }
 
     // Track which GeoDM messages we've already sent a delivery ACK for (by messageID)
@@ -580,6 +527,11 @@ final class ChatViewModel: ObservableObject, SynchronousMessageTransportEventDel
     // Single-writer: mutate only via `registerNostrKeyMapping` / `removeNostrKeyMappings` below.
     private(set) var nostrKeyMapping: [PeerID: String] = [:]  // senderPeerID -> nostrPubkey
 
+    // Track originating geohash per GeoDM conversation so replies and read
+    // receipts sign with the thread's own per-geohash identity even if the user
+    // has switched to `.mesh` or a different location channel.
+    private(set) var geoDMGeohashByPeerID: [PeerID: String] = [:]
+
     // MARK: - Single-Writer Intent Operations
     // Owner-side mutation paths for state the coordinator contexts may read
     // but not write directly. Each op is the sole way to mutate its backing
@@ -591,11 +543,24 @@ final class ChatViewModel: ObservableObject, SynchronousMessageTransportEventDel
         nostrKeyMapping[peerID] = pubkey
     }
 
+    /// Binds a GeoDM conversation key to the geohash whose derived identity owns it.
+    @MainActor
+    func registerGeoDMGeohash(_ geohash: String, for peerID: PeerID) {
+        guard peerID.isGeoDM, !geohash.isEmpty else { return }
+        geoDMGeohashByPeerID[peerID] = geohash
+    }
+
+    @MainActor
+    func geohashForGeoDM(_ peerID: PeerID) -> String? {
+        geoDMGeohashByPeerID[peerID]
+    }
+
     /// Drops every key mapping that resolves to the given (lowercased) Nostr pubkey.
     @MainActor
     func removeNostrKeyMappings(matchingPubkeyHexLowercased hex: String) {
         for (key, value) in nostrKeyMapping where value.lowercased() == hex {
             nostrKeyMapping.removeValue(forKey: key)
+            geoDMGeohashByPeerID.removeValue(forKey: key)
         }
     }
 
@@ -626,17 +591,6 @@ final class ChatViewModel: ObservableObject, SynchronousMessageTransportEventDel
     @MainActor
     func unmarkReadReceiptsSent(_ ids: [String]) {
         sentReadReceipts.subtract(ids)
-    }
-
-    /// Marks read receipts as sent for own messages already delivered/read in
-    /// `peerID`'s chat, syncing the chat manager's tracking with the persisted
-    /// set. (Wraps the manager's `inout` sync so the raw set never leaks.)
-    @MainActor
-    func syncReadReceiptsForSentMessages(for peerID: PeerID) {
-        privateChatManager.syncReadReceiptsForSentMessages(
-            peerID: peerID,
-            externalReceipts: &sentReadReceipts
-        )
     }
 
     /// Drops every recorded read receipt whose message ID is no longer valid.
@@ -1401,6 +1355,8 @@ final class ChatViewModel: ObservableObject, SynchronousMessageTransportEventDel
         encryptedHistoryStore.save(
             from: conversations,
             nostrKeyMapping: nostrKeyMapping,
+            geoDMGeohashByPeerID: geoDMGeohashByPeerID,
+            sentReadReceipts: sentReadReceipts,
             synchronous: true
         )
     }
@@ -1409,6 +1365,9 @@ final class ChatViewModel: ObservableObject, SynchronousMessageTransportEventDel
         historyPersistTask?.cancel()
         historyPersistTask = nil
         encryptedHistoryStore.clearPersistedHistory()
+        if readReceiptsDefaults.object(forKey: "sentReadReceipts") != nil {
+            readReceiptsDefaults.removeObject(forKey: "sentReadReceipts")
+        }
     }
 
     func isConversationMuted(for peerID: PeerID) -> Bool {
@@ -1482,7 +1441,9 @@ final class ChatViewModel: ObservableObject, SynchronousMessageTransportEventDel
         for id in peerIDsToRemove {
             conversations.removeConversation(.directPeer(id))
             encryptedHistoryStore.setTimer(.off, for: id)
+            geoDMGeohashByPeerID.removeValue(forKey: id)
         }
+        _ = pruneSentReadReceipts(keeping: conversations.directMessageIDs())
 
         // Remove any favorite entry for this contact so the deleted chat
         // doesn't immediately reappear as an empty favorite row in the inbox.
@@ -1574,6 +1535,12 @@ final class ChatViewModel: ObservableObject, SynchronousMessageTransportEventDel
         for (rawPeerID, nostrKey) in snapshot.nostrKeyMapping where nostrKeyMapping[PeerID(str: rawPeerID)] == nil {
             nostrKeyMapping[PeerID(str: rawPeerID)] = nostrKey
         }
+        for (rawPeerID, geohash) in snapshot.geoDMGeohashByPeerID where geoDMGeohashByPeerID[PeerID(str: rawPeerID)] == nil {
+            geoDMGeohashByPeerID[PeerID(str: rawPeerID)] = geohash
+        }
+        if !snapshot.sentReadReceipts.isEmpty {
+            sentReadReceipts.formUnion(snapshot.sentReadReceipts)
+        }
         let unreadSet = Set(snapshot.unreadPeerIDs)
         for (rawPeerID, messages) in snapshot.messagesByPeerID where !messages.isEmpty {
             let peerID = PeerID(str: rawPeerID)
@@ -1592,7 +1559,12 @@ final class ChatViewModel: ObservableObject, SynchronousMessageTransportEventDel
         historyPersistTask = Task { @MainActor [weak self] in
             try? await Task.sleep(nanoseconds: 600_000_000)
             guard !Task.isCancelled, let self, !self.isPanicResetting else { return }
-            self.encryptedHistoryStore.save(from: self.conversations, nostrKeyMapping: self.nostrKeyMapping)
+            self.encryptedHistoryStore.save(
+                from: self.conversations,
+                nostrKeyMapping: self.nostrKeyMapping,
+                geoDMGeohashByPeerID: self.geoDMGeohashByPeerID,
+                sentReadReceipts: self.sentReadReceipts
+            )
             self.historyPersistTask = nil
         }
     }
@@ -2190,13 +2162,13 @@ final class ChatViewModel: ObservableObject, SynchronousMessageTransportEventDel
         _ = clearGeoSamplingSubs()
         cachedGeohashIdentity = nil
         nostrKeyMapping.removeAll()
+        geoDMGeohashByPeerID.removeAll()
         // Every pubkey seen in any geohash this session, with when.
         participantTracker.clear()
 
         // Clear read receipt tracking
         sentReadReceipts.removeAll()
         flushPersistedReadReceiptsSynchronously()
-        privateChatManager.resetForPanic()
         deduplicationService.clearAll()
 
         // IMPORTANT: Clear Nostr-related state

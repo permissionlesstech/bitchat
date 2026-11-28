@@ -30,6 +30,8 @@ protocol NostrInboundPipelineContext: AnyObject {
     func setGeoNickname(_ nickname: String, forPubkey pubkeyHex: String)
     /// Records the Nostr pubkey behind a (possibly virtual) peer ID.
     func registerNostrKeyMapping(_ pubkey: String, for peerID: PeerID)
+    /// Binds a GeoDM conversation key to the geohash whose derived identity owns it.
+    func registerGeoDMGeohash(_ geohash: String, for peerID: PeerID)
     /// `seenAt` is the event's own timestamp, so replayed history doesn't
     /// count its authors as present. Returns whether the activity counted.
     @discardableResult
@@ -65,6 +67,7 @@ protocol NostrInboundPipelineContext: AnyObject {
 }
 
 extension NostrInboundPipelineContext {
+    func registerGeoDMGeohash(_ geohash: String, for peerID: PeerID) {}
     func handlePrivateMessage(
         _ payload: NoisePayload,
         senderPubkey: String,
@@ -266,6 +269,7 @@ final class NostrInboundPipeline {
     func handleGiftWrap(
         _ giftWrap: NostrEvent,
         id: NostrIdentity,
+        geohash: String? = nil,
         outerSignatureAlreadyVerified: Bool = false
     ) {
         guard let context else { return }
@@ -276,10 +280,12 @@ final class NostrInboundPipeline {
         // wipe between spawn and delivery bumps the generation, and the task
         // drops its result instead of delivering plaintext post-wipe.
         let wipeGeneration = self.wipeGeneration
+        let resolvedGeohash = geohash ?? context.currentGeohash
         Task.detached(priority: .userInitiated) { [weak self] in
             await self?.processGiftWrap(
                 giftWrap,
                 geohashIdentity: id,
+                geohash: resolvedGeohash,
                 initialWipeGeneration: wipeGeneration,
                 outerSignatureAlreadyVerified: outerSignatureAlreadyVerified
             )
@@ -308,6 +314,7 @@ final class NostrInboundPipeline {
         await processGiftWrap(
             giftWrap,
             geohashIdentity: nil,
+            geohash: nil,
             initialWipeGeneration: nil,
             outerSignatureAlreadyVerified: outerSignatureAlreadyVerified
         )
@@ -320,6 +327,7 @@ final class NostrInboundPipeline {
     private func processGiftWrap(
         _ giftWrap: NostrEvent,
         geohashIdentity: NostrIdentity?,
+        geohash: String?,
         initialWipeGeneration: UInt64?,
         outerSignatureAlreadyVerified: Bool
     ) async {
@@ -407,6 +415,9 @@ final class NostrInboundPipeline {
             let convKey: PeerID
             if isGeohashDM {
                 convKey = PeerID(nostr_: senderPubkey)
+                if let geohash {
+                    context.registerGeoDMGeohash(geohash, for: convKey)
+                }
             } else {
                 let actualSenderNoiseKey = self.findNoiseKey(for: senderPubkey)
                 convKey = PeerID(str: actualSenderNoiseKey?.hexEncodedString()) ?? PeerID(nostr_: senderPubkey)

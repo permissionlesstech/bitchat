@@ -1094,13 +1094,51 @@ struct ChatViewModelPrivateChatTests {
     }
 
     @Test @MainActor
-    func syncReadReceiptsForSentMessages_judgesMineBySenderIDNotNickname() async {
-        let (viewModel, transport) = makeTestableViewModel()
+    func startPrivateChat_sendsSingleReadReceiptForNamesakeAndNeverDuplicatesAcrossRestarts() async throws {
+        // Integration regression:
+        // 1. Opening a chat must emit exactly ONE read receipt (no duplicate from PrivateChatManager).
+        // 2. A namesake's delivered incoming message still gets a READ receipt; own messages do not.
+        // 3. Sent read receipts are sealed in EncryptedHistoryStore, never written in plaintext
+        //    to UserDefaults, and reopening a restored chat sends ZERO duplicate receipts.
+        let suiteName = "read-receipt-integration-\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suiteName))
+        defaults.removePersistentDomain(forName: suiteName)
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+
+        // Seed legacy plaintext key to verify one-time scrub on startup.
+        defaults.set(try JSONEncoder().encode(["legacy-msg"]), forKey: "sentReadReceipts")
+
+        let historyURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("rr-history-\(UUID().uuidString).sealed")
+        defer { try? FileManager.default.removeItem(at: historyURL) }
+
+        let keychain = MockKeychain()
+        let historyStore = EncryptedHistoryStore(
+            keychain: keychain,
+            persistsToDisk: true,
+            fileURL: historyURL,
+            persistenceEnabledProvider: { true }
+        )
+        let transport = MockTransport()
+        let viewModel = ChatViewModel(
+            keychain: keychain,
+            idBridge: NostrIdentityBridge(keychain: MockKeychainHelper()),
+            identityManager: MockIdentityManager(keychain),
+            transport: transport,
+            readReceiptsDefaults: defaults,
+            encryptedHistoryStore: historyStore
+        )
+
+        // Legacy plaintext key must be scrubbed on startup.
+        #expect(defaults.object(forKey: "sentReadReceipts") == nil)
+        #expect(viewModel.hasSentReadReceipt("legacy-msg"))
+
         viewModel.nickname = "alice"
         let peerID = PeerID(str: "0011223344556677")
+        transport.connectedPeers.insert(peerID)
+        transport.reachablePeers.insert(peerID)
+
         viewModel.seedPrivateChat([
-            // A namesake's file, delivered to me (BLEFileTransferHandler.incomingMessage):
-            // it still needs my READ receipt.
             BitchatMessage(
                 id: "namesake-delivered",
                 sender: "alice",
@@ -1112,7 +1150,6 @@ struct ChatViewModelPrivateChatTests {
                 senderPeerID: peerID,
                 deliveryStatus: .delivered(to: "alice", at: Date())
             ),
-            // My own message from before a rename, already read.
             BitchatMessage(
                 id: "mine-before-rename",
                 sender: "al",
@@ -1126,11 +1163,94 @@ struct ChatViewModelPrivateChatTests {
             )
         ], for: peerID)
 
-        viewModel.syncReadReceiptsForSentMessages(for: peerID)
+        viewModel.startPrivateChat(with: peerID)
+        await Task.yield()
 
-        #expect(!viewModel.hasSentReadReceipt("namesake-delivered"))
-        #expect(!viewModel.privateChatManager.sentReadReceipts.contains("namesake-delivered"))
-        #expect(viewModel.hasSentReadReceipt("mine-before-rename"))
+        // Single owner: exactly one READ receipt for the namesake's incoming message,
+        // none for our own message, and own message ID never pollutes sentReadReceipts.
+        #expect(transport.sentReadReceipts.map(\.receipt.originalMessageID) == ["namesake-delivered"])
+        #expect(viewModel.hasSentReadReceipt("namesake-delivered"))
+        #expect(!viewModel.hasSentReadReceipt("mine-before-rename"))
+
+        // Flush encrypted history and confirm UserDefaults remains completely free of plaintext IDs.
+        viewModel.flushPersistedPrivateHistorySynchronously()
+        #expect(defaults.object(forKey: "sentReadReceipts") == nil)
+
+        // Simulate app relaunch with the same encrypted history file: restored chat
+        // must remember sentReadReceipts and send ZERO duplicate receipts when reopened.
+        let transport2 = MockTransport()
+        transport2.connectedPeers.insert(peerID)
+        transport2.reachablePeers.insert(peerID)
+        let historyStore2 = EncryptedHistoryStore(
+            keychain: keychain,
+            persistsToDisk: true,
+            fileURL: historyURL,
+            persistenceEnabledProvider: { true }
+        )
+        let viewModel2 = ChatViewModel(
+            keychain: keychain,
+            idBridge: NostrIdentityBridge(keychain: MockKeychainHelper()),
+            identityManager: MockIdentityManager(keychain),
+            transport: transport2,
+            readReceiptsDefaults: defaults,
+            encryptedHistoryStore: historyStore2
+        )
+        #expect(viewModel2.hasSentReadReceipt("namesake-delivered"))
+        viewModel2.startPrivateChat(with: peerID)
+        await Task.yield()
+        #expect(transport2.sentReadReceipts.isEmpty)
+    }
+
+    @Test @MainActor
+    func stealthMode_disablesReadReceiptsAndNeverPersistsToDisk() async throws {
+        let suiteName = "read-receipt-stealth-\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suiteName))
+        defaults.removePersistentDomain(forName: suiteName)
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+
+        PrivacyModeSettings.setMode(.stealth, in: defaults)
+        defaults.set(try JSONEncoder().encode(["stale-plaintext"]), forKey: "sentReadReceipts")
+
+        let transport = MockTransport()
+        let peerID = PeerID(str: "0011223344556688")
+        transport.connectedPeers.insert(peerID)
+        transport.reachablePeers.insert(peerID)
+
+        let keychain = MockKeychain()
+        let viewModel = ChatViewModel(
+            keychain: keychain,
+            idBridge: NostrIdentityBridge(keychain: MockKeychainHelper()),
+            identityManager: MockIdentityManager(keychain),
+            transport: transport,
+            readReceiptsDefaults: defaults
+        )
+
+        // Stealth mode scrubs legacy plaintext key and does NOT load it.
+        #expect(defaults.object(forKey: "sentReadReceipts") == nil)
+        #expect(!viewModel.hasSentReadReceipt("stale-plaintext"))
+        #expect(!viewModel.sendReadReceiptsEnabled)
+
+        viewModel.seedPrivateChat([
+            BitchatMessage(
+                id: "stealth-in-1",
+                sender: "Alice",
+                content: "secret",
+                timestamp: Date(),
+                isRelay: false,
+                isPrivate: true,
+                recipientNickname: "me",
+                senderPeerID: peerID
+            )
+        ], for: peerID)
+        viewModel.markPrivateChatUnread(peerID)
+
+        viewModel.startPrivateChat(with: peerID)
+        await Task.yield()
+
+        // Unread clears locally, but no wire read receipt is emitted and nothing hits UserDefaults.
+        #expect(!viewModel.unreadPrivateMessages.contains(peerID))
+        #expect(transport.sentReadReceipts.isEmpty)
+        #expect(defaults.object(forKey: "sentReadReceipts") == nil)
     }
 }
 

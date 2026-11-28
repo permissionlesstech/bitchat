@@ -14,6 +14,10 @@ struct BLEPendingTypedPayload: Equatable {
 }
 
 struct BLENoiseSessionQueues {
+    /// Bounds queued pre-handshake control/media payloads per peer so a peer
+    /// that never finishes a handshake cannot grow RAM without bound.
+    static let maxTypedPayloadsPerPeer = 128
+
     private var privateMessagesByPeerID: [PeerID: [BLEPendingPrivateMessage]] = [:]
     private var typedPayloadsByPeerID: [PeerID: [BLEPendingTypedPayload]] = [:]
 
@@ -42,9 +46,24 @@ struct BLENoiseSessionQueues {
     }
 
     mutating func appendTypedPayload(_ payload: Data, transferId: String? = nil, for peerID: PeerID) {
-        typedPayloadsByPeerID[peerID, default: []].append(
-            BLEPendingTypedPayload(payload: payload, transferId: transferId)
-        )
+        let entry = BLEPendingTypedPayload(payload: payload, transferId: transferId)
+        var queue = typedPayloadsByPeerID[peerID] ?? []
+        // Deduplicate identical control payloads (e.g. repeated read/delivery
+        // receipts queued before handshake completion).
+        if transferId == nil, queue.contains(entry) {
+            return
+        }
+        queue.append(entry)
+        if queue.count > Self.maxTypedPayloadsPerPeer {
+            // Prefer evicting the oldest non-media control payload over an
+            // in-flight media transfer tracked by TransferProgressManager.
+            if let controlIndex = queue.firstIndex(where: { $0.transferId == nil }) {
+                queue.remove(at: controlIndex)
+            } else {
+                queue.removeFirst()
+            }
+        }
+        typedPayloadsByPeerID[peerID] = queue
     }
 
     mutating func takeTypedPayloads(for peerID: PeerID) -> [BLEPendingTypedPayload] {

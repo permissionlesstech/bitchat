@@ -84,4 +84,30 @@ struct BLENoiseSessionQueuesTests {
             BLEPendingTypedPayload(payload: Data([0x01, 0xBB]), transferId: nil)
         ])
     }
+
+    @Test
+    func controlPayloadsDeduplicateAndRespectPerPeerCapWhilePreservingMedia() {
+        let peerID = PeerID(str: "aaaaaaaaaaaaaaaa")
+        var queues = BLENoiseSessionQueues()
+        let readPayload = BLENoisePayloadFactory.readReceipt(originalMessageID: "dup-id")
+
+        // Identical control payloads deduplicate.
+        queues.appendTypedPayload(readPayload, for: peerID)
+        queues.appendTypedPayload(readPayload, for: peerID)
+        #expect(queues.takeTypedPayloads(for: peerID).count == 1)
+
+        // Filling past maxTypedPayloadsPerPeer evicts oldest control payload
+        // first while keeping tracked media transfers intact.
+        queues.appendTypedPayload(Data([0x20, 0x01]), transferId: "keep-media", for: peerID)
+        for index in 0..<(BLENoiseSessionQueues.maxTypedPayloadsPerPeer + 5) {
+            queues.appendTypedPayload(
+                BLENoisePayloadFactory.readReceipt(originalMessageID: "msg-\(index)"),
+                for: peerID
+            )
+        }
+
+        let drained = queues.takeTypedPayloads(for: peerID)
+        #expect(drained.count == BLENoiseSessionQueues.maxTypedPayloadsPerPeer)
+        #expect(drained.contains(where: { $0.transferId == "keep-media" }))
+    }
 }
