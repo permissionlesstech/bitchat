@@ -33,11 +33,16 @@ final class MockKeychain: KeychainManagerProtocol {
 
     func getIdentityKey(forKey key: String) -> Data? {
         getIdentityKeyCallCount += 1
-        if simulatedReadError != nil,
-           simulatedReadErrorKeys == nil || simulatedReadErrorKeys?.contains(key) == true {
+        if simulatedReadFault(forKey: key) != nil {
             return nil
         }
         return storage[key]
+    }
+
+    /// The simulated read error for `key`. With no key filter, it applies to every key.
+    private func simulatedReadFault(forKey key: String) -> KeychainReadResult? {
+        guard simulatedReadErrorKeys?.contains(key) ?? true else { return nil }
+        return simulatedReadError
     }
 
     func deleteIdentityKey(forKey key: String) -> Bool {
@@ -64,8 +69,7 @@ final class MockKeychain: KeychainManagerProtocol {
     // BCH-01-009: New methods with proper error classification
     func getIdentityKeyWithResult(forKey key: String) -> KeychainReadResult {
         getIdentityKeyCallCount += 1
-        if let simulated = simulatedReadError,
-           simulatedReadErrorKeys == nil || simulatedReadErrorKeys?.contains(key) == true {
+        if let simulated = simulatedReadFault(forKey: key) {
             return simulated
         }
         if let data = storage[key] {

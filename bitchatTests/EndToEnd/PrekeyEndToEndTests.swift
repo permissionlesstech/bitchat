@@ -475,4 +475,36 @@ struct PrekeyEndToEndTests {
         #expect(!alice.prekeyBundleStore.hasUsableBundle(for: bob.noiseStaticPublicKeyData()))
         #expect(!alice._test_hasGossipPrekeyBundle(for: bob.myPeerID))
     }
+
+    @Test func unsentBundleDoesNotStartTheRebroadcastWindow() async throws {
+        // The prekey store cannot be read, so the bundle is empty and nothing goes out.
+        let keychain = MockKeychain()
+        keychain.simulatedReadError = .deviceLocked
+        keychain.simulatedReadErrorKeys = ["prekeysV1"]
+        let service = BLEService(
+            keychain: keychain,
+            idBridge: NostrIdentityBridge(keychain: MockKeychainHelper()),
+            identityManager: MockIdentityManager(keychain),
+            initializeBluetoothManagers: false
+        )
+        service.courierStore = CourierStore(persistsToDisk: false)
+        service.prekeyBundleStore = PrekeyBundleStore(persistsToDisk: false)
+        let tap = PacketTap()
+        service._test_onOutboundPacket = tap.record
+
+        service.sendPrekeyBundle()
+        await service._test_drainAllPipelines()
+        #expect(tap.first(ofType: .prekeyBundle) == nil)
+
+        // Once the store reads again, the next unforced send goes out at once,
+        // not after the rebroadcast window.
+        keychain.simulatedReadError = nil
+        keychain.simulatedReadErrorKeys = nil
+        service.sendPrekeyBundle()
+        let sent = await TestHelpers.waitUntil(
+            { tap.first(ofType: .prekeyBundle) != nil },
+            timeout: TestConstants.settleTimeout
+        )
+        #expect(sent)
+    }
 }

@@ -390,12 +390,14 @@ extension BLEService {
     /// Forced sends (bundle changed after consumption) go immediately.
     func sendPrekeyBundle(force: Bool = false) {
         let now = Date()
+        var previousSentAt: Date?
         let shouldSend: Bool = onEngine {
             if !force,
                let last = lastPrekeyBundleSentAt,
                now.timeIntervalSince(last) < TransportConfig.prekeyBundleRebroadcastSeconds {
                 return false
             }
+            previousSentAt = lastPrekeyBundleSentAt
             lastPrekeyBundleSentAt = now
             return true
         }
@@ -403,6 +405,7 @@ extension BLEService {
         guard let bundle = noiseService.currentPrekeyBundle(),
               let payload = bundle.encode() else {
             SecureLogger.error("❌ Failed to build prekey bundle", category: .security)
+            restorePrekeyBundleSentAt(claimedAt: now, previous: previousSentAt)
             return
         }
         guard let signedPacket = buildSignedBroadcastPacket(
@@ -410,7 +413,10 @@ extension BLEService {
             payload: payload,
             timestamp: now,
             logLabel: "prekey bundle packet"
-        ) else { return }
+        ) else {
+            restorePrekeyBundleSentAt(claimedAt: now, previous: previousSentAt)
+            return
+        }
         if DispatchQueue.getSpecific(key: messageQueueKey) != nil {
             broadcastPacket(signedPacket)
         } else {
@@ -419,6 +425,17 @@ extension BLEService {
             }
         }
         gossipSyncManager?.onPublicPacketSeen(signedPacket)
+    }
+
+    /// No bundle went out, so the rebroadcast window must not start. For
+    /// example, a failed prekey read gives an empty bundle until the next read.
+    private func restorePrekeyBundleSentAt(claimedAt: Date, previous: Date?) {
+        onEngine {
+            // A later send or a panic reset may have set a newer value.
+            if lastPrekeyBundleSentAt == claimedAt {
+                lastPrekeyBundleSentAt = previous
+            }
+        }
     }
 
     /// Ingests a gossiped prekey bundle. Attribution is layered: the outer

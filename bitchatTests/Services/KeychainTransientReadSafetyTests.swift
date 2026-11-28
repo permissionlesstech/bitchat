@@ -64,7 +64,6 @@ final class KeychainTransientReadSafetyTests: XCTestCase {
         // Simulate locked keychain on next launch: store must fail closed and
         // must NOT latch `loaded = true` or overwrite Keychain with fresh IDs.
         keychain.simulatedReadError = .deviceLocked
-        keychain.simulatedReadErrorKeys = ["prekeysV1"]
         let store2 = LocalPrekeyStore(keychain: keychain)
         XCTAssertTrue(store2.currentBundlePrekeys().prekeys.isEmpty)
         XCTAssertNil(store2.privateKey(for: firstPrekeyID))
@@ -74,7 +73,6 @@ final class KeychainTransientReadSafetyTests: XCTestCase {
         // Once unlocked, the SAME store2 instance retries loadLocked() and
         // recovers the exact persisted prekey privates intact.
         keychain.simulatedReadError = nil
-        keychain.simulatedReadErrorKeys = nil
         let recoveredPrivate = try XCTUnwrap(store2.privateKey(for: firstPrekeyID))
         XCTAssertEqual(recoveredPrivate.rawRepresentation, firstPrivateBefore.rawRepresentation)
         XCTAssertEqual(store2.currentBundlePrekeys().prekeys, initialBundle.prekeys)
