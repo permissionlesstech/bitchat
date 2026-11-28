@@ -211,7 +211,7 @@ final class NWPathReachabilityMonitor: NetworkReachabilityMonitoring {
         } else if reachable && debounce.committed {
             // Still committed-reachable, but either a brief (<debounce) offline
             // blip just cleared or the active interface changed (e.g. Wi-Fi ↔
-            // Cellular). Notify listeners so failed/DNS-blacklisted relays can
+            // Cellular). Notify listeners so failed/DNS-blocked relays can
             // retry immediately instead of waiting out the 10-minute cooldown.
             var interfaceChanged = false
             if let interfaceSignature {

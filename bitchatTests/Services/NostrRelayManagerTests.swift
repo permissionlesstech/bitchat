@@ -1904,7 +1904,7 @@ final class NostrRelayManagerTests: XCTestCase {
     // MARK: - Offline ↔ Online & Path Recovery
 
     @MainActor
-    func test_resetForNetworkRecovery_clearsDNSBlacklistAndReconnectsImmediately() async {
+    func test_resetForNetworkRecovery_clearsPermanentDNSFailureAndReconnectsImmediately() async {
         let relayURL = "wss://offline-dns-recovery.example"
         let context = makeContext(permission: .denied)
         context.sessionFactory.pingErrorByURL[relayURL] = NSError(
@@ -1915,10 +1915,10 @@ final class NostrRelayManagerTests: XCTestCase {
 
         // Simulate DNS failure during the 2.5s window before offline debounce commits.
         context.manager.ensureConnections(to: [relayURL])
-        let blacklisted = await waitUntil {
+        let markedPermanent = await waitUntil {
             context.manager.relays.first(where: { $0.url == relayURL })?.reconnectAttempts == TransportConfig.nostrRelayMaxReconnectAttempts
         }
-        XCTAssertTrue(blacklisted)
+        XCTAssertTrue(markedPermanent)
 
         // Offline → Online: network comes back immediately (well inside the 10m cooldown).
         context.manager.disconnect()

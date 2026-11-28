@@ -208,7 +208,7 @@ final class NetworkActivationService: ObservableObject {
             .store(in: &cancellables)
 
         // React to interface transitions or brief (<debounce) offline blips
-        // while staying reachable: clear transient DNS/backoff blacklists so
+        // while staying reachable: clear transient DNS/backoff failures so
         // relays recover immediately without disturbing healthy sockets.
         reachabilityMonitor.pathDidChangePublisher
             .receive(on: DispatchQueue.main)
