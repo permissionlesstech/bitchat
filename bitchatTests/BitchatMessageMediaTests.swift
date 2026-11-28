@@ -38,6 +38,20 @@ struct BitchatMessageMediaTests {
     }
 
     @Test
+    func meshFileTransfersResolveInTheirOwnDirection() {
+        guard case .file(let incoming)? = message("[file] notes.pdf").mediaAttachment(for: "me"),
+              case .file(let outgoing)? = message("[file] notes.pdf", sender: "me").mediaAttachment(for: "me")
+        else {
+            Issue.record("Expected mesh file transfers to resolve to file rows")
+            return
+        }
+        #expect(incoming.lastPathComponent == "notes.pdf")
+        #expect(incoming.deletingLastPathComponent().path.hasSuffix("/files/incoming"))
+        #expect(outgoing.lastPathComponent == "notes.pdf")
+        #expect(outgoing.deletingLastPathComponent().path.hasSuffix("/files/outgoing"))
+    }
+
+    @Test
     func nostrSendersNeverGetMediaRows() {
         // Geochats, geo DMs and bridged messages carry no files, so a
         // media-looking line from a Nostr sender must stay text instead of
@@ -49,7 +63,7 @@ struct BitchatMessageMediaTests {
         #expect(geoDMSender.isGeoDM)
         #expect(bridgedSender.isBridge)
 
-        for content in ["[image] img_1.jpg", "[voice] note.m4a"] {
+        for content in ["[image] img_1.jpg", "[voice] note.m4a", "[file] notes.pdf"] {
             #expect(message(content, senderPeerID: geoChatSender).mediaAttachment(for: "me") == nil)
             #expect(message(content, senderPeerID: geoDMSender).mediaAttachment(for: "me") == nil)
             #expect(message(content, senderPeerID: bridgedSender).mediaAttachment(for: "me") == nil)
@@ -76,6 +90,7 @@ struct BitchatMessageMediaTests {
             #expect(!BitchatMessage.isSafeMediaFilename(name), "\(name)")
             #expect(message("[image] \(name)").mediaAttachment(for: "me") == nil, "\(name)")
             #expect(message("[voice] \(name)").mediaAttachment(for: "me") == nil, "\(name)")
+            #expect(message("[file] \(name)").mediaAttachment(for: "me") == nil, "\(name)")
         }
         #expect(!BitchatMessage.isSafeMediaFilename(""))
         #expect(message("[image]  ").mediaAttachment(for: "me") == nil)
