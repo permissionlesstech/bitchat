@@ -121,10 +121,6 @@ private final class MockChatPrivateConversationContext: ChatPrivateConversationC
         }
     }
 
-    func privateChat(_ peerID: PeerID, containsMessageWithID messageID: String) -> Bool {
-        privateChats[peerID]?.contains { $0.id == messageID } == true
-    }
-
     // Peers & identity
     var myPeerID = PeerID(str: "0011223344556677")
     var nicknamesByPeerID: [PeerID: String] = [:]

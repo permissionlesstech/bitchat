@@ -1017,12 +1017,6 @@ final class ChatViewModel: ObservableObject, SynchronousMessageTransportEventDel
         conversations.directConversationsContainMessage(withID: messageID)
     }
 
-    /// `true` when `peerID`'s chat contains a message with `messageID`.
-    @MainActor
-    func privateChat(_ peerID: PeerID, containsMessageWithID messageID: String) -> Bool {
-        conversations.conversationsByID[.directPeer(peerID)]?.containsMessage(withID: messageID) ?? false
-    }
-
     /// Removes a message by ID from every private chat that contains it,
     /// dropping chats that become empty. Returns the removed message, if any.
     @MainActor
@@ -2584,6 +2578,9 @@ final class ChatViewModel: ObservableObject, SynchronousMessageTransportEventDel
                 messageID,
                 status: status
             )
+
+        case .readReceiptEvicted(let messageID):
+            unmarkReadReceiptsSent([messageID])
 
         case .bluetoothStateUpdated(let state):
             updateBluetoothState(state)

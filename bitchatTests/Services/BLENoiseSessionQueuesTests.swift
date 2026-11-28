@@ -91,23 +91,31 @@ struct BLENoiseSessionQueuesTests {
         var queues = BLENoiseSessionQueues()
         let readPayload = BLENoisePayloadFactory.readReceipt(originalMessageID: "dup-id")
 
-        // Identical control payloads deduplicate.
-        queues.appendTypedPayload(readPayload, for: peerID)
-        queues.appendTypedPayload(readPayload, for: peerID)
+        // Identical control payloads deduplicate and never evict.
+        #expect(queues.appendTypedPayload(readPayload, for: peerID) == nil)
+        #expect(queues.appendTypedPayload(readPayload, for: peerID) == nil)
         #expect(queues.takeTypedPayloads(for: peerID).count == 1)
 
         // Filling past maxTypedPayloadsPerPeer evicts oldest control payload
-        // first while keeping tracked media transfers intact.
-        queues.appendTypedPayload(Data([0x20, 0x01]), transferId: "keep-media", for: peerID)
+        // first while keeping tracked media transfers intact, and returns
+        // each evicted payload so callers can unmark dropped read receipts.
+        #expect(queues.appendTypedPayload(Data([0x20, 0x01]), transferId: "keep-media", for: peerID) == nil)
+        var evictedPayloads: [BLEPendingTypedPayload] = []
         for index in 0..<(BLENoiseSessionQueues.maxTypedPayloadsPerPeer + 5) {
-            queues.appendTypedPayload(
+            if let evicted = queues.appendTypedPayload(
                 BLENoisePayloadFactory.readReceipt(originalMessageID: "msg-\(index)"),
                 for: peerID
-            )
+            ) {
+                evictedPayloads.append(evicted)
+            }
         }
 
         let drained = queues.takeTypedPayloads(for: peerID)
         #expect(drained.count == BLENoiseSessionQueues.maxTypedPayloadsPerPeer)
         #expect(drained.contains(where: { $0.transferId == "keep-media" }))
+        #expect(evictedPayloads.count == 6)
+        #expect(evictedPayloads.map(\.payload) == (0..<6).map {
+            BLENoisePayloadFactory.readReceipt(originalMessageID: "msg-\($0)")
+        })
     }
 }

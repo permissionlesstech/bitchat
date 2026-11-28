@@ -61,6 +61,10 @@ protocol ChatVerificationContext: AnyObject {
     /// session and still pending an ack. Both ephemeral and stable aliases
     /// are supplied because either can own the outbox entry.
     func retrySecurePrivateMessagesAfterAuthentication(for peerIDAliases: [PeerID])
+    /// Re-runs the read-receipt scan if the user is actively viewing one of
+    /// the newly authenticated peer's conversation aliases (recovering any
+    /// receipts evicted from the pre-handshake queue).
+    func retryPendingReadReceiptsIfViewing(peerIDAliases: [PeerID])
     func sendVerifyChallenge(to peerID: PeerID, noiseKeyHex: String, nonceA: Data)
     func sendVerifyResponse(to peerID: PeerID, noiseKeyHex: String, nonceA: Data)
 
@@ -125,6 +129,15 @@ extension ChatViewModel: ChatVerificationContext {
 
     func retrySecurePrivateMessagesAfterAuthentication(for peerIDAliases: [PeerID]) {
         messageRouter.retrySecurePrivateMessagesAfterAuthentication(for: peerIDAliases)
+    }
+
+    func retryPendingReadReceiptsIfViewing(peerIDAliases: [PeerID]) {
+        guard isAppActive, let selectedPeer = selectedPrivateChatPeer else { return }
+        let selectedShort = selectedPeer.toShort()
+        guard peerIDAliases.contains(where: { $0 == selectedPeer || $0.toShort() == selectedShort }) else {
+            return
+        }
+        markPrivateMessagesAsRead(from: selectedPeer)
     }
 
     /// QR verification rides the mesh's Noise sessions only.
@@ -261,6 +274,7 @@ final class ChatVerificationCoordinator {
                         peerIDAliases.append(stablePeerID)
                     }
                     self.context.retrySecurePrivateMessagesAfterAuthentication(for: peerIDAliases)
+                    self.context.retryPendingReadReceiptsIfViewing(peerIDAliases: peerIDAliases)
 
                     if var pending = self.pendingQRVerifications[peerID], pending.sent == false {
                         self.context.sendVerifyChallenge(

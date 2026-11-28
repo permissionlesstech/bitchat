@@ -91,9 +91,11 @@ extension ChatViewModel: ChatLifecycleContext {
     }
 
     var canSendGeohashReadReceipt: Bool {
+        // Mirror NostrRelayManager.sendEvent's policy gate (`NetworkActivationService`)
+        // without blocking offline queuing while relays reconnect; the bootstrapper
+        // also re-scans the open chat when activation or relay connectivity returns.
         networkActivationAllowed
-            && NetworkActivationService.shared.activationAllowed
-            && NostrRelayManager.shared.isDMRelayConnected
+            && (TestEnvironment.isRunningTests || NetworkActivationService.shared.activationAllowed)
     }
 
     func scheduleOnMainAfter(_ delay: TimeInterval, _ work: @escaping @MainActor () -> Void) {
