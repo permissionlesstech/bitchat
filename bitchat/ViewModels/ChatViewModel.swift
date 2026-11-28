@@ -1267,7 +1267,10 @@ final class ChatViewModel: ObservableObject, SynchronousMessageTransportEventDel
         self.panicRecoveryOperations = panicRecoveryOperations
             ?? .ephemeral(wipeMedia: panicMediaWipe ?? {})
         self.panicNetworkLifecycle = panicNetworkLifecycle
-        self.groupStore = GroupStore(keychain: keychain)
+        self.groupStore = GroupStore(
+            keychain: keychain,
+            loadSynchronously: TestEnvironment.isRunningTests
+        )
         self.encryptedHistoryStore = encryptedHistoryStore ?? EncryptedHistoryStore(
             keychain: keychain,
             persistsToDisk: !TestEnvironment.isRunningTests
@@ -1387,11 +1390,50 @@ final class ChatViewModel: ObservableObject, SynchronousMessageTransportEventDel
         encryptedHistoryStore.clearPersistedHistory()
     }
 
+    func isConversationMuted(for peerID: PeerID) -> Bool {
+        let muted = InboxMutedChats.mutedKeys()
+        guard !muted.isEmpty else { return false }
+        if muted.contains(peerID.id) {
+            return true
+        }
+        if !peerID.isGroup,
+           let fingerprint = getFingerprint(for: peerID),
+           muted.contains(fingerprint) {
+            return true
+        }
+        return false
+    }
+
+    func setInboxConversationUnread(_ unread: Bool, for peerID: PeerID, pinKey: String) {
+        let targetFingerprint = peerID.isGroup
+            ? nil
+            : (getFingerprint(for: peerID) ?? (pinKey != peerID.id ? pinKey : nil))
+        var targetPeerIDs: Set<PeerID> = [peerID]
+        if let targetFingerprint {
+            for (id, _) in conversations.conversationsByID {
+                guard case .direct(let handle) = id else { continue }
+                let candidate = handle.routingPeerID
+                if getFingerprint(for: candidate) == targetFingerprint {
+                    targetPeerIDs.insert(candidate)
+                }
+            }
+        }
+        for target in targetPeerIDs {
+            if unread {
+                markPrivateChatUnread(target)
+            } else {
+                markPrivateChatRead(target)
+            }
+        }
+        flushPersistedPrivateHistorySynchronously()
+    }
+
     /// Deletes a chat from the Chats inbox: leaves the group (for groups) or
     /// removes all matching direct conversation history, timer, pin, and
     /// favorite entry (for 1:1 DMs), then flushes encrypted history to disk.
     func deleteInboxConversation(peerID: PeerID, pinKey: String, isGroup: Bool) {
         InboxPinnedChats.unpin(pinKey)
+        InboxMutedChats.unmute(pinKey)
 
         if isGroup {
             _ = groupCoordinator.leaveGroup(peerID: peerID)
@@ -1441,8 +1483,19 @@ final class ChatViewModel: ObservableObject, SynchronousMessageTransportEventDel
     }
 
     private func restorePersistedPrivateHistoryIfEnabled() {
-        guard let snapshot = encryptedHistoryStore.load() else { return }
-        for (rawPeerID, nostrKey) in snapshot.nostrKeyMapping {
+        if TestEnvironment.isRunningTests {
+            guard let snapshot = encryptedHistoryStore.load() else { return }
+            applyRestoredPrivateHistory(snapshot)
+            return
+        }
+        encryptedHistoryStore.loadAsync { [weak self] snapshot in
+            guard let self, let snapshot, !self.isPanicResetting else { return }
+            self.applyRestoredPrivateHistory(snapshot)
+        }
+    }
+
+    private func applyRestoredPrivateHistory(_ snapshot: EncryptedHistoryStore.Snapshot) {
+        for (rawPeerID, nostrKey) in snapshot.nostrKeyMapping where nostrKeyMapping[PeerID(str: rawPeerID)] == nil {
             nostrKeyMapping[PeerID(str: rawPeerID)] = nostrKey
         }
         let unreadSet = Set(snapshot.unreadPeerIDs)
@@ -1913,6 +1966,7 @@ final class ChatViewModel: ObservableObject, SynchronousMessageTransportEventDel
         conversations.clearAll()
         pendingGeohashSystemMessages.removeAll()
         InboxPinnedChats.clear()
+        InboxMutedChats.clear()
 
         // Delete all keychain data (including Noise and Nostr keys)
         let keychainWipeCompleted = keychain.deleteAllKeychainData()

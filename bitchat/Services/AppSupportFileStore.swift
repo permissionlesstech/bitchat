@@ -140,6 +140,52 @@ struct AppSupportFileStore {
         return try JSONDecoder().decode(type, from: data)
     }
 
+    /// Reads and decodes JSON on the background I/O queue so cold-launch
+    /// restores never perform synchronous file I/O on the main thread.
+    func loadJSONAsync<T: Decodable>(
+        _ type: T.Type,
+        completion: @escaping (Result<T?, Error>) -> Void
+    ) {
+        guard let fileURL else {
+            completion(.success(nil))
+            return
+        }
+        Self.ioQueue.async {
+            guard FileManager.default.fileExists(atPath: fileURL.path) else {
+                completion(.success(nil))
+                return
+            }
+            do {
+                let data = try Data(contentsOf: fileURL)
+                let decoded = try JSONDecoder().decode(type, from: data)
+                completion(.success(decoded))
+            } catch {
+                completion(.failure(error))
+            }
+        }
+    }
+
+    /// Reads raw bytes on the background I/O queue, returning `nil` when the
+    /// file does not exist.
+    func readRawAsync(completion: @escaping (Result<Data?, Error>) -> Void) {
+        guard let fileURL else {
+            completion(.success(nil))
+            return
+        }
+        Self.ioQueue.async {
+            guard FileManager.default.fileExists(atPath: fileURL.path) else {
+                completion(.success(nil))
+                return
+            }
+            do {
+                let data = try Data(contentsOf: fileURL)
+                completion(.success(data))
+            } catch {
+                completion(.failure(error))
+            }
+        }
+    }
+
     /// Removes the file off the main thread when called on main; use
     /// `removeIgnoringErrors()` for synchronous panic-wipe deletion.
     func removeOffMain() {

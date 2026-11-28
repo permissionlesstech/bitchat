@@ -477,4 +477,55 @@ final class InboxPinnedChatsTests: XCTestCase {
         InboxPinnedChats.clear(in: defaults)
         XCTAssertTrue(InboxPinnedChats.pinnedKeys(in: defaults).isEmpty)
     }
+
+    func test_mutedChatsToggleUnmuteAndClear() {
+        let suiteName = "InboxMutedChatsTests.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+
+        XCTAssertFalse(InboxMutedChats.isMuted("chat-a", in: defaults))
+        XCTAssertTrue(InboxMutedChats.toggle("chat-a", in: defaults))
+        XCTAssertTrue(InboxMutedChats.isMuted("chat-a", in: defaults))
+
+        XCTAssertFalse(InboxMutedChats.toggle("chat-a", in: defaults))
+        XCTAssertFalse(InboxMutedChats.isMuted("chat-a", in: defaults))
+
+        InboxMutedChats.toggle("chat-b", in: defaults)
+        InboxMutedChats.unmute("chat-b", in: defaults)
+        XCTAssertTrue(InboxMutedChats.mutedKeys(in: defaults).isEmpty)
+
+        InboxMutedChats.toggle("chat-c", in: defaults)
+        InboxMutedChats.clear(in: defaults)
+        XCTAssertTrue(InboxMutedChats.mutedKeys(in: defaults).isEmpty)
+    }
+
+    func test_onboardingStatePersistsCompletionAndSuppressesInTests() {
+        let suiteName = "OnboardingStateTests.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+
+        XCTAssertFalse(OnboardingState.shouldPresent(in: defaults, isRunningTests: true))
+        XCTAssertTrue(OnboardingState.shouldPresent(in: defaults, isRunningTests: false))
+
+        OnboardingState.markCompleted(in: defaults)
+        XCTAssertFalse(OnboardingState.shouldPresent(in: defaults, isRunningTests: false))
+
+        OnboardingState.reset(in: defaults)
+        XCTAssertTrue(OnboardingState.shouldPresent(in: defaults, isRunningTests: false))
+    }
+
+    func test_stealthModeEnforcesHiddenNotificationPreviews() {
+        let suiteName = "StealthNotificationPrivacyTests.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+
+        NotificationPrivacySettings.setHideMessagePreviews(false, in: defaults)
+        XCTAssertFalse(NotificationPrivacySettings.hideMessagePreviews(in: defaults))
+
+        PrivacyModeSettings.setMode(.stealth, in: defaults)
+        XCTAssertTrue(NotificationPrivacySettings.hideMessagePreviews(in: defaults))
+
+        PrivacyModeSettings.setMode(.everyday, in: defaults)
+        XCTAssertFalse(NotificationPrivacySettings.hideMessagePreviews(in: defaults))
+    }
 }

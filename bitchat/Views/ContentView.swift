@@ -24,6 +24,7 @@ struct ContentRootModalPresentationState {
     var isVoiceAlertPresented = false
     var isScreenshotPrivacyAlertPresented = false
     var isMediaPickerPresented = false
+    var isOnboardingPresented = false
 
     var hasPresentation: Bool {
         isPeopleSheetPresented
@@ -35,6 +36,7 @@ struct ContentRootModalPresentationState {
             || isVoiceAlertPresented
             || isScreenshotPrivacyAlertPresented
             || isMediaPickerPresented
+            || isOnboardingPresented
     }
 }
 
@@ -45,7 +47,8 @@ extension ContentRootModalPresentationState {
         isPeopleSheetPresented: Bool = false,
         isImagePreviewPresented: Bool = false,
         isVoiceAlertPresented: Bool = false,
-        isMediaPickerPresented: Bool = false
+        isMediaPickerPresented: Bool = false,
+        isOnboardingPresented: Bool = false
     ) {
         self.init(
             isPeopleSheetPresented: isPeopleSheetPresented,
@@ -60,7 +63,8 @@ extension ContentRootModalPresentationState {
             isVoiceAlertPresented: isVoiceAlertPresented,
             isScreenshotPrivacyAlertPresented:
                 appChromeModel.showScreenshotPrivacyWarning,
-            isMediaPickerPresented: isMediaPickerPresented
+            isMediaPickerPresented: isMediaPickerPresented,
+            isOnboardingPresented: isOnboardingPresented
         )
     }
 }
@@ -199,6 +203,7 @@ struct ContentView: View {
     @State private var activePlaceTitle: String? = nil
     @State private var showAddFriendSheet = false
     @State private var showCreateGroupSheet = false
+    @State private var showOnboardingSheet = false
     @State private var showSidebar = false
     @State private var selectedMessageSender: String?
     @State private var selectedMessageSenderID: PeerID?
@@ -250,7 +255,8 @@ struct ContentView: View {
             isPeopleSheetPresented: isPeopleSheetPresented,
             isImagePreviewPresented: imagePreviewURL != nil,
             isVoiceAlertPresented: includingVoiceAlert && voiceRecordingVM.showAlert,
-            isMediaPickerPresented: mediaPickerMode != nil
+            isMediaPickerPresented: mediaPickerMode != nil,
+            isOnboardingPresented: showOnboardingSheet
         )
     }
 
@@ -345,6 +351,9 @@ struct ContentView: View {
                     channel: locationChannelsModel.selectedChannel
                 )
                 draftModel?.loadInitialDraft(for: initialKey)
+                if OnboardingState.shouldPresent() {
+                    showOnboardingSheet = true
+                }
             }
             .onChange(of: colorScheme) { newValue in
                 appEnvironmentModels?.conversationUIModel.setCurrentColorScheme(newValue)
@@ -475,6 +484,18 @@ struct ContentView: View {
             }
             .environmentObject(appChromeModel)
         }
+        .sheet(isPresented: $showOnboardingSheet, onDismiss: {
+            OnboardingState.markCompleted()
+        }) {
+            OnboardingSheetView { openAddFriend in
+                if openAddFriend {
+                    Task { @MainActor in
+                        showAddFriendSheet = true
+                    }
+                }
+            }
+            .environmentObject(appChromeModel)
+        }
         .sheet(isPresented: $showCreateGroupSheet) {
             CreateGroupSheet(
                 onRequestAddFriend: { showAddFriendSheet = true },
@@ -530,6 +551,17 @@ struct ContentView: View {
                 guard let importedText = sharedContentImportModel.confirm(
                     destination: sharedContentDestination
                 ) else { return }
+                // Ensure the target composer is visible when the user confirmed
+                // a share handoff from Chats or Settings with no DM open.
+                if selectedPrivatePeerID == nil {
+                    switch locationChannelsModel.selectedChannel {
+                    case .location(let channel):
+                        activePlaceChannel = channel
+                        selectedTab = .places
+                    case .mesh:
+                        selectedTab = .nearby
+                    }
+                }
                 // Replacing is deliberate and called out in the prompt. It
                 // avoids combining a stale draft from another conversation
                 // with newly shared content.

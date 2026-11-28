@@ -214,6 +214,7 @@ extension ChatViewModel: ChatPrivateConversationContext {
     }
 
     func notifyPrivateMessage(from senderName: String, message: String, peerID: PeerID) {
+        guard !isConversationMuted(for: peerID) else { return }
         NotificationService.shared.sendPrivateMessageNotification(from: senderName, message: message, peerID: peerID)
     }
 

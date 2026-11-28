@@ -106,6 +106,9 @@ struct PrivateConversationHeaderState: Equatable {
     let availability: PrivateConversationAvailability
     let isFavorite: Bool
     let encryptionStatus: EncryptionStatus?
+    var groupMeshReachableCount: Int = 0
+    var groupNostrReachableCount: Int = 0
+    var groupOtherMemberCount: Int = 0
 
     var supportsFavoriteToggle: Bool {
         !conversationPeerID.isGeoDM && !conversationPeerID.isGroup
@@ -289,18 +292,40 @@ final class PrivateConversationModel: ObservableObject {
         // the local mesh, and the per-peer encryption badge does not apply.
         if conversationPeerID.isGroup {
             let displayName: String
+            var meshCount = 0
+            var nostrCount = 0
+            var otherCount = 0
             if let group = chatViewModel.groupStore.group(for: conversationPeerID) {
                 displayName = "#\(group.name) (\(group.members.count))"
+                let myFP = chatViewModel.myNoiseFingerprint()
+                for member in group.members where member.fingerprint != myFP {
+                    otherCount += 1
+                    let onMesh = chatViewModel.connectedPeerID(forFingerprint: member.fingerprint) != nil
+                    let onNostr = chatViewModel.nostrReachablePeerID(forFingerprint: member.fingerprint) != nil
+                    if onMesh {
+                        meshCount += 1
+                    } else if onNostr {
+                        nostrCount += 1
+                    }
+                }
             } else {
                 displayName = String(localized: "common.unknown", comment: "Fallback label for unknown peer")
             }
+            let groupAvailability: PrivateConversationAvailability = {
+                if meshCount > 0 { return .bluetoothConnected }
+                if nostrCount > 0 { return .nostrAvailable }
+                return .offline
+            }()
             return PrivateConversationHeaderState(
                 conversationPeerID: conversationPeerID,
                 headerPeerID: conversationPeerID,
                 displayName: displayName,
-                availability: .meshReachable,
+                availability: groupAvailability,
                 isFavorite: false,
-                encryptionStatus: nil
+                encryptionStatus: nil,
+                groupMeshReachableCount: meshCount,
+                groupNostrReachableCount: nostrCount,
+                groupOtherMemberCount: otherCount
             )
         }
 

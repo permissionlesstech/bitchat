@@ -24,10 +24,17 @@ final class GroupStore: ObservableObject {
     private let keychain: KeychainManagerProtocol
     private let fileStore: AppSupportFileStore
     private var keyCache: [Data: Data] = [:]
+    private var lifecycleGeneration: UInt64 = 0
 
-    /// - Parameter fileURL: Overrides the on-disk location (tests). Ignored
-    ///   when `persistsToDisk` is false.
-    init(keychain: KeychainManagerProtocol, persistsToDisk: Bool = true, fileURL: URL? = nil) {
+    /// - Parameters:
+    ///   - fileURL: Overrides the on-disk location (tests). Ignored when `persistsToDisk` is false.
+    ///   - loadSynchronously: Pass `false` on production cold launch to avoid main-thread disk reads.
+    init(
+        keychain: KeychainManagerProtocol,
+        persistsToDisk: Bool = true,
+        fileURL: URL? = nil,
+        loadSynchronously: Bool = true
+    ) {
         self.keychain = keychain
         self.fileStore = AppSupportFileStore(
             persistsToDisk: persistsToDisk,
@@ -36,7 +43,11 @@ final class GroupStore: ObservableObject {
             fileName: "groups.json",
             protection: .untilFirstUserAuthentication
         )
-        loadFromDisk()
+        if loadSynchronously {
+            loadFromDisk()
+        } else {
+            loadFromDiskAsync()
+        }
     }
 
     // MARK: - Reads
@@ -158,6 +169,7 @@ final class GroupStore: ObservableObject {
     /// (The panic flow also nukes the whole keychain; deleting per-group keys
     /// here keeps the store safe to wipe on its own.)
     func wipe() {
+        lifecycleGeneration &+= 1
         for group in groups {
             _ = keychain.deleteIdentityKey(forKey: Self.keychainKey(for: group.groupID))
         }
@@ -207,14 +219,31 @@ final class GroupStore: ObservableObject {
         guard let stored = try? fileStore.loadJSON([BitchatGroup].self) else {
             return
         }
+        applyLoadedGroups(stored)
+    }
+
+    private func loadFromDiskAsync() {
+        let generation = lifecycleGeneration
+        fileStore.loadJSONAsync([BitchatGroup].self) { [weak self] result in
+            guard case .success(let stored?) = result else { return }
+            Task { @MainActor [weak self] in
+                guard let self, self.lifecycleGeneration == generation else { return }
+                self.applyLoadedGroups(stored)
+            }
+        }
+    }
+
+    private func applyLoadedGroups(_ stored: [BitchatGroup]) {
         // Only groups whose key survived in the keychain are usable. Loading
         // bypasses `upsert`, so re-check its invariants here too, and keep one
         // entry per groupID so a group can never carry two creators.
-        var seenGroupIDs = Set<Data>()
-        groups = stored.filter { group in
+        var seenGroupIDs = Set(groups.map(\.groupID))
+        let valid = stored.filter { group in
             Self.isWellFormed(group)
                 && seenGroupIDs.insert(group.groupID).inserted
                 && key(forGroupID: group.groupID) != nil
         }
+        guard !valid.isEmpty else { return }
+        groups = valid + groups
     }
 }

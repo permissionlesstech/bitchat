@@ -109,6 +109,7 @@ final class EncryptedHistoryStore: ObservableObject {
     /// True when a transient Keychain or disk failure prevented reading durable
     /// data at launch. Refuses to overwrite durable history until healthy.
     private var loadUnavailable = false
+    private var lifecycleGeneration: UInt64 = 0
 
     init(
         keychain: KeychainManagerProtocol,
@@ -176,6 +177,51 @@ final class EncryptedHistoryStore: ObservableObject {
             return nil
         }
 
+        return decodeAndPrune(sealedBytes: sealedBytes, key: key, now: now)
+    }
+
+    /// Reads the sealed history file off the main thread, then decrypts and
+    /// delivers the snapshot on `@MainActor`.
+    func loadAsync(now: Date = Date(), completion: @escaping @MainActor (Snapshot?) -> Void) {
+        guard persistenceEnabledProvider(), fileStore.fileURL != nil else {
+            completion(nil)
+            return
+        }
+        let generation = lifecycleGeneration
+        fileStore.readRawAsync { [weak self] result in
+            Task { @MainActor [weak self] in
+                guard let self, self.lifecycleGeneration == generation else {
+                    completion(nil)
+                    return
+                }
+                guard self.persistenceEnabledProvider() else {
+                    completion(nil)
+                    return
+                }
+                switch result {
+                case .success(nil):
+                    self.loadUnavailable = false
+                    completion(nil)
+                case .success(let sealedBytes?):
+                    guard let key = self.resolveExistingKey() else {
+                        completion(nil)
+                        return
+                    }
+                    completion(self.decodeAndPrune(sealedBytes: sealedBytes, key: key, now: now))
+                case .failure(let error):
+                    if AppSupportFileStore.isMissingFileError(error) {
+                        self.loadUnavailable = false
+                    } else {
+                        self.loadUnavailable = true
+                        SecureLogger.warning("Private history unreadable; deferring writes: \(error)", category: .security)
+                    }
+                    completion(nil)
+                }
+            }
+        }
+    }
+
+    private func decodeAndPrune(sealedBytes: Data, key: SymmetricKey, now: Date) -> Snapshot? {
         do {
             let sealedBox = try ChaChaPoly.SealedBox(combined: sealedBytes)
             let plaintext = try ChaChaPoly.open(sealedBox, using: key)
@@ -268,6 +314,7 @@ final class EncryptedHistoryStore: ObservableObject {
 
     /// Panic wipe: destroys disk file, Keychain encryption key, and timer state.
     func wipe() {
+        lifecycleGeneration &+= 1
         loadUnavailable = false
         cachedKey = nil
         timers.removeAll()

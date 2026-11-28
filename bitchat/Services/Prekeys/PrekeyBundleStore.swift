@@ -77,7 +77,14 @@ final class PrekeyBundleStore {
             fileName: "bundles.json",
             protection: .untilFirstUserAuthentication
         )
-        loadFromDisk()
+        if self.fileStore.fileURL != nil {
+            // Restore off the calling thread (cold launch on MainActor) on the
+            // serial store queue. Every read/write serializes on `queue`, so
+            // callers are linearly ordered after restore without blocking init().
+            queue.async { [self] in
+                loadFromDiskLocked()
+            }
+        }
     }
 
     // MARK: - Ingest
@@ -216,13 +223,10 @@ final class PrekeyBundleStore {
         }
     }
 
-    private func loadFromDisk() {
-        guard fileStore.fileURL != nil else { return }
-        queue.sync {
-            guard let stored = try? fileStore.loadJSON([StoredBundle].self) else { return }
-            for bundle in stored where bundle.prekeyIDs.count == bundle.prekeyPublicKeys.count {
-                bundles[bundle.noiseKey] = bundle
-            }
+    private func loadFromDiskLocked() {
+        guard let stored = try? fileStore.loadJSON([StoredBundle].self) else { return }
+        for bundle in stored where bundle.prekeyIDs.count == bundle.prekeyPublicKeys.count {
+            bundles[bundle.noiseKey] = bundle
         }
     }
 }

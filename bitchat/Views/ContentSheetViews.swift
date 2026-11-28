@@ -533,49 +533,120 @@ private struct ContentPrivateChatSheetView: View {
             }
     }
 
-    /// Persistent one-line reminder that this composer feeds a private
-    /// conversation — the DM sheet otherwise renders identically to the
-    /// public timeline. Claims end-to-end encryption only once the session
-    /// is actually secured.
+    /// Persistent one-line indicator above the private composer showing both
+    /// encryption posture and how the next message will move (Bluetooth mesh,
+    /// Nostr relay, hybrid group split, or queued offline for reconnect/courier).
     private var privacyCaption: some View {
-        HStack(spacing: 5) {
-            Image(systemName: "lock.fill")
-                .font(.bitchatSystem(size: 9))
-                .foregroundColor(Color.orange.opacity(0.85))
-                .offset(y: -0.5)
-            Text(verbatim: privacyCaptionText)
+        let info = transportCaptionInfo
+        return HStack(spacing: 5) {
+            Image(systemName: info.icon)
+                .font(.bitchatSystem(size: 10, weight: .medium))
+                .foregroundColor(info.tint)
+                .offset(y: info.icon == "lock.fill" ? -0.5 : 0)
+            Text(verbatim: info.text)
                 .bitchatFont(size: 11, weight: .medium)
                 .foregroundColor(palette.secondary)
+                .lineLimit(1)
+                .truncationMode(.tail)
         }
         .frame(maxWidth: .infinity)
-        .padding(.vertical, 4)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 5)
         .themedSurface()
         .accessibilityElement(children: .combine)
     }
 
-    private var privacyCaptionText: String {
-        // Group chats are ChaCha20-Poly1305 sealed to the roster's shared key.
-        if privateConversationModel.selectedPeerID?.isGroup == true {
-            return String(localized: "content.private.caption_group", comment: "Caption above the group chat composer noting messages are encrypted to group members")
+    private var transportCaptionInfo: (icon: String, tint: Color, text: String) {
+        guard let header = privateConversationModel.selectedHeaderState else {
+            return (
+                "lock.fill",
+                Color.orange.opacity(0.85),
+                String(localized: "content.private.caption", comment: "Caption above the private chat composer before encryption is established")
+            )
         }
-        // Geohash DMs use BitChat's private-envelope encryption over Nostr —
-        // always end-to-end encrypted,
-        // even though they carry no Noise session status. Mesh DMs earn the
-        // "encrypted" claim only once the Noise handshake has secured — or
-        // when the peer is reachable only over Nostr, where delivery is
-        // gift-wrapped end-to-end without a Noise session.
-        let isGeoDM = privateConversationModel.selectedPeerID?.isGeoDM == true
+
+        if header.isGroupConversation {
+            let mesh = header.groupMeshReachableCount
+            let nostr = header.groupNostrReachableCount
+            if mesh > 0 && nostr > 0 {
+                return (
+                    "lock.fill",
+                    palette.accent,
+                    String(
+                        format: String(localized: "content.private.transport.group_hybrid", defaultValue: "Encrypted · %lld on mesh, %lld via Nostr", comment: "Group transport caption when members span Bluetooth mesh and Nostr"),
+                        locale: .current,
+                        mesh,
+                        nostr
+                    )
+                )
+            } else if mesh > 0 {
+                return (
+                    "antenna.radiowaves.left.and.right",
+                    palette.accentBlue,
+                    String(
+                        format: String(localized: "content.private.transport.group_mesh", defaultValue: "Encrypted · %lld on Bluetooth mesh", comment: "Group transport caption when members are reachable over Bluetooth mesh"),
+                        locale: .current,
+                        mesh
+                    )
+                )
+            } else if nostr > 0 {
+                return (
+                    "globe",
+                    .purple,
+                    String(
+                        format: String(localized: "content.private.transport.group_nostr", defaultValue: "Encrypted · %lld via Nostr relay", comment: "Group transport caption when members are reachable via Nostr"),
+                        locale: .current,
+                        nostr
+                    )
+                )
+            } else if header.groupOtherMemberCount > 0 {
+                return (
+                    "clock.arrow.circlepath",
+                    Color.orange.opacity(0.9),
+                    String(localized: "content.private.transport.group_offline", defaultValue: "Encrypted · Members offline, sends on reconnect", comment: "Group transport caption when all other members are offline")
+                )
+            }
+            return (
+                "lock.fill",
+                Color.orange.opacity(0.85),
+                String(localized: "content.private.caption_group", comment: "Caption above the group chat composer noting messages are encrypted to group members")
+            )
+        }
+
+        let isGeoDM = header.conversationPeerID.isGeoDM
         let noiseSecured: Bool = {
-            switch privateConversationModel.selectedHeaderState?.encryptionStatus {
+            switch header.encryptionStatus {
             case .noiseSecured, .noiseVerified: return true
             default: return false
             }
         }()
-        let nostrTransport = privateConversationModel.selectedHeaderState?.availability == .nostrAvailable
-        if isGeoDM || noiseSecured || nostrTransport {
-            return String(localized: "content.private.caption_encrypted", comment: "Caption above the private chat composer once the session is end-to-end encrypted")
+
+        switch header.availability {
+        case .bluetoothConnected:
+            let text = noiseSecured
+                ? String(localized: "content.private.transport.ble_encrypted", defaultValue: "Encrypted · Direct Bluetooth", comment: "DM transport caption for secured direct Bluetooth connection")
+                : String(localized: "content.private.transport.ble_securing", defaultValue: "Direct Bluetooth · Securing session", comment: "DM transport caption while Bluetooth Noise handshake is pending")
+            return ("dot.radiowaves.left.and.right", palette.accentBlue, text)
+
+        case .meshReachable:
+            let text = noiseSecured
+                ? String(localized: "content.private.transport.mesh_encrypted", defaultValue: "Encrypted · Relayed on mesh", comment: "DM transport caption for secured multi-hop mesh path")
+                : String(localized: "content.private.transport.mesh_securing", defaultValue: "Mesh relay · Securing session", comment: "DM transport caption while multi-hop mesh Noise handshake is pending")
+            return ("point.3.filled.connected.trianglepath.dotted", palette.accentBlue, text)
+
+        case .nostrAvailable:
+            let text = isGeoDM
+                ? String(localized: "content.private.transport.nostr_geo", defaultValue: "Encrypted · Nostr location DM", comment: "DM transport caption for a geohash Nostr DM")
+                : String(localized: "content.private.transport.nostr_relay", defaultValue: "Encrypted · Nostr relay", comment: "DM transport caption for a Nostr-routed DM")
+            return ("globe", .purple, text)
+
+        case .offline:
+            return (
+                "clock.arrow.circlepath",
+                Color.orange.opacity(0.9),
+                String(localized: "content.private.transport.offline_queue", defaultValue: "Offline · Messages queue until reconnect or courier", comment: "DM transport caption when peer is currently offline")
+            )
         }
-        return String(localized: "content.private.caption", comment: "Caption above the private chat composer before encryption is established")
     }
 }
 

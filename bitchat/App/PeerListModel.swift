@@ -91,6 +91,44 @@ enum InboxPinnedChats {
     }
 }
 
+/// Persists muted chat keys for the Chats inbox. Cleared on panic wipe.
+enum InboxMutedChats {
+    static let storageKey = "inbox.mutedChatKeys"
+
+    static func mutedKeys(in defaults: UserDefaults = .standard) -> Set<String> {
+        Set(defaults.stringArray(forKey: storageKey) ?? [])
+    }
+
+    static func isMuted(_ key: String, in defaults: UserDefaults = .standard) -> Bool {
+        mutedKeys(in: defaults).contains(key)
+    }
+
+    @discardableResult
+    static func toggle(_ key: String, in defaults: UserDefaults = .standard) -> Bool {
+        var keys = mutedKeys(in: defaults)
+        let nowMuted: Bool
+        if keys.contains(key) {
+            keys.remove(key)
+            nowMuted = false
+        } else {
+            keys.insert(key)
+            nowMuted = true
+        }
+        defaults.set(Array(keys).sorted(), forKey: storageKey)
+        return nowMuted
+    }
+
+    static func unmute(_ key: String, in defaults: UserDefaults = .standard) {
+        var keys = mutedKeys(in: defaults)
+        guard keys.remove(key) != nil else { return }
+        defaults.set(Array(keys).sorted(), forKey: storageKey)
+    }
+
+    static func clear(in defaults: UserDefaults = .standard) {
+        defaults.removeObject(forKey: storageKey)
+    }
+}
+
 /// Unified row for the Inbox-first Chats tab: combines private groups,
 /// mutual friends, and any active DM threads in pinned + recency order.
 struct InboxChatRow: Identifiable, Equatable {
@@ -109,6 +147,7 @@ struct InboxChatRow: Identifiable, Equatable {
     let lastActivity: Date?
     let hasUnread: Bool
     let isPinned: Bool
+    let isMuted: Bool
     let isGroup: Bool
     let memberCount: Int
     let isFavorite: Bool
@@ -275,6 +314,16 @@ final class PeerListModel: ObservableObject {
         refresh()
     }
 
+    func toggleMute(for row: InboxChatRow) {
+        InboxMutedChats.toggle(row.pinKey)
+        refresh()
+    }
+
+    func toggleUnread(for row: InboxChatRow) {
+        chatViewModel.setInboxConversationUnread(!row.hasUnread, for: row.peerID, pinKey: row.pinKey)
+        refresh()
+    }
+
     func deleteInboxChat(_ row: InboxChatRow) {
         chatViewModel.deleteInboxConversation(
             peerID: row.peerID,
@@ -282,6 +331,73 @@ final class PeerListModel: ObservableObject {
             isGroup: row.isGroup
         )
         refresh()
+    }
+
+    /// Filters `inboxRows` by contact/group name, preview text, or any
+    /// stored message content inside that conversation.
+    func filteredInboxRows(matching query: String) -> [InboxChatRow] {
+        let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return inboxRows }
+
+        var results: [InboxChatRow] = []
+        for row in inboxRows {
+            if row.displayName.localizedCaseInsensitiveContains(trimmed)
+                || row.subtitle.localizedCaseInsensitiveContains(trimmed) {
+                results.append(row)
+                continue
+            }
+            if let snippet = latestMatchingMessageSnippet(for: row, query: trimmed) {
+                results.append(
+                    InboxChatRow(
+                        peerID: row.peerID,
+                        pinKey: row.pinKey,
+                        displayName: row.displayName,
+                        subtitle: snippet,
+                        lastActivity: row.lastActivity,
+                        hasUnread: row.hasUnread,
+                        isPinned: row.isPinned,
+                        isMuted: row.isMuted,
+                        isGroup: row.isGroup,
+                        memberCount: row.memberCount,
+                        isFavorite: row.isFavorite,
+                        reachability: row.reachability,
+                        disappearingTimer: row.disappearingTimer
+                    )
+                )
+            }
+        }
+        return results
+    }
+
+    private func latestMatchingMessageSnippet(for row: InboxChatRow, query: String) -> String? {
+        var bestMessage: BitchatMessage?
+        let targetFingerprint = row.isGroup
+            ? nil
+            : (chatViewModel.getFingerprint(for: row.peerID) ?? (row.pinKey != row.peerID.id ? row.pinKey : nil))
+
+        for (id, conversation) in conversations.conversationsByID {
+            guard case .direct(let handle) = id else { continue }
+            let candidate = handle.routingPeerID
+            let matchesConversation: Bool
+            if row.isGroup {
+                matchesConversation = (candidate == row.peerID)
+            } else if candidate == row.peerID {
+                matchesConversation = true
+            } else if let targetFingerprint,
+                      chatViewModel.getFingerprint(for: candidate) == targetFingerprint {
+                matchesConversation = true
+            } else {
+                matchesConversation = false
+            }
+            guard matchesConversation else { continue }
+
+            if let hit = conversation.messages.last(where: { $0.content.localizedCaseInsensitiveContains(query) }) {
+                if bestMessage == nil || hit.timestamp > bestMessage!.timestamp {
+                    bestMessage = hit
+                }
+            }
+        }
+        return bestMessage?.content
     }
 
     private func bind() {
@@ -480,6 +596,7 @@ final class PeerListModel: ObservableObject {
     private func buildInboxRows(meshRows: [MeshPeerRow], groupRows: [GroupChatRow]) -> [InboxChatRow] {
         var rowsByKey: [String: InboxChatRow] = [:]
         let pinnedKeys = InboxPinnedChats.pinnedKeys()
+        let mutedKeys = InboxMutedChats.mutedKeys()
 
         // 1. Groups
         for group in groupRows {
@@ -499,6 +616,7 @@ final class PeerListModel: ObservableObject {
                 lastActivity: lastMsg?.timestamp,
                 hasUnread: group.hasUnread,
                 isPinned: pinnedKeys.contains(key),
+                isMuted: mutedKeys.contains(key),
                 isGroup: true,
                 memberCount: group.memberCount,
                 isFavorite: false,
@@ -567,6 +685,7 @@ final class PeerListModel: ObservableObject {
                 lastActivity: lastMsg?.timestamp ?? rel.lastUpdated,
                 hasUnread: chatViewModel.hasUnreadMessages(for: targetPeerID),
                 isPinned: pinnedKeys.contains(fingerprint),
+                isMuted: mutedKeys.contains(fingerprint),
                 isGroup: false,
                 memberCount: 0,
                 isFavorite: true,
@@ -605,6 +724,7 @@ final class PeerListModel: ObservableObject {
                 lastActivity: lastMsg.timestamp,
                 hasUnread: chatViewModel.hasUnreadMessages(for: peerID),
                 isPinned: pinnedKeys.contains(key),
+                isMuted: mutedKeys.contains(key),
                 isGroup: false,
                 memberCount: 0,
                 isFavorite: meshRow?.isFavorite ?? false,

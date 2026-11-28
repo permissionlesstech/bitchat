@@ -28,6 +28,8 @@ struct ChatsInboxView: View {
     let onSwitchToNearby: () -> Void
     let onSwitchToPlaces: () -> Void
 
+    @State private var searchQuery = ""
+
     private static let relativeFormatter: RelativeDateTimeFormatter = {
         let formatter = RelativeDateTimeFormatter()
         formatter.unitsStyle = .abbreviated
@@ -161,8 +163,53 @@ struct ChatsInboxView: View {
         .buttonStyle(.plain)
     }
 
+    private var searchBar: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "magnifyingglass")
+                .font(.system(size: 13, weight: .medium))
+                .foregroundColor(palette.secondary)
+
+            TextField(
+                String(localized: "chats.search.placeholder", defaultValue: "Search chats and messages", comment: "Search bar placeholder in Chats inbox"),
+                text: $searchQuery
+            )
+            .textFieldStyle(.plain)
+            .bitchatFont(size: 14)
+            .foregroundColor(palette.primary)
+            .autocorrectionDisabled(true)
+            #if os(iOS)
+            .textInputAutocapitalization(.never)
+            .submitLabel(.search)
+            #endif
+
+            if !searchQuery.isEmpty {
+                Button {
+                    searchQuery = ""
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.system(size: 14))
+                        .foregroundColor(palette.secondary)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(String(localized: "common.clear", defaultValue: "Clear", comment: "Clear search query button"))
+            }
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .background(palette.cardBackground)
+        .overlay(
+            RoundedRectangle(cornerRadius: palette.buttonRadius, style: .continuous)
+                .stroke(palette.cardBorder, lineWidth: 1)
+        )
+        .clipShape(RoundedRectangle(cornerRadius: palette.buttonRadius, style: .continuous))
+        .padding(.horizontal, 14)
+        .padding(.top, 8)
+        .padding(.bottom, 6)
+    }
+
     @ViewBuilder
     private var inboxList: some View {
+        let displayedRows = peerListModel.filteredInboxRows(matching: searchQuery)
         let list = List {
             if appChromeModel.panicWipeBlocked || ConnectivityIssue.resolve(
                 bluetoothState: appChromeModel.bluetoothState,
@@ -181,7 +228,28 @@ struct ChatsInboxView: View {
                     .listRowBackground(Color.clear)
             }
 
-            ForEach(peerListModel.inboxRows) { row in
+            searchBar
+                .listRowInsets(EdgeInsets())
+                .listRowSeparator(.hidden)
+                .listRowBackground(Color.clear)
+
+            if displayedRows.isEmpty && !searchQuery.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                VStack(spacing: 8) {
+                    Image(systemName: "magnifyingglass")
+                        .font(.system(size: 24))
+                        .foregroundColor(palette.secondary.opacity(0.6))
+                    Text(String(localized: "chats.search.no_results", defaultValue: "No matching chats", comment: "Empty state shown when inbox search finds no matches"))
+                        .bitchatFont(size: 14, weight: .medium)
+                        .foregroundColor(palette.secondary)
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 40)
+                .listRowInsets(EdgeInsets())
+                .listRowSeparator(.hidden)
+                .listRowBackground(Color.clear)
+            }
+
+            ForEach(displayedRows) { row in
                 VStack(spacing: 0) {
                     Button {
                         privateConversationModel.openConversation(for: row.peerID)
@@ -212,6 +280,20 @@ struct ChatsInboxView: View {
                         )
                     }
                     .tint(Color.orange)
+
+                    Button {
+                        withAnimation(.easeInOut(duration: 0.2)) {
+                            peerListModel.toggleUnread(for: row)
+                        }
+                    } label: {
+                        Label(
+                            row.hasUnread
+                                ? String(localized: "inbox.action.mark_read", defaultValue: "Read", comment: "Swipe action to mark a chat as read")
+                                : String(localized: "inbox.action.mark_unread", defaultValue: "Unread", comment: "Swipe action to mark a chat as unread"),
+                            systemImage: row.hasUnread ? "envelope.open.fill" : "envelope.badge.fill"
+                        )
+                    }
+                    .tint(palette.accentBlue)
                 }
                 .swipeActions(edge: .trailing, allowsFullSwipe: true) {
                     Button(role: .destructive) {
@@ -220,10 +302,24 @@ struct ChatsInboxView: View {
                         }
                     } label: {
                         Label(
-                            String(localized: "board.action.delete", defaultValue: "delete", comment: "Swipe action to delete a chat").capitalized,
+                            String(localized: "board.action.delete", defaultValue: "Delete", comment: "Swipe action to delete a chat"),
                             systemImage: "trash.fill"
                         )
                     }
+
+                    Button {
+                        withAnimation(.easeInOut(duration: 0.2)) {
+                            peerListModel.toggleMute(for: row)
+                        }
+                    } label: {
+                        Label(
+                            row.isMuted
+                                ? String(localized: "inbox.action.unmute", defaultValue: "Unmute", comment: "Swipe action to unmute a chat")
+                                : String(localized: "inbox.action.mute", defaultValue: "Mute", comment: "Swipe action to mute notifications for a chat"),
+                            systemImage: row.isMuted ? "bell.fill" : "bell.slash.fill"
+                        )
+                    }
+                    .tint(Color.indigo)
                 }
                 .contextMenu {
                     Button {
@@ -237,11 +333,35 @@ struct ChatsInboxView: View {
                         )
                     }
 
+                    Button {
+                        peerListModel.toggleUnread(for: row)
+                    } label: {
+                        Label(
+                            row.hasUnread
+                                ? String(localized: "inbox.action.mark_read", defaultValue: "Mark as Read", comment: "Context menu action to mark a chat as read")
+                                : String(localized: "inbox.action.mark_unread", defaultValue: "Mark as Unread", comment: "Context menu action to mark a chat as unread"),
+                            systemImage: row.hasUnread ? "envelope.open" : "envelope.badge"
+                        )
+                    }
+
+                    Button {
+                        peerListModel.toggleMute(for: row)
+                    } label: {
+                        Label(
+                            row.isMuted
+                                ? String(localized: "inbox.action.unmute", defaultValue: "Unmute", comment: "Context menu action to unmute a chat")
+                                : String(localized: "inbox.action.mute", defaultValue: "Mute", comment: "Context menu action to mute notifications for a chat"),
+                            systemImage: row.isMuted ? "bell" : "bell.slash"
+                        )
+                    }
+
+                    Divider()
+
                     Button(role: .destructive) {
                         peerListModel.deleteInboxChat(row)
                     } label: {
                         Label(
-                            String(localized: "board.action.delete", defaultValue: "delete", comment: "Context menu action to delete a chat").capitalized,
+                            String(localized: "board.action.delete", defaultValue: "Delete", comment: "Context menu action to delete a chat"),
                             systemImage: "trash"
                         )
                     }
@@ -250,6 +370,9 @@ struct ChatsInboxView: View {
         }
         .listStyle(.plain)
         .scrollContentBackground(.hidden)
+        #if os(iOS)
+        .scrollDismissesKeyboard(.interactively)
+        #endif
 
         if theme.usesGlassChrome {
             if #available(iOS 17.0, macOS 14.0, *) {
@@ -307,6 +430,11 @@ struct ChatsInboxView: View {
                         .foregroundColor(row.hasUnread ? palette.primary : palette.secondary)
                         .lineLimit(1)
                     Spacer(minLength: 4)
+                    if row.isMuted {
+                        Image(systemName: "bell.slash.fill")
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundColor(palette.secondary)
+                    }
                     if row.isPinned {
                         Image(systemName: "pin.fill")
                             .font(.system(size: 11, weight: .medium))
