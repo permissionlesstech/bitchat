@@ -41,7 +41,6 @@ private final class MockChatLifecycleContext: ChatLifecycleContext {
     var activeChannel: ChannelID = .mesh
     var nostrKeyMapping: [PeerID: String] = [:]
     var geoDMGeohashByPeerID: [PeerID: String] = [:]
-    private(set) var derivedGeohashes: [String] = []
     private(set) var ownerLevelReadPasses: [PeerID] = []
     private(set) var managerReadMarks: [PeerID] = []
 

@@ -464,7 +464,7 @@ extension BLEService {
         // may pass the full 64-hex noise key.
         let peerID = peerID.toShort()
         guard noiseService.hasEstablishedSession(with: peerID) else {
-            pendingNoiseSessionQueues.appendTypedPayload(typedPayload, for: peerID)
+            enqueuePendingTypedPayload(typedPayload, for: peerID)
             SecureLogger.debug("📥 Queued \(logLabel) for \(peerID.id.prefix(8))… pending handshake", category: .session)
             if !initiateOnlyIfReachable || (!noiseService.hasSession(with: peerID) && isPeerReachable(peerID)) {
                 initiateNoiseHandshake(with: peerID)
@@ -475,6 +475,32 @@ extension BLEService {
             broadcastPacket(try makeEncryptedNoisePacket(typedPayload, to: peerID))
         } catch {
             SecureLogger.error("Failed to send \(logLabel): \(error)")
+        }
+    }
+
+    /// Queues a pre-handshake typed Noise payload on `messageQueue` and
+    /// notifies the UI if an older `.readReceipt` payload was evicted so it
+    /// remains eligible for retry once authentication finishes.
+    func enqueuePendingTypedPayload(
+        _ typedPayload: Data,
+        transferId: String? = nil,
+        for peerID: PeerID
+    ) {
+        guard let evicted = pendingNoiseSessionQueues.appendTypedPayload(
+            typedPayload,
+            transferId: transferId,
+            for: peerID
+        ) else {
+            return
+        }
+        guard let rawType = evicted.payload.first,
+              NoisePayloadType.decoded(rawValue: rawType) == .readReceipt,
+              let messageID = String(data: evicted.payload.dropFirst(), encoding: .utf8),
+              !messageID.isEmpty else {
+            return
+        }
+        notifyUI { [weak self] in
+            self?.deliverTransportEvent(.readReceiptEvicted(messageID: messageID))
         }
     }
 

@@ -1810,7 +1810,7 @@ final class BLEService: NSObject {
                 }
                 let queued = onEngine {
                     self.privateMediaTransferAdmissions.withActive(transferId) {
-                        self.pendingNoiseSessionQueues.appendTypedPayload(
+                        self.enqueuePendingTypedPayload(
                             typedPayload,
                             transferId: transferId,
                             for: targetID
@@ -5510,7 +5510,7 @@ extension BLEService {
                     // exact payload back until authenticated 0x21 state
                     // arrives; that handler calls this drain again.
                     onEngine {
-                        pendingNoiseSessionQueues.appendTypedPayload(
+                        enqueuePendingTypedPayload(
                             pending.payload,
                             transferId: pending.transferId,
                             for: peerID

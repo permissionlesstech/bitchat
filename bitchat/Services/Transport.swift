@@ -79,6 +79,10 @@ enum TransportEvent: @unchecked Sendable {
     case peerDisconnected(PeerID)
     case peerListUpdated([PeerID])
     case messageDeliveryStatusUpdated(messageID: String, status: DeliveryStatus)
+    /// Emitted when a pre-handshake queued read receipt is evicted from a
+    /// bounded transport queue so the view model unmarks it for retry after
+    /// authentication completes.
+    case readReceiptEvicted(messageID: String)
     case bluetoothStateUpdated(CBManagerState)
 }
 

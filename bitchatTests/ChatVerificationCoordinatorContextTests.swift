@@ -97,6 +97,7 @@ private final class MockChatVerificationContext: ChatVerificationContext {
     private(set) var triggeredHandshakes: [PeerID] = []
     private(set) var privateMediaAuthenticatedPeers: [PeerID] = []
     private(set) var securePrivateMessageRetryAliases: [[PeerID]] = []
+    private(set) var readReceiptRetryAliases: [[PeerID]] = []
     private(set) var sentChallenges: [(peerID: PeerID, noiseKeyHex: String, nonceA: Data)] = []
     private(set) var sentResponses: [(peerID: PeerID, noiseKeyHex: String, nonceA: Data)] = []
 
@@ -119,6 +120,10 @@ private final class MockChatVerificationContext: ChatVerificationContext {
 
     func retrySecurePrivateMessagesAfterAuthentication(for peerIDAliases: [PeerID]) {
         securePrivateMessageRetryAliases.append(peerIDAliases)
+    }
+
+    func retryPendingReadReceiptsIfViewing(peerIDAliases: [PeerID]) {
+        readReceiptRetryAliases.append(peerIDAliases)
     }
 
     func sendVerifyChallenge(to peerID: PeerID, noiseKeyHex: String, nonceA: Data) {
@@ -290,6 +295,7 @@ struct ChatVerificationCoordinatorContextTests {
         #expect(context.invalidatedEncryptionCachePeers.contains(peerID))
         #expect(context.privateMediaAuthenticatedPeers == [peerID])
         #expect(context.securePrivateMessageRetryAliases == [[peerID, stablePeerID]])
+        #expect(context.readReceiptRetryAliases == [[peerID, stablePeerID]])
 
         // Handshake required -> handshaking status.
         callbacks?.onHandshakeRequired(peerID)

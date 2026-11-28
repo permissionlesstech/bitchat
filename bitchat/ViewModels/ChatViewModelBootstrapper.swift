@@ -616,7 +616,32 @@ private extension ChatViewModelBootstrapper {
         NostrRelayManager.shared.$isDMRelayConnected
             .removeDuplicates()
             .receive(on: DispatchQueue.main)
-            .sink { _ in BridgeCourierService.shared.refresh() }
+            .sink { [weak viewModel] connected in
+                BridgeCourierService.shared.refresh()
+                guard connected,
+                      let viewModel,
+                      viewModel.isAppActive,
+                      let peerID = viewModel.selectedPrivateChatPeer else {
+                    return
+                }
+                viewModel.markPrivateMessagesAsRead(from: peerID)
+            }
+            .store(in: &viewModel.cancellables)
+
+        // Retry deferred GeoDM/Nostr read receipts when network activation or
+        // general relay connectivity returns while a private chat is open.
+        NetworkActivationService.shared.$activationAllowed
+            .removeDuplicates()
+            .receive(on: DispatchQueue.main)
+            .sink { [weak viewModel] allowed in
+                guard allowed,
+                      let viewModel,
+                      viewModel.isAppActive,
+                      let peerID = viewModel.selectedPrivateChatPeer else {
+                    return
+                }
+                viewModel.markPrivateMessagesAsRead(from: peerID)
+            }
             .store(in: &viewModel.cancellables)
         // Toggle changes re-evaluate the watch set.
         BridgeService.shared.$isEnabled

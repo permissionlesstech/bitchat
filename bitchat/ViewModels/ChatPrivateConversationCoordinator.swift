@@ -44,8 +44,6 @@ protocol ChatPrivateConversationContext: ChatIdentityContext, ChatDirectMessageS
     func registerVerifiedFriendInviteIdentity(_ invite: FriendInvite)
     /// `true` when any private chat contains a message with `messageID`.
     func privateChatsContainMessage(withID messageID: String) -> Bool
-    /// `true` when `peerID`'s chat contains a message with `messageID`.
-    func privateChat(_ peerID: PeerID, containsMessageWithID messageID: String) -> Bool
     /// `true` only when `messageID` is one of our outgoing messages in at least
     /// one of the authenticated peer's conversation aliases.
     func isOutgoingPrivateMessage(_ messageID: String, toAny peerIDs: Set<PeerID>) -> Bool

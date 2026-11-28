@@ -45,25 +45,32 @@ struct BLENoiseSessionQueues {
         privateMessagesByPeerID[peerID, default: []].insert(contentsOf: messages, at: 0)
     }
 
-    mutating func appendTypedPayload(_ payload: Data, transferId: String? = nil, for peerID: PeerID) {
+    @discardableResult
+    mutating func appendTypedPayload(
+        _ payload: Data,
+        transferId: String? = nil,
+        for peerID: PeerID
+    ) -> BLEPendingTypedPayload? {
         let entry = BLEPendingTypedPayload(payload: payload, transferId: transferId)
         var queue = typedPayloadsByPeerID[peerID] ?? []
         // Deduplicate identical control payloads (e.g. repeated read/delivery
         // receipts queued before handshake completion).
         if transferId == nil, queue.contains(entry) {
-            return
+            return nil
         }
         queue.append(entry)
+        var evicted: BLEPendingTypedPayload?
         if queue.count > Self.maxTypedPayloadsPerPeer {
             // Prefer evicting the oldest non-media control payload over an
             // in-flight media transfer tracked by TransferProgressManager.
             if let controlIndex = queue.firstIndex(where: { $0.transferId == nil }) {
-                queue.remove(at: controlIndex)
+                evicted = queue.remove(at: controlIndex)
             } else {
-                queue.removeFirst()
+                evicted = queue.removeFirst()
             }
         }
         typedPayloadsByPeerID[peerID] = queue
+        return evicted
     }
 
     mutating func takeTypedPayloads(for peerID: PeerID) -> [BLEPendingTypedPayload] {

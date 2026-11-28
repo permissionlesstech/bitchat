@@ -1252,6 +1252,74 @@ struct ChatViewModelPrivateChatTests {
         #expect(transport.sentReadReceipts.isEmpty)
         #expect(defaults.object(forKey: "sentReadReceipts") == nil)
     }
+
+    @Test @MainActor
+    func evictedReadReceipt_unmarksAndRetriesWhenPeerAuthenticatesWhileViewing() async {
+        let (viewModel, transport) = makeTestableViewModel()
+        let noiseKey = Data(repeating: 0xAA, count: 32)
+        let fullPeerID = PeerID(hexData: noiseKey)
+        let shortPeerID = fullPeerID.toShort()
+        let otherPeerID = PeerID(str: "bbbbbbbbbbbbbbbb")
+
+        transport.connectedPeers.insert(shortPeerID)
+        transport.reachablePeers.insert(shortPeerID)
+
+        viewModel.seedPrivateChat([
+            BitchatMessage(
+                id: "evicted-rr-1",
+                sender: "Alice",
+                content: "hello",
+                timestamp: Date(),
+                isRelay: false,
+                isPrivate: true,
+                recipientNickname: viewModel.nickname,
+                senderPeerID: shortPeerID
+            )
+        ], for: shortPeerID)
+
+        viewModel.startPrivateChat(with: shortPeerID)
+        await Task.yield()
+        #expect(transport.sentReadReceipts.map(\.receipt.originalMessageID) == ["evicted-rr-1"])
+        #expect(viewModel.hasSentReadReceipt("evicted-rr-1"))
+
+        // Queue eviction unmarks the receipt so it becomes eligible for retry.
+        viewModel.didReceiveTransportEvent(.readReceiptEvicted(messageID: "evicted-rr-1"))
+        #expect(!viewModel.hasSentReadReceipt("evicted-rr-1"))
+
+        // Unrelated peer authentication does not trigger retry.
+        viewModel.retryPendingReadReceiptsIfViewing(peerIDAliases: [otherPeerID])
+        await Task.yield()
+        #expect(transport.sentReadReceipts.count == 1)
+
+        // Backgrounded app does not emit retry receipts even for the open peer.
+        viewModel.setAppActive(false)
+        viewModel.retryPendingReadReceiptsIfViewing(peerIDAliases: [shortPeerID, fullPeerID])
+        await Task.yield()
+        #expect(transport.sentReadReceipts.count == 1)
+        #expect(!viewModel.hasSentReadReceipt("evicted-rr-1"))
+
+        // Foreground authentication matching via full-key alias retries and re-marks.
+        viewModel.setAppActive(true)
+        viewModel.retryPendingReadReceiptsIfViewing(peerIDAliases: [fullPeerID])
+        await Task.yield()
+        #expect(transport.sentReadReceipts.map(\.receipt.originalMessageID) == ["evicted-rr-1", "evicted-rr-1"])
+        #expect(viewModel.hasSentReadReceipt("evicted-rr-1"))
+    }
+
+    @Test @MainActor
+    func canSendGeohashReadReceipt_dependsOnNetworkActivationPolicyNotRelaySocketState() {
+        let (viewModel, _) = makeTestableViewModel()
+        #expect(viewModel.networkActivationAllowed)
+        #expect(viewModel.canSendGeohashReadReceipt)
+
+        // Failed panic recovery blocks network activation and therefore GeoDM read receipts.
+        let blockedKeychain = MockKeychain()
+        blockedKeychain.simulatedDeleteAllResult = false
+        let (blockedViewModel, _) = makeTestableViewModel(keychain: blockedKeychain)
+        _ = blockedViewModel.panicClearAllData()
+        #expect(!blockedViewModel.networkActivationAllowed)
+        #expect(!blockedViewModel.canSendGeohashReadReceipt)
+    }
 }
 
 // MARK: - Private Chat Selection Tests
