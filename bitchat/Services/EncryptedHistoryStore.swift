@@ -153,6 +153,7 @@ final class EncryptedHistoryStore: ObservableObject {
         guard let fileURL = fileStore.fileURL else {
             return nil
         }
+        AppSupportFileStore.drainPendingWrites()
         guard FileManager.default.fileExists(atPath: fileURL.path) else {
             loadUnavailable = false
             return nil
@@ -341,7 +342,7 @@ final class EncryptedHistoryStore: ObservableObject {
     private func persistSnapshot(_ snapshot: Snapshot) {
         guard fileStore.fileURL != nil else { return }
         if snapshot.isEmpty {
-            fileStore.removeIgnoringErrors()
+            fileStore.removeOffMain()
             return
         }
         guard let key = resolveOrCreateKey() else {
@@ -350,7 +351,7 @@ final class EncryptedHistoryStore: ObservableObject {
         do {
             let plaintext = try JSONEncoder().encode(snapshot)
             let sealed = try ChaChaPoly.seal(plaintext, using: key)
-            try fileStore.writeRaw(sealed.combined)
+            try fileStore.writeRawOffMain(sealed.combined)
         } catch {
             SecureLogger.error("Failed to seal and persist private history: \(error)", category: .security)
         }

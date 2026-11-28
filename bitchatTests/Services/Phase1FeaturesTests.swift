@@ -95,6 +95,7 @@ final class EncryptedHistoryStoreTests: XCTestCase {
         store.setTimer(.days7, for: alice)
 
         store.save(from: conversations, nostrKeyMapping: [alice: "abcd1234"])
+        AppSupportFileStore.drainPendingWrites()
 
         // File must exist and must NOT contain plaintext message
         let rawBytes = try? Data(contentsOf: fileURL)
@@ -199,6 +200,7 @@ final class EncryptedHistoryStoreTests: XCTestCase {
         )
         store.setTimer(.hours24, for: peer)
         store.save(from: conversations, nostrKeyMapping: [:])
+        AppSupportFileStore.drainPendingWrites()
         XCTAssertTrue(FileManager.default.fileExists(atPath: fileURL.path))
 
         store.wipe()

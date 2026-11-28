@@ -35,6 +35,11 @@ enum AppSupportFileProtection {
 }
 
 struct AppSupportFileStore {
+    private static let ioQueue = DispatchQueue(
+        label: "chat.bitchat.appSupportFileStore.io",
+        qos: .utility
+    )
+
     let fileURL: URL?
     let protection: AppSupportFileProtection
 
@@ -56,11 +61,16 @@ struct AppSupportFileStore {
             for: .applicationSupportDirectory,
             in: .userDomainMask,
             appropriateFor: nil,
-            create: true
+            create: false
         ) else { return nil }
         return base
             .appendingPathComponent(subdirectory, isDirectory: true)
             .appendingPathComponent(fileName)
+    }
+
+    /// Waits for any in-flight background writes enqueued from the main thread.
+    static func drainPendingWrites() {
+        ioQueue.sync {}
     }
 
     func writeRaw(
@@ -75,20 +85,54 @@ struct AppSupportFileStore {
         try write(data, fileURL, protection.writingOptions)
     }
 
-    func saveJSON<T: Encodable>(_ value: T, isEmpty: Bool = false) throws {
-        guard let fileURL else { return }
-        if isEmpty {
-            try? FileManager.default.removeItem(at: fileURL)
+    /// Writes raw bytes off the main thread when invoked from the main thread,
+    /// or synchronously when already on a background queue.
+    func writeRawOffMain(_ data: Data) throws {
+        guard fileURL != nil else { return }
+        if Thread.isMainThread {
+            let store = self
+            Self.ioQueue.async {
+                do {
+                    try store.writeRaw(data)
+                } catch {
+                    SecureLogger.error("Background file write failed: \(error)", category: .session)
+                }
+            }
             return
         }
-        let data = try JSONEncoder().encode(value)
         try writeRaw(data)
+    }
+
+    func saveJSON<T: Encodable>(_ value: T, isEmpty: Bool = false) throws {
+        guard let fileURL else { return }
+        let encoded: Data? = isEmpty ? nil : try JSONEncoder().encode(value)
+        if Thread.isMainThread {
+            let store = self
+            Self.ioQueue.async {
+                if let encoded {
+                    do {
+                        try store.writeRaw(encoded)
+                    } catch {
+                        SecureLogger.error("Background JSON save failed: \(error)", category: .session)
+                    }
+                } else {
+                    try? FileManager.default.removeItem(at: fileURL)
+                }
+            }
+            return
+        }
+        if let encoded {
+            try writeRaw(encoded)
+        } else {
+            try? FileManager.default.removeItem(at: fileURL)
+        }
     }
 
     func loadJSON<T: Decodable>(
         _ type: T.Type,
         readData: (URL) throws -> Data = { try Data(contentsOf: $0) }
     ) throws -> T? {
+        Self.drainPendingWrites()
         guard let fileURL, FileManager.default.fileExists(atPath: fileURL.path) else {
             return nil
         }
@@ -96,7 +140,21 @@ struct AppSupportFileStore {
         return try JSONDecoder().decode(type, from: data)
     }
 
+    /// Removes the file off the main thread when called on main; use
+    /// `removeIgnoringErrors()` for synchronous panic-wipe deletion.
+    func removeOffMain() {
+        guard let fileURL else { return }
+        if Thread.isMainThread {
+            Self.ioQueue.async {
+                try? FileManager.default.removeItem(at: fileURL)
+            }
+            return
+        }
+        try? FileManager.default.removeItem(at: fileURL)
+    }
+
     func removeIgnoringErrors() {
+        Self.drainPendingWrites()
         guard let fileURL else { return }
         try? FileManager.default.removeItem(at: fileURL)
     }

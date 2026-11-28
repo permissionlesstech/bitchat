@@ -214,6 +214,7 @@ struct GroupStoreTests {
             kept = try #require(store.createGroup(named: "kept", creator: creator))
             orphaned = try #require(store.createGroup(named: "orphaned", creator: creator))
         }
+        AppSupportFileStore.drainPendingWrites()
         // Loading bypasses `upsert`: a second entry handing `kept` to another
         // creator, and an entry whose creator is missing from its roster.
         let rehomed = BitchatGroup(
@@ -245,6 +246,7 @@ struct GroupStoreTests {
 
         let store = GroupStore(keychain: keychain, fileURL: fileURL)
         let group = try #require(store.createGroup(named: "gone", creator: makeMember(seed: 0xC1)))
+        AppSupportFileStore.drainPendingWrites()
         #expect(FileManager.default.fileExists(atPath: fileURL.path))
 
         store.wipe()
