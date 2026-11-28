@@ -593,6 +593,30 @@ final class SecureIdentityStateManagerTests: XCTestCase {
         XCTAssertTrue(decoded.verifiedFingerprints.contains(fingerprint))
     }
 
+    func test_associatedNostrBlock_persistsAcrossReloadAndClearsOnUnblock() {
+        let keychain = MockKeychain()
+        let fingerprint = String(repeating: "ef", count: 32)
+        let nostrHex = String(repeating: "ab", count: 32)
+
+        let manager = SecureIdentityStateManager(keychain)
+        manager.setBlocked(fingerprint, isBlocked: true)
+        manager.setAssociatedNostrBlock(forFingerprint: fingerprint, nostrPubkeyHex: nostrHex)
+        manager.forceSave()
+
+        XCTAssertTrue(manager.isBlocked(fingerprint: fingerprint))
+        XCTAssertTrue(manager.isNostrBlocked(pubkeyHexLowercased: nostrHex))
+
+        // Simulate app relaunch: the fingerprint -> Nostr block link must survive
+        // even though FavoritesPersistenceService no longer has the relationship.
+        let reloaded = SecureIdentityStateManager(keychain)
+        XCTAssertTrue(reloaded.isBlocked(fingerprint: fingerprint))
+        XCTAssertTrue(reloaded.isNostrBlocked(pubkeyHexLowercased: nostrHex))
+
+        reloaded.setBlocked(fingerprint, isBlocked: false)
+        XCTAssertFalse(reloaded.isBlocked(fingerprint: fingerprint))
+        XCTAssertFalse(reloaded.isNostrBlocked(pubkeyHexLowercased: nostrHex))
+    }
+
     private func waitUntil(
         timeout: TimeInterval = TestConstants.settleTimeout,
         condition: @escaping () -> Bool

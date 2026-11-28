@@ -49,6 +49,14 @@ protocol NostrInboundPipelineContext: AnyObject {
         id: NostrIdentity,
         messageTimestamp: Date
     )
+    func handlePrivateMessage(
+        _ payload: NoisePayload,
+        senderPubkey: String,
+        convKey: PeerID,
+        id: NostrIdentity,
+        messageTimestamp: Date,
+        isGeohashDM: Bool
+    )
     func handleDelivered(_ payload: NoisePayload, senderPubkey: String, convKey: PeerID)
     func handleReadReceipt(_ payload: NoisePayload, senderPubkey: String, convKey: PeerID)
     func handleNostrGroupInvite(_ payload: Data, from senderPeerID: PeerID)
@@ -57,6 +65,23 @@ protocol NostrInboundPipelineContext: AnyObject {
 }
 
 extension NostrInboundPipelineContext {
+    func handlePrivateMessage(
+        _ payload: NoisePayload,
+        senderPubkey: String,
+        convKey: PeerID,
+        id: NostrIdentity,
+        messageTimestamp: Date,
+        isGeohashDM _: Bool
+    ) {
+        handlePrivateMessage(
+            payload,
+            senderPubkey: senderPubkey,
+            convKey: convKey,
+            id: id,
+            messageTimestamp: messageTimestamp
+        )
+    }
+
     func handleNostrGroupInvite(_ payload: Data, from senderPeerID: PeerID) {}
     func handleNostrGroupKeyUpdate(_ payload: Data, from senderPeerID: PeerID) {}
     func handleNostrGroupMessage(_ payload: Data, timestamp: Date) {}
@@ -395,7 +420,8 @@ final class NostrInboundPipeline {
                     senderPubkey: senderPubkey,
                     convKey: convKey,
                     id: recipientIdentity,
-                    messageTimestamp: messageTimestamp
+                    messageTimestamp: messageTimestamp,
+                    isGeohashDM: isGeohashDM
                 )
             case .delivered:
                 context.handleDelivered(payload, senderPubkey: senderPubkey, convKey: convKey)

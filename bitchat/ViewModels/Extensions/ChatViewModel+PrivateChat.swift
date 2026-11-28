@@ -41,7 +41,27 @@ extension ChatViewModel {
             senderPubkey: senderPubkey,
             convKey: convKey,
             id: id,
-            messageTimestamp: messageTimestamp
+            messageTimestamp: messageTimestamp,
+            isGeohashDM: false
+        )
+    }
+
+    @MainActor
+    func handlePrivateMessage(
+        _ payload: NoisePayload,
+        senderPubkey: String,
+        convKey: PeerID,
+        id: NostrIdentity,
+        messageTimestamp: Date,
+        isGeohashDM: Bool
+    ) {
+        privateConversationCoordinator.handlePrivateMessage(
+            payload,
+            senderPubkey: senderPubkey,
+            convKey: convKey,
+            id: id,
+            messageTimestamp: messageTimestamp,
+            isGeohashDM: isGeohashDM
         )
     }
 

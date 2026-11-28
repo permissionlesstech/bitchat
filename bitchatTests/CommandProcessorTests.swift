@@ -353,6 +353,73 @@ struct CommandProcessorTests {
     }
 
     @MainActor
+    @Test func favoriteCommandReturnsErrorWhenToggleFails() async {
+        let identityManager = MockIdentityManager(MockKeychain())
+        let context = MockCommandContextProvider()
+        context.toggleFavoriteResult = false
+        let processor = CommandProcessor(
+            contextProvider: context,
+            meshService: MockTransport(),
+            identityManager: identityManager
+        )
+        let peerID = PeerID(str: "00aa00bb00cc00ee")
+        context.nicknameToPeerID["ghost"] = peerID
+
+        let result = await withSelectedChannel(.mesh, context: context) {
+            processor.process("/fav ghost")
+        }
+
+        switch result {
+        case .error:
+            break
+        default:
+            Issue.record("Expected error result when toggleFavorite returns false")
+        }
+    }
+
+    @MainActor
+    @Test func blockAndUnblockCommandClearsAssociatedNostrBlockForOneSidedFavorite() async throws {
+        let identityManager = MockIdentityManager(MockKeychain())
+        let transport = MockTransport()
+        let context = MockCommandContextProvider()
+        let processor = CommandProcessor(
+            contextProvider: context,
+            meshService: transport,
+            identityManager: identityManager
+        )
+
+        let noiseKey = Data(repeating: 0x6D, count: 32)
+        let peerID = PeerID(publicKey: noiseKey)
+        let fingerprint = noiseKey.sha256Fingerprint()
+        let nostrIdentity = try NostrIdentity.generate()
+        let nostrHex = nostrIdentity.publicKeyHex.lowercased()
+
+        context.nicknameToPeerID["oneSided"] = peerID
+        transport.peerFingerprints[peerID] = fingerprint
+        FavoritesPersistenceService.shared.addFavorite(
+            peerNoisePublicKey: noiseKey,
+            peerNostrPublicKey: nostrIdentity.npub,
+            peerNickname: "oneSided"
+        )
+        defer {
+            FavoritesPersistenceService.shared.removeFavorite(peerNoisePublicKey: noiseKey)
+        }
+
+        _ = await withSelectedChannel(.mesh, context: context) {
+            processor.process("/block oneSided")
+        }
+        #expect(FavoritesPersistenceService.shared.getFavoriteStatus(for: noiseKey) == nil)
+        #expect(identityManager.isBlocked(fingerprint: fingerprint))
+        #expect(identityManager.isNostrBlocked(pubkeyHexLowercased: nostrHex))
+
+        _ = await withSelectedChannel(.mesh, context: context) {
+            processor.process("/unblock oneSided")
+        }
+        #expect(!identityManager.isBlocked(fingerprint: fingerprint))
+        #expect(!identityManager.isNostrBlocked(pubkeyHexLowercased: nostrHex))
+    }
+
+    @MainActor
     @Test func favoriteCommandIsRejectedOutsideMesh() async {
         let identityManager = MockIdentityManager(MockKeychain())
         let context = MockCommandContextProvider()
@@ -704,8 +771,12 @@ private final class MockCommandContextProvider: CommandContextProvider {
         commandOutputDestinations.append(destination)
     }
 
-    func toggleFavorite(peerID: PeerID) {
+    var toggleFavoriteResult = true
+
+    @discardableResult
+    func toggleFavorite(peerID: PeerID) -> Bool {
         toggledFavorites.append(peerID)
+        return toggleFavoriteResult
     }
 
     // Groups: record the parsed subcommand + argument the processor forwarded.

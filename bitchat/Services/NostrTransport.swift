@@ -164,8 +164,14 @@ final class NostrTransport: Transport, @unchecked Sendable {
     private var favoriteStatusObserver: NSObjectProtocol?
 
     // Reachability Cache (thread-safe)
+    /// Peers eligible for normal Nostr DM/ack routing: mutual favorites with a
+    /// valid 32-byte Nostr public key.
     private var reachablePeers: Set<PeerID> = []
     private var reachableShortPeers: Set<PeerID> = []
+    /// Peers with any stored valid Nostr public key (including one-sided
+    /// relationships) so `[FAVORITED]`/`[UNFAVORITED]` notifications can be
+    /// resolved synchronously before a removal deletes the relationship.
+    private var favoriteNotificationNpubs: [PeerID: String] = [:]
     // Mirror of the relay manager's connection state, cached here because
     // canDeliverPromptly is called synchronously off the main actor.
     private var relaysConnected = false
@@ -183,17 +189,7 @@ final class NostrTransport: Transport, @unchecked Sendable {
         setupObservers()
         
         // Synchronously warm the cache to avoid startup race
-        let favorites = self.dependencies.loadFavorites()
-        let reachable = favorites.values
-            .filter { $0.peerNostrPublicKey != nil }
-            .map { PeerID(publicKey: $0.peerNoisePublicKey) }
-        let reachableSet = Set(reachable)
-        let reachableShortSet = Set(reachable.map { $0.toShort() })
-            
-        queue.sync(flags: .barrier) {
-            self.reachablePeers = reachableSet
-            self.reachableShortPeers = reachableShortSet
-        }
+        refreshReachablePeersSynchronously()
 
         relayConnectivityCancellable = self.dependencies.relayConnectivity()
             .sink { [weak self] connected in
@@ -219,19 +215,45 @@ final class NostrTransport: Transport, @unchecked Sendable {
     }
 
     private func refreshReachablePeers() {
-        Task { @MainActor [weak self] in
-            guard let self else { return }
-            let favorites = dependencies.loadFavorites()
-            let reachable = favorites.values
-                .filter { $0.peerNostrPublicKey != nil }
-                .map { PeerID(publicKey: $0.peerNoisePublicKey) }
-            let reachableSet = Set(reachable)
-            let reachableShortSet = Set(reachable.map { $0.toShort() })
-            
-            self.queue.async(flags: .barrier) { [weak self] in
-                self?.reachablePeers = reachableSet
-                self?.reachableShortPeers = reachableShortSet
+        if Thread.isMainThread {
+            MainActor.assumeIsolated {
+                self.refreshReachablePeersSynchronously()
             }
+            return
+        }
+        Task { @MainActor [weak self] in
+            self?.refreshReachablePeersSynchronously()
+        }
+    }
+
+    @MainActor
+    private func refreshReachablePeersSynchronously() {
+        let favorites = dependencies.loadFavorites()
+        var reachableSet = Set<PeerID>()
+        var reachableShortSet = Set<PeerID>()
+        var notificationNpubs: [PeerID: String] = [:]
+
+        for relationship in favorites.values {
+            guard let npub = FavoritesPersistenceService.normalizeNostrNpub(relationship.peerNostrPublicKey) else {
+                continue
+            }
+            let fullID = PeerID(hexData: relationship.peerNoisePublicKey)
+            let shortID = PeerID(publicKey: relationship.peerNoisePublicKey)
+            notificationNpubs[fullID] = npub
+            notificationNpubs[shortID] = npub
+
+            // Normal Nostr DM reachability requires a mutual favorite.
+            if relationship.isMutual {
+                reachableSet.insert(fullID)
+                reachableSet.insert(shortID)
+                reachableShortSet.insert(shortID)
+            }
+        }
+
+        queue.sync(flags: .barrier) {
+            self.reachablePeers = reachableSet
+            self.reachableShortPeers = reachableShortSet
+            self.favoriteNotificationNpubs = notificationNpubs
         }
     }
 
@@ -248,6 +270,15 @@ final class NostrTransport: Transport, @unchecked Sendable {
         let short = peerID.toShort()
         return queue.sync {
             reachablePeers.contains(peerID) || reachableShortPeers.contains(short)
+        }
+    }
+
+    /// True when we know a valid Nostr npub for `peerID` (even if one-sided)
+    /// so `[FAVORITED]`/`[UNFAVORITED]` notifications can still be delivered.
+    func canSendFavoriteNotification(to peerID: PeerID) -> Bool {
+        let short = peerID.toShort()
+        return queue.sync {
+            favoriteNotificationNpubs[peerID] != nil || favoriteNotificationNpubs[short] != nil
         }
     }
 
@@ -299,9 +330,16 @@ final class NostrTransport: Transport, @unchecked Sendable {
 
     func sendFavoriteNotification(to peerID: PeerID, isFavorite: Bool) {
         let generation = dependencies.ackPacer.currentGeneration()
+        // Snapshot the recipient npub synchronously BEFORE any caller removes
+        // the favorite entry from persistence (e.g. unfavoriting a one-sided
+        // favorite deletes the record on the very next line).
+        let short = peerID.toShort()
+        let cachedNpub = queue.sync {
+            favoriteNotificationNpubs[peerID] ?? favoriteNotificationNpubs[short]
+        }
         Task { @MainActor in
             guard dependencies.ackPacer.currentGeneration() == generation else { return }
-            guard let recipientNpub = resolveRecipientNpub(for: peerID),
+            guard let recipientNpub = cachedNpub ?? resolveRecipientNpub(for: peerID),
                   let recipientHex = npubToHex(recipientNpub),
                   let senderIdentity = try? dependencies.currentIdentity() else { return }
             let content = isFavorite ? "[FAVORITED]:\(senderIdentity.npub)" : "[UNFAVORITED]:\(senderIdentity.npub)"
@@ -451,17 +489,14 @@ extension NostrTransport {
 // MARK: - Private Helpers
 
 extension NostrTransport {
-    /// Converts npub bech32 string to hex pubkey
+    /// Converts npub bech32 string (or 64-char hex) to hex pubkey
     @MainActor
     private func npubToHex(_ npub: String) -> String? {
-        do {
-            let (hrp, data) = try Bech32.decode(npub)
-            guard hrp == "npub" else { return nil }
-            return data.hexEncodedString()
-        } catch {
-            SecureLogger.error("NostrTransport: failed to decode npub -> hex: \(error)", category: .session)
-            return nil
+        if let hex = FavoritesPersistenceService.nostrPubkeyHex(from: npub) {
+            return hex
         }
+        SecureLogger.error("NostrTransport: failed to decode npub -> hex", category: .session)
+        return nil
     }
 
     /// Creates and sends a gift-wrapped private message event.

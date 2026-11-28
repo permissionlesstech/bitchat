@@ -77,7 +77,7 @@ struct MeshPeerList: View {
                                 .font(.bitchatSystem(size: 10))
                                 .foregroundColor(baseColor)
                                 .help(Strings.reachable)
-                        } else if peer.isMutualFavorite {
+                        } else if peer.isNostrAvailable {
                             // Mutual favorite reachable via Nostr: globe icon (purple)
                             Image(systemName: "globe")
                                 .font(.bitchatSystem(size: 10))
@@ -247,7 +247,7 @@ struct MeshPeerList: View {
                 parts.append(Strings.connected)
             } else if peer.isReachable {
                 parts.append(Strings.reachable)
-            } else if peer.isMutualFavorite {
+            } else if peer.isNostrAvailable {
                 parts.append(Strings.nostr)
             } else {
                 parts.append(Strings.offline)

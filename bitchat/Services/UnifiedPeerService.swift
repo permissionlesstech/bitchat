@@ -336,6 +336,26 @@ final class UnifiedPeerService: ObservableObject, TransportPeerEventsDelegate {
             return nil
         }
         identityManager.setBlocked(fingerprint, isBlocked: blocked)
+
+        // Keep favorites and Nostr blocks aligned with Noise identity blocks.
+        // Never send a network [UNFAVORITED] signal on block (no liveness leak).
+        // Record the fingerprint->Nostr link in `identityManager` before
+        // removing the favorite so unblocking a one-sided favorite (whose
+        // favorites entry is deleted) still clears the Nostr block cleanly.
+        let matchingFavorite = resolveFavoriteRelationship(for: peerID, fingerprint: fingerprint)
+        if let rel = matchingFavorite {
+            if let nostrHex = FavoritesPersistenceService.nostrPubkeyHex(from: rel.peerNostrPublicKey) {
+                if blocked {
+                    identityManager.setAssociatedNostrBlock(forFingerprint: fingerprint, nostrPubkeyHex: nostrHex)
+                } else {
+                    identityManager.setNostrBlocked(nostrHex, isBlocked: false)
+                }
+            }
+            if blocked && rel.isFavorite {
+                favoritesService.removeFavorite(peerNoisePublicKey: rel.peerNoisePublicKey)
+            }
+        }
+
         if blocked {
             // Purge while the fingerprint↔peerID mapping is still known: the
             // archived-echo seed filter can't resolve offline strangers, so
@@ -346,11 +366,35 @@ final class UnifiedPeerService: ObservableObject, TransportPeerEventsDelegate {
         return fingerprint
     }
 
-    /// Toggle favorite status
-    func toggleFavorite(_ peerID: PeerID) {
+    private func resolveFavoriteRelationship(
+        for peerID: PeerID,
+        fingerprint: String
+    ) -> FavoritesPersistenceService.FavoriteRelationship? {
+        if let noiseKey = peerID.noiseKey,
+           let rel = favoritesService.getFavoriteStatus(for: noiseKey) {
+            return rel
+        }
+        if let peer = getPeer(by: peerID),
+           peer.noisePublicKey.count == FavoritesPersistenceService.expectedNoiseKeyLength,
+           let rel = favoritesService.getFavoriteStatus(for: peer.noisePublicKey) {
+            return rel
+        }
+        if let rel = favoritesService.getFavoriteStatus(forPeerID: peerID) {
+            return rel
+        }
+        return favoritesService.favorites.first(where: { $0.key.sha256Fingerprint() == fingerprint })?.value
+    }
+
+    /// Toggle favorite status. Returns `true` when the favorite state changed.
+    @discardableResult
+    func toggleFavorite(_ peerID: PeerID) -> Bool {
         guard let peer = getPeer(by: peerID) else {
             SecureLogger.warning("⚠️ Cannot toggle favorite - peer not found: \(peerID)", category: .session)
-            return 
+            return false
+        }
+        guard peer.noisePublicKey.count == FavoritesPersistenceService.expectedNoiseKeyLength else {
+            SecureLogger.warning("⚠️ Cannot toggle favorite - missing valid Noise key for peer: \(peerID)", category: .security)
+            return false
         }
         
         let wasFavorite = peer.isFavorite
@@ -373,27 +417,31 @@ final class UnifiedPeerService: ObservableObject, TransportPeerEventsDelegate {
         let finalNickname = actualNickname.isEmpty ? peer.displayName : actualNickname
         
         if wasFavorite {
-            // Remove favorite
+            // Send [UNFAVORITED] BEFORE removing so NostrTransport can still
+            // resolve the peer's npub (even for one-sided favorites).
+            if let router = messageRouter {
+                router.sendFavoriteNotification(to: peerID, isFavorite: false)
+            } else {
+                meshService.sendFavoriteNotification(to: peerID, isFavorite: false)
+            }
             favoritesService.removeFavorite(peerNoisePublicKey: peer.noisePublicKey)
         } else {
-            // Add favorite
-            favoritesService.addFavorite(
+            guard favoritesService.addFavorite(
                 peerNoisePublicKey: peer.noisePublicKey,
                 peerNostrPublicKey: peer.nostrPublicKey,
                 peerNickname: finalNickname
-            )
+            ) else {
+                return false
+            }
+            if let router = messageRouter {
+                router.sendFavoriteNotification(to: peerID, isFavorite: true)
+            } else {
+                meshService.sendFavoriteNotification(to: peerID, isFavorite: true)
+            }
         }
         
         // Log the final nickname being saved
         SecureLogger.debug("⭐️ Toggled favorite for '\(finalNickname)' (peerID: \(peerID), was: \(wasFavorite), now: \(!wasFavorite))", category: .session)
-        
-        // Send favorite notification to the peer via router (mesh or Nostr)
-        if let router = messageRouter {
-            router.sendFavoriteNotification(to: peerID, isFavorite: !wasFavorite)
-        } else {
-            // Fallback to mesh-only if router not yet wired
-            meshService.sendFavoriteNotification(to: peerID, isFavorite: !wasFavorite)
-        }
         
         // Force update of peers to reflect the change
         updatePeers()
@@ -402,6 +450,7 @@ final class UnifiedPeerService: ObservableObject, TransportPeerEventsDelegate {
         DispatchQueue.main.async { [weak self] in
             self?.objectWillChange.send()
         }
+        return true
     }
     
     func getFingerprint(for peerID: PeerID) -> String? {
@@ -417,7 +466,8 @@ final class UnifiedPeerService: ObservableObject, TransportPeerEventsDelegate {
         }
         
         // Try to get from peer's public key
-        if let peer = getPeer(by: peerID) {
+        if let peer = getPeer(by: peerID),
+           peer.noisePublicKey.count == FavoritesPersistenceService.expectedNoiseKeyLength {
             let fingerprint = peer.noisePublicKey.sha256Fingerprint()
             fingerprintCache[peerID] = fingerprint
             return fingerprint

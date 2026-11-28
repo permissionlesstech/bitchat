@@ -218,12 +218,107 @@ struct UnifiedPeerServiceTests {
         #expect(service.setBlocked(peerID, blocked: true) == nil)
         #expect(!service.isBlocked(peerID))
     }
+
+    @Test @MainActor
+    func toggleFavorite_rejectsPeerWithMissingNoiseKey() async {
+        let transport = MockTransport()
+        let service = UnifiedPeerService(meshService: transport, identityManager: TestIdentityManager())
+        let peerID = PeerID(str: "0011223344556699")
+        let snapshots = [TransportPeerSnapshot(
+            peerID: peerID,
+            nickname: "no-key-peer",
+            isConnected: true,
+            noisePublicKey: nil,
+            lastSeen: Date()
+        )]
+        transport.updatePeerSnapshots(snapshots)
+        service.didUpdatePeerSnapshots(snapshots)
+
+        #expect(service.toggleFavorite(peerID) == false)
+        #expect(FavoritesPersistenceService.shared.getFavoriteStatus(for: Data()) == nil)
+    }
+
+    @Test @MainActor
+    func setBlocked_removesFavoriteAndBlocksAssociatedNostrKey() async throws {
+        let favoritesService = FavoritesPersistenceService.shared
+        let transport = MockTransport()
+        let identity = TestIdentityManager()
+        let service = UnifiedPeerService(meshService: transport, identityManager: identity)
+
+        let noiseKey = Data(repeating: 0x7A, count: 32)
+        let peerID = PeerID(hexData: noiseKey)
+        let nostrIdentity = try NostrIdentity.generate()
+        favoritesService.establishMutualFavorite(
+            peerNoisePublicKey: noiseKey,
+            peerNostrPublicKey: nostrIdentity.npub,
+            peerNickname: "blocked-fav"
+        )
+        defer {
+            favoritesService.updatePeerFavoritedUs(peerNoisePublicKey: noiseKey, favorited: false)
+            favoritesService.removeFavorite(peerNoisePublicKey: noiseKey)
+        }
+        service.didUpdatePeerSnapshots([])
+
+        let fp = service.setBlocked(peerID, blocked: true)
+        #expect(fp == noiseKey.sha256Fingerprint())
+        #expect(!favoritesService.isFavorite(noiseKey))
+        #expect(!favoritesService.isMutualFavorite(noiseKey))
+        #expect(identity.isNostrBlocked(pubkeyHexLowercased: nostrIdentity.publicKeyHex.lowercased()))
+
+        _ = service.setBlocked(peerID, blocked: false)
+        #expect(!identity.isNostrBlocked(pubkeyHexLowercased: nostrIdentity.publicKeyHex.lowercased()))
+    }
+
+    /// Blocking a one-sided favorite deletes the favorites record completely;
+    /// unblocking must still clear the linked Nostr block even though the
+    /// favorites entry is gone.
+    @Test @MainActor
+    func setBlocked_unblockingOneSidedFavoriteStillClearsNostrBlock() async throws {
+        let favoritesService = FavoritesPersistenceService.shared
+        let transport = MockTransport()
+        let identity = TestIdentityManager()
+        let service = UnifiedPeerService(meshService: transport, identityManager: identity)
+
+        let noiseKey = Data(repeating: 0x7B, count: 32)
+        let shortPeerID = PeerID(publicKey: noiseKey)
+        let nostrIdentity = try NostrIdentity.generate()
+        let nostrHex = nostrIdentity.publicKeyHex.lowercased()
+        favoritesService.addFavorite(
+            peerNoisePublicKey: noiseKey,
+            peerNostrPublicKey: nostrIdentity.npub,
+            peerNickname: "one-sided-fav"
+        )
+        defer {
+            favoritesService.removeFavorite(peerNoisePublicKey: noiseKey)
+        }
+        let snapshots = [TransportPeerSnapshot(
+            peerID: shortPeerID,
+            nickname: "one-sided-fav",
+            isConnected: true,
+            noisePublicKey: noiseKey,
+            lastSeen: Date()
+        )]
+        transport.updatePeerSnapshots(snapshots)
+        service.didUpdatePeerSnapshots(snapshots)
+
+        let fp = service.setBlocked(shortPeerID, blocked: true)
+        #expect(fp == noiseKey.sha256Fingerprint())
+        // One-sided favorite record was deleted completely.
+        #expect(favoritesService.getFavoriteStatus(for: noiseKey) == nil)
+        #expect(identity.isNostrBlocked(pubkeyHexLowercased: nostrHex))
+
+        // Unblocking clears BOTH Noise and Nostr blocks even with no favorites record.
+        _ = service.setBlocked(shortPeerID, blocked: false)
+        #expect(!identity.isBlocked(fingerprint: noiseKey.sha256Fingerprint()))
+        #expect(!identity.isNostrBlocked(pubkeyHexLowercased: nostrHex))
+    }
 }
 
 private final class TestIdentityManager: SecureIdentityStateManagerProtocol {
     private var socialIdentities: [String: SocialIdentity] = [:]
     private var favorites: Set<String> = []
     private var blockedNostr: Set<String> = []
+    private var blockedNostrByFingerprint: [String: String] = [:]
     private var verified: Set<String> = []
 
     func forceSave() {}
@@ -258,18 +353,31 @@ private final class TestIdentityManager: SecureIdentityStateManagerProtocol {
         )
         identity.isBlocked = isBlocked
         socialIdentities[fingerprint] = identity
+        if !isBlocked,
+           let associated = blockedNostrByFingerprint.removeValue(forKey: fingerprint),
+           !blockedNostrByFingerprint.values.contains(associated) {
+            blockedNostr.remove(associated)
+        }
     }
 
     func isNostrBlocked(pubkeyHexLowercased: String) -> Bool {
-        blockedNostr.contains(pubkeyHexLowercased)
+        blockedNostr.contains(pubkeyHexLowercased.lowercased())
     }
 
     func setNostrBlocked(_ pubkeyHexLowercased: String, isBlocked: Bool) {
+        let key = pubkeyHexLowercased.lowercased()
         if isBlocked {
-            blockedNostr.insert(pubkeyHexLowercased)
+            blockedNostr.insert(key)
         } else {
-            blockedNostr.remove(pubkeyHexLowercased)
+            blockedNostr.remove(key)
+            blockedNostrByFingerprint = blockedNostrByFingerprint.filter { $0.value != key }
         }
+    }
+
+    func setAssociatedNostrBlock(forFingerprint fingerprint: String, nostrPubkeyHex: String) {
+        let key = nostrPubkeyHex.lowercased()
+        blockedNostr.insert(key)
+        blockedNostrByFingerprint[fingerprint] = key
     }
 
     func getBlockedNostrPubkeys() -> Set<String> {

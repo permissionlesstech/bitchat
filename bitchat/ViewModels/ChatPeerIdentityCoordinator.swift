@@ -52,11 +52,14 @@ protocol ChatPeerIdentityContext: AnyObject {
     /// The peer's current entry in the unified peer service, if known.
     func unifiedPeer(for peerID: PeerID) -> BitchatPeer?
     func unifiedIsBlocked(_ peerID: PeerID) -> Bool
-    func unifiedToggleFavorite(_ peerID: PeerID)
+    @discardableResult
+    func unifiedToggleFavorite(_ peerID: PeerID) -> Bool
     func unifiedFingerprint(for peerID: PeerID) -> String?
     func unifiedPeerID(forNickname nickname: String) -> PeerID?
     /// Resolves the ephemeral (short) peer ID for a known Noise public key, if connected.
     func ephemeralPeerID(forNoiseKey noiseKey: Data) -> PeerID?
+    /// Resolves a unique persisted 32-byte Noise key for an offline 16-hex short peer ID.
+    func knownNoiseKey(forShortPeerID peerID: PeerID) -> Data?
 
     // MARK: Mesh & Noise sessions
     func peerNickname(for peerID: PeerID) -> String?
@@ -70,9 +73,6 @@ protocol ChatPeerIdentityContext: AnyObject {
 
     // MARK: Identity store (fingerprints & encryption status)
     func setStoredFingerprint(_ fingerprint: String, for peerID: PeerID)
-    /// Moves the stored fingerprint mapping from `oldPeerID` to `newPeerID`,
-    /// falling back to `fallback` when none was stored. Returns the migrated fingerprint.
-    func migrateFingerprintMapping(from oldPeerID: PeerID, to newPeerID: PeerID, fallback: String?) -> String?
     func isVerifiedFingerprint(_ fingerprint: String) -> Bool
     func setEncryptionStatus(_ status: EncryptionStatus?, for peerID: PeerID)
     func cachedEncryptionStatus(for peerID: PeerID) -> EncryptionStatus?
@@ -129,8 +129,17 @@ extension ChatViewModel: ChatPeerIdentityContext {
         unifiedPeerService.isBlocked(peerID)
     }
 
-    func unifiedToggleFavorite(_ peerID: PeerID) {
+    @discardableResult
+    func unifiedToggleFavorite(_ peerID: PeerID) -> Bool {
         unifiedPeerService.toggleFavorite(peerID)
+    }
+
+    func knownNoiseKey(forShortPeerID peerID: PeerID) -> Data? {
+        guard peerID.isShort else { return nil }
+        let matches = identityManager.getCryptoIdentitiesByPeerIDPrefix(peerID)
+            .filter { $0.publicKey.count == FavoritesPersistenceService.expectedNoiseKeyLength }
+        guard matches.count == 1 else { return nil }
+        return matches[0].publicKey
     }
 
     func unifiedFingerprint(for peerID: PeerID) -> String? {
@@ -167,10 +176,6 @@ extension ChatViewModel: ChatPeerIdentityContext {
 
     func setStoredFingerprint(_ fingerprint: String, for peerID: PeerID) {
         peerIdentityStore.setFingerprint(fingerprint, for: peerID)
-    }
-
-    func migrateFingerprintMapping(from oldPeerID: PeerID, to newPeerID: PeerID, fallback: String?) -> String? {
-        peerIdentityStore.migrateFingerprintMapping(from: oldPeerID, to: newPeerID, fallback: fallback)
     }
 
     func isVerifiedFingerprint(_ fingerprint: String) -> Bool {
@@ -277,13 +282,28 @@ final class ChatPeerIdentityCoordinator {
     }
 
     @MainActor
-    func toggleFavorite(peerID: PeerID) {
+    @discardableResult
+    func toggleFavorite(peerID: PeerID) -> Bool {
         if let noisePublicKey = peerID.noiseKey {
-            toggleFavoriteForNoiseKey(noisePublicKey, peerID: peerID)
-            return
+            return toggleFavoriteForNoiseKey(noisePublicKey, peerID: peerID)
         }
 
-        context.unifiedToggleFavorite(peerID)
+        if context.unifiedPeer(for: peerID) != nil {
+            return context.unifiedToggleFavorite(peerID)
+        }
+
+        // Offline 16-hex mesh conversation: resolve the underlying 32-byte
+        // Noise key from the favorites store or persisted crypto identities
+        // so one-sided favorites and offline passersby can still be toggled.
+        if let relationship = context.favoriteRelationship(forPeerID: peerID) {
+            return toggleFavoriteForNoiseKey(relationship.peerNoisePublicKey, peerID: peerID)
+        }
+
+        if let noisePublicKey = context.knownNoiseKey(forShortPeerID: peerID) {
+            return toggleFavoriteForNoiseKey(noisePublicKey, peerID: peerID)
+        }
+
+        return false
     }
 
     @MainActor
@@ -292,7 +312,11 @@ final class ChatPeerIdentityCoordinator {
             return context.favoriteRelationship(forNoiseKey: noisePublicKey)?.isFavorite ?? false
         }
 
-        return context.unifiedPeer(for: peerID)?.isFavorite ?? false
+        if let peer = context.unifiedPeer(for: peerID) {
+            return peer.isFavorite
+        }
+
+        return context.favoriteRelationship(forPeerID: peerID)?.isFavorite ?? false
     }
 
     @MainActor
@@ -383,28 +407,9 @@ final class ChatPeerIdentityCoordinator {
     }
 
     func handleFavoriteStatusChanged(_ notification: Notification) {
-        guard let peerPublicKey = notification.userInfo?["peerPublicKey"] as? Data else { return }
-
-        Task { @MainActor [weak context = self.context] in
-            guard let context else { return }
-
-            if let isKeyUpdate = notification.userInfo?["isKeyUpdate"] as? Bool,
-               isKeyUpdate,
-               let oldKey = notification.userInfo?["oldPeerPublicKey"] as? Data {
-                migrateNoiseKeyUpdate(
-                    oldPeerID: PeerID(hexData: oldKey),
-                    newPeerID: PeerID(hexData: peerPublicKey)
-                )
-            }
-
-            updatePrivateChatPeerIfNeeded()
-
-            if let isFavorite = notification.userInfo?["isFavorite"] as? Bool {
-                let peerID = PeerID(hexData: peerPublicKey)
-                let action = isFavorite ? "favorited" : "unfavorited"
-                let peerNickname = favoriteNotificationNickname(for: peerID, peerPublicKey: peerPublicKey)
-                context.addSystemMessage("\(peerNickname) \(action) you")
-            }
+        _ = notification
+        Task { @MainActor [weak self] in
+            self?.updatePrivateChatPeerIfNeeded()
         }
     }
 
@@ -581,46 +586,6 @@ private extension ChatPeerIdentityCoordinator {
     }
 
     @MainActor
-    func migrateNoiseKeyUpdate(oldPeerID: PeerID, newPeerID: PeerID) {
-        // Capture before the migration: the store hands its selection off to
-        // `newPeerID` during `migrateChatState`, and the manager's selection
-        // mirrors the store, so the old peer ID is no longer selected after.
-        let wasSelected = context.selectedPrivateChatPeer == oldPeerID
-        if wasSelected {
-            SecureLogger.info("📱 Updating private chat peer ID due to key change: \(oldPeerID) -> \(newPeerID)", category: .session)
-        } else if !context.privateMessages(for: oldPeerID).isEmpty {
-            SecureLogger.debug("📱 Migrating private chat messages from \(oldPeerID) to \(newPeerID)", category: .session)
-        }
-
-        migrateChatState(from: oldPeerID, to: newPeerID)
-
-        if wasSelected {
-            context.selectedPrivateChatPeer = newPeerID
-        }
-
-        if let fingerprint = context.migrateFingerprintMapping(
-            from: oldPeerID,
-            to: newPeerID,
-            fallback: getFingerprint(for: newPeerID)
-        ) {
-            if context.selectedPrivateChatPeer == newPeerID {
-                context.selectedPrivateChatFingerprint = fingerprint
-            }
-        }
-    }
-
-    @MainActor
-    func favoriteNotificationNickname(for peerID: PeerID, peerPublicKey: Data) -> String {
-        if let nickname = context.peerNickname(for: peerID) {
-            return nickname
-        }
-        if let favorite = context.favoriteRelationship(forNoiseKey: peerPublicKey) {
-            return favorite.peerNickname
-        }
-        return "Unknown"
-    }
-
-    @MainActor
     func verifiedEncryptionStatus(for peerID: PeerID) -> EncryptionStatus {
         if let fingerprint = getFingerprint(for: peerID),
            context.isVerifiedFingerprint(fingerprint) {
@@ -630,14 +595,19 @@ private extension ChatPeerIdentityCoordinator {
     }
 
     @MainActor
-    func toggleFavoriteForNoiseKey(_ noisePublicKey: Data, peerID: PeerID) {
+    @discardableResult
+    func toggleFavoriteForNoiseKey(_ noisePublicKey: Data, peerID: PeerID) -> Bool {
+        guard noisePublicKey.count == FavoritesPersistenceService.expectedNoiseKeyLength else {
+            return false
+        }
+
         if let ephemeralID = context.ephemeralPeerID(forNoiseKey: noisePublicKey) {
-            context.unifiedToggleFavorite(ephemeralID)
-            return
+            return context.unifiedToggleFavorite(ephemeralID)
         }
 
         let currentStatus = context.favoriteRelationship(forNoiseKey: noisePublicKey)
         let fallbackNickname = context.privateMessages(for: peerID).first { $0.senderPeerID == peerID }?.sender
+            ?? context.peerNickname(for: peerID)
         let plan = ChatFavoriteTogglePolicy.plan(
             currentStatus: currentStatus.map(ChatFavoriteStatusSnapshot.init),
             fallbackNickname: fallbackNickname,
@@ -651,18 +621,27 @@ private extension ChatPeerIdentityCoordinator {
                 nostrPublicKey: nostrKey,
                 nickname: nickname
             )
+            if case .send(let isFavorite) = plan.notification {
+                context.sendFavoriteNotificationViaNostr(
+                    noisePublicKey: noisePublicKey,
+                    isFavorite: isFavorite
+                )
+            }
 
         case .remove:
+            // Notify BEFORE removing so NostrTransport / ChatNostrCoordinator
+            // can still resolve the peer's npub (including for one-sided
+            // favorites whose record will be deleted completely).
+            if case .send(let isFavorite) = plan.notification {
+                context.sendFavoriteNotificationViaNostr(
+                    noisePublicKey: noisePublicKey,
+                    isFavorite: isFavorite
+                )
+            }
             context.removeFavorite(noiseKey: noisePublicKey)
         }
 
-
-        if case .send(let isFavorite) = plan.notification {
-            context.sendFavoriteNotificationViaNostr(
-                noisePublicKey: noisePublicKey,
-                isFavorite: isFavorite
-            )
-        }
+        return true
     }
 }
 
@@ -671,5 +650,9 @@ private extension ChatPeerIdentityCoordinator {
 extension ChatPeerIdentityContext {
     func privateMessages(for peerID: PeerID) -> [BitchatMessage] {
         privateChats[peerID] ?? []
+    }
+
+    func knownNoiseKey(forShortPeerID peerID: PeerID) -> Data? {
+        nil
     }
 }

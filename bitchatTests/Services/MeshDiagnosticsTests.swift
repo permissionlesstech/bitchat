@@ -285,7 +285,8 @@ private final class DiagnosticsMockContext: CommandContextProvider {
     func groupList() -> CommandResult { .handled }
     func addLocalPrivateSystemMessage(_ content: String, to peerID: PeerID) {}
     func addPublicSystemMessage(_ content: String) {}
-    func toggleFavorite(peerID: PeerID) {}
+    @discardableResult
+    func toggleFavorite(peerID: PeerID) -> Bool { true }
 
     func currentCommandDestination() -> CommandOutputDestination {
         if let peerID = selectedPrivateChatPeer {

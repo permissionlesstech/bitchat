@@ -99,6 +99,11 @@ protocol ChatPrivateConversationContext: ChatIdentityContext, ChatDirectMessageS
     /// The persisted favorite relationship resolved from a short 16-hex mesh
     /// peer ID (matched against the IDs derived from stored noise keys).
     func favoriteRelationship(forPeerID peerID: PeerID) -> FavoritesPersistenceService.FavoriteRelationship?
+    /// Fast reverse lookup from a Nostr pubkey (hex or npub) to an existing
+    /// favorite's Noise static key (prevents cross-peer `npub` hijacking).
+    func favoriteNoiseKey(forNostrPubkey nostrPubkey: String) -> Data?
+    /// Our own 32-byte Noise static public key (used to reject self-favorites).
+    func myNoisePublicKey() -> Data
     /// Persists that the peer favorited/unfavorited us (favorites store write).
     func updatePeerFavoritedUs(noiseKey: Data, favorited: Bool, nickname: String, nostrPublicKey: String?)
     /// Posts the incoming-private-message local notification.
@@ -108,6 +113,8 @@ protocol ChatPrivateConversationContext: ChatIdentityContext, ChatDirectMessageS
 extension ChatPrivateConversationContext {
     func reconcileDisappearingTimer(from sourcePeerID: PeerID, to destinationPeerID: PeerID) {}
     func registerVerifiedFriendInviteIdentity(_ invite: FriendInvite) {}
+    func favoriteNoiseKey(forNostrPubkey nostrPubkey: String) -> Data? { nil }
+    func myNoisePublicKey() -> Data { Data() }
 }
 
 extension ChatViewModel: ChatPrivateConversationContext {
@@ -136,7 +143,13 @@ extension ChatViewModel: ChatPrivateConversationContext {
     }
 
     func ephemeralPeerID(forNoiseKey noiseKey: Data) -> PeerID? {
-        unifiedPeerService.peers.first(where: { $0.noisePublicKey == noiseKey })?.peerID
+        unifiedPeerService.peers.first(where: {
+            $0.noisePublicKey == noiseKey && $0.peerID.isShort && ($0.isConnected || $0.isReachable)
+        })?.peerID
+    }
+
+    func myNoisePublicKey() -> Data {
+        meshService.noiseStaticPublicKeyData()
     }
 
     func storedFingerprint(for peerID: PeerID) -> String? {
@@ -516,15 +529,18 @@ final class ChatPrivateConversationCoordinator {
         senderPubkey: String,
         convKey: PeerID,
         id: NostrIdentity,
-        messageTimestamp: Date
+        messageTimestamp: Date,
+        isGeohashDM: Bool = false
     ) {
         guard let pm = PrivateMessagePacket.decode(from: payload.data) else { return }
         let messageId = pm.messageID
 
         // Block check before anything that answers the sender: a blocked
         // sender gets no DELIVERED or READ ack back (not even a liveness
-        // signal) and doesn't consume a dedup slot.
-        if context.isNostrBlocked(pubkeyHexLowercased: senderPubkey) {
+        // signal) and doesn't consume a dedup slot. Check both the Nostr
+        // blocklist and the Noise-identity blocklist (for known favorites).
+        if context.isNostrBlocked(pubkeyHexLowercased: senderPubkey.lowercased())
+            || (convKey.noiseKey != nil && context.isPeerBlocked(convKey)) {
             return
         }
 
@@ -550,14 +566,16 @@ final class ChatPrivateConversationCoordinator {
             return context.displayNameForNostrPubkey(senderPubkey)
         }()
 
-        // Favorite notifications ride the PM channel over Nostr too; intercept
-        // them so they update the relationship instead of rendering as text.
-        if pm.content.hasPrefix("[FAVORITED]") || pm.content.hasPrefix("[UNFAVORITED]") {
+        // Favorite notifications ride the PM channel over account Nostr DMs;
+        // never let geohash DMs mutate favorite or identity state.
+        if !isGeohashDM,
+           pm.content.hasPrefix("[FAVORITED]") || pm.content.hasPrefix("[UNFAVORITED]") {
             handleFavoriteNotification(
                 pm.content,
                 from: convKey,
                 senderNickname: senderName,
-                senderNostrPubkeyHex: senderPubkey
+                senderNostrPubkeyHex: senderPubkey,
+                isGeohashDM: false
             )
             return
         }
@@ -757,40 +775,95 @@ final class ChatPrivateConversationCoordinator {
     }
 
     /// Applies an inbound `[FAVORITED]`/`[UNFAVORITED]` marker from either
-    /// transport. `peerID` must resolve to a noise key — a full 64-hex ID, one
-    /// the unified peer list knows, or a cryptographically signed invite
-    /// acceptance bundle matching `senderNostrPubkeyHex`; otherwise dropped.
+    /// transport. `peerID` must resolve to a 32-byte noise key — a full 64-hex
+    /// ID, one the unified peer list knows, or a cryptographically signed
+    /// invite acceptance bundle matching `senderNostrPubkeyHex` on the account
+    /// Nostr mailbox (never on geohash DMs); otherwise dropped.
     func handleFavoriteNotification(
         _ content: String,
         from peerID: PeerID,
         senderNickname: String,
-        senderNostrPubkeyHex: String? = nil
+        senderNostrPubkeyHex: String? = nil,
+        isGeohashDM: Bool = false
     ) {
+        guard !isGeohashDM else { return }
+
         let isFavorite = content.hasPrefix("[FAVORITED]")
-        let parts = content.split(separator: ":")
+        let parts = content.split(separator: ":", omittingEmptySubsequences: false)
+        let expectedSenderHex = senderNostrPubkeyHex?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
 
         var nostrPubkey: String?
         if parts.count > 1 {
-            nostrPubkey = String(parts[1])
-            SecureLogger.info("📝 Received Nostr npub in favorite notification: \(nostrPubkey ?? "none")", category: .session)
+            let rawNostr = String(parts[1]).trimmingCharacters(in: .whitespacesAndNewlines)
+            if !rawNostr.isEmpty {
+                if let normalizedNpub = FavoritesPersistenceService.normalizeNostrNpub(rawNostr) {
+                    if let expectedHex = expectedSenderHex, !expectedHex.isEmpty {
+                        // Over Nostr, the embedded npub must match the NIP-17
+                        // authenticated sender so a peer cannot spoof another
+                        // person's npub into our favorites index.
+                        guard FavoritesPersistenceService.nostrPubkeyHex(from: normalizedNpub) == expectedHex else {
+                            SecureLogger.warning(
+                                "🚫 Rejecting favorite notification with mismatched npub for sender \(expectedHex.prefix(8))…",
+                                category: .security
+                            )
+                            return
+                        }
+                    }
+                    nostrPubkey = normalizedNpub
+                    SecureLogger.info("📝 Received Nostr npub in favorite notification: \(normalizedNpub.prefix(16))…", category: .session)
+                } else {
+                    SecureLogger.warning("⚠️ Ignoring invalid Nostr pubkey in favorite notification", category: .security)
+                }
+            }
         }
 
+        let myNoiseKey = context.myNoisePublicKey()
         var resolvedNoiseKey = peerID.noiseKey ?? context.noisePublicKey(for: peerID)
         if resolvedNoiseKey == nil,
            isFavorite,
+           let expectedHex = expectedSenderHex, !expectedHex.isEmpty,
            let verifiedInvite = FriendInvite.parseFavoriteAcceptancePayload(
                content,
-               expectedSenderPubkeyHex: senderNostrPubkeyHex,
+               expectedSenderPubkeyHex: expectedHex,
                nickname: senderNickname
            ) {
+            guard verifiedInvite.noisePublicKey != myNoiseKey,
+                  !context.isPeerBlocked(verifiedInvite.stablePeerID) else {
+                SecureLogger.debug("🚫 Ignoring invite acceptance from self or blocked peer", category: .security)
+                return
+            }
+            if let existingOwner = context.favoriteNoiseKey(forNostrPubkey: verifiedInvite.nostrNpub),
+               existingOwner != verifiedInvite.noisePublicKey {
+                SecureLogger.warning("🚫 Rejecting invite acceptance claiming an npub already bound to another peer", category: .security)
+                return
+            }
             context.registerVerifiedFriendInviteIdentity(verifiedInvite)
             resolvedNoiseKey = verifiedInvite.noisePublicKey
             nostrPubkey = verifiedInvite.nostrNpub
         }
 
-        guard let finalNoiseKey = resolvedNoiseKey else {
+        guard let finalNoiseKey = resolvedNoiseKey,
+              finalNoiseKey.count == FavoritesPersistenceService.expectedNoiseKeyLength else {
             SecureLogger.warning("⚠️ Cannot get Noise key for peer \(peerID)", category: .session)
             return
+        }
+
+        guard finalNoiseKey != myNoiseKey else { return }
+
+        let stablePeerID = PeerID(hexData: finalNoiseKey)
+        if context.isPeerBlocked(peerID) || context.isPeerBlocked(stablePeerID) {
+            return
+        }
+
+        // Prevent a peer from overwriting/hijacking another known peer's npub.
+        if let candidateNpub = nostrPubkey,
+           let existingOwner = context.favoriteNoiseKey(forNostrPubkey: candidateNpub),
+           existingOwner != finalNoiseKey {
+            SecureLogger.warning(
+                "🚫 Ignoring spoofed npub in favorite notification from \(peerID.id.prefix(8))… (already owned by another peer)",
+                category: .security
+            )
+            nostrPubkey = nil
         }
 
         let prior = context.favoriteRelationship(forNoiseKey: finalNoiseKey)?.theyFavoritedUs ?? false
@@ -801,9 +874,9 @@ final class ChatPrivateConversationCoordinator {
             nostrPublicKey: nostrPubkey
         )
 
-        if isFavorite && nostrPubkey != nil {
+        if isFavorite, let nostrPubkey {
             SecureLogger.info(
-                "💾 Storing Nostr key association for \(senderNickname): \(nostrPubkey!.prefix(16))...",
+                "💾 Storing Nostr key association for \(senderNickname): \(nostrPubkey.prefix(16))...",
                 category: .session
             )
         }

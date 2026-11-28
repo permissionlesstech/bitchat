@@ -76,7 +76,9 @@ protocol CommandContextProvider: AnyObject {
     // MARK: - Favorites
     /// Toggles the favorite via the unified peer flow, which persists by the
     /// real noise key and notifies the peer over mesh or Nostr.
-    func toggleFavorite(peerID: PeerID)
+    /// Returns `true` if the toggle succeeded.
+    @discardableResult
+    func toggleFavorite(peerID: PeerID) -> Bool
 
     // MARK: - Groups
     // Group logic lives in `ChatGroupCoordinator`; these forward the parsed
@@ -360,6 +362,18 @@ final class CommandProcessor {
                 )
                 identityManager.updateSocialIdentity(blockedIdentity)
             }
+            // Remove from favorites and persist the linked Nostr block under
+            // the peer's fingerprint so unblocking a one-sided favorite (whose
+            // favorites entry is deleted) still clears both blocklists.
+            for (noiseKey, rel) in FavoritesPersistenceService.shared.favorites
+            where noiseKey.sha256Fingerprint() == fingerprint {
+                if let nostrHex = FavoritesPersistenceService.nostrPubkeyHex(from: rel.peerNostrPublicKey) {
+                    identityManager.setAssociatedNostrBlock(forFingerprint: fingerprint, nostrPubkeyHex: nostrHex)
+                }
+                if rel.isFavorite {
+                    FavoritesPersistenceService.shared.removeFavorite(peerNoisePublicKey: noiseKey)
+                }
+            }
             // Scrub their carried public messages now, while the peerID is
             // resolvable, so they can't resurface as archived echoes.
             meshArchive?.purgeArchivedPublicMessages(from: peerID)
@@ -392,6 +406,12 @@ final class CommandProcessor {
                 return .success(message: String(format: String(localized: "command.unblock.not_blocked", defaultValue: "%@ is not blocked", comment: "Reply when /unblock targets a nickname that isn't blocked"), locale: .current, nickname))
             }
             identityManager.setBlocked(fingerprint, isBlocked: false)
+            for (noiseKey, rel) in FavoritesPersistenceService.shared.favorites
+            where noiseKey.sha256Fingerprint() == fingerprint {
+                if let nostrHex = FavoritesPersistenceService.nostrPubkeyHex(from: rel.peerNostrPublicKey) {
+                    identityManager.setNostrBlocked(nostrHex, isBlocked: false)
+                }
+            }
             return .success(message: String(format: String(localized: "command.unblock.done", defaultValue: "unblocked %@", comment: "Confirmation after unblocking a mesh peer"), locale: .current, nickname))
         }
         // Try geohash unblock
@@ -574,7 +594,9 @@ final class CommandProcessor {
         }
 
         // toggleFavorite persists by the real noise key and notifies the peer.
-        contextProvider?.toggleFavorite(peerID: peerID)
+        guard contextProvider?.toggleFavorite(peerID: peerID) == true else {
+            return .error(message: String(format: String(localized: "command.fav.not_found", defaultValue: "can't find peer: %@", comment: "Error when /fav or /unfav can't resolve the nickname"), locale: .current, nickname))
+        }
 
         return .success(message: add
             ? String(format: String(localized: "command.fav.added", defaultValue: "added %@ to favorites", comment: "Confirmation after /fav"), locale: .current, nickname)

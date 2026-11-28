@@ -131,7 +131,7 @@ extension ChatViewModel: ChatGroupContext {
 
     func nostrReachablePeerID(forFingerprint fingerprint: String) -> PeerID? {
         for (noiseKey, rel) in FavoritesPersistenceService.shared.favorites {
-            guard rel.peerNostrPublicKey != nil,
+            guard rel.isMutual && rel.hasValidNostrPublicKey,
                   noiseKey.sha256Fingerprint() == fingerprint else { continue }
             return PeerID(hexData: noiseKey)
         }
@@ -147,17 +147,10 @@ extension ChatViewModel: ChatGroupContext {
             return myNostrPubkeyHex()
         }
         for (noiseKey, rel) in FavoritesPersistenceService.shared.favorites {
-            guard let rawNostr = rel.peerNostrPublicKey?.trimmingCharacters(in: .whitespacesAndNewlines),
-                  noiseKey.sha256Fingerprint() == fingerprint else { continue }
-            if rawNostr.lowercased().hasPrefix("npub1"),
-               let (hrp, data) = try? Bech32.decode(rawNostr.lowercased()),
-               hrp == "npub",
-               data.count == 32 {
-                return data.hexEncodedString()
-            }
-            if rawNostr.count == 64, Data(hexString: rawNostr)?.count == 32 {
-                return rawNostr.lowercased()
-            }
+            guard rel.isMutual,
+                  noiseKey.sha256Fingerprint() == fingerprint,
+                  let hex = FavoritesPersistenceService.nostrPubkeyHex(from: rel.peerNostrPublicKey) else { continue }
+            return hex
         }
         return nil
     }
