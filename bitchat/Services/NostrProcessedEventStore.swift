@@ -10,8 +10,9 @@ import BitLogger
 import Foundation
 
 /// Disk persistence for processed private-envelope event IDs. BitChat
-/// randomizes envelope timestamps, so DM subscriptions must look back
-/// generously (24h)
+/// and peer clients randomize envelope timestamps (up to ~48h into the
+/// past on Android), so DM subscriptions must look back across that
+/// window
 /// and relays redeliver the same events on every launch — without a
 /// cross-launch record, each relaunch reprocesses old PMs and acks
 /// (re-sent DELIVERED bursts, "delivered ack for unknown mid" noise).
