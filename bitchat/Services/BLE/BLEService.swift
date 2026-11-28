@@ -4313,6 +4313,16 @@ extension BLEService {
                verifiedDirectAnnounceOwners.value(for: messageID, now: Date()) == claimedSenderID {
                 bindUnboundLinkAfterVerifiedDirectAnnounce(link, to: claimedSenderID)
             }
+            // The 3s ingress record returns before the dedup cancel, so a
+            // duplicate from another relay never reached scheduledRelays.cancel.
+            // The relay jitter is at most 220ms, so that copy always lands here.
+            if BLEReceivePipeline.shouldCancelScheduledRelayForIngressDuplicate(
+                packet: packet,
+                localPeerID: myPeerID,
+                connectedPeerCount: peerRegistry.connectedCount
+            ) {
+                scheduledRelays.cancel(messageID: messageID)
+            }
             return
         }
 

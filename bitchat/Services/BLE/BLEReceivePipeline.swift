@@ -39,6 +39,19 @@ struct BLEReceivePipeline {
         connectedPeerCount > 2
     }
 
+    /// A second copy inside the ingress window never reaches
+    /// `dropDuplicatePacketIfNeeded`. Cancel the pending relay here when this
+    /// packet would have been deduplicated on that later path.
+    static func shouldCancelScheduledRelayForIngressDuplicate(
+        packet: BitchatPacket,
+        localPeerID: PeerID,
+        connectedPeerCount: Int
+    ) -> Bool {
+        let received = context(for: packet, localPeerID: localPeerID)
+        guard received.shouldDeduplicate else { return false }
+        return shouldCancelScheduledRelayForDuplicate(connectedPeerCount: connectedPeerCount)
+    }
+
     static func relayDecision(
         for packet: BitchatPacket,
         senderID: PeerID,

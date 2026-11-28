@@ -47,6 +47,30 @@ struct BLEReceivePipelineTests {
         #expect(BLEReceivePipeline.shouldCancelScheduledRelayForDuplicate(connectedPeerCount: 3))
     }
 
+    @Test("an ingress duplicate cancels a dense relay but not a fragment or a sparse graph")
+    func ingressDuplicateCancelsDenseRelay() {
+        let sender = PeerID(str: "1122334455667788")
+        let local = PeerID(str: "8877665544332211")
+        let message = makePacket(type: .message, sender: sender, ttl: 5)
+        let fragment = makePacket(type: .fragment, sender: sender, ttl: 5)
+
+        #expect(BLEReceivePipeline.shouldCancelScheduledRelayForIngressDuplicate(
+            packet: message,
+            localPeerID: local,
+            connectedPeerCount: 3
+        ))
+        #expect(!BLEReceivePipeline.shouldCancelScheduledRelayForIngressDuplicate(
+            packet: message,
+            localPeerID: local,
+            connectedPeerCount: 2
+        ))
+        #expect(!BLEReceivePipeline.shouldCancelScheduledRelayForIngressDuplicate(
+            packet: fragment,
+            localPeerID: local,
+            connectedPeerCount: 4
+        ))
+    }
+
     @Test("relay decision maps packet context and suppresses local recipient traffic")
     func relayDecisionSuppressesLocalRecipientTraffic() {
         let sender = PeerID(str: "1122334455667788")
