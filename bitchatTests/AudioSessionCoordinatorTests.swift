@@ -507,4 +507,51 @@ struct AudioSessionCoordinatorTests {
         await coordinator.drain()
         #expect(session.activationCalls == [true, false])
     }
+
+    #if os(iOS)
+    @Test func externalActivationSkipsSetActiveOnAcquireAndRelease() async throws {
+        let session = MockAudioSession()
+        let coordinator = AudioSessionCoordinator(session: session)
+
+        coordinator.prepareForExternalActivation(.capture)
+        coordinator.handleExternalActivation()
+        #expect(session.categoryCalls == [.playAndRecord])
+        #expect(session.activationCalls.isEmpty)
+
+        let token = try await coordinator.acquire(.capture) {}
+        #expect(session.categoryCalls == [.playAndRecord])
+        #expect(session.activationCalls.isEmpty)
+
+        coordinator.release(token)
+        await coordinator.drain()
+        #expect(session.activationCalls.isEmpty)
+
+        await coordinator.handleExternalDeactivation()
+        await coordinator.drain()
+        #expect(session.activationCalls.isEmpty)
+
+        // Normal in-app acquire resumes managing setActive(true/false).
+        let normal = try await coordinator.acquire(.capture) {}
+        #expect(session.activationCalls == [true])
+        coordinator.release(normal)
+        await coordinator.drain()
+        #expect(session.activationCalls == [true, false])
+    }
+
+    @Test func externalDeactivationInterruptsLiveHolders() async throws {
+        let session = MockAudioSession()
+        let coordinator = AudioSessionCoordinator(session: session)
+
+        coordinator.handleExternalActivation()
+        var interrupted = false
+        let token = try await coordinator.acquire(.capture) { interrupted = true }
+
+        await coordinator.handleExternalDeactivation()
+        #expect(interrupted)
+
+        coordinator.release(token)
+        await coordinator.drain()
+        #expect(session.activationCalls.isEmpty)
+    }
+    #endif
 }

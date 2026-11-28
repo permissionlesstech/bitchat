@@ -230,6 +230,13 @@ final class AudioSessionCoordinator: @unchecked Sendable {
     private var holders: [ObjectIdentifier: WeakHolder] = [:]
     private var currentCategory: Category?
     private var sessionActive = false
+    #if os(iOS)
+    /// True while iOS `PushToTalk` owns `AVAudioSession` activation/deactivation
+    /// (between `didActivateAudioSession` and `didDeactivateAudioSession`).
+    /// Calling `setActive(true)` in the background fails with `'!pri'` (561015905),
+    /// and calling `setActive(false)` conflicts with PushToTalk's session lifecycle.
+    private var externallyManaged = false
+    #endif
     /// Written once in init, read in deinit — never touched concurrently.
     private var observers: [NSObjectProtocol] = []
 
@@ -360,6 +367,12 @@ final class AudioSessionCoordinator: @unchecked Sendable {
     private func releaseOnQueue(id: ObjectIdentifier) {
         guard holders.removeValue(forKey: id) != nil else { return }
         guard holders.isEmpty else { return }
+        #if os(iOS)
+        if externallyManaged {
+            // iOS PushToTalk owns deactivation and will call didDeactivateAudioSession.
+            return
+        }
+        #endif
         currentCategory = nil
         guard sessionActive else { return }
         sessionActive = false
@@ -397,11 +410,62 @@ final class AudioSessionCoordinator: @unchecked Sendable {
     /// No auto-resume — the next acquire re-activates.
     func handleInterruptionBegan() async {
         let tickets = await onQueue { () -> [Token.CallbackTicket] in
+            #if os(iOS)
+            self.externallyManaged = false
+            #endif
             self.sessionActive = false
             return self.holders.values.compactMap { $0.token?.record(.interrupted) }
         }
         await deliver(tickets)
     }
+
+    #if os(iOS)
+    /// Pre-configures the audio session category before iOS `PushToTalk`
+    /// activates the session on our behalf (must NOT call `setActive(true)`).
+    func prepareForExternalActivation(_ use: Use) {
+        queue.sync {
+            guard self.holders.isEmpty else { return }
+            let target: Category = (use == .capture || self.currentCategory == .playAndRecord) ? .playAndRecord : .playback
+            guard target != self.currentCategory else { return }
+            do {
+                try self.session.setCategory(target)
+                self.currentCategory = target
+            } catch {
+                SecureLogger.warning("AudioSession: failed configuring category for external activation: \(error)", category: .session)
+            }
+        }
+    }
+
+    /// Records that iOS `PushToTalk` has activated `AVAudioSession` on our
+    /// behalf. Subsequent `acquire` calls skip `setActive(true)` and `release`
+    /// skips `setActive(false)` until `handleExternalDeactivation()` runs.
+    func handleExternalActivation() {
+        queue.sync {
+            self.externallyManaged = true
+            self.sessionActive = true
+            if self.holders.isEmpty, self.currentCategory != .playAndRecord {
+                do {
+                    try self.session.setCategory(.playAndRecord)
+                    self.currentCategory = .playAndRecord
+                } catch {
+                    SecureLogger.warning("AudioSession: failed setting playAndRecord after external activation: \(error)", category: .session)
+                }
+            }
+        }
+    }
+
+    /// Called when iOS `PushToTalk` deactivates `AVAudioSession`. Releases
+    /// external ownership and interrupts any remaining holders.
+    func handleExternalDeactivation() async {
+        let tickets = await onQueue { () -> [Token.CallbackTicket] in
+            self.externallyManaged = false
+            self.sessionActive = false
+            self.currentCategory = nil
+            return self.holders.values.compactMap { $0.token?.record(.interrupted) }
+        }
+        await deliver(tickets)
+    }
+    #endif
 
     /// The active route's input/output device disappeared (e.g. BT headset
     /// off): ready holders' engines are wedged against a dead route — stop

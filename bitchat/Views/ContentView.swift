@@ -342,7 +342,13 @@ struct ContentView: View {
                 #if os(iOS)
                 SystemPTTChannelManager.shared.onSystemTransmitBegan = { [weak voiceRecordingVM, weak uiModel] target in
                     guard let voiceRecordingVM, let uiModel else { return }
-                    voiceRecordingVM.start(shouldShow: uiModel.canSendVoiceInCurrentContext, target: target)
+                    if case .error = voiceRecordingVM.state {
+                        voiceRecordingVM.showAlert = false
+                    }
+                    voiceRecordingVM.start(
+                        shouldShow: target != nil || uiModel.canSendVoiceInCurrentContext,
+                        target: target
+                    )
                 }
                 SystemPTTChannelManager.shared.onSystemTransmitEnded = { [weak voiceRecordingVM, weak uiModel] in
                     guard let voiceRecordingVM, let uiModel else { return }

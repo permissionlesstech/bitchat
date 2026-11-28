@@ -92,6 +92,9 @@ final class SystemPTTChannelManager: ObservableObject {
     #if os(iOS) && canImport(PushToTalk)
     private var channelManager: PTChannelManager?
     private var delegateProxy: SystemPTTDelegateProxy?
+    private var pendingSystemTransmit = false
+    private var isAudioSessionExternallyActive = false
+    private var hasStartedSystemCapture = false
     #endif
 
     private init() {}
@@ -155,9 +158,15 @@ final class SystemPTTChannelManager: ObservableObject {
     func leaveCurrentChannel() {
         #if os(iOS) && canImport(PushToTalk)
         let previousUUID = activeChannel?.channelUUID
+        let wasCapturing = hasStartedSystemCapture
         activeChannel = nil
         isSystemTransmitting = false
+        pendingSystemTransmit = false
+        hasStartedSystemCapture = false
         status = .idle
+        if wasCapturing {
+            onSystemTransmitEnded?()
+        }
         if let manager = channelManager, let uuid = previousUUID {
             manager.leaveChannel(channelUUID: uuid)
         }
@@ -222,9 +231,15 @@ final class SystemPTTChannelManager: ObservableObject {
 
     fileprivate func handleDidLeave(channelUUID: UUID) {
         if activeChannel?.channelUUID == channelUUID {
+            let wasCapturing = hasStartedSystemCapture
             activeChannel = nil
             isSystemTransmitting = false
+            pendingSystemTransmit = false
+            hasStartedSystemCapture = false
             status = .idle
+            if wasCapturing {
+                onSystemTransmitEnded?()
+            }
         }
     }
 
@@ -233,6 +248,8 @@ final class SystemPTTChannelManager: ObservableObject {
         if activeChannel?.channelUUID == channelUUID || activeChannel == nil {
             activeChannel = nil
             isSystemTransmitting = false
+            pendingSystemTransmit = false
+            hasStartedSystemCapture = false
             status = .unavailable(reason: error.localizedDescription)
         }
     }
@@ -240,20 +257,55 @@ final class SystemPTTChannelManager: ObservableObject {
     fileprivate func handleFailedToTransmit(channelUUID: UUID, error: Error) {
         SecureLogger.warning("PTT: failed to transmit on system PushToTalk channel \(channelUUID): \(error.localizedDescription)", category: .session)
         if activeChannel?.channelUUID == channelUUID {
+            let wasCapturing = hasStartedSystemCapture
             isSystemTransmitting = false
+            pendingSystemTransmit = false
+            hasStartedSystemCapture = false
+            if wasCapturing {
+                onSystemTransmitEnded?()
+            }
         }
     }
 
     fileprivate func handleTransmitBegan(channelUUID: UUID) {
         guard activeChannel?.channelUUID == channelUUID else { return }
         isSystemTransmitting = true
-        onSystemTransmitBegan?(activeChannel?.target)
+        pendingSystemTransmit = true
+        beginSystemCaptureIfReady()
     }
 
     fileprivate func handleTransmitEnded(channelUUID: UUID) {
         guard activeChannel?.channelUUID == channelUUID else { return }
         isSystemTransmitting = false
-        onSystemTransmitEnded?()
+        pendingSystemTransmit = false
+        if hasStartedSystemCapture {
+            hasStartedSystemCapture = false
+            onSystemTransmitEnded?()
+        }
+    }
+
+    fileprivate func handleAudioSessionActivated() {
+        isAudioSessionExternallyActive = true
+        beginSystemCaptureIfReady()
+    }
+
+    fileprivate func handleAudioSessionDeactivated() async {
+        isAudioSessionExternallyActive = false
+        if hasStartedSystemCapture {
+            hasStartedSystemCapture = false
+            pendingSystemTransmit = false
+            isSystemTransmitting = false
+            onSystemTransmitEnded?()
+        }
+        await AudioSessionCoordinator.shared.handleExternalDeactivation()
+    }
+
+    private func beginSystemCaptureIfReady() {
+        guard pendingSystemTransmit,
+              isAudioSessionExternallyActive,
+              !hasStartedSystemCapture else { return }
+        hasStartedSystemCapture = true
+        onSystemTransmitBegan?(activeChannel?.target)
     }
 
     nonisolated fileprivate static func channelAvatarImage() -> UIImage? {
@@ -319,6 +371,9 @@ private final class SystemPTTDelegateProxy: NSObject, PTChannelManagerDelegate, 
     }
 
     func channelManager(_ channelManager: PTChannelManager, channelUUID: UUID, didBeginTransmittingFrom source: PTChannelTransmitRequestSource) {
+        // Configure AVAudioSession category BEFORE iOS PushToTalk activates it
+        // (must NOT call setActive(true); wait for didActivateAudioSession).
+        AudioSessionCoordinator.shared.prepareForExternalActivation(.capture)
         Task { @MainActor [weak owner] in
             owner?.handleTransmitBegan(channelUUID: channelUUID)
         }
@@ -335,11 +390,18 @@ private final class SystemPTTDelegateProxy: NSObject, PTChannelManagerDelegate, 
     }
 
     func channelManager(_ channelManager: PTChannelManager, didActivate audioSession: AVAudioSession) {
-        SecureLogger.debug("PTT: system PushToTalk audio session activated", category: .session)
+        SecureLogger.info("PTT: system PushToTalk audio session activated", category: .session)
+        AudioSessionCoordinator.shared.handleExternalActivation()
+        Task { @MainActor [weak owner] in
+            owner?.handleAudioSessionActivated()
+        }
     }
 
     func channelManager(_ channelManager: PTChannelManager, didDeactivate audioSession: AVAudioSession) {
-        SecureLogger.debug("PTT: system PushToTalk audio session deactivated", category: .session)
+        SecureLogger.info("PTT: system PushToTalk audio session deactivated", category: .session)
+        Task { @MainActor [weak owner] in
+            await owner?.handleAudioSessionDeactivated()
+        }
     }
 
     func incomingPushResult(channelManager: PTChannelManager, channelUUID: UUID, pushPayload: [String: Any]) -> PTPushResult {
