@@ -82,19 +82,9 @@ struct ContentHeaderView: View {
                         .foregroundColor(palette.primary)
                         .layoutPriority(2)
                         .onTapGesture(count: 3) {
-                            guard PrivacyModeSettings.isTripleTapPanicEnabled() else {
-                                appChromeModel.presentAppInfo(pane: .settings)
-                                return
-                            }
+                            guard PrivacyModeSettings.isTripleTapPanicEnabled() else { return }
                             appChromeModel.requestPanicWipe()
                         }
-                        .onTapGesture(count: 1) {
-                            appChromeModel.presentAppInfo(pane: .info)
-                        }
-                        .accessibilityAddTraits(.isButton)
-                        .accessibilityHint(
-                            String(localized: "content.accessibility.app_info_hint", comment: "Accessibility hint explaining a tap opens app info")
-                        )
 
                     Button {
                         withAnimation(.easeInOut(duration: TransportConfig.uiAnimationMediumSeconds)) {
