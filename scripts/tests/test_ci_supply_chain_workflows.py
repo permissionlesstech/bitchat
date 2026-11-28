@@ -17,6 +17,11 @@ XCODE_PACKAGE_RESOLVED = (
 
 SHA_PINNED_USES = re.compile(r"uses:\s*[\w.-]+/[\w.-]+(?:/[\w.-]+)*@[0-9a-f]{40}\b")
 ANY_USES = re.compile(r"uses:\s*([^\s#]+)")
+# The whole `uses:` value: owner/repo[/path]@<40-hex commit>, nothing after it.
+FULL_SHA_PIN = re.compile(r"\A[\w.-]+/[\w.-]+(?:/[\w.-]+)*@[0-9a-f]{40}\Z")
+# YAML block scalar header: | or >, optional chomping and indent indicators,
+# optional comment.
+BLOCK_SCALAR_HEADER = re.compile(r"[|>](?:[1-9][+-]?|[+-][1-9]?)?(?:\s+#.*)?")
 
 
 def strip_comments(text: str) -> str:
@@ -39,7 +44,7 @@ def extract_run_blocks(text: str) -> list[str]:
         # `- run: |` that key starts after the dash.
         indent = len(match.group(1)) + len(match.group(2) or "")
         rest = match.group(3).strip()
-        if rest in ("|", ">", "|-", ">-"):
+        if BLOCK_SCALAR_HEADER.fullmatch(rest):
             block_lines: list[str] = []
             i += 1
             while i < len(lines):
@@ -136,7 +141,9 @@ class ArtiProvenanceWorkflowTests(unittest.TestCase):
 class AllWorkflowFilesTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
-        cls.workflows = sorted(WORKFLOWS_DIR.glob("*.yml"))
+        cls.workflows = sorted(
+            [*WORKFLOWS_DIR.glob("*.yml"), *WORKFLOWS_DIR.glob("*.yaml")]
+        )
 
     def test_workflow_files_are_found(self) -> None:
         self.assertTrue(self.workflows, f"no workflow files in {WORKFLOWS_DIR}")
@@ -145,9 +152,10 @@ class AllWorkflowFilesTests(unittest.TestCase):
         for path in self.workflows:
             directives = strip_comments(path.read_text(encoding="utf-8"))
             for line in directives.splitlines():
-                if "uses:" in line:
+                match = ANY_USES.search(line)
+                if match:
                     with self.subTest(workflow=path.name, line=line.strip()):
-                        self.assertRegex(line, SHA_PINNED_USES)
+                        self.assertRegex(match.group(1), FULL_SHA_PIN)
 
     def test_no_expression_interpolation_in_run_blocks(self) -> None:
         # Raw text: GitHub expands ${{ }} in every line of a run: block,
