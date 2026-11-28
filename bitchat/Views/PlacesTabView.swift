@@ -22,6 +22,7 @@ struct PlacesTabView<RoomContent: View>: View {
     @ThemedPalette private var palette
 
     @Binding var activeLocationChannel: GeohashChannel?
+    @Binding var activeLocationTitle: String?
     @ViewBuilder let roomContent: (GeohashChannel) -> RoomContent
 
     @State private var customGeohash = ""
@@ -96,19 +97,7 @@ struct PlacesTabView<RoomContent: View>: View {
                     .bitchatFont(size: 19, weight: .bold)
                     .foregroundColor(palette.primary)
             } trailing: {
-                TopBarIconButton(
-                    systemImage: "globe.americas.fill",
-                    accessibilityLabel: String(localized: "location_channels.accessibility.open_map", defaultValue: "open map", comment: "Accessibility label for opening the globe picker"),
-                    color: palette.locationAccent,
-                    action: { showGlobePicker = true }
-                )
-
-                TopBarIconButton(
-                    systemImage: "gearshape",
-                    accessibilityLabel: String(localized: "chats.accessibility.settings", defaultValue: "Settings", comment: "Accessibility label for the settings gear button"),
-                    color: palette.secondary,
-                    action: { appChromeModel.presentAppInfo(pane: .settings) }
-                )
+                EmptyView()
             }
 
             if !theme.usesGlassChrome {
@@ -208,6 +197,7 @@ struct PlacesTabView<RoomContent: View>: View {
                         ) {
                             locationChannelsModel.markTeleported(for: channel.geohash, false)
                             locationChannelsModel.select(.location(channel))
+                            activeLocationTitle = nil
                             activeLocationChannel = channel
                         }
                         if index < nearby.count - 1 {
@@ -236,9 +226,10 @@ struct PlacesTabView<RoomContent: View>: View {
             ThemedSectionLabel(text: String(localized: "places.section.regional", defaultValue: "POPULAR REGION", comment: "Section header for quick join region"))
 
             Button {
-                locationChannelsModel.teleport(to: suggestion.geohash)
                 let level = GeohashCoverage.level(forLength: suggestion.geohash.count)
+                activeLocationTitle = suggestion.localizedName
                 activeLocationChannel = GeohashChannel(level: level, geohash: suggestion.geohash)
+                locationChannelsModel.teleport(to: suggestion.geohash)
             } label: {
                 ThemedCard {
                     HStack(spacing: 12) {
@@ -284,8 +275,9 @@ struct PlacesTabView<RoomContent: View>: View {
                     ) {
                         let inRegional = locationChannelsModel.availableChannels.contains { $0.geohash == gh }
                         locationChannelsModel.markTeleported(for: gh, !inRegional && !locationChannelsModel.availableChannels.isEmpty)
-                        locationChannelsModel.select(.location(channel))
+                        activeLocationTitle = resolvedName
                         activeLocationChannel = channel
+                        locationChannelsModel.select(.location(channel))
                     }
                     .onAppear { locationChannelsModel.resolveBookmarkNameIfNeeded(for: gh) }
 
@@ -365,6 +357,8 @@ struct PlacesTabView<RoomContent: View>: View {
                             return
                         }
                         customError = nil
+                        activeLocationTitle = nil
+                        locationChannelsModel.resolveBookmarkNameIfNeeded(for: normalized)
                         locationChannelsModel.teleport(to: normalized)
                         let level = GeohashCoverage.level(forLength: normalized.count)
                         activeLocationChannel = GeohashChannel(level: level, geohash: normalized)
@@ -474,6 +468,8 @@ struct PlacesTabView<RoomContent: View>: View {
         guard let geohash = pickedGeohash else { return }
         pickedGeohash = nil
         guard Geohash.isValidGeohash(geohash) else { return }
+        activeLocationTitle = nil
+        locationChannelsModel.resolveBookmarkNameIfNeeded(for: geohash)
         locationChannelsModel.teleport(to: geohash)
         let level = GeohashCoverage.level(forLength: geohash.count)
         activeLocationChannel = GeohashChannel(level: level, geohash: geohash)

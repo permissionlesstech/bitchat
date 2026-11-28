@@ -96,6 +96,41 @@ final class LocationChannelsModel: ObservableObject {
         locationNames[level]
     }
 
+    /// Resolves the header title for a place room without letting the user's
+    /// own GPS location names bleed into teleported or popular regions.
+    nonisolated static func resolveDisplayTitle(
+        for channel: GeohashChannel,
+        availableChannels: [GeohashChannel],
+        locationNames: [GeohashChannelLevel: String],
+        bookmarkNames: [String: String],
+        explicitTitle: String? = nil
+    ) -> String {
+        if let explicit = explicitTitle?.trimmingCharacters(in: .whitespacesAndNewlines),
+           !explicit.isEmpty {
+            return explicit
+        }
+        if availableChannels.contains(where: { $0.geohash == channel.geohash }),
+           let localName = locationNames[channel.level]?.trimmingCharacters(in: .whitespacesAndNewlines),
+           !localName.isEmpty {
+            return localName
+        }
+        if let bookmarkName = bookmarkNames[channel.geohash]?.trimmingCharacters(in: .whitespacesAndNewlines),
+           !bookmarkName.isEmpty {
+            return bookmarkName
+        }
+        return "#\(channel.geohash)"
+    }
+
+    func displayTitle(for channel: GeohashChannel, explicitTitle: String? = nil) -> String {
+        Self.resolveDisplayTitle(
+            for: channel,
+            availableChannels: availableChannels,
+            locationNames: locationNames,
+            bookmarkNames: bookmarkNames,
+            explicitTitle: explicitTitle
+        )
+    }
+
     func setUserTorEnabled(_ enabled: Bool) {
         network.setUserTorEnabled(enabled)
     }

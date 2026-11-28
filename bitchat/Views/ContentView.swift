@@ -163,6 +163,7 @@ enum AppRootTab: Hashable {
     case chats
     case nearby
     case places
+    case settings
 }
 
 struct ContentView: View {
@@ -181,6 +182,7 @@ struct ContentView: View {
     @Environment(\.scenePhase) private var scenePhase
     @State private var selectedTab: AppRootTab = .chats
     @State private var activePlaceChannel: GeohashChannel? = nil
+    @State private var activePlaceTitle: String? = nil
     @State private var showAddFriendSheet = false
     @State private var showCreateGroupSheet = false
     @State private var showSidebar = false
@@ -349,8 +351,15 @@ struct ContentView: View {
             case .mesh:
                 if selectedTab == .places && activePlaceChannel != nil {
                     activePlaceChannel = nil
+                    activePlaceTitle = nil
                 }
             case .location(let channel):
+                if activePlaceChannel?.geohash != channel.geohash {
+                    activePlaceTitle = nil
+                    if !locationChannelsModel.availableChannels.contains(where: { $0.geohash == channel.geohash }) {
+                        locationChannelsModel.resolveBookmarkNameIfNeeded(for: channel.geohash)
+                    }
+                }
                 activePlaceChannel = channel
                 if selectedTab != .places {
                     selectedTab = .places
@@ -376,8 +385,15 @@ struct ContentView: View {
                 if let place = activePlaceChannel {
                     locationChannelsModel.select(.location(place))
                 }
-            case .chats:
+            case .chats, .settings:
                 break
+            }
+        }
+        .onChange(of: appChromeModel.isAppInfoPresented) { presented in
+            guard presented else { return }
+            selectedTab = .settings
+            Task { @MainActor in
+                appChromeModel.isAppInfoPresented = false
             }
         }
         .onChange(of: scenePhase) { phase in
@@ -428,19 +444,6 @@ struct ContentView: View {
                 // reads so ContentPeopleListView / PrivateMessageListView never crash.
                 .installAppEnvironment(models)
             }
-        }
-        .sheet(isPresented: $appChromeModel.isAppInfoPresented) {
-            AppInfoView(
-                topologyProvider: { appChromeModel.meshTopologyDisplayModel() },
-                onPanicWipe: { appChromeModel.panicClearAllData() },
-                onClearPersistedHistory: { appChromeModel.clearPersistedPrivateHistory() },
-                nicknameBinding: Binding(
-                    get: { appChromeModel.nickname },
-                    set: { appChromeModel.setNickname($0) }
-                ),
-                onCommitNickname: { appChromeModel.validateAndSaveNickname() }
-            )
-            .environmentObject(locationChannelsModel)
         }
         .sheet(isPresented: $showAddFriendSheet) {
             AddFriendSheet { _ in
@@ -526,54 +529,110 @@ struct ContentView: View {
         privateInboxModel.unreadPeerIDs.count
     }
 
-    private var tabRootView: some View {
-        TabView(selection: $selectedTab) {
-            ChatsInboxView(
-                onOpenAddFriend: { showAddFriendSheet = true },
-                onOpenCreateGroup: { showCreateGroupSheet = true },
-                onSwitchToNearby: { selectedTab = .nearby },
-                onSwitchToPlaces: {
-                    activePlaceChannel = nil
-                    selectedTab = .places
-                }
-            )
-            .tabItem {
-                Label(
-                    String(localized: "tab.chats", defaultValue: "Chats", comment: "Tab bar label for Chats inbox"),
-                    systemImage: "bubble.left.and.bubble.right.fill"
-                )
-            }
-            .badge(unreadChatsCount)
-            .tag(AppRootTab.chats)
+    private var showBottomBar: Bool {
+        if selectedTab == .places && activePlaceChannel != nil {
+            return false
+        }
+        #if os(iOS)
+        if isTextFieldFocused {
+            return false
+        }
+        #endif
+        return true
+    }
 
-            mainContent(onBack: nil, placeTitle: nil)
-                .tabItem {
-                    Label(
-                        String(localized: "tab.nearby", defaultValue: "Nearby", comment: "Tab bar label for Nearby Bluetooth mesh"),
-                        systemImage: "antenna.radiowaves.left.and.right"
+    private var rootTabItems: [SlimTabItem<AppRootTab>] {
+        [
+            SlimTabItem(
+                tab: .chats,
+                title: String(localized: "tab.chats", defaultValue: "Chats", comment: "Tab bar label for Chats inbox"),
+                systemImage: "bubble.left.and.bubble.right.fill",
+                badgeCount: unreadChatsCount
+            ),
+            SlimTabItem(
+                tab: .nearby,
+                title: String(localized: "tab.nearby", defaultValue: "Nearby", comment: "Tab bar label for Nearby Bluetooth mesh"),
+                systemImage: "antenna.radiowaves.left.and.right",
+                badgeCount: peerListModel.reachableMeshPeerCount
+            ),
+            SlimTabItem(
+                tab: .places,
+                title: String(localized: "tab.places", defaultValue: "Places", comment: "Tab bar label for Places location channels"),
+                systemImage: "globe.americas.fill"
+            ),
+            SlimTabItem(
+                tab: .settings,
+                title: String(localized: "chats.accessibility.settings", defaultValue: "Settings", comment: "Tab bar label for Settings"),
+                systemImage: "gearshape.fill"
+            )
+        ]
+    }
+
+    private var tabRootView: some View {
+        VStack(spacing: 0) {
+            Group {
+                switch selectedTab {
+                case .chats:
+                    ChatsInboxView(
+                        onOpenAddFriend: { showAddFriendSheet = true },
+                        onOpenCreateGroup: { showCreateGroupSheet = true },
+                        onSwitchToNearby: { selectedTab = .nearby },
+                        onSwitchToPlaces: {
+                            activePlaceChannel = nil
+                            activePlaceTitle = nil
+                            selectedTab = .places
+                        }
+                    )
+
+                case .nearby:
+                    mainContent(onBack: nil, placeTitle: nil)
+
+                case .places:
+                    PlacesTabView(
+                        activeLocationChannel: $activePlaceChannel,
+                        activeLocationTitle: $activePlaceTitle
+                    ) { channel in
+                        let placeName = locationChannelsModel.displayTitle(
+                            for: channel,
+                            explicitTitle: activePlaceTitle
+                        )
+                        mainContent(
+                            onBack: {
+                                activePlaceChannel = nil
+                                activePlaceTitle = nil
+                            },
+                            placeTitle: placeName
+                        )
+                    }
+
+                case .settings:
+                    AppInfoView(
+                        topologyProvider: { appChromeModel.meshTopologyDisplayModel() },
+                        onPanicWipe: { appChromeModel.panicClearAllData() },
+                        onClearPersistedHistory: { appChromeModel.clearPersistedPrivateHistory() },
+                        nicknameBinding: Binding(
+                            get: { appChromeModel.nickname },
+                            set: { appChromeModel.setNickname($0) }
+                        ),
+                        onCommitNickname: { appChromeModel.validateAndSaveNickname() },
+                        isEmbeddedInTab: true
                     )
                 }
-                .badge(peerListModel.reachableMeshPeerCount)
-                .tag(AppRootTab.nearby)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
 
-            PlacesTabView(activeLocationChannel: $activePlaceChannel) { channel in
-                let placeName = locationChannelsModel.locationName(for: channel.level)
-                    ?? locationChannelsModel.bookmarkNames[channel.geohash]
-                    ?? "#\(channel.geohash)"
-                mainContent(
-                    onBack: { activePlaceChannel = nil },
-                    placeTitle: placeName
+            if showBottomBar {
+                SlimBottomTabBar(
+                    selection: $selectedTab,
+                    items: rootTabItems,
+                    onSelect: { tab in
+                        if tab == .settings {
+                            AppInfoView.setSelectedPane(.settings)
+                        }
+                    }
                 )
             }
-            .tabItem {
-                Label(
-                    String(localized: "tab.places", defaultValue: "Places", comment: "Tab bar label for Places location channels"),
-                    systemImage: "globe.americas.fill"
-                )
-            }
-            .tag(AppRootTab.places)
         }
-        .tint(palette.accent)
     }
 
     /// Matrix: classic opaque bars with dividers. Glass on iOS 17+/macOS 14+:

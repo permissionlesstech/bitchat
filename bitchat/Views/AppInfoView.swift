@@ -6,6 +6,7 @@ import SwiftUI
 /// privacy, symbols legend).
 struct AppInfoView: View {
     @Environment(\.dismiss) var dismiss
+    @Environment(\.appTheme) private var theme
     @ThemedPalette private var palette
     @AppStorage(AppTheme.storageKey) private var appThemeRawValue = AppTheme.liquidGlass.rawValue
     @EnvironmentObject private var locationChannelsModel: LocationChannelsModel
@@ -23,6 +24,9 @@ struct AppInfoView: View {
     /// in Settings from any tab.
     var nicknameBinding: Binding<String>? = nil
     var onCommitNickname: (@MainActor () -> Void)? = nil
+    /// When true, renders as a native root tab using `AppTopBar` and
+    /// `ThemedRootBackground` instead of a modal sheet with a Close button.
+    var isEmbeddedInTab: Bool = false
 
     @State private var showTopology = false
     @State private var privacyMode = PrivacyModeSettings.mode
@@ -281,6 +285,44 @@ struct AppInfoView: View {
 
     }
 
+    private var tabBody: some View {
+        VStack(spacing: 0) {
+            AppTopBar {
+                Text(
+                    selectedPane == .settings
+                        ? String(localized: "chats.accessibility.settings", defaultValue: "Settings", comment: "Title for Settings tab")
+                        : Strings.Settings.tabInfo.capitalized
+                )
+                .bitchatFont(size: 19, weight: .bold)
+                .foregroundColor(palette.primary)
+                .lineLimit(1)
+            } trailing: {
+                Picker(Strings.Settings.tabPickerLabel, selection: $selectedPane) {
+                    Text(Strings.Settings.tabSettings.capitalized).tag(Pane.settings)
+                    Text(Strings.Settings.tabInfo.capitalized).tag(Pane.info)
+                }
+                .pickerStyle(.segmented)
+                .labelsHidden()
+                .frame(width: 156)
+            }
+
+            if !theme.usesGlassChrome {
+                Rectangle()
+                    .fill(palette.divider)
+                    .frame(height: 1)
+            }
+
+            ScrollView {
+                paneContent
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(ThemedRootBackground())
+        .onDisappear {
+            onCommitNickname?()
+        }
+    }
+
     private var sheetBody: some View {
         VStack(spacing: 0) {
             ThemedSheetHeader(
@@ -303,16 +345,22 @@ struct AppInfoView: View {
     }
 
     var body: some View {
-        sheetBody
-            .foregroundColor(textColor)
-            #if os(macOS)
-            .frame(minWidth: 520, idealWidth: 580, minHeight: 620, idealHeight: 680)
-            #endif
-            .sheet(isPresented: $showTopology) {
-                if let topologyProvider {
-                    MeshTopologyView(provider: topologyProvider)
-                }
+        Group {
+            if isEmbeddedInTab {
+                tabBody
+            } else {
+                sheetBody
+                    #if os(macOS)
+                    .frame(minWidth: 520, idealWidth: 580, minHeight: 620, idealHeight: 680)
+                    #endif
             }
+        }
+        .foregroundColor(textColor)
+        .sheet(isPresented: $showTopology) {
+            if let topologyProvider {
+                MeshTopologyView(provider: topologyProvider)
+            }
+        }
     }
 
     // MARK: - Pane switching

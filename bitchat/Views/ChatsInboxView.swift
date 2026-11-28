@@ -101,13 +101,6 @@ struct ChatsInboxView: View {
                 accessibilityLabel: String(localized: "chats.accessibility.new_group", defaultValue: "New group", comment: "Accessibility label for new group toolbar button"),
                 action: onOpenCreateGroup
             )
-
-            TopBarIconButton(
-                systemImage: "gearshape",
-                accessibilityLabel: String(localized: "chats.accessibility.settings", defaultValue: "Settings", comment: "Accessibility label for the settings gear button"),
-                color: palette.secondary,
-                action: { appChromeModel.presentAppInfo(pane: .settings) }
-            )
         }
     }
 

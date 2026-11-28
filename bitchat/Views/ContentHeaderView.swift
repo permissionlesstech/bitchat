@@ -195,15 +195,6 @@ struct ContentHeaderView: View {
                     appChromeModel.presentNotices()
                 }
             )
-
-            if onBack == nil {
-                TopBarIconButton(
-                    systemImage: "gearshape",
-                    accessibilityLabel: String(localized: "chats.accessibility.settings", defaultValue: "Settings", comment: "Accessibility label for the settings gear button"),
-                    color: palette.secondary,
-                    action: { appChromeModel.presentAppInfo(pane: .settings) }
-                )
-            }
         }
         .onReceive(BoardStore.shared.$postsSnapshot) { posts in
             boardPosts = posts

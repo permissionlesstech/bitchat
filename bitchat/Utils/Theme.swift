@@ -275,6 +275,40 @@ private struct ThemedChromePanelModifier: ViewModifier {
     }
 }
 
+/// Floating Liquid Glass capsule used by the slim bottom tab bar (and flat
+/// hairline surface in Matrix mode).
+private struct ThemedBottomBarSurfaceModifier: ViewModifier {
+    @Environment(\.appTheme) private var theme
+    @ThemedPalette private var palette
+
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        if theme.usesGlassChrome {
+            content
+                .padding(.horizontal, 6)
+                .padding(.vertical, 3)
+                .modifier(GlassPanel(shape: Capsule()))
+                .padding(.horizontal, 14)
+                .padding(.top, 4)
+                #if os(macOS)
+                .padding(.bottom, 8)
+                #else
+                .padding(.bottom, 2)
+                #endif
+        } else {
+            VStack(spacing: 0) {
+                Rectangle()
+                    .fill(palette.divider)
+                    .frame(height: 1)
+                content
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 2)
+            }
+            .background(palette.background.opacity(0.97))
+        }
+    }
+}
+
 /// Background for the composer input field. Matrix keeps its translucent fill;
 /// glass leaves it clear — the field sits inside the composer's glass panel,
 /// and glass cannot sample other glass.
@@ -305,6 +339,10 @@ extension View {
 
     func themedChromePanel(edge: VerticalEdge) -> some View {
         modifier(ThemedChromePanelModifier(edge: edge))
+    }
+
+    func themedBottomBarSurface() -> some View {
+        modifier(ThemedBottomBarSurfaceModifier())
     }
 
     func themedInputBackground() -> some View {

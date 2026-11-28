@@ -379,3 +379,56 @@ final class HybridGroupDeliveryTests: XCTestCase {
         XCTAssertEqual(msgPacket.payload, samplePayload)
     }
 }
+
+final class PlaceTitleResolutionTests: XCTestCase {
+    func test_popularRegionUsesExplicitTitleInsteadOfLocalGPSRegionName() {
+        let localUS = GeohashChannel(level: .region, geohash: "dr")
+        let italy = GeohashChannel(level: .region, geohash: "sr")
+
+        let title = LocationChannelsModel.resolveDisplayTitle(
+            for: italy,
+            availableChannels: [localUS],
+            locationNames: [.region: "United States"],
+            bookmarkNames: [:],
+            explicitTitle: "Italy"
+        )
+
+        XCTAssertEqual(title, "Italy")
+    }
+
+    func test_remoteChannelWithoutExplicitTitleNeverLeaksLocalGPSRegionName() {
+        let localUS = GeohashChannel(level: .region, geohash: "dr")
+        let italy = GeohashChannel(level: .region, geohash: "sr")
+
+        let fallbackTitle = LocationChannelsModel.resolveDisplayTitle(
+            for: italy,
+            availableChannels: [localUS],
+            locationNames: [.region: "United States"],
+            bookmarkNames: [:],
+            explicitTitle: nil
+        )
+        XCTAssertEqual(fallbackTitle, "#sr")
+
+        let bookmarkedTitle = LocationChannelsModel.resolveDisplayTitle(
+            for: italy,
+            availableChannels: [localUS],
+            locationNames: [.region: "United States"],
+            bookmarkNames: ["sr": "Italy"],
+            explicitTitle: nil
+        )
+        XCTAssertEqual(bookmarkedTitle, "Italy")
+    }
+
+    func test_localChannelUsesLocalGPSLocationName() {
+        let localUS = GeohashChannel(level: .region, geohash: "dr")
+
+        let title = LocationChannelsModel.resolveDisplayTitle(
+            for: localUS,
+            availableChannels: [localUS],
+            locationNames: [.region: "United States"],
+            bookmarkNames: [:],
+            explicitTitle: nil
+        )
+        XCTAssertEqual(title, "United States")
+    }
+}
