@@ -845,7 +845,12 @@ struct BLEServiceCoreTests {
     /// has to wait for the convergence handshake and use its new session.
     @Test
     func timeoutRestoredSessionDefersQueueDrainUntilConvergence() async throws {
-        let ble = makeService(noiseResponderHandshakeTimeout: 0.3)
+        // On the real clock, a stalled runner lets the 5s proof watchdog
+        // expire before the forced firing below and drain the parked queues.
+        let ble = makeService(
+            noiseResponderHandshakeTimeout: 0.3,
+            engineScheduler: BLEEngineManualScheduler()
+        )
         let alice = NoiseEncryptionService(keychain: MockKeychain())
         let mallory = NoiseEncryptionService(keychain: MockKeychain())
         let alicePeerID = PeerID(publicKey: alice.getStaticPublicKeyData())
@@ -896,12 +901,13 @@ struct BLEServiceCoreTests {
             messageID: "deferred-pm-\(UUID().uuidString)",
             for: alicePeerID
         )
+        let inviteTransferID = "deferred-invite-\(UUID().uuidString)"
         ble._test_enqueuePendingNoisePayload(
             NoisePayload(
                 type: .groupInvite,
                 data: Data("queued-during-quarantine".utf8)
             ).encode(),
-            transferId: "deferred-invite-\(UUID().uuidString)",
+            transferId: inviteTransferID,
             for: alicePeerID
         )
 
@@ -944,15 +950,18 @@ struct BLEServiceCoreTests {
         #expect(outbound.count(ofType: .noiseEncrypted) == 0)
 
         // The capability-proof watchdog armed at the original authentication
-        // is still live and can genuinely reach its real 5s deadline here on
-        // a stalled CI runner. Fire it deterministically: its drain must
-        // respect the deferred-until-convergence state instead of encrypting
-        // the parked queues under the restored keys (the exact silent loss
-        // the defer path exists to prevent). The retry below then still
-        // finds the queues parked.
-        ble._test_forcePrivateMediaProofTimeout(for: alicePeerID)
+        // is still live; on the injected clock it expires only here. Its
+        // drain must respect the deferred-until-convergence state instead of
+        // encrypting the parked queues under the restored keys (the exact
+        // silent loss the defer path exists to prevent). The retry below then
+        // still finds the queues parked.
+        #expect(ble._test_forcePrivateMediaProofTimeout(for: alicePeerID))
         await ble._test_drainNoiseMessagePipeline()
         #expect(outbound.count(ofType: .noiseEncrypted) == 0)
+        #expect(
+            ble._test_privateMediaTransferState(transferId: inviteTransferID)
+                .pendingNoise
+        )
 
         // Release the mandatory convergence retry: it retires the restored
         // session and starts a fresh XX exchange with the live peer.
