@@ -12,6 +12,7 @@ import SwiftUI
 /// the crosshair is the selection; zooming changes precision, and the +/- buttons step
 /// precision while framing the cell.
 struct GeohashPickerView: View {
+    let activityBeacons: [GlobeActivityBeacon]
     let onSelect: (String) -> Void
     let onCancel: () -> Void
 
@@ -35,9 +36,11 @@ struct GeohashPickerView: View {
     init(
         initialGeohash: String?,
         nearbyGeohashes: [String] = [],
+        activityBeacons: [GlobeActivityBeacon] = [],
         onSelect: @escaping (String) -> Void,
         onCancel: @escaping () -> Void
     ) {
+        self.activityBeacons = activityBeacons
         self.onSelect = onSelect
         self.onCancel = onCancel
         let target = Self.initialTarget(initialGeohash: initialGeohash, nearbyGeohashes: nearbyGeohashes)
@@ -67,8 +70,13 @@ struct GeohashPickerView: View {
                 .ignoresSafeArea()
 
             if let world {
-                GlobeView(state: state, colors: globeColors, world: world)
-                    .ignoresSafeArea()
+                GlobeView(
+                    state: state,
+                    colors: globeColors,
+                    world: world,
+                    activityBeacons: activityBeacons
+                )
+                .ignoresSafeArea()
             }
 
             VStack(spacing: 0) {
@@ -106,10 +114,25 @@ struct GeohashPickerView: View {
     private var bottomControls: some View {
         HStack(spacing: 10) {
             VStack(alignment: .leading, spacing: 2) {
-                Text(verbatim: hasSelection ? "#\(state.selectedGeohash)" : Strings.noSelection)
-                    .bitchatFont(size: 16, weight: .bold)
-                    .foregroundColor(palette.primary)
-                    .lineLimit(1)
+                HStack(spacing: 6) {
+                    Text(verbatim: hasSelection ? "#\(state.selectedGeohash)" : Strings.noSelection)
+                        .bitchatFont(size: 16, weight: .bold)
+                        .foregroundColor(palette.primary)
+                        .lineLimit(1)
+                    if let activeCount = matchingActivityCount, activeCount > 0 {
+                        HStack(spacing: 3) {
+                            Image(systemName: "flame.fill")
+                                .font(.system(size: 10, weight: .semibold))
+                            Text(verbatim: "\(activeCount)")
+                                .bitchatFont(size: 11, weight: .semibold)
+                        }
+                        .foregroundColor(.orange)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(Color.orange.opacity(0.16))
+                        .clipShape(Capsule())
+                    }
+                }
                 if hasSelection {
                     Text(verbatim: "\(GeohashCoverage.level(forLength: state.precision).displayName) · \(GeohashCoverage.string(forPrecision: state.precision))")
                         .bitchatFont(size: 11)
@@ -174,6 +197,19 @@ struct GeohashPickerView: View {
     }
 
     private var hasSelection: Bool { !state.selectedGeohash.isEmpty }
+
+    /// Total live activity in or directly inside the crosshair's selected geohash cell.
+    private var matchingActivityCount: Int? {
+        guard hasSelection else { return nil }
+        let selected = state.selectedGeohash.lowercased()
+        let total = activityBeacons.reduce(0) { sum, beacon in
+            if beacon.geohash == selected || beacon.geohash.hasPrefix(selected) || selected.hasPrefix(beacon.geohash) {
+                return sum + beacon.activityCount
+            }
+            return sum
+        }
+        return total > 0 ? total : nil
+    }
 
     // MARK: - Globe palette
 

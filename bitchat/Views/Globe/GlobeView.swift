@@ -29,6 +29,56 @@ struct GlobeColors: Equatable {
     let star: Color
 }
 
+/// Live spatial activity marker projected onto the 3D globe (active chat/feed
+/// places and bookmarked Saved Places).
+struct GlobeActivityBeacon: Equatable, Sendable, Identifiable {
+    let geohash: String
+    let lat: Double
+    let lon: Double
+    /// Recent chat messages + feed notes observed in this cell.
+    let activityCount: Int
+    let isBookmarked: Bool
+
+    var id: String { geohash }
+
+    init(geohash: String, activityCount: Int, isBookmarked: Bool = false) {
+        let norm = geohash.lowercased()
+        let center = Geohash.decodeCenter(norm)
+        self.geohash = norm
+        self.lat = center.lat
+        self.lon = center.lon
+        self.activityCount = max(0, activityCount)
+        self.isBookmarked = isBookmarked
+    }
+
+    static func buildBeacons(
+        chatCounts: [String: Int],
+        noteCounts: [String: Int],
+        bookmarks: [String]
+    ) -> [GlobeActivityBeacon] {
+        var combined: [String: Int] = [:]
+        for (gh, count) in chatCounts where Geohash.isValidGeohash(gh) && count > 0 {
+            combined[gh.lowercased(), default: 0] += count
+        }
+        for (gh, count) in noteCounts where Geohash.isValidGeohash(gh) && count > 0 {
+            combined[gh.lowercased(), default: 0] += count
+        }
+        let bookmarkSet = Set(bookmarks.map { $0.lowercased() }.filter(Geohash.isValidGeohash))
+        for gh in bookmarkSet where combined[gh] == nil {
+            combined[gh] = 0
+        }
+        return combined
+            .map { gh, count in
+                GlobeActivityBeacon(
+                    geohash: gh,
+                    activityCount: count,
+                    isBookmarked: bookmarkSet.contains(gh)
+                )
+            }
+            .sorted { ($0.activityCount, $0.geohash) > ($1.activityCount, $1.geohash) }
+    }
+}
+
 /// Interactive orthographic globe: drag to spin (with inertia), pinch to zoom, tap to
 /// focus, double tap to zoom in. The selected geohash is always the cell under the
 /// crosshair at the screen center.
@@ -37,6 +87,7 @@ struct GlobeView: View {
     @ObservedObject private var camera: GlobeCameraState
     let colors: GlobeColors
     let world: GlobeWorldData
+    let activityBeacons: [GlobeActivityBeacon]
 
     @Environment(\.displayScale) private var displayScale
     @Environment(\.appTheme) private var theme
@@ -46,11 +97,17 @@ struct GlobeView: View {
     @State private var selectionFeedback = UISelectionFeedbackGenerator()
     #endif
 
-    init(state: GlobeState, colors: GlobeColors, world: GlobeWorldData) {
+    init(
+        state: GlobeState,
+        colors: GlobeColors,
+        world: GlobeWorldData,
+        activityBeacons: [GlobeActivityBeacon] = []
+    ) {
         self.state = state
         self._camera = ObservedObject(wrappedValue: state.camera)
         self.colors = colors
         self.world = world
+        self.activityBeacons = activityBeacons
     }
 
     var body: some View {
@@ -69,6 +126,7 @@ struct GlobeView: View {
                     detail: state.frameDetail,
                     colors: colors,
                     world: world,
+                    activityBeacons: activityBeacons,
                     pixel: 1 / max(displayScale, 1),
                     fontDesign: theme.bodyFontDesign
                 )
@@ -230,6 +288,7 @@ private struct GlobeRenderer {
     let detail: GlobeMotionDetail.Frame
     let colors: GlobeColors
     let world: GlobeWorldData
+    let activityBeacons: [GlobeActivityBeacon]
     /// One device pixel in points; hairline widths are specified in pixels.
     let pixel: Double
     let fontDesign: Font.Design
@@ -370,12 +429,82 @@ private struct GlobeRenderer {
 
         // Dots follow the zoom at every detail level; only their labels wait for rest.
         drawCities(in: &context, projector: projector, cx: cx, cy: cy, r: r, size: size)
+        drawActivityBeacons(in: &context, projector: projector, cx: cx, cy: cy, r: r, size: size)
 
         // The grid is drawn at every detail level, including while dragging.
         if !selectedGeohash.isEmpty {
             let cells = visibleCells
             drawGeohashGrid(cells, in: &context, cx: cx, cy: cy, r: r, clip: clip)
             drawGeohashLabels(cells, in: &context, cx: cx, cy: cy, r: r)
+        }
+    }
+
+    private func drawActivityBeacons(
+        in context: inout GraphicsContext,
+        projector: GlobeMath.PreparedProjector,
+        cx: Double,
+        cy: Double,
+        r: Double,
+        size: CGSize
+    ) {
+        guard !activityBeacons.isEmpty else { return }
+        for beacon in activityBeacons {
+            let projected = projector.project(GlobeMath.Terms(lat: beacon.lat, lon: beacon.lon))
+            guard projected.cosC > 0.05 else { continue }
+            let sx = cx + projected.x * r
+            let sy = cy - projected.y * r
+            guard sx >= -24, sx <= Double(size.width) + 24,
+                  sy >= -24, sy <= Double(size.height) + 24 else {
+                continue
+            }
+
+            let isActive = beacon.activityCount > 0
+            let haloRadius: Double = isActive
+                ? min(18.0, 8.0 + log2(Double(beacon.activityCount) + 1.0) * 3.0)
+                : 7.0
+            let coreRadius: Double = isActive ? 3.5 : 2.5
+            let beaconColor: Color = isActive ? Color.orange : colors.accent
+
+            let haloRect = CGRect(
+                x: sx - haloRadius,
+                y: sy - haloRadius,
+                width: haloRadius * 2,
+                height: haloRadius * 2
+            )
+            context.fill(
+                Path(ellipseIn: haloRect),
+                with: .radialGradient(
+                    Gradient(stops: [
+                        .init(color: beaconColor.opacity(isActive ? 0.55 : 0.35), location: 0),
+                        .init(color: beaconColor.opacity(0.0), location: 1)
+                    ]),
+                    center: CGPoint(x: sx, y: sy),
+                    startRadius: 0,
+                    endRadius: haloRadius
+                )
+            )
+
+            let coreRect = CGRect(
+                x: sx - coreRadius,
+                y: sy - coreRadius,
+                width: coreRadius * 2,
+                height: coreRadius * 2
+            )
+            context.fill(Path(ellipseIn: coreRect), with: .color(beaconColor))
+            if beacon.isBookmarked {
+                let ringRadius = coreRadius + 2.5
+                let ringRect = CGRect(
+                    x: sx - ringRadius,
+                    y: sy - ringRadius,
+                    width: ringRadius * 2,
+                    height: ringRadius * 2
+                )
+                context.stroke(
+                    Path(ellipseIn: ringRect),
+                    with: .color(colors.accent.opacity(0.85)),
+                    lineWidth: 1.2 * pixel
+                )
+            }
         }
     }
 

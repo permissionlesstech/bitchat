@@ -99,9 +99,12 @@ final class GatewayService: ObservableObject {
     var relaysConnected: (@MainActor () -> Bool)?
     /// The geohash channel the local user is viewing, if any.
     var currentGeohash: (@MainActor () -> String?)?
-    /// Injects a verified carried event into the same inbound pipeline as
-    /// relay-received events (blocking, rate limits, dedup, rendering).
+    /// Injects a verified carried ephemeral chat event into the same inbound
+    /// pipeline as relay-received events (blocking, rate limits, dedup, rendering).
     var injectInbound: (@MainActor (NostrEvent) -> Void)?
+    /// Injects a verified carried feed event (kind-1 post/reply or kind-7
+    /// reaction) into active Place Feed managers (`LocationNotesPool`).
+    var injectFeedInbound: (@MainActor (NostrEvent, String) -> Void)?
     /// Fired on toggle changes (advertise/withdraw the capability bit and
     /// force a re-announce).
     var onEnabledChanged: (@MainActor (Bool) -> Void)?
@@ -231,8 +234,8 @@ final class GatewayService: ObservableObject {
         // publish or queue: a quota-dropped deposit is never published and,
         // being directed, no other peer will ever see it, so showing it would
         // diverge our timeline permanently from what reached the channel.
-        if accepted, currentGeohash?() == carrier.geohash {
-            injectInbound?(event)
+        if accepted {
+            deliverCarriedEvent(event, geohash: carrier.geohash)
         }
     }
 
@@ -258,7 +261,7 @@ final class GatewayService: ObservableObject {
     /// the mesh, within the airtime budget.
     func rebroadcastRelayEvent(_ event: NostrEvent, geohash: String, signatureAlreadyVerified: Bool = false) {
         guard isEnabled, broadcastToMesh != nil else { return }
-        guard event.kind == NostrProtocol.EventKind.ephemeralEvent.rawValue else { return }
+        guard Self.supportedCarriedKinds.contains(event.kind) else { return }
         // Freshness + geohash gate BEFORE spending any budget. A channel
         // (re)subscribe backfills up to an hour of history (limit 200), but
         // every receiver's `validatedEvent` drops anything older than the
@@ -311,10 +314,18 @@ final class GatewayService: ObservableObject {
         // paths injects once (the pipeline's Nostr event-ID cache additionally
         // dedups against our own relay subscription).
         guard relayEngine.meshBroadcastEventIDs.insert(event.id) else { return }
-        // Only inject events for the channel we're viewing; the inbound
-        // pipeline files public messages under the current geohash.
-        guard currentGeohash?() == carrier.geohash else { return }
-        injectInbound?(event)
+        deliverCarriedEvent(event, geohash: carrier.geohash)
+    }
+
+    private func deliverCarriedEvent(_ event: NostrEvent, geohash: String) {
+        if event.kind == NostrProtocol.EventKind.ephemeralEvent.rawValue {
+            // Live ephemeral chat only injects for the channel currently viewed.
+            guard currentGeohash?() == geohash else { return }
+            injectInbound?(event)
+        } else if event.kind == NostrProtocol.EventKind.textNote.rawValue
+                    || event.kind == NostrProtocol.EventKind.reaction.rawValue {
+            injectFeedInbound?(event, geohash)
+        }
     }
 
     // MARK: - Uplink (sender role: mesh-only peer with no relays)
@@ -360,6 +371,16 @@ final class GatewayService: ObservableObject {
         return event
     }
 
+    /// Event kinds permitted across the BLE <-> Nostr gateway carrier:
+    /// kind 20000 (ephemeral geohash chat), kind 1 (Place Feed posts & NIP-10
+    /// replies), and kind 7 (NIP-25 reactions). All other kinds (DMs, profiles,
+    /// courier drops) are rejected.
+    static let supportedCarriedKinds: Set<Int> = [
+        NostrProtocol.EventKind.ephemeralEvent.rawValue,
+        NostrProtocol.EventKind.textNote.rawValue,
+        NostrProtocol.EventKind.reaction.rawValue
+    ]
+
     /// The cheap half of `validatedEvent`: parse + size + geohash + kind +
     /// `#g` tag + freshness, with NO signature verification. Callers that can
     /// dedup or rate-limit on the carried ID run this first so the expensive
@@ -368,7 +389,7 @@ final class GatewayService: ObservableObject {
         guard carrier.eventJSON.count <= NostrCarrierPacket.maxEventJSONBytes,
               Self.isValidGeohash(carrier.geohash),
               let event = carrier.event(),
-              event.kind == NostrProtocol.EventKind.ephemeralEvent.rawValue,
+              Self.supportedCarriedKinds.contains(event.kind),
               event.tags.contains(where: { $0.count >= 2 && $0[0] == "g" && $0[1] == carrier.geohash }),
               relayEngine.isFresh(event) else {
             return nil

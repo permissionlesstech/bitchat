@@ -59,6 +59,31 @@ final class LocationNotesPool {
         }
     }
 
+    /// Delivers a BLE-gateway-carried kind-1 or kind-7 event into any active
+    /// pooled manager whose 9-cell grid covers `geohash`.
+    func injectCarriedEvent(_ event: NostrEvent, geohash: String) {
+        let target = geohash.lowercased()
+        for entry in entries.values {
+            let manager = entry.manager
+            if manager.geohash == target || Geohash.neighbors(of: manager.geohash).contains(target) {
+                manager.ingestCarriedEvent(event)
+            }
+        }
+    }
+
+    /// Snapshot of currently loaded note counts per pooled geohash (used by
+    /// the 3D globe activity layer).
+    func activeNoteCounts() -> [String: Int] {
+        var counts: [String: Int] = [:]
+        for (gh, entry) in entries {
+            let count = entry.manager.notes.count
+            if count > 0 {
+                counts[gh] = count
+            }
+        }
+        return counts
+    }
+
     /// Panic-wipe hook: cancel subscriptions, wipe in-memory notes/identities,
     /// and drop every pooled manager.
     func resetForPanic() {

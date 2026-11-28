@@ -33,6 +33,50 @@ struct NoticeItem: Identifiable, Equatable {
         return false
     }
 
+    var nostrNote: LocationNotesManager.Note? {
+        if case .nostr(let note) = source { return note }
+        return nil
+    }
+
+    var authorSuffix: String? {
+        switch source {
+        case .nostr(let note):
+            return note.authorSuffix
+        case .board(let post):
+            return String(post.authorSigningKey.hexEncodedString().suffix(4))
+        }
+    }
+
+    var authorColorSeed: String {
+        switch source {
+        case .nostr(let note):
+            return note.pubkey
+        case .board(let post):
+            return post.authorSigningKey.hexEncodedString()
+        }
+    }
+
+    var powDifficulty: Int {
+        nostrNote?.powDifficulty ?? 0
+    }
+
+    var hasVerifiedPoW: Bool {
+        isBoardPost || powDifficulty >= NostrProtocol.verifiedPoWThresholdBits
+    }
+
+    var isTeleported: Bool {
+        nostrNote?.isTeleported ?? false
+    }
+
+    var cellGeohash: String {
+        switch source {
+        case .nostr(let note):
+            return note.geohash
+        case .board(let post):
+            return post.geohash
+        }
+    }
+
     init(post: BoardPostPacket) {
         id = post.postID.hexEncodedString()
         author = post.authorNickname.trimmedOrNilIfEmpty ?? "anon"

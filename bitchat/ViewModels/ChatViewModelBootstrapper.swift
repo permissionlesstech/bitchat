@@ -86,6 +86,7 @@ final class ChatViewModelBootstrapper {
 
 private extension ChatViewModelBootstrapper {
     func wireServiceGraph() {
+        LocalWebOfTrustService.shared.configure(identityManager: viewModel.identityManager)
         viewModel.privateChatManager.conversationStore = viewModel.conversations
         viewModel.privateChatManager.messageRouter = viewModel.messageRouter
         viewModel.privateChatManager.unifiedPeerService = viewModel.unifiedPeerService
@@ -353,6 +354,9 @@ private extension ChatViewModelBootstrapper {
         // blocking, rate limits, dedup, and rendering behave identically.
         gateway.injectInbound = { [weak viewModel] event in
             viewModel?.handleNostrEvent(event)
+        }
+        gateway.injectFeedInbound = { event, geohash in
+            LocationNotesPool.shared.injectCarriedEvent(event, geohash: geohash)
         }
         // The capability bit is advertised ONLY while the toggle is on; a
         // change forces a re-announce so peers learn promptly.

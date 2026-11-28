@@ -162,14 +162,13 @@ struct GatewayServiceTests {
     func structuralGates() throws {
         let fixture = Fixture()
 
-        // Wrong kind (kind-1 text note instead of kind-20000 ephemeral).
+        // Wrong kind (kind-0 profile metadata is not carried over the BLE gateway).
         let identity = try NostrIdentity.generate()
-        let note = try NostrProtocol.createGeohashTextNote(
-            content: "note",
-            geohash: Self.geohash,
+        let metadata = try NostrProtocol.createMetadataEvent(
+            profile: .init(name: "alice", displayName: nil, about: nil, nip05: nil),
             senderIdentity: identity
         )
-        try deposit(note, into: fixture)
+        try deposit(metadata, into: fixture)
         #expect(fixture.published.isEmpty)
 
         // Carrier geohash disagreeing with the event's #g tag.

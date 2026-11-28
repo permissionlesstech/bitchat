@@ -19,6 +19,7 @@ struct NostrProtocol {
 
     /// Nostr event kinds
     enum EventKind: Int {
+        case metadata = 0 // NIP-01 user profile metadata
         case textNote = 1
         // BitChat's proprietary private-envelope layers. These reuse the
         // NIP-17/NIP-59 kind numbers (14/13/1059) for historical reasons, but
@@ -29,6 +30,8 @@ struct NostrProtocol {
         case ephemeralEvent = 20000
         case geohashPresence = 20001
         case deletion = 5 // NIP-09 event deletion request
+        case reaction = 7 // NIP-25 reaction
+        case blossomAuth = 24242 // BUD-01/02 Blossom upload authorization
         /// Sealed courier envelope parked on relays under its rotating
         /// recipient tag (`#x`). Regular (stored) kind so it survives until
         /// its NIP-40 expiration — the whole point is store-and-forward.
@@ -384,17 +387,241 @@ struct NostrProtocol {
         return try event.sign(with: schnorrKey)
     }
 
-    /// Create a persistent location note (kind 1: text note) tagged to a street-level geohash.
-    /// An optional `expiresAt` adds a NIP-40 expiration tag so honoring relays
-    /// drop the note in step with a bridged board post's expiry.
+    /// NIP-10 thread reference extracted from or written to a kind-1 note's
+    /// `e` and `p` tags.
+    struct ThreadReference: Equatable, Sendable {
+        /// Event ID of the thread root post.
+        let rootEventID: String
+        /// Event ID of the direct parent when replying to a reply; nil (or
+        /// equal to `rootEventID`) for a direct reply to the root post.
+        let replyEventID: String?
+        /// Pubkey hex of the author being replied to (`p` tag), if known.
+        let replyAuthorPubkey: String?
+
+        init(rootEventID: String, replyEventID: String? = nil, replyAuthorPubkey: String? = nil) {
+            self.rootEventID = rootEventID.lowercased()
+            let normalizedReply = replyEventID?.lowercased()
+            self.replyEventID = (normalizedReply == self.rootEventID) ? nil : normalizedReply
+            self.replyAuthorPubkey = replyAuthorPubkey?.lowercased()
+        }
+    }
+
+    /// NIP-92 `imeta` attachment metadata for a Blossom content-addressed blob.
+    /// Strictly requires HTTPS and a 64-char SHA-256 hash so receivers can
+    /// verify downloaded bytes before decoding or displaying.
+    struct MediaAttachment: Equatable, Hashable, Sendable, Identifiable {
+        let url: URL
+        let mimeType: String
+        let sha256Hex: String
+        let sizeBytes: Int?
+        let dimensions: String?
+
+        var id: String { "\(sha256Hex)|\(url.absoluteString)" }
+    }
+
+    static let maxAttachmentsPerNote = 4
+
+    /// Encodes a `MediaAttachment` as a NIP-92 `imeta` tag.
+    static func imetaTag(for attachment: MediaAttachment) -> [String] {
+        var fields = [
+            "imeta",
+            "url \(attachment.url.absoluteString)",
+            "m \(attachment.mimeType)",
+            "x \(attachment.sha256Hex.lowercased())"
+        ]
+        if let size = attachment.sizeBytes, size > 0 {
+            fields.append("size \(size)")
+        }
+        if let dim = attachment.dimensions?.trimmedOrNilIfEmpty {
+            fields.append("dim \(dim)")
+        }
+        return fields
+    }
+
+    /// Parses up to `maxAttachmentsPerNote` validated NIP-92 `imeta` tags.
+    /// Rejects non-HTTPS URLs, local/private hosts, and attachments missing a
+    /// valid 64-character SHA-256 digest (`x`).
+    static func parseMediaAttachments(from tags: [[String]]) -> [MediaAttachment] {
+        var attachments: [MediaAttachment] = []
+        var seenHashes = Set<String>()
+
+        for tag in tags where tag.count >= 2 && tag[0].lowercased() == "imeta" {
+            var urlString: String?
+            var mimeType = "image/jpeg"
+            var sha256Hex: String?
+            var sizeBytes: Int?
+            var dimensions: String?
+
+            for field in tag.dropFirst() {
+                guard let spaceIdx = field.firstIndex(of: " ") else { continue }
+                let key = field[..<spaceIdx].lowercased()
+                let value = String(field[field.index(after: spaceIdx)...]).trimmingCharacters(in: .whitespacesAndNewlines)
+                guard !value.isEmpty else { continue }
+                switch key {
+                case "url":
+                    urlString = value
+                case "m":
+                    if value.count <= 64 { mimeType = value.lowercased() }
+                case "x":
+                    let lower = value.lowercased()
+                    if lower.count == 64, isValidHexIdentifier(lower) {
+                        sha256Hex = lower
+                    }
+                case "size":
+                    if let parsed = Int(value), parsed > 0 { sizeBytes = parsed }
+                case "dim":
+                    if value.count <= 24 { dimensions = value }
+                default:
+                    break
+                }
+            }
+
+            guard let urlString,
+                  let url = validatedRemoteHTTPSURL(urlString),
+                  let sha256Hex,
+                  mimeType.hasPrefix("image/"),
+                  seenHashes.insert(sha256Hex).inserted else {
+                continue
+            }
+
+            attachments.append(MediaAttachment(
+                url: url,
+                mimeType: mimeType,
+                sha256Hex: sha256Hex,
+                sizeBytes: sizeBytes,
+                dimensions: dimensions
+            ))
+            if attachments.count >= maxAttachmentsPerNote {
+                break
+            }
+        }
+        return attachments
+    }
+
+    /// Creates a signed BUD-02 Blossom upload authorization event (kind 24242).
+    static func createBlossomUploadAuthEvent(
+        sha256Hex: String,
+        expiration: Date,
+        senderIdentity: NostrIdentity,
+        createdAt: Date = Date()
+    ) throws -> NostrEvent {
+        let normalizedHash = sha256Hex.lowercased()
+        guard normalizedHash.count == 64, isValidHexIdentifier(normalizedHash) else {
+            throw NostrError.invalidEvent
+        }
+        let tags = [
+            ["t", "upload"],
+            ["x", normalizedHash],
+            ["expiration", String(Int(expiration.timeIntervalSince1970))]
+        ]
+        let event = NostrEvent(
+            pubkey: senderIdentity.publicKeyHex,
+            createdAt: createdAt,
+            kind: .blossomAuth,
+            tags: tags,
+            content: "Upload blob"
+        )
+        let schnorrKey = try senderIdentity.schnorrSigningKey()
+        return try event.sign(with: schnorrKey)
+    }
+
+    static func validatedRemoteHTTPSURL(_ raw: String) -> URL? {
+        guard raw.count <= 1024,
+              let url = URL(string: raw),
+              url.scheme?.lowercased() == "https",
+              let host = url.host?.lowercased(),
+              !host.isEmpty,
+              host != "localhost",
+              !host.hasSuffix(".localhost"),
+              !host.hasSuffix(".local"),
+              !host.hasSuffix(".internal"),
+              !host.hasPrefix("127."),
+              !host.hasPrefix("10."),
+              !host.hasPrefix("192.168."),
+              host != "::1" else {
+            return nil
+        }
+        return url
+    }
+
+    /// Minimum committed NIP-13 leading-zero bit count required for a note to
+    /// carry the verified-PoW feed badge or match the PoW feed filter.
+    static let verifiedPoWThresholdBits = 8
+
+    /// Passive read-only NIP-13 proof-of-work validator for inbound events.
+    /// Returns the committed target difficulty if the event carries a valid
+    /// `["nonce", <nonce>, <target>]` tag and its `idHex` meets at least that
+    /// many leading zero bits; otherwise returns 0.
+    static func validatedPoWDifficulty(idHex: String, tags: [[String]]) -> Int {
+        guard let nonceTag = tags.first(where: { $0.count >= 3 && $0[0] == "nonce" }),
+              let committed = Int(nonceTag[2]),
+              committed > 0, committed <= 256 else {
+            return 0
+        }
+        guard let idData = Data(hexString: idHex), idData.count == 32 else {
+            return 0
+        }
+        var leadingZeros = 0
+        for byte in idData {
+            if byte == 0 {
+                leadingZeros += 8
+            } else {
+                leadingZeros += byte.leadingZeroBitCount
+                break
+            }
+        }
+        return leadingZeros >= committed ? committed : 0
+    }
+
+    /// Create a persistent location note (kind 1: text note) tagged to a geohash.
+    /// Supports optional NIP-40 expiration, urgency, teleport marker, NIP-10
+    /// thread reply tags, NIP-92 `imeta` attachments, and extra tags.
     static func createGeohashTextNote(
         content: String,
         geohash: String,
         senderIdentity: NostrIdentity,
         nickname: String? = nil,
         expiresAt: Date? = nil,
-        urgent: Bool = false
+        urgent: Bool = false,
+        replyTo: ThreadReference? = nil,
+        teleported: Bool = false,
+        attachments: [MediaAttachment] = [],
+        createdAt: Date = Date(),
+        extraTags: [[String]] = []
     ) throws -> NostrEvent {
+        var tags = geohashTextNoteTags(
+            geohash: geohash,
+            nickname: nickname,
+            expiresAt: expiresAt,
+            urgent: urgent,
+            replyTo: replyTo,
+            teleported: teleported
+        )
+        for attachment in attachments.prefix(maxAttachmentsPerNote) {
+            tags.append(imetaTag(for: attachment))
+        }
+        if !extraTags.isEmpty {
+            tags.append(contentsOf: extraTags)
+        }
+        let event = NostrEvent(
+            pubkey: senderIdentity.publicKeyHex,
+            createdAt: createdAt,
+            kind: .textNote,
+            tags: tags,
+            content: content
+        )
+        let schnorrKey = try senderIdentity.schnorrSigningKey()
+        return try event.sign(with: schnorrKey)
+    }
+
+    private static func geohashTextNoteTags(
+        geohash: String,
+        nickname: String?,
+        expiresAt: Date?,
+        urgent: Bool,
+        replyTo: ThreadReference?,
+        teleported: Bool
+    ) -> [[String]] {
         var tags = [["g", geohash]]
         if let nickname = nickname?.trimmedOrNilIfEmpty {
             tags.append(["n", nickname])
@@ -405,15 +632,316 @@ struct NostrProtocol {
         if urgent {
             tags.append(["t", "urgent"])
         }
+        if teleported {
+            tags.append(["t", "teleport"])
+        }
+        if let replyTo, isValidHexIdentifier(replyTo.rootEventID) {
+            tags.append(["e", replyTo.rootEventID, "", "root"])
+            if let directReply = replyTo.replyEventID,
+               directReply != replyTo.rootEventID,
+               isValidHexIdentifier(directReply) {
+                tags.append(["e", directReply, "", "reply"])
+            }
+            if let authorPubkey = replyTo.replyAuthorPubkey,
+               isValidHexIdentifier(authorPubkey) {
+                tags.append(["p", authorPubkey])
+            }
+        }
+        return tags
+    }
+
+    /// Create a NIP-25 reaction (kind 7) targeting a note inside a geohash feed.
+    /// Carries the place's `g` tag so the single per-place relay subscription
+    /// receives both posts and reactions without extra Tor socket overhead.
+    static func createGeohashReactionEvent(
+        emoji: String,
+        targetEventID: String,
+        targetAuthorPubkey: String?,
+        geohash: String,
+        senderIdentity: NostrIdentity,
+        createdAt: Date = Date()
+    ) throws -> NostrEvent {
+        let normalizedEmoji = normalizeReactionContent(emoji) ?? "❤️"
+        var tags = [
+            ["g", geohash],
+            ["e", targetEventID.lowercased()]
+        ]
+        if let author = targetAuthorPubkey?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased(),
+           isValidHexIdentifier(author) {
+            tags.append(["p", author])
+        }
         let event = NostrEvent(
             pubkey: senderIdentity.publicKeyHex,
-            createdAt: Date(),
+            createdAt: createdAt,
+            kind: .reaction,
+            tags: tags,
+            content: normalizedEmoji
+        )
+        let schnorrKey = try senderIdentity.schnorrSigningKey()
+        return try event.sign(with: schnorrKey)
+    }
+
+    /// Parse a NIP-10 thread reference from a kind-1 note's tags.
+    /// Prefers marked `e` tags (`root` / `reply`, ignoring `mention`); falls
+    /// back to positional `e` tags when no markers are present.
+    static func parseThreadReference(from tags: [[String]]) -> ThreadReference? {
+        var markedRoot: String?
+        var markedReply: String?
+        var positionalEventIDs: [String] = []
+        var replyAuthorPubkey: String?
+
+        for tag in tags where tag.count >= 2 {
+            let key = tag[0].lowercased()
+            switch key {
+            case "e":
+                let candidate = tag[1].trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+                guard isValidHexIdentifier(candidate) else { continue }
+                let marker = tag.count >= 4
+                    ? tag[3].trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+                    : ""
+                switch marker {
+                case "root":
+                    if markedRoot == nil { markedRoot = candidate }
+                case "reply":
+                    markedReply = candidate
+                case "mention":
+                    continue
+                default:
+                    positionalEventIDs.append(candidate)
+                }
+            case "p":
+                let candidate = tag[1].trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+                if isValidHexIdentifier(candidate) {
+                    replyAuthorPubkey = candidate
+                }
+            default:
+                break
+            }
+        }
+
+        if let root = markedRoot {
+            return ThreadReference(
+                rootEventID: root,
+                replyEventID: markedReply,
+                replyAuthorPubkey: replyAuthorPubkey
+            )
+        }
+        if let replyOnly = markedReply {
+            // Some clients emit only a single "reply" marker on direct replies.
+            return ThreadReference(
+                rootEventID: replyOnly,
+                replyEventID: nil,
+                replyAuthorPubkey: replyAuthorPubkey
+            )
+        }
+        if let first = positionalEventIDs.first {
+            let last = positionalEventIDs.count > 1 ? positionalEventIDs.last : nil
+            return ThreadReference(
+                rootEventID: first,
+                replyEventID: last,
+                replyAuthorPubkey: replyAuthorPubkey
+            )
+        }
+        return nil
+    }
+
+    /// Parse a NIP-25 kind-7 reaction event into its target event ID (last `e`
+    /// tag per NIP-25) and normalized display emoji.
+    static func parseReactionTarget(from event: NostrEvent) -> (targetEventID: String, emoji: String)? {
+        guard event.kind == EventKind.reaction.rawValue,
+              let emoji = normalizeReactionContent(event.content) else {
+            return nil
+        }
+        var targetEventID: String?
+        for tag in event.tags where tag.count >= 2 && tag[0].lowercased() == "e" {
+            let candidate = tag[1].trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+            if isValidHexIdentifier(candidate) {
+                targetEventID = candidate
+            }
+        }
+        guard let targetEventID else { return nil }
+        return (targetEventID, emoji)
+    }
+
+    /// Normalizes NIP-25 reaction content: empty or `"+"` maps to `"❤️"`,
+    /// `"-"` is ignored, and custom emoji strings are bounded defensively.
+    static func normalizeReactionContent(_ raw: String) -> String? {
+        let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.isEmpty || trimmed == "+" {
+            return "❤️"
+        }
+        if trimmed == "-" {
+            return nil
+        }
+        guard trimmed.count <= 2, trimmed.utf8.count <= 16 else {
+            return nil
+        }
+        return trimmed
+    }
+
+    /// Sanitized NIP-01 kind-0 profile metadata. Intentionally excludes remote
+    /// avatar/banner URLs so reading profiles never triggers clearnet image
+    /// fetches or IP leaks in Stealth Mode.
+    struct ProfileMetadata: Codable, Equatable, Sendable {
+        let name: String?
+        let displayName: String?
+        let about: String?
+        let nip05: String?
+
+        var preferredName: String? {
+            displayName?.trimmedOrNilIfEmpty ?? name?.trimmedOrNilIfEmpty
+        }
+
+        private enum CodingKeys: String, CodingKey {
+            case name
+            case displayName = "display_name"
+            case about
+            case nip05
+        }
+    }
+
+    /// Defensive upper bound on untrusted kind-0 metadata JSON content.
+    static let maximumProfileMetadataBytes = 8 * 1024
+
+    /// Create a signed NIP-01 kind-0 metadata event for an opt-in persistent
+    /// Nostr public handle.
+    static func createMetadataEvent(
+        profile: ProfileMetadata,
+        senderIdentity: NostrIdentity,
+        createdAt: Date = Date()
+    ) throws -> NostrEvent {
+        var payload: [String: String] = [:]
+        if let name = sanitizeMetadataField(profile.name, maxLength: 64, allowNewlines: false) {
+            payload["name"] = name
+        }
+        if let displayName = sanitizeMetadataField(profile.displayName, maxLength: 64, allowNewlines: false) {
+            payload["display_name"] = displayName
+        }
+        if let about = sanitizeMetadataField(profile.about, maxLength: 280, allowNewlines: true) {
+            payload["about"] = about
+        }
+        if let nip05 = sanitizeMetadataField(profile.nip05, maxLength: 120, allowNewlines: false) {
+            payload["nip05"] = nip05
+        }
+        let data = try JSONSerialization.data(withJSONObject: payload, options: [.sortedKeys, .withoutEscapingSlashes])
+        let content = String(data: data, encoding: .utf8) ?? "{}"
+        let event = NostrEvent(
+            pubkey: senderIdentity.publicKeyHex,
+            createdAt: createdAt,
+            kind: .metadata,
+            tags: [],
+            content: content
+        )
+        let schnorrKey = try senderIdentity.schnorrSigningKey()
+        return try event.sign(with: schnorrKey)
+    }
+
+    /// Parse and sanitize a NIP-01 kind-0 profile metadata event.
+    static func parseMetadataEvent(_ event: NostrEvent) -> ProfileMetadata? {
+        guard event.kind == EventKind.metadata.rawValue,
+              event.content.utf8.count <= maximumProfileMetadataBytes,
+              let data = event.content.data(using: .utf8),
+              let dict = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            return nil
+        }
+        let name = sanitizeMetadataField(dict["name"] as? String, maxLength: 64, allowNewlines: false)
+        let displayName = sanitizeMetadataField(dict["display_name"] as? String, maxLength: 64, allowNewlines: false)
+        let about = sanitizeMetadataField(dict["about"] as? String, maxLength: 280, allowNewlines: true)
+        let nip05 = sanitizeMetadataField(dict["nip05"] as? String, maxLength: 120, allowNewlines: false)
+        guard name != nil || displayName != nil || about != nil || nip05 != nil else {
+            return nil
+        }
+        return ProfileMetadata(
+            name: name,
+            displayName: displayName,
+            about: about,
+            nip05: nip05
+        )
+    }
+
+    /// Create a global (non-geohash) kind-1 text note signed synchronously by a
+    /// persistent public handle, with optional NIP-10 reply tags and NIP-92 `imeta`.
+    static func createPublicTextNote(
+        content: String,
+        senderIdentity: NostrIdentity,
+        nickname: String? = nil,
+        expiresAt: Date? = nil,
+        replyTo: ThreadReference? = nil,
+        attachments: [MediaAttachment] = [],
+        createdAt: Date = Date()
+    ) throws -> NostrEvent {
+        var tags: [[String]] = []
+        if let nickname = nickname?.trimmedOrNilIfEmpty {
+            tags.append(["n", nickname])
+        }
+        if let expiresAt {
+            tags.append(["expiration", String(Int(expiresAt.timeIntervalSince1970))])
+        }
+        if let replyTo, isValidHexIdentifier(replyTo.rootEventID) {
+            tags.append(["e", replyTo.rootEventID, "", "root"])
+            if let directReply = replyTo.replyEventID,
+               directReply != replyTo.rootEventID,
+               isValidHexIdentifier(directReply) {
+                tags.append(["e", directReply, "", "reply"])
+            }
+            if let authorPubkey = replyTo.replyAuthorPubkey,
+               isValidHexIdentifier(authorPubkey) {
+                tags.append(["p", authorPubkey])
+            }
+        }
+        for attachment in attachments.prefix(maxAttachmentsPerNote) {
+            tags.append(imetaTag(for: attachment))
+        }
+        let event = NostrEvent(
+            pubkey: senderIdentity.publicKeyHex,
+            createdAt: createdAt,
             kind: .textNote,
             tags: tags,
             content: content
         )
         let schnorrKey = try senderIdentity.schnorrSigningKey()
         return try event.sign(with: schnorrKey)
+    }
+
+    /// Decode either a 64-character hex pubkey or a `npub1...` Bech32 string
+    /// into canonical lowercase 64-char hex.
+    static func normalizePubkeyHex(_ raw: String) -> String? {
+        let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return nil }
+        let lower = trimmed.lowercased()
+        if lower.hasPrefix("npub1") {
+            guard let (hrp, data) = try? Bech32.decode(lower),
+                  hrp == "npub",
+                  data.count == 32 else {
+                return nil
+            }
+            return data.hexEncodedString().lowercased()
+        }
+        guard lower.count == 64, isValidHexIdentifier(lower) else {
+            return nil
+        }
+        return lower
+    }
+
+    private static func sanitizeMetadataField(_ raw: String?, maxLength: Int, allowNewlines: Bool) -> String? {
+        guard let raw else { return nil }
+        let disallowed = allowNewlines
+            ? CharacterSet.controlCharacters.subtracting(.newlines)
+            : CharacterSet.controlCharacters.union(.newlines)
+        var cleaned = ""
+        cleaned.unicodeScalars.append(contentsOf: raw.unicodeScalars.filter { !disallowed.contains($0) })
+        cleaned = cleaned.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !cleaned.isEmpty else { return nil }
+        return String(cleaned.prefix(maxLength))
+    }
+
+    private static func isValidHexIdentifier(_ value: String) -> Bool {
+        guard !value.isEmpty, value.count <= 64 else { return false }
+        return value.utf8.allSatisfy { byte in
+            (byte >= 0x30 && byte <= 0x39)
+                || (byte >= 0x61 && byte <= 0x66)
+                || (byte >= 0x41 && byte <= 0x46)
+        }
     }
 
     /// Create a NIP-09 deletion request for one of our own events. Relays that

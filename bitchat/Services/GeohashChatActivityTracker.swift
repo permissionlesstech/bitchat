@@ -123,6 +123,20 @@ final class GeohashChatActivityTracker: ObservableObject {
         return best
     }
 
+    /// Snapshot of currently active geohashes and their recent message counts
+    /// within the activity window (used by the 3D globe live activity layer).
+    func activeGeohashCounts() -> [String: Int] {
+        let cutoff = now().addingTimeInterval(-window)
+        var counts: [String: Int] = [:]
+        for (gh, times) in messageTimes {
+            let activeCount = times.reduce(0) { $1 >= cutoff ? $0 + 1 : $0 }
+            if activeCount > 0 {
+                counts[gh] = activeCount
+            }
+        }
+        return counts
+    }
+
     func clear() {
         messageTimes.removeAll()
         lastMessages.removeAll()
