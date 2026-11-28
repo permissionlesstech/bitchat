@@ -15,9 +15,11 @@ struct InboundFrame: Sendable {
 /// because the guarded critical section is only a dictionary lookup + yield.
 final class InboundFrameRouter: @unchecked Sendable {
     /// Full cryptographic identity of a Nostr event being verified.
-    /// Including every field covered by the NIP-01 event ID + signature ensures
-    /// a forged/tampered copy can never coalesce onto — or poison — a genuine copy.
-    private struct VerificationFingerprint: Hashable {
+    /// Including every field covered by the NIP-01 event ID + signature with
+    /// byte-exact UTF-8 equality ensures canonically equivalent Unicode variants
+    /// (such as NFC vs. NFD) or tampered copies can never coalesce onto — or
+    /// poison — a genuine copy.
+    struct VerificationFingerprint: Hashable {
         let id: String
         let pubkey: String
         let createdAt: Int
@@ -37,23 +39,70 @@ final class InboundFrameRouter: @unchecked Sendable {
         }
 
         static func == (lhs: VerificationFingerprint, rhs: VerificationFingerprint) -> Bool {
-            lhs.id == rhs.id &&
-            lhs.pubkey == rhs.pubkey &&
             lhs.createdAt == rhs.createdAt &&
             lhs.kind == rhs.kind &&
-            lhs.sig == rhs.sig &&
-            lhs.content == rhs.content &&
-            lhs.tags == rhs.tags
+            utf8Equal(lhs.id, rhs.id) &&
+            utf8Equal(lhs.pubkey, rhs.pubkey) &&
+            optionalUTF8Equal(lhs.sig, rhs.sig) &&
+            utf8Equal(lhs.content, rhs.content) &&
+            tagsUTF8Equal(lhs.tags, rhs.tags)
         }
 
         func hash(into hasher: inout Hasher) {
-            hasher.combine(id)
-            hasher.combine(pubkey)
+            Self.combineUTF8(id, into: &hasher)
+            Self.combineUTF8(pubkey, into: &hasher)
             hasher.combine(createdAt)
             hasher.combine(kind)
-            hasher.combine(sig)
-            hasher.combine(content)
-            hasher.combine(tags)
+            if let sig {
+                hasher.combine(true)
+                Self.combineUTF8(sig, into: &hasher)
+            } else {
+                hasher.combine(false)
+            }
+            Self.combineUTF8(content, into: &hasher)
+            hasher.combine(tags.count)
+            for tag in tags {
+                hasher.combine(tag.count)
+                for element in tag {
+                    Self.combineUTF8(element, into: &hasher)
+                }
+            }
+        }
+
+        private static func utf8Equal(_ lhs: String, _ rhs: String) -> Bool {
+            lhs.utf8.elementsEqual(rhs.utf8)
+        }
+
+        private static func optionalUTF8Equal(_ lhs: String?, _ rhs: String?) -> Bool {
+            switch (lhs, rhs) {
+            case (nil, nil):
+                return true
+            case let (l?, r?):
+                return utf8Equal(l, r)
+            default:
+                return false
+            }
+        }
+
+        private static func tagsUTF8Equal(_ lhs: [[String]], _ rhs: [[String]]) -> Bool {
+            guard lhs.count == rhs.count else { return false }
+            for (lhsTag, rhsTag) in zip(lhs, rhs) {
+                guard lhsTag.count == rhsTag.count else { return false }
+                for (lhsElement, rhsElement) in zip(lhsTag, rhsTag) where !utf8Equal(lhsElement, rhsElement) {
+                    return false
+                }
+            }
+            return true
+        }
+
+        private static func combineUTF8(_ value: String, into hasher: inout Hasher) {
+            // Normalize to contiguous UTF-8 so native Swift Strings and
+            // JSONSerialization-bridged NSStrings hash identically.
+            var copy = value
+            copy.withUTF8 { buffer in
+                hasher.combine(buffer.count)
+                hasher.combine(bytes: UnsafeRawBufferPointer(buffer))
+            }
         }
     }
 
@@ -103,7 +152,10 @@ final class InboundFrameRouter: @unchecked Sendable {
 
     /// Verifies `event.isValidSignature()` while coalescing simultaneous fan-in
     /// deliveries of byte-identical events across multiple relay pipelines.
-    func verifySignatureCoalesced(_ event: NostrEvent) async -> Bool {
+    func verifySignatureCoalesced(
+        _ event: NostrEvent,
+        verify: @Sendable (NostrEvent) -> Bool = { $0.isValidSignature() }
+    ) async -> Bool {
         let fingerprint = VerificationFingerprint(event: event)
         let isOwner: Bool = {
             lock.lock()
@@ -116,7 +168,7 @@ final class InboundFrameRouter: @unchecked Sendable {
         }()
 
         if isOwner {
-            let valid = event.isValidSignature()
+            let valid = verify(event)
             let waiters: [CheckedContinuation<Bool, Never>] = {
                 lock.lock()
                 defer { lock.unlock() }
@@ -136,7 +188,7 @@ final class InboundFrameRouter: @unchecked Sendable {
                 lock.unlock()
             } else {
                 lock.unlock()
-                continuation.resume(returning: event.isValidSignature())
+                continuation.resume(returning: verify(event))
             }
         }
     }

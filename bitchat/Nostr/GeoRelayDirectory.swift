@@ -807,10 +807,10 @@ final class GeoRelayDirectory {
 }
 
 /// Chunked, strictly byte-bounded HTTP body reader for `GeoRelayDirectory`.
-/// Replaces byte-by-byte `AsyncBytes` iteration (~50k async suspensions for
-/// the relay CSV) while still enforcing `maximumBytes` before unbounded memory
-/// allocation and rejecting HTTP errors or unexpected redirect URLs.
-private final class BoundedHTTPDataReader: NSObject, URLSessionDataDelegate, @unchecked Sendable {
+/// Avoids byte-by-byte `AsyncBytes` suspensions while enforcing `maximumBytes`
+/// before unbounded memory allocation, rejecting HTTP errors, and refusing
+/// HTTP redirects before following them.
+final class BoundedHTTPDataReader: NSObject, URLSessionDataDelegate, @unchecked Sendable {
     private let expectedURL: URL?
     private let maximumBytes: Int
     private let lock = NSLock()
@@ -887,6 +887,20 @@ private final class BoundedHTTPDataReader: NSObject, URLSessionDataDelegate, @un
         lock.unlock()
 
         pendingContinuation?.resume(with: result)
+    }
+
+    func urlSession(
+        _ session: URLSession,
+        task: URLSessionTask,
+        willPerformHTTPRedirection response: HTTPURLResponse,
+        newRequest request: URLRequest,
+        completionHandler: @escaping (URLRequest?) -> Void
+    ) {
+        _ = session
+        _ = task
+        _ = response
+        _ = request
+        completionHandler(nil)
     }
 
     func urlSession(
