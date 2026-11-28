@@ -265,16 +265,19 @@ extension BLEService {
         privateMediaSessions.hasPendingPolicyResolution(for: peerID.toShort())
     }
 
-    func _test_forcePrivateMediaProofTimeout(for peerID: PeerID) {
+    /// Returns whether a live proof deadline was found and fired.
+    @discardableResult
+    func _test_forcePrivateMediaProofTimeout(for peerID: PeerID) -> Bool {
         let normalizedPeerID = peerID.toShort()
         let target = privateMediaSessions.proofTimeoutTarget(for: normalizedPeerID)
-        guard let target else { return }
+        guard let target else { return false }
         handlePrivateMediaProofTimeout(
             for: normalizedPeerID,
             fingerprint: target.fingerprint,
             sessionGeneration: target.generation,
             nonce: target.nonce
         )
+        return true
     }
 
     func _test_privateMediaTransferState(
