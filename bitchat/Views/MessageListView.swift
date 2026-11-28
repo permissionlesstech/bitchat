@@ -408,14 +408,14 @@ private struct MessageListContentView: View {
                 showClearConfirmation = true
             }
             .confirmationDialog(
-                "content.clear.confirm_title",
+                String(localized: "content.clear.confirm_title"),
                 isPresented: $showClearConfirmation,
                 titleVisibility: .visible
             ) {
-                Button("content.clear.confirm_action", role: .destructive) {
+                Button(String(localized: "content.clear.confirm_action"), role: .destructive) {
                     conversationUIModel.clearCurrentConversation()
                 }
-                Button("common.cancel", role: .cancel) {}
+                Button(String(localized: "common.cancel"), role: .cancel) {}
             }
             .onAppear {
                 // Runs before the rows' onAppear: lands the list (and sets the
@@ -437,13 +437,13 @@ private struct MessageListContentView: View {
                 isPresented: $showMessageActions,
                 titleVisibility: .visible
             ) {
-                Button("content.actions.mention") {
+                Button(String(localized: "content.actions.mention")) {
                     if let sender = selectedMessageSender {
                         insertMention(sender)
                     }
                 }
 
-                Button("content.actions.direct_message") {
+                Button(String(localized: "content.actions.direct_message")) {
                     if let peerID = selectedMessageSenderID {
                         appEnvironmentModels?.privateConversationModel.openConversation(for: peerID)
                         withAnimation(.easeInOut(duration: TransportConfig.uiAnimationMediumSeconds)) {
@@ -452,23 +452,23 @@ private struct MessageListContentView: View {
                     }
                 }
 
-                Button("content.actions.hug") {
+                Button(String(localized: "content.actions.hug")) {
                     if let sender = selectedMessageSender {
                         conversationUIModel.sendHug(to: sender)
                     }
                 }
 
-                Button("content.actions.slap") {
+                Button(String(localized: "content.actions.slap")) {
                     if let sender = selectedMessageSender {
                         conversationUIModel.sendSlap(to: sender)
                     }
                 }
 
-                Button("content.actions.block", role: .destructive) {
+                Button(String(localized: "content.actions.block"), role: .destructive) {
                     conversationUIModel.block(peerID: selectedMessageSenderID, displayName: selectedMessageSender)
                 }
 
-                Button("common.cancel", role: .cancel) {}
+                Button(String(localized: "common.cancel"), role: .cancel) {}
             }
             .onAppear {
                 // Also check when view appears
@@ -913,11 +913,11 @@ private struct MessageRowView: View, Equatable {
                     // mentioning the only other participant is noise, and "DM"
                     // would just reopen the conversation that is already open.
                     if privatePeer == nil {
-                        Button("content.actions.mention") {
+                        Button(String(localized: "content.actions.mention")) {
                             onInsertMention(message.sender)
                         }
                         if let peerID = message.senderPeerID {
-                            Button("content.actions.direct_message") {
+                            Button(String(localized: "content.actions.direct_message")) {
                                 appEnvironmentModels?.privateConversationModel.openConversation(for: peerID)
                                 withAnimation(.easeInOut(duration: TransportConfig.uiAnimationMediumSeconds)) {
                                     showSidebar = true
@@ -925,23 +925,23 @@ private struct MessageRowView: View, Equatable {
                             }
                         }
                     }
-                    Button("content.actions.hug") {
+                    Button(String(localized: "content.actions.hug")) {
                         conversationUIModel.sendHug(to: message.sender)
                     }
-                    Button("content.actions.slap") {
+                    Button(String(localized: "content.actions.slap")) {
                         conversationUIModel.sendSlap(to: message.sender)
                     }
                 }
-                Button("content.message.copy") {
+                Button(String(localized: "content.message.copy")) {
                     ClipboardHelper.copy(message.content)
                 }
                 if isResendableFailedMessage(message) {
-                    Button("content.actions.resend") {
+                    Button(String(localized: "content.actions.resend")) {
                         conversationUIModel.resendFailedPrivateMessage(message)
                     }
                 }
                 if showsUserActions {
-                    Button("content.actions.block", role: .destructive) {
+                    Button(String(localized: "content.actions.block"), role: .destructive) {
                         conversationUIModel.block(peerID: message.senderPeerID, displayName: message.sender)
                     }
                 }

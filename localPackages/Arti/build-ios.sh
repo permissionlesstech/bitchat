@@ -13,9 +13,9 @@ set -e
 
 # rustup/cargo install tools here on standard setups; GUI/Xcode shells often
 # omit it from PATH even though `cargo` itself is available elsewhere.
-export PATH="$HOME/.cargo/bin:$PATH"
-RUST_TOOLCHAIN="${RUST_TOOLCHAIN:-1.96.0}"
-RUSTC_VERSION="${RUSTC_VERSION:-1.96.0}"
+export PATH="/opt/homebrew/opt/rustup/bin:$HOME/.cargo/bin:$PATH"
+RUST_TOOLCHAIN="${RUST_TOOLCHAIN:-nightly-2026-11-28}"
+RUSTC_VERSION="${RUSTC_VERSION:-1.102.0-nightly}"
 CBINDGEN_VERSION="${CBINDGEN_VERSION:-0.29.4}"
 export RUSTC="$(rustup which --toolchain "$RUST_TOOLCHAIN" rustc)"
 
@@ -68,6 +68,12 @@ check_prerequisites() {
         exit 1
     fi
 
+    # Check/install rust-src (required for -Z build-std)
+    if ! rustup component list --toolchain "$RUST_TOOLCHAIN" --installed | grep -qx "rust-src"; then
+        log_info "Installing component: rust-src"
+        rustup component add --toolchain "$RUST_TOOLCHAIN" rust-src
+    fi
+
     # Check/install targets
     for target in "${TARGETS[@]}"; do
         if ! rustup target list --toolchain "$RUST_TOOLCHAIN" --installed | grep -qx "$target"; then
@@ -94,8 +100,8 @@ check_prerequisites() {
 setup_rustflags() {
     local target="$1"
 
-    # Base flags for size optimization
-    export RUSTFLAGS="-C opt-level=z -C lto=fat -C codegen-units=1 -C panic=abort -C strip=symbols"
+    # Base flags for size optimization (preserving rustls + tokio rt-multi-thread behavior)
+    export RUSTFLAGS="-C opt-level=z -C lto=fat -C codegen-units=1 -Zunstable-options -C panic=immediate-abort -C strip=symbols -Z location-detail=none"
 
     # Set deployment targets to suppress linker warnings about version mismatches
     case "$target" in
@@ -122,8 +128,10 @@ build_target() {
 
     setup_rustflags "$target"
 
-    # Build release with locked Cargo.lock for reproducible dependency resolution
-    rustup run "$RUST_TOOLCHAIN" cargo build --release --locked --target "$target" -p "$CRATE_NAME"
+    # Build release with locked Cargo.lock and size-optimized std for reproducible dependency resolution
+    rustup run "$RUST_TOOLCHAIN" cargo build --release --locked --target "$target" -p "$CRATE_NAME" \
+        -Z build-std=std,panic_abort \
+        -Z build-std-features=optimize_for_size
 
     # Check output
     local lib_path="target/$target/release/$LIB_NAME"

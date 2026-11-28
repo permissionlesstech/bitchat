@@ -258,14 +258,14 @@ struct NoticesView: View {
         static let nostrSource = String(localized: "notices.source.nostr", defaultValue: "net", comment: "Source badge for notices seen on internet relays")
         static let locationUnavailable = String(localized: "content.notes.location_unavailable", comment: "Shown when the device location is unavailable for geo notices")
         static let enableLocation = String(localized: "content.location.enable", comment: "Button enabling location for geo notices")
-        static let locationNotesTitle: LocalizedStringKey = "app_info.location.notes.title"
-        static let locationNotesDescription: LocalizedStringKey = "app_info.location.notes.description"
-        static let loadingNotes: LocalizedStringKey = "location_notes.loading_notes"
-        static let connectingRelays: LocalizedStringKey = "location_notes.connecting_relays"
-        static let noRelaysNearby: LocalizedStringKey = "location_notes.no_relays_nearby"
-        static let relaysRetryHint: LocalizedStringKey = "location_notes.relays_retry_hint"
-        static let retry: LocalizedStringKey = "location_notes.action.retry"
-        static let dismissError: LocalizedStringKey = "location_notes.action.dismiss"
+        static let locationNotesTitle = String(localized: "app_info.location.notes.title")
+        static let locationNotesDescription = String(localized: "app_info.location.notes.description")
+        static let loadingNotes = String(localized: "location_notes.loading_notes")
+        static let connectingRelays = String(localized: "location_notes.connecting_relays")
+        static let noRelaysNearby = String(localized: "location_notes.no_relays_nearby")
+        static let relaysRetryHint = String(localized: "location_notes.relays_retry_hint")
+        static let retry = String(localized: "location_notes.action.retry")
+        static let dismissError = String(localized: "location_notes.action.dismiss")
 
         static func expiryDaysOption(_ days: Int) -> String {
             String(

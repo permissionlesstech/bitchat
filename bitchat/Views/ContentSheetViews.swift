@@ -197,7 +197,7 @@ struct ContentPeopleSheetView: View {
                     )
                 }
             }
-            Button("common.cancel", role: .cancel) {
+            Button(String(localized: "common.cancel"), role: .cancel) {
                 if let requestID = legacyConsentRequest?.id {
                     conversationUIModel.resolveLegacyPrivateMediaConsent(
                         requestID: requestID,
