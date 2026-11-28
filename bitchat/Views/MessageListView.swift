@@ -174,6 +174,7 @@ private struct MessageListContentView: View {
 
     @EnvironmentObject private var conversationUIModel: ConversationUIModel
     @Environment(\.appEnvironmentModels) private var appEnvironmentModels
+    @Environment(\.composerDraftModel) private var composerDraftModel
 
     let privatePeer: PeerID?
     let messages: [BitchatMessage]
@@ -287,7 +288,7 @@ private struct MessageListContentView: View {
                                         showSidebar: $showSidebar,
                                         onInsertMention: insertMention,
                                         onReply: { target in
-                                            appEnvironmentModels?.composerDraftModel.setReplyTarget(target)
+                                            composerDraftModel?.setReplyTarget(target)
                                             isTextFieldFocused.wrappedValue = true
                                         },
                                         onReact: { emoji in
@@ -446,7 +447,7 @@ private struct MessageListContentView: View {
 
                 Button(String(localized: "content.actions.direct_message")) {
                     if let peerID = selectedMessageSenderID {
-                        appEnvironmentModels?.privateConversationModel.openConversation(for: peerID)
+                        appEnvironmentModels.require("MessageListContentView.directMessage")?.privateConversationModel.openConversation(for: peerID)
                         withAnimation(.easeInOut(duration: TransportConfig.uiAnimationMediumSeconds)) {
                             showSidebar = true
                         }
@@ -474,7 +475,7 @@ private struct MessageListContentView: View {
             .onAppear {
                 // Also check when view appears
                 if let peerID = privatePeer,
-                   let privateConversationModel = appEnvironmentModels?.privateConversationModel {
+                   let privateConversationModel = appEnvironmentModels.require("MessageListContentView.markMessagesAsRead")?.privateConversationModel {
                     // Try multiple times to ensure read receipts are sent
                     privateConversationModel.markMessagesAsRead(from: peerID)
 
@@ -648,7 +649,7 @@ private extension MessageListContentView {
     /// Appends an @mention to the composer draft (never overwrites what the
     /// user has already typed) and focuses the input field.
     func insertMention(_ sender: String) {
-        appEnvironmentModels?.composerDraftModel.insertMention(sender)
+        composerDraftModel?.insertMention(sender)
         isTextFieldFocused.wrappedValue = true
     }
 
@@ -683,7 +684,8 @@ private extension MessageListContentView {
 
     func handleOpenURL(_ url: URL) {
         guard url.scheme == "bitchat" else { return }
-        guard appEnvironmentModels?.appChromeModel.panicWipeBlocked != true else { return }
+        guard let models = appEnvironmentModels.require("MessageListContentView.handleOpenURL") else { return }
+        guard !models.appChromeModel.panicWipeBlocked else { return }
         switch url.host {
         case "user":
             let id = url.path.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
@@ -705,7 +707,7 @@ private extension MessageListContentView {
         case "geohash":
             let gh = url.path.trimmingCharacters(in: CharacterSet(charactersIn: "/")).lowercased()
             guard (2...12).contains(gh.count), gh.allSatisfy({ Self.allowedGeohashChars.contains($0) }) else { return }
-            appEnvironmentModels?.locationChannelsModel.openLocationChannel(for: gh)
+            models.locationChannelsModel.openLocationChannel(for: gh)
 
         default:
             return
@@ -1013,7 +1015,7 @@ private struct MessageRowView: View, Equatable {
                         }
                         if let peerID = message.senderPeerID {
                             Button(String(localized: "content.actions.direct_message")) {
-                                appEnvironmentModels?.privateConversationModel.openConversation(for: peerID)
+                                appEnvironmentModels.require("MessageRowView.directMessage")?.privateConversationModel.openConversation(for: peerID)
                                 withAnimation(.easeInOut(duration: TransportConfig.uiAnimationMediumSeconds)) {
                                     showSidebar = true
                                 }

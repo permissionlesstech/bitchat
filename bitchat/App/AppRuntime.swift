@@ -23,29 +23,12 @@ final class AppRuntime: ObservableObject {
     let verificationModel: VerificationModel
     let conversationUIModel: ConversationUIModel
     let composerAutocompleteModel: ComposerAutocompleteModel
-    let composerDraftModel = ComposerDraftModel()
     let locationChannelsModel: LocationChannelsModel
     let peerListModel: PeerListModel
     let appChromeModel: AppChromeModel
     let boardAlertsModel: BoardAlertsModel
     let sharedContentImportModel: SharedContentImportModel
-
-    var environmentModels: AppEnvironmentModels {
-        AppEnvironmentModels(
-            publicChatModel: publicChatModel,
-            privateInboxModel: privateInboxModel,
-            privateConversationModel: privateConversationModel,
-            verificationModel: verificationModel,
-            conversationUIModel: conversationUIModel,
-            composerAutocompleteModel: composerAutocompleteModel,
-            composerDraftModel: composerDraftModel,
-            locationChannelsModel: locationChannelsModel,
-            peerListModel: peerListModel,
-            appChromeModel: appChromeModel,
-            boardAlertsModel: boardAlertsModel,
-            sharedContentImportModel: sharedContentImportModel
-        )
-    }
+    let environmentModels: AppEnvironmentModels
 
     private let idBridge: NostrIdentityBridge
     private var cancellables = Set<AnyCancellable>()
@@ -146,6 +129,19 @@ final class AppRuntime: ObservableObject {
                     }
                 }
             )
+        )
+        self.environmentModels = AppEnvironmentModels(
+            publicChatModel: publicChatModel,
+            privateInboxModel: privateInboxModel,
+            privateConversationModel: privateConversationModel,
+            verificationModel: verificationModel,
+            conversationUIModel: conversationUIModel,
+            composerAutocompleteModel: composerAutocompleteModel,
+            locationChannelsModel: locationChannelsModel,
+            peerListModel: peerListModel,
+            appChromeModel: appChromeModel,
+            boardAlertsModel: boardAlertsModel,
+            sharedContentImportModel: sharedContentImportModel
         )
         if chatViewModel.networkActivationAllowed {
             GeoRelayDirectory.shared.prefetchIfNeeded()

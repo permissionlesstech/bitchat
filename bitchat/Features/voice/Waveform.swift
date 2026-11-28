@@ -17,7 +17,7 @@ final class WaveformCache {
     private var wipeGeneration: UInt64 = 0
     private let maxCacheSize = 20  // Limit cache to prevent unbounded memory growth
 
-    private init() {}
+    init() {}
 
     func cachedWaveform(for url: URL) -> [Float]? {
         queue.sync {

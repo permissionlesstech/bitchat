@@ -199,6 +199,8 @@ struct ContentView: View {
     @Environment(\.appEnvironmentModels) private var appEnvironmentModels
 
     @StateObject private var voiceRecordingVM = VoiceRecordingViewModel()
+    @StateObject private var draftHost = ComposerDraftHost()
+    private var draftModel: ComposerDraftModel { draftHost.model }
     @FocusState private var isTextFieldFocused: Bool
     @Environment(\.colorScheme) var colorScheme
     @Environment(\.appTheme) private var appTheme
@@ -296,7 +298,7 @@ struct ContentView: View {
                 // `get`); publishing synchronously there is undefined
                 // behavior, so defer the write one hop.
                 Task { @MainActor in
-                    appChromeModel.showBluetoothAlert = false
+                    appChromeModel.dismissBluetoothAlert()
                 }
             }
         )
@@ -331,9 +333,10 @@ struct ContentView: View {
 
     var body: some View {
         tabRootView
-            .onAppear { [appEnvironmentModels, voiceRecordingVM] in
-                let uiModel = appEnvironmentModels?.conversationUIModel
-                let draftModel = appEnvironmentModels?.composerDraftModel
+            .environment(\.composerDraftModel, draftModel)
+            .onAppear { [appEnvironmentModels, voiceRecordingVM, draftHost] in
+                let uiModel = appEnvironmentModels.require("ContentView.onAppear")?.conversationUIModel
+                let draftModel = draftHost.model
                 uiModel?.setCurrentColorScheme(colorScheme)
                 uiModel?.setCurrentTheme(appTheme)
                 voiceRecordingVM.sessionProvider = { [weak uiModel] in
@@ -356,14 +359,14 @@ struct ContentView: View {
                     voiceRecordingVM.finish(completion: uiModel.sendVoiceNote(at:target:))
                 }
                 #endif
-                appChromeModel.setPanicPreparation { [weak voiceRecordingVM, weak draftModel] in
+                appChromeModel.setPanicPreparation({ [weak voiceRecordingVM, weak draftModel] in
                     SystemPTTChannelManager.shared.leaveCurrentChannel()
                     voiceRecordingVM?.panicWipe()
                     // Drop in-memory composer text before ChatViewModel resets
                     // persisted drafts — otherwise the next inactive/background
                     // transition would write the pre-wipe draft back.
                     draftModel?.resetForPanic()
-                }
+                }, id: draftHost.id)
                 #if os(macOS)
                 DispatchQueue.main.async {
                     isTextFieldFocused = true
@@ -375,17 +378,17 @@ struct ContentView: View {
                     fingerprint: selectedPrivatePeerID.flatMap { uiModel?.getFingerprint(for: $0) },
                     channel: locationChannelsModel.selectedChannel
                 )
-                draftModel?.loadInitialDraft(for: initialKey)
+                draftModel.loadInitialDraft(for: initialKey)
                 if OnboardingState.shouldPresent() {
                     showOnboardingSheet = true
                 }
                 syncNearbyViewingState()
             }
             .onChange(of: colorScheme) { newValue in
-                appEnvironmentModels?.conversationUIModel.setCurrentColorScheme(newValue)
+                appEnvironmentModels.require("ContentView.colorScheme")?.conversationUIModel.setCurrentColorScheme(newValue)
             }
             .onChange(of: appTheme) { newValue in
-                appEnvironmentModels?.conversationUIModel.setCurrentTheme(newValue)
+                appEnvironmentModels.require("ContentView.appTheme")?.conversationUIModel.setCurrentTheme(newValue)
             }
         .background(ThemedRootBackground())
         .foregroundColor(palette.primary)
@@ -395,10 +398,11 @@ struct ContentView: View {
         .onChange(of: selectedPrivatePeerID) { newValue in
             syncNearbyViewingState()
             sharedContentImportModel.updateDestination(sharedContentDestination)
-            let uiModel = appEnvironmentModels?.conversationUIModel
-            appEnvironmentModels?.composerDraftModel.switchDraft(to: ComposerDraftStore.Key.from(
+            let models = appEnvironmentModels.require("ContentView.selectedPrivatePeerID")
+            models?.composerAutocompleteModel.dismissAutocomplete(ownerID: draftModel.id)
+            draftModel.switchDraft(to: ComposerDraftStore.Key.from(
                 peerID: newValue,
-                fingerprint: newValue.flatMap { uiModel?.getFingerprint(for: $0) },
+                fingerprint: newValue.flatMap { models?.conversationUIModel.getFingerprint(for: $0) },
                 channel: locationChannelsModel.selectedChannel
             ))
         }
@@ -428,7 +432,8 @@ struct ContentView: View {
             // Private drafts are keyed by peer; only public channel switches
             // need a draft swap while no DM is open.
             if selectedPrivatePeerID == nil {
-                appEnvironmentModels?.composerDraftModel.switchDraft(to: ComposerDraftStore.Key.from(
+                appEnvironmentModels?.composerAutocompleteModel.dismissAutocomplete(ownerID: draftModel.id)
+                draftModel.switchDraft(to: ComposerDraftStore.Key.from(
                     peerID: nil,
                     fingerprint: nil,
                     channel: newChannel
@@ -468,7 +473,7 @@ struct ContentView: View {
                 // Always save, including empty — clearing the composer must
                 // remove the in-memory draft so it does not resurrect on the
                 // next switch back into this conversation.
-                appEnvironmentModels?.composerDraftModel.saveCurrentDraft()
+                draftModel.saveCurrentDraft()
             }
         }
         .sheet(
@@ -491,10 +496,10 @@ struct ContentView: View {
                 }
             )
         ) {
-            if let models = appEnvironmentModels {
+            if let models = appEnvironmentModels.require("ContentView.peopleSheet") {
                 ContentPeopleSheetView(
                     showSidebar: $showSidebar,
-                    draftModel: models.composerDraftModel,
+                    draftModel: draftModel,
                     selectedMessageSender: $selectedMessageSender,
                     selectedMessageSenderID: $selectedMessageSenderID,
                     imagePreviewURL: $imagePreviewURL,
@@ -538,7 +543,7 @@ struct ContentView: View {
             .environmentObject(peerListModel)
         }
         .sheet(isPresented: $showWalkieTalkieSheet) {
-            if let models = appEnvironmentModels {
+            if let models = appEnvironmentModels.require("ContentView.walkieTalkieSheet") {
                 WalkieTalkieSheetView(voiceRecordingVM: voiceRecordingVM)
                     .installAppEnvironment(models)
                     #if os(iOS)
@@ -552,7 +557,7 @@ struct ContentView: View {
             set: { _ in appChromeModel.clearFingerprint() }
         )) {
             if let peerID = appChromeModel.showingFingerprintFor,
-               let verificationModel = appEnvironmentModels?.verificationModel {
+               let verificationModel = appEnvironmentModels.require("ContentView.fingerprintSheet")?.verificationModel {
                 FingerprintView(peerID: peerID)
                     .environmentObject(verificationModel)
             }
@@ -560,7 +565,7 @@ struct ContentView: View {
         .mediaPickerPresentation(
             mode: $mediaPickerMode,
             isActive: !showSidebar && selectedPrivatePeerID == nil,
-            conversationUIModel: appEnvironmentModels?.conversationUIModel
+            conversationUIModel: appEnvironmentModels.require("ContentView.mediaPicker")?.conversationUIModel
         )
         .sheet(isPresented: Binding(
             get: { imagePreviewURL != nil },
@@ -609,7 +614,7 @@ struct ContentView: View {
                 // Replacing is deliberate and called out in the prompt. It
                 // avoids combining a stale draft from another conversation
                 // with newly shared content.
-                appEnvironmentModels?.composerDraftModel.replaceText(importedText)
+                draftModel.replaceText(importedText)
                 isTextFieldFocused = true
             }
         } message: { offer in
@@ -620,8 +625,9 @@ struct ContentView: View {
             Text(String(format: format, offer.destination.displayName) + "\n\n" + offer.payload.preview)
         }
         .onDisappear {
-            appEnvironmentModels?.composerDraftModel.cancelAutocompleteDebounce()
-            appChromeModel.setPanicPreparation(nil)
+            draftModel.cancelAutocompleteDebounce()
+            appEnvironmentModels?.composerAutocompleteModel.dismissAutocomplete(ownerID: draftModel.id)
+            appChromeModel.setPanicPreparation(nil, id: draftHost.id)
         }
         // Hosted at the root so Stealth Mode triple-tap panic wipe works from
         // every root tab (Chats, Nearby, Places, Settings).
@@ -814,7 +820,7 @@ struct ContentView: View {
 
     private var publicSearchMatches: [String] {
         guard isPublicSearchPresented,
-              let publicMessages = appEnvironmentModels?.publicChatModel.messages else {
+              let publicMessages = appEnvironmentModels.require("ContentView.publicSearchMatches")?.publicChatModel.messages else {
             return []
         }
         return MessageInteractionCodec.matchingMessageIDs(in: publicMessages, query: publicSearchQuery)
@@ -883,7 +889,7 @@ struct ContentView: View {
                     }
                 )
                 .onChange(of: publicSearchQuery) { newQuery in
-                    let latest = appEnvironmentModels.map {
+                    let latest = appEnvironmentModels.require("ContentView.publicSearchQuery").map {
                         MessageInteractionCodec.matchingMessageIDs(in: $0.publicChatModel.messages, query: newQuery)
                     } ?? []
                     publicSearchMatchIndex = latest.isEmpty ? nil : latest.count - 1
@@ -940,25 +946,24 @@ struct ContentView: View {
         )
     }
 
-    @ViewBuilder
     private var composerView: some View {
-        if let draftModel = appEnvironmentModels?.composerDraftModel {
-            ContentComposerView(
-                draftModel: draftModel,
-                isTextFieldFocused: $isTextFieldFocused,
-                voiceRecordingVM: voiceRecordingVM,
-                onSendMessage: sendMessage,
-                mediaPickerMode: $mediaPickerMode
-            )
-        }
+        ContentComposerView(
+            draftModel: draftModel,
+            isTextFieldFocused: $isTextFieldFocused,
+            voiceRecordingVM: voiceRecordingVM,
+            onSendMessage: sendMessage,
+            mediaPickerMode: $mediaPickerMode
+        )
     }
 
     private func sendMessage() {
-        guard let trimmed = appEnvironmentModels?.composerDraftModel.takeMessageToSend() else { return }
-        let uiModel = appEnvironmentModels?.conversationUIModel
+        guard let models = appEnvironmentModels.require("ContentView.sendMessage") else { return }
+        guard let trimmed = draftModel.takeMessageToSend() else { return }
+        models.composerAutocompleteModel.dismissAutocomplete(ownerID: draftModel.id)
 
+        let uiModel = models.conversationUIModel
         DispatchQueue.main.async {
-            uiModel?.sendMessage(trimmed)
+            uiModel.sendMessage(trimmed)
         }
     }
 }

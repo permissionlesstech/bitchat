@@ -29,11 +29,15 @@ struct ContentComposerView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            if autocompleteModel.showAutocomplete && !autocompleteModel.autocompleteSuggestions.isEmpty {
+            if autocompleteModel.isShowingAutocomplete(for: draftModel.id) {
                 VStack(alignment: .leading, spacing: 0) {
                     ForEach(Array(autocompleteModel.autocompleteSuggestions.prefix(4).enumerated()), id: \.element) { index, suggestion in
                         Button(action: {
-                            _ = autocompleteModel.completeNickname(suggestion, in: &draftModel.messageText)
+                            _ = autocompleteModel.completeNickname(
+                                suggestion,
+                                in: &draftModel.messageText,
+                                ownerID: draftModel.id
+                            )
                         }) {
                             HStack {
                                 Text(suggestion)
@@ -93,25 +97,28 @@ struct ContentComposerView: View {
                 #endif
                 .submitLabel(.send)
                 .modifier(AutocompleteKeyboardNavigationModifier(
-                    isActive: { autocompleteModel.showAutocomplete
-                        && !autocompleteModel.autocompleteSuggestions.isEmpty },
+                    isActive: { autocompleteModel.isShowingAutocomplete(for: draftModel.id) },
                     onMove: { delta in
-                        autocompleteModel.moveAutocompleteSelection(by: delta)
+                        autocompleteModel.moveAutocompleteSelection(by: delta, ownerID: draftModel.id)
                     },
                     onAccept: {
-                        autocompleteModel.completeSelectedSuggestion(in: &draftModel.messageText)
+                        autocompleteModel.completeSelectedSuggestion(
+                            in: &draftModel.messageText,
+                            ownerID: draftModel.id
+                        )
                     },
                     onDismiss: {
-                        autocompleteModel.dismissAutocomplete()
+                        autocompleteModel.dismissAutocomplete(ownerID: draftModel.id)
                     }
                 ))
                 // Return while the mention panel is open completes the
                 // highlight instead of sending — matches command suggestions
                 // (#1504) and keeps Tab/Return/Escape on one convention.
                 .onSubmit {
-                    if autocompleteModel.showAutocomplete,
-                       !autocompleteModel.autocompleteSuggestions.isEmpty,
-                       autocompleteModel.completeSelectedSuggestion(in: &draftModel.messageText) {
+                    if autocompleteModel.completeSelectedSuggestion(
+                        in: &draftModel.messageText,
+                        ownerID: draftModel.id
+                    ) {
                         return
                     }
                     onSendMessage()
@@ -149,6 +156,7 @@ struct ContentComposerView: View {
         .themedChromePanel(edge: .bottom)
         .onDisappear {
             draftModel.cancelAutocompleteDebounce()
+            autocompleteModel.dismissAutocomplete(ownerID: draftModel.id)
         }
     }
 }

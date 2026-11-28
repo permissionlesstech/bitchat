@@ -31,9 +31,10 @@ final class AppChromeModel: ObservableObject {
     private let chatViewModel: ChatViewModel
     private let onPanicWipe: () -> Void
     private var cancellables = Set<AnyCancellable>()
-    /// The composer owns capture state above ChatViewModel. ContentView
-    /// installs this hook so both panic entry points synchronously stop it.
-    private var prepareForPanic: (@MainActor () -> Void)?
+    /// Per-window panic preparation hooks (voice capture + per-window composer
+    /// draft). Keyed by window ID so closing one macOS window does not clear
+    /// another window's hook.
+    private var panicPreparations: [UUID: @MainActor () -> Void] = [:]
 
     /// Bulletin-board coordinator, created on first use of the board sheet.
     private(set) lazy var boardManager = BoardManager(transport: chatViewModel.meshService)
@@ -76,6 +77,13 @@ final class AppChromeModel: ObservableObject {
 
     func clearFingerprint() {
         showingFingerprintFor = nil
+    }
+
+    func dismissBluetoothAlert() {
+        showBluetoothAlert = false
+        if chatViewModel.showBluetoothAlert {
+            chatViewModel.showBluetoothAlert = false
+        }
     }
 
     /// Presents the App Info sheet. Pass a pane when the launching control
@@ -135,8 +143,12 @@ final class AppChromeModel: ObservableObject {
         return chatViewModel.acceptFriendInvite(invite)
     }
 
-    func setPanicPreparation(_ preparation: (@MainActor () -> Void)?) {
-        prepareForPanic = preparation
+    func setPanicPreparation(_ preparation: (@MainActor () -> Void)?, id: UUID) {
+        if let preparation {
+            panicPreparations[id] = preparation
+        } else {
+            panicPreparations.removeValue(forKey: id)
+        }
     }
 
     /// Entry point for the header triple-tap: confirm before destroying.
@@ -157,7 +169,9 @@ final class AppChromeModel: ObservableObject {
         isNoticesSheetPresented = false
         showingFingerprintFor = nil
 
-        prepareForPanic?()
+        for preparation in panicPreparations.values {
+            preparation()
+        }
         onPanicWipe()
         chatViewModel.panicClearAllData()
     }
@@ -175,7 +189,17 @@ final class AppChromeModel: ObservableObject {
             .store(in: &cancellables)
 
         mirror(chatViewModel.$nickname, to: \.nickname)
-        mirror(chatViewModel.$showBluetoothAlert, to: \.showBluetoothAlert)
+        // Omit upstream `.removeDuplicates()` because alert dismissal clears
+        // `showBluetoothAlert` locally; consecutive alertable radio states
+        // (e.g. `.poweredOff` -> `.unauthorized`) must still re-present.
+        chatViewModel.$showBluetoothAlert
+            .dropFirst()
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] showAlert in
+                guard let self, self.showBluetoothAlert != showAlert else { return }
+                self.showBluetoothAlert = showAlert
+            }
+            .store(in: &cancellables)
         mirror(chatViewModel.$bluetoothAlertMessage, to: \.bluetoothAlertMessage)
         mirror(chatViewModel.$bluetoothState, to: \.bluetoothState)
         mirror(chatViewModel.$torBlocked, to: \.torBlocked)
