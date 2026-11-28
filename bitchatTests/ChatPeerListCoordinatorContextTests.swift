@@ -52,18 +52,29 @@ private final class MockChatPeerListContext: ChatPeerListContext {
     var connectedMeshPeers: Set<PeerID> = []
     var reachableMeshPeers: Set<PeerID> = []
     var activeMeshPeerCountValue = 0
+    private(set) var activeMeshPeerCountReads = 0
+    private(set) var registeredEphemeralSessions: [PeerID] = []
     private(set) var updateEncryptionStatusForPeersCount = 0
 
     func isPeerConnected(_ peerID: PeerID) -> Bool { connectedMeshPeers.contains(peerID) }
     func isPeerReachable(_ peerID: PeerID) -> Bool { reachableMeshPeers.contains(peerID) }
-    func activeMeshPeerCount() -> Int { activeMeshPeerCountValue }
+    func activeMeshPeerCount() -> Int {
+        activeMeshPeerCountReads += 1
+        return activeMeshPeerCountValue
+    }
+    func registerEphemeralSession(peerID: PeerID) { registeredEphemeralSessions.append(peerID) }
     func updateEncryptionStatusForPeers() { updateEncryptionStatusForPeersCount += 1 }
 
     // Notifications
     private(set) var networkAvailableNotifications: [Int] = []
+    var suppressedNearbyPeerIDs: Set<PeerID> = []
 
     func notifyNetworkAvailable(peerCount: Int) {
         networkAvailableNotifications.append(peerCount)
+    }
+
+    func suppressesNearbyNotification(for peerID: PeerID) -> Bool {
+        suppressedNearbyPeerIDs.contains(peerID)
     }
 
     // Sightings
@@ -268,5 +279,87 @@ struct ChatPeerListCoordinatorContextTests {
         coordinator.didUpdatePeerList([peerA])
         await drainMainActorTasks()
         #expect(context.networkAvailableNotifications.isEmpty)
+    }
+
+    @Test @MainActor
+    func didUpdatePeerList_mutedPeersDoNotTriggerNearbyNotification() async {
+        let context = MockChatPeerListContext()
+        let coordinator = ChatPeerListCoordinator(context: context)
+        let mutedPeer = PeerID(str: "0011223344556677")
+        let stranger = PeerID(str: "8899aabbccddeeff")
+        context.connectedMeshPeers = [mutedPeer, stranger]
+        context.suppressedNearbyPeerIDs = [mutedPeer]
+
+        // Only the muted (own) device is nearby: stay quiet.
+        coordinator.didUpdatePeerList([mutedPeer])
+        await drainMainActorTasks()
+        #expect(context.networkAvailableNotifications.isEmpty)
+
+        // A stranger joining after muted-only mesh still alerts.
+        coordinator.didUpdatePeerList([mutedPeer, stranger])
+        await drainMainActorTasks()
+        #expect(context.networkAvailableNotifications == [1])
+    }
+
+    @Test @MainActor
+    func didUpdatePeerList_mutedOnlyMeshResetsEmptyGateForNextStranger() async {
+        let context = MockChatPeerListContext()
+        let coordinator = ChatPeerListCoordinator(context: context, notificationCooldownSeconds: 0)
+        let mutedPeer = PeerID(str: "0011223344556677")
+        let stranger = PeerID(str: "8899aabbccddeeff")
+        context.connectedMeshPeers = [mutedPeer, stranger]
+        context.suppressedNearbyPeerIDs = [mutedPeer]
+
+        // First stranger alerts and marks the mesh populated.
+        coordinator.didUpdatePeerList([mutedPeer, stranger])
+        await drainMainActorTasks()
+        #expect(context.networkAvailableNotifications == [1])
+
+        // Stranger leaves; only the muted peer remains. Reset-path count
+        // must treat that as empty (activeMeshPeerCount excludes muted).
+        context.connectedMeshPeers = [mutedPeer]
+        context.activeMeshPeerCountValue = 0
+        coordinator.didUpdatePeerList([mutedPeer])
+        await drainMainActorTasks()
+        coordinator.handleNetworkEmptyTimerFired()
+
+        // A later stranger must alert again — the muted peer must not pin
+        // meshWasEmpty to false forever.
+        context.connectedMeshPeers = [mutedPeer, stranger]
+        context.activeMeshPeerCountValue = 1
+        coordinator.didUpdatePeerList([mutedPeer, stranger])
+        await drainMainActorTasks()
+        #expect(context.networkAvailableNotifications == [1, 1])
+    }
+
+    @Test @MainActor
+    func mutingLastCountablePeerConfirmsEmptyMeshWithoutPeerListUpdate() async throws {
+        let context = MockChatPeerListContext()
+        let coordinator = ChatPeerListCoordinator(
+            context: context,
+            notificationCooldownSeconds: 0,
+            networkEmptyConfirmationSeconds: 0.01
+        )
+        let firstPeer = PeerID(str: "0011223344556677")
+        let nextPeer = PeerID(str: "8899aabbccddeeff")
+        context.connectedMeshPeers = [firstPeer]
+        context.activeMeshPeerCountValue = 1
+        coordinator.didUpdatePeerListSynchronously([firstPeer])
+        #expect(context.networkAvailableNotifications == [1])
+
+        context.suppressedNearbyPeerIDs = [firstPeer]
+        context.activeMeshPeerCountValue = 0
+        coordinator.nearbyNotificationMuteDidChange()
+        // One count checks the changed preference and one confirms the timer fired.
+        for _ in 0..<100 {
+            if context.activeMeshPeerCountReads >= 2 { break }
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        try #require(context.activeMeshPeerCountReads >= 2)
+
+        context.connectedMeshPeers.insert(nextPeer)
+        context.activeMeshPeerCountValue = 1
+        coordinator.didUpdatePeerListSynchronously([firstPeer, nextPeer])
+        #expect(context.networkAvailableNotifications == [1, 1])
     }
 }
