@@ -2759,6 +2759,11 @@ final class BLEService: NSObject {
                     completion: completion,
                     finalization: finalization
                 )
+            },
+            reportPrivateMediaDecodeFailure: { [weak self] reason, peerID in
+                self?.emitTransportEvent(
+                    .privateMediaDecodeFailed(peerID: peerID, reason: reason)
+                )
             }
         )
     }

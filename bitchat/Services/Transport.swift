@@ -80,6 +80,8 @@ enum TransportEvent: @unchecked Sendable {
     case peerListUpdated([PeerID])
     case messageDeliveryStatusUpdated(messageID: String, status: DeliveryStatus)
     case bluetoothStateUpdated(CBManagerState)
+    /// Authenticated private media failed local validation on this device.
+    case privateMediaDecodeFailed(peerID: PeerID, reason: PrivateMediaDecodeFailureReason)
 }
 
 /// Downgrade-safe decision for a private-media recipient. Callers ask before

@@ -2194,6 +2194,24 @@ struct ChatViewModelPanicTests {
     }
 
     @Test @MainActor
+    func panicClearAllData_forgetsPrivateMediaDecodeFailures() {
+        let (viewModel, _) = makeTestableViewModel()
+        let peerID = PeerID(str: "abcd1234abcd1234")
+
+        viewModel.didFailPrivateMediaDecode(from: peerID, reason: .malformedPayload)
+        viewModel.didFailPrivateMediaDecode(from: peerID, reason: .malformedPayload)
+        #expect(viewModel.privateChats[peerID]?.count == 1)
+
+        #expect(viewModel.panicClearAllData())
+        #expect((viewModel.privateChats[peerID] ?? []).isEmpty)
+
+        viewModel.didFailPrivateMediaDecode(from: peerID, reason: .malformedPayload)
+        #expect(viewModel.privateChats[peerID]?.map(\.content) == [
+            PrivateMediaDecodeFailureReason.malformedPayload.localizedSystemMessage
+        ])
+    }
+
+    @Test @MainActor
     func panicKeychainFailureKeepsRecoveryPendingAndServicesStopped() {
         let keychain = MockKeychain()
         keychain.simulatedDeleteAllResult = false
