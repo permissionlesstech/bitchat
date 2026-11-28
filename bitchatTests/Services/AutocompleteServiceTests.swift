@@ -35,8 +35,8 @@ struct AutocompleteServiceTests {
         #expect(result.range == nil)
     }
 
-    @Test("Mention token detection is true exactly where suggestions are possible")
-    func hasMentionTokenMatchesSuggestionContext() {
+    @Test("Mention prefix is found exactly where suggestions are possible")
+    func mentionPrefixMatchesSuggestionContext() {
         let service = AutocompleteService()
         let samples: [(text: String, cursor: Int, hasToken: Bool)] = [
             ("", 0, false),
@@ -54,7 +54,7 @@ struct AutocompleteServiceTests {
 
         for sample in samples {
             #expect(
-                AutocompleteService.hasMentionToken(in: sample.text, cursorPosition: sample.cursor) == sample.hasToken,
+                (AutocompleteService.mentionPrefix(in: sample.text, cursorPosition: sample.cursor) != nil) == sample.hasToken,
                 "\(sample.text) @ \(sample.cursor)"
             )
             // A peer named after the token's own prefix always matches it, so

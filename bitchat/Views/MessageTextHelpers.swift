@@ -28,8 +28,8 @@ extension BitchatMessage {
 }
 
 extension String {
-    /// Zero-allocation check matching `!trimmed.isEmpty`: returns `true` on the
-    /// first non-whitespace, non-newline character.
+    /// Zero-allocation check: returns `true` on the first character that is
+    /// neither whitespace nor a newline.
     var hasNonWhitespaceContent: Bool {
         contains { !$0.isWhitespace && !$0.isNewline }
     }

@@ -220,9 +220,10 @@ private struct MessageListContentView: View {
     /// expansion waits for it.
     @State private var bottomSettledContextKey: String?
     /// Visible height of the scroll viewport, read non-structurally only while
-    /// the empty mesh state needs it to center its radar. Keeping GeometryReader
-    /// out from around ScrollView prevents double top safe-area insets under
-    /// Liquid Glass's `.safeAreaInset` chrome.
+    /// the empty mesh state needs it to center its radar. No GeometryReader
+    /// wraps the ScrollView, so the chrome insets reach it once: overlays plus
+    /// `.contentMargins` on iOS 17+/macOS 14+, one `.safeAreaInset` level on
+    /// older versions (see `ContentView.mainContent`).
     @State private var emptyStateViewportHeight: CGFloat = 0
     @State private var quoteHighlightMessageID: String?
     @State private var quoteHighlightTask: Task<Void, Never>?
