@@ -47,7 +47,6 @@ private struct TimelineSignature: Equatable {
 struct PublicMessageListView: View {
     @EnvironmentObject private var publicChatModel: PublicChatModel
     @EnvironmentObject private var locationChannelsModel: LocationChannelsModel
-    @EnvironmentObject private var appChromeModel: AppChromeModel
 
     @Binding var isAtBottom: Bool
     @Binding var selectedMessageSender: String?
