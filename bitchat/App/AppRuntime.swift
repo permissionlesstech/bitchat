@@ -63,6 +63,9 @@ final class AppRuntime: ObservableObject {
         idBridge: NostrIdentityBridge = .shared,
         sharedContentStore: SharedContentStore? = nil
     ) {
+        if !TestEnvironment.isRunningTests {
+            PrivacyModeSettings.migrateLegacyInstallIfNeeded()
+        }
         self.idBridge = idBridge
         let conversations = ConversationStore()
         let peerIdentityStore = PeerIdentityStore()

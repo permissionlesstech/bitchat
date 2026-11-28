@@ -2011,7 +2011,7 @@ final class ChatViewModel: ObservableObject, SynchronousMessageTransportEventDel
         historyPersistTask?.cancel()
         historyPersistTask = nil
         encryptedHistoryStore.wipe()
-        PrivacyModeSettings.reset()
+        PrivacyModeSettings.resetForPanic(in: userDefaults)
         CourierStore.shared.wipe()
         BridgeCourierService.shared.wipe()
         BridgeService.shared.resetForPanic()

@@ -56,6 +56,10 @@ struct BitchatApp: App {
     #endif
 
     init() {
+        // Must run before AppRuntime/KeychainManager/ChatViewModel write any
+        // first-launch defaults or initialize networking, so 1.x upgrades keep
+        // their existing Tor and RAM-only posture until the user chooses a mode.
+        PrivacyModeSettings.migrateLegacyInstallIfNeeded()
         _runtime = StateObject(wrappedValue: AppRuntime())
         UNUserNotificationCenter.current().delegate = NotificationDelegate.shared
     }

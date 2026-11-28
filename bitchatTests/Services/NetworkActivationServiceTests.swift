@@ -35,6 +35,24 @@ final class NetworkActivationServiceTests: XCTestCase {
         XCTAssertEqual(context.relayController.connectCallCount, 1)
     }
 
+    func test_start_afterLegacy1xUpgradeMigration_keepsTorFailClosedOnFirstConnection() {
+        let context = makeService(permission: .authorized, favorites: [], torEnabled: nil)
+        // Simulate a 1.x install that relied on the default Tor-on behavior.
+        context.storage.set("legacy-user", forKey: "bitchat.nickname")
+        context.storage.set(true, forKey: "keychain.installLifecycleMarker.present")
+
+        PrivacyModeSettings.migrateLegacyInstallIfNeeded(in: context.storage)
+        context.service.start()
+
+        XCTAssertTrue(context.service.activationAllowed)
+        XCTAssertTrue(context.service.userTorEnabled)
+        XCTAssertEqual(context.torController.autoStartAllowedValues, [true])
+        XCTAssertEqual(context.proxyController.proxyModes, [true])
+        XCTAssertFalse(context.proxyController.proxyModes.contains(false))
+        XCTAssertEqual(context.torController.startIfNeededCallCount, 1)
+        XCTAssertEqual(context.relayController.connectCallCount, 1)
+    }
+
     func test_start_enablesTorAndRelaysWhenAuthorized() {
         let context = makeService(permission: .authorized, favorites: [], torEnabled: true)
 

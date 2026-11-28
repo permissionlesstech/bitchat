@@ -614,6 +614,24 @@ struct ContentView: View {
             appEnvironmentModels?.composerDraftModel.cancelAutocompleteDebounce()
             appChromeModel.setPanicPreparation(nil)
         }
+        // Hosted at the root so Stealth Mode triple-tap panic wipe works from
+        // every root tab (Chats, Nearby, Places, Settings).
+        .confirmationDialog(
+            Text(
+                String(localized: "app_info.settings.danger.panic_confirm_title", defaultValue: "wipe all data?", comment: "Title of the confirmation dialog before a panic wipe")
+            ),
+            isPresented: $appChromeModel.showPanicConfirmation,
+            titleVisibility: .visible
+        ) {
+            Button(role: .destructive) {
+                appChromeModel.panicClearAllData()
+            } label: {
+                Text(
+                    String(localized: "app_info.settings.danger.panic_confirm_action", defaultValue: "wipe everything", comment: "Destructive confirmation button that performs the panic wipe")
+                )
+            }
+            Button("common.cancel", role: .cancel) {}
+        }
     }
 
     private var unreadChatsCount: Int {
@@ -710,7 +728,8 @@ struct ContentView: View {
                     onCommitNickname: { appChromeModel.validateAndSaveNickname() },
                     isEmbeddedInTab: true,
                     navItems: rootNavItems,
-                    onSelectTab: selectRootTab
+                    onSelectTab: selectRootTab,
+                    onTripleTapPanic: { appChromeModel.requestPanicWipe() }
                 )
             }
         }
@@ -869,24 +888,6 @@ struct ContentView: View {
             ) {
                 ConnectivityStatusBanner(issue: issue)
             }
-        }
-        // Hosted here rather than on the logo Text so the pending dialog
-        // survives whatever happens to the header chrome.
-        .confirmationDialog(
-            Text(
-                String(localized: "app_info.settings.danger.panic_confirm_title", defaultValue: "wipe all data?", comment: "Title of the confirmation dialog before a panic wipe")
-            ),
-            isPresented: $appChromeModel.showPanicConfirmation,
-            titleVisibility: .visible
-        ) {
-            Button(role: .destructive) {
-                appChromeModel.panicClearAllData()
-            } label: {
-                Text(
-                    String(localized: "app_info.settings.danger.panic_confirm_action", defaultValue: "wipe everything", comment: "Destructive confirmation button that performs the panic wipe")
-                )
-            }
-            Button("common.cancel", role: .cancel) {}
         }
     }
 

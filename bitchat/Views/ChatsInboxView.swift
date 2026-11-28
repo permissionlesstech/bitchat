@@ -124,6 +124,9 @@ struct ChatsInboxView: View {
                 action: onOpenCreateGroup
             )
         }
+        .stealthTripleTapPanicWipe {
+            appChromeModel.requestPanicWipe()
+        }
     }
 
     private var nearbyBanner: some View {

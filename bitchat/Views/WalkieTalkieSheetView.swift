@@ -273,7 +273,7 @@ struct WalkieTalkieSheetView: View {
                                     privateConversationModel.openConversation(for: peer.peerID)
                                 } label: {
                                     HStack {
-                                        Text("@\(peer.displayName)")
+                                        Text(verbatim: "@\(peer.displayName)")
                                         if privateConversationModel.selectedPeerID?.toShort() == peer.peerID.toShort() {
                                             Image(systemName: "checkmark")
                                         }
@@ -296,7 +296,7 @@ struct WalkieTalkieSheetView: View {
                                     privateConversationModel.openConversation(for: group.peerID)
                                 } label: {
                                     HStack {
-                                        Text("#\(group.name)")
+                                        Text(verbatim: "#\(group.name)")
                                         if privateConversationModel.selectedPeerID == group.peerID {
                                             Image(systemName: "checkmark")
                                         }

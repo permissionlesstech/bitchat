@@ -147,6 +147,21 @@ struct AppTopBar<Leading: View, Trailing: View>: View {
     }
 }
 
+extension View {
+    /// Arms the Stealth Mode emergency triple-tap panic wipe on root top bars.
+    /// Uses `simultaneousGesture` so single-tap navigation menus and buttons keep
+    /// responding immediately while a deliberate triple-tap triggers the dialog.
+    func stealthTripleTapPanicWipe(action: @escaping () -> Void) -> some View {
+        self.simultaneousGesture(
+            TapGesture(count: 3)
+                .onEnded {
+                    guard PrivacyModeSettings.isTripleTapPanicEnabled() else { return }
+                    action()
+                }
+        )
+    }
+}
+
 /// Consistent icon button for `AppTopBar` and sheet toolbars (36×36 visual
 /// box with 44pt effective hit area).
 struct TopBarIconButton: View {

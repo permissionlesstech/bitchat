@@ -47,6 +47,75 @@ final class PrivacyModeSettingsTests: XCTestCase {
         XCTAssertEqual(PrivacyModeSettings.currentMode(in: defaults), .everyday)
         XCTAssertTrue(PrivacyModeSettings.shouldPersistPrivateHistory(in: defaults))
     }
+
+    func test_migrateLegacyInstall_preservesImplicitTorOnAndRamOnlyHistory() {
+        let defaults = makeDefaults()
+        // Simulate a 1.x user who relied on the old Tor-on default (never
+        // toggled userTorEnabled, so key is absent) and has 1.x install state.
+        defaults.set("alice", forKey: "bitchat.nickname")
+        defaults.set(true, forKey: "keychain.installLifecycleMarker.present")
+
+        let migrated = PrivacyModeSettings.migrateLegacyInstallIfNeeded(in: defaults)
+
+        XCTAssertTrue(migrated)
+        XCTAssertTrue(NetworkActivationService.persistedTorPreference(in: defaults))
+        XCTAssertEqual(PrivacyModeSettings.currentMode(in: defaults), .stealth)
+        XCTAssertFalse(PrivacyModeSettings.shouldPersistPrivateHistory(in: defaults))
+        XCTAssertTrue(PrivacyModeSettings.isTripleTapPanicEnabled(in: defaults))
+
+        // Idempotent on subsequent launches; user choice to Everyday is respected.
+        XCTAssertFalse(PrivacyModeSettings.migrateLegacyInstallIfNeeded(in: defaults))
+        PrivacyModeSettings.setMode(.everyday, in: defaults)
+        defaults.set(false, forKey: NetworkActivationService.torPreferenceKey)
+        XCTAssertFalse(PrivacyModeSettings.migrateLegacyInstallIfNeeded(in: defaults))
+        XCTAssertEqual(PrivacyModeSettings.currentMode(in: defaults), .everyday)
+        XCTAssertFalse(NetworkActivationService.persistedTorPreference(in: defaults))
+    }
+
+    func test_migrateLegacyInstall_preservesExplicitTorOffAndRamOnlyHistory() {
+        let defaults = makeDefaults()
+        // Simulate a 1.x user who explicitly disabled Tor before upgrading.
+        defaults.set("bob", forKey: "bitchat.nickname")
+        defaults.set(false, forKey: NetworkActivationService.torPreferenceKey)
+
+        let migrated = PrivacyModeSettings.migrateLegacyInstallIfNeeded(in: defaults)
+
+        XCTAssertTrue(migrated)
+        XCTAssertFalse(NetworkActivationService.persistedTorPreference(in: defaults))
+        XCTAssertEqual(PrivacyModeSettings.currentMode(in: defaults), .everyday)
+        // Still preserves 1.x RAM-only history until the user explicitly opts in.
+        XCTAssertFalse(PrivacyModeSettings.shouldPersistPrivateHistory(in: defaults))
+    }
+
+    func test_migrateLegacyInstall_leavesFresh20InstallInEverydayMode() {
+        let defaults = makeDefaults()
+
+        let migrated = PrivacyModeSettings.migrateLegacyInstallIfNeeded(in: defaults)
+
+        XCTAssertFalse(migrated)
+        XCTAssertEqual(PrivacyModeSettings.currentMode(in: defaults), .everyday)
+        XCTAssertFalse(NetworkActivationService.persistedTorPreference(in: defaults))
+        XCTAssertTrue(PrivacyModeSettings.shouldPersistPrivateHistory(in: defaults))
+        XCTAssertFalse(PrivacyModeSettings.isTripleTapPanicEnabled(in: defaults))
+
+        // Writing 2.0 keys afterwards never retro-triggers 1.x migration.
+        defaults.set("charlie", forKey: "bitchat.nickname")
+        XCTAssertFalse(PrivacyModeSettings.migrateLegacyInstallIfNeeded(in: defaults))
+        XCTAssertFalse(NetworkActivationService.persistedTorPreference(in: defaults))
+    }
+
+    func test_resetForPanic_preservesStealthTorPostureAndTripleTap() {
+        let defaults = makeDefaults()
+        PrivacyModeSettings.setMode(.stealth, in: defaults)
+        defaults.set(true, forKey: NetworkActivationService.torPreferenceKey)
+
+        PrivacyModeSettings.resetForPanic(in: defaults)
+
+        XCTAssertEqual(PrivacyModeSettings.currentMode(in: defaults), .stealth)
+        XCTAssertTrue(NetworkActivationService.persistedTorPreference(in: defaults))
+        XCTAssertFalse(PrivacyModeSettings.shouldPersistPrivateHistory(in: defaults))
+        XCTAssertTrue(PrivacyModeSettings.isTripleTapPanicEnabled(in: defaults))
+    }
 }
 
 @MainActor

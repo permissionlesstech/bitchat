@@ -277,6 +277,9 @@ struct ContentHeaderView: View {
         .sheet(item: $activeSharePayload) { payload in
             ShareActivityView(text: payload.text)
         }
+        .stealthTripleTapPanicWipe {
+            appChromeModel.requestPanicWipe()
+        }
     }
 
     private func requestHeaderShare(forGeohash geohash: String) {

@@ -114,6 +114,9 @@ struct PlacesTabView<RoomContent: View>: View {
         } trailing: {
             EmptyView()
         }
+        .stealthTripleTapPanicWipe {
+            appChromeModel.requestPanicWipe()
+        }
 
         let scrollBody = ScrollView {
             VStack(alignment: .leading, spacing: 20) {

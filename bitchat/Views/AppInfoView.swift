@@ -29,6 +29,7 @@ struct AppInfoView: View {
     var isEmbeddedInTab: Bool = false
     var navItems: [SectionNavItem<AppRootTab>] = []
     var onSelectTab: ((AppRootTab) -> Void)? = nil
+    var onTripleTapPanic: (() -> Void)? = nil
 
     @State private var showTopology = false
     @State private var privacyMode = PrivacyModeSettings.mode
@@ -310,6 +311,9 @@ struct AppInfoView: View {
             .labelsHidden()
             .frame(width: 156)
         }
+        .stealthTripleTapPanicWipe {
+            onTripleTapPanic?()
+        }
 
         let scrollBody = ScrollView {
             paneContent
@@ -334,6 +338,11 @@ struct AppInfoView: View {
                     scrollBody
                 }
             }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: PrivacyModeSettings.didChangeNotification)) { _ in
+            privacyMode = PrivacyModeSettings.mode
+            persistPrivateHistory = PrivacyModeSettings.persistPrivateHistory
+            hideMessagePreviews = NotificationPrivacySettings.hideMessagePreviews
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(ThemedRootBackground())
