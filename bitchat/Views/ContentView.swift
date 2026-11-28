@@ -190,6 +190,7 @@ enum AppRootTab: String, Hashable {
 
 struct ContentView: View {
     @EnvironmentObject private var appChromeModel: AppChromeModel
+    @EnvironmentObject private var publicChatModel: PublicChatModel
     @EnvironmentObject private var privateConversationModel: PrivateConversationModel
     @EnvironmentObject private var privateInboxModel: PrivateInboxModel
     @EnvironmentObject private var locationChannelsModel: LocationChannelsModel
@@ -373,6 +374,7 @@ struct ContentView: View {
                 if OnboardingState.shouldPresent() {
                     showOnboardingSheet = true
                 }
+                syncNearbyViewingState()
             }
             .onChange(of: colorScheme) { newValue in
                 appEnvironmentModels?.conversationUIModel.setCurrentColorScheme(newValue)
@@ -386,6 +388,7 @@ struct ContentView: View {
         .frame(minWidth: 600, minHeight: 400)
         #endif
         .onChange(of: selectedPrivatePeerID) { newValue in
+            syncNearbyViewingState()
             sharedContentImportModel.updateDestination(sharedContentDestination)
             let uiModel = appEnvironmentModels?.conversationUIModel
             appEnvironmentModels?.composerDraftModel.switchDraft(to: ComposerDraftStore.Key.from(
@@ -428,6 +431,7 @@ struct ContentView: View {
             }
         }
         .onChange(of: selectedTab) { newTab in
+            syncNearbyViewingState()
             isPublicSearchPresented = false
             publicSearchQuery = ""
             publicSearchMatchIndex = nil
@@ -651,7 +655,10 @@ struct ContentView: View {
                 tab: .nearby,
                 title: String(localized: "tab.nearby", defaultValue: "Nearby", comment: "Navigation item for Nearby Bluetooth mesh"),
                 systemImage: "antenna.radiowaves.left.and.right",
-                badgeCount: peerListModel.reachableMeshPeerCount
+                badgeCount: publicChatModel.unreadMeshMessageCount > 0
+                    ? publicChatModel.unreadMeshMessageCount
+                    : peerListModel.reachableMeshPeerCount,
+                showsAlertDot: publicChatModel.unreadMeshMessageCount > 0
             ),
             SectionNavItem(
                 tab: .places,
@@ -674,6 +681,11 @@ struct ContentView: View {
         if selectedTab != tab {
             selectedTab = tab
         }
+        syncNearbyViewingState()
+    }
+
+    private func syncNearbyViewingState() {
+        publicChatModel.setViewingNearbyMesh(selectedTab == .nearby && selectedPrivatePeerID == nil)
     }
 
     private var tabRootView: some View {

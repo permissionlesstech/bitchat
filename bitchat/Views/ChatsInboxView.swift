@@ -15,6 +15,7 @@ import SwiftUI
 
 struct ChatsInboxView: View {
     @EnvironmentObject private var appChromeModel: AppChromeModel
+    @EnvironmentObject private var publicChatModel: PublicChatModel
     @EnvironmentObject private var peerListModel: PeerListModel
     @EnvironmentObject private var privateConversationModel: PrivateConversationModel
     @Environment(\.colorScheme) private var colorScheme
@@ -41,7 +42,7 @@ struct ChatsInboxView: View {
             if peerListModel.inboxRows.isEmpty {
                 VStack(spacing: 0) {
                     banners
-                    if peerListModel.reachableMeshPeerCount > 0 {
+                    if peerListModel.reachableMeshPeerCount > 0 || publicChatModel.unreadMeshMessageCount > 0 {
                         nearbyBanner
                     }
                     emptyInboxState
@@ -130,33 +131,75 @@ struct ChatsInboxView: View {
     }
 
     private var nearbyBanner: some View {
-        Button(action: onSwitchToNearby) {
-            HStack(spacing: 8) {
-                Image(systemName: "antenna.radiowaves.left.and.right")
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundColor(palette.accentBlue)
-                Text(
-                    peerListModel.reachableMeshPeerCount == 1
-                        ? String(localized: "chats.nearby_banner.one", defaultValue: "1 person nearby on Bluetooth mesh", comment: "Banner in Chats tab when 1 BLE peer is reachable")
-                        : String(
-                            format: String(localized: "chats.nearby_banner.many", defaultValue: "%lld people nearby on Bluetooth mesh", comment: "Banner in Chats tab when multiple BLE peers are reachable"),
-                            locale: .current,
-                            peerListModel.reachableMeshPeerCount
-                        )
-                )
-                .bitchatFont(size: 13, weight: .medium)
-                .foregroundColor(palette.primary)
-                Spacer()
+        let unreadCount = publicChatModel.unreadMeshMessageCount
+        let hasUnread = unreadCount > 0
+        return Button(action: onSwitchToNearby) {
+            HStack(spacing: 10) {
+                ZStack(alignment: .topTrailing) {
+                    Image(systemName: "antenna.radiowaves.left.and.right")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundColor(palette.accentBlue)
+                    if hasUnread {
+                        Circle()
+                            .fill(palette.alertRed)
+                            .frame(width: 7, height: 7)
+                            .offset(x: 3, y: -2)
+                    }
+                }
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(
+                        hasUnread
+                            ? (unreadCount == 1
+                                ? String(localized: "chats.nearby_banner.unread_one", defaultValue: "New message in Nearby", comment: "Banner headline in Chats tab when 1 unread message arrived in Nearby mesh")
+                                : String(
+                                    format: String(localized: "chats.nearby_banner.unread_many", defaultValue: "%lld new messages in Nearby", comment: "Banner headline in Chats tab when multiple unread messages arrived in Nearby mesh"),
+                                    locale: .current,
+                                    unreadCount
+                                ))
+                            : (peerListModel.reachableMeshPeerCount == 1
+                                ? String(localized: "chats.nearby_banner.one", defaultValue: "1 person nearby on Bluetooth mesh", comment: "Banner in Chats tab when 1 BLE peer is reachable")
+                                : String(
+                                    format: String(localized: "chats.nearby_banner.many", defaultValue: "%lld people nearby on Bluetooth mesh", comment: "Banner in Chats tab when multiple BLE peers are reachable"),
+                                    locale: .current,
+                                    peerListModel.reachableMeshPeerCount
+                                ))
+                    )
+                    .bitchatFont(size: 13, weight: hasUnread ? .semibold : .medium)
+                    .foregroundColor(palette.primary)
+                    .lineLimit(1)
+
+                    if let preview = publicChatModel.latestUnreadMeshPreview, hasUnread {
+                        Text(verbatim: "@\(preview.sender): \(preview.text)")
+                            .bitchatFont(size: 12)
+                            .foregroundColor(palette.secondary)
+                            .lineLimit(1)
+                            .truncationMode(.tail)
+                    }
+                }
+
+                Spacer(minLength: 4)
+
+                if hasUnread {
+                    Text(verbatim: "\(unreadCount)")
+                        .bitchatFont(size: 11, weight: .bold)
+                        .foregroundColor(palette.accentForeground)
+                        .padding(.horizontal, 7)
+                        .padding(.vertical, 2)
+                        .background(palette.accentBlue)
+                        .clipShape(Capsule())
+                }
+
                 Image(systemName: "chevron.right")
                     .font(.system(size: ChromeMetrics.rowChevronSize, weight: .semibold))
                     .foregroundColor(palette.secondary)
             }
             .padding(.horizontal, 14)
             .padding(.vertical, 10)
-            .background(palette.accentBlue.opacity(0.12))
+            .background(palette.accentBlue.opacity(hasUnread ? 0.16 : 0.12))
             .overlay(
                 RoundedRectangle(cornerRadius: palette.cardRadius, style: .continuous)
-                    .stroke(palette.accentBlue.opacity(0.22), lineWidth: 1)
+                    .stroke(palette.accentBlue.opacity(hasUnread ? 0.35 : 0.22), lineWidth: 1)
             )
             .clipShape(RoundedRectangle(cornerRadius: palette.cardRadius, style: .continuous))
             .padding(.horizontal, 14)
@@ -224,7 +267,7 @@ struct ChatsInboxView: View {
                     .listRowBackground(Color.clear)
             }
 
-            if peerListModel.reachableMeshPeerCount > 0 {
+            if peerListModel.reachableMeshPeerCount > 0 || publicChatModel.unreadMeshMessageCount > 0 {
                 nearbyBanner
                     .listRowInsets(EdgeInsets())
                     .listRowSeparator(.hidden)

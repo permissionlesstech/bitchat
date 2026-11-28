@@ -81,7 +81,13 @@ final class AppRuntime: ObservableObject {
             locationPresenceStore: locationPresenceStore,
             locationManager: locationManager
         )
-        self.publicChatModel = PublicChatModel(conversations: conversations)
+        let chatVMForPublicModel = self.chatViewModel
+        self.publicChatModel = PublicChatModel(
+            conversations: conversations,
+            myPeerIDProvider: { [weak chatVMForPublicModel] in
+                chatVMForPublicModel?.meshService.myPeerID
+            }
+        )
         self.privateInboxModel = PrivateInboxModel(conversations: conversations)
         self.locationChannelsModel = LocationChannelsModel(manager: locationManager)
         self.privateConversationModel = PrivateConversationModel(

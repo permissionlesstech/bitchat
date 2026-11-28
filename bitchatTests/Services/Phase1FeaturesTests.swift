@@ -703,4 +703,48 @@ final class InboxPinnedChatsTests: XCTestCase {
         XCTAssertEqual(MessageInteractionCodec.matchingMessageIDs(in: [m1, sys, react, m2], query: "sounds"), ["m2"])
         XCTAssertEqual(MessageInteractionCodec.matchingMessageIDs(in: [m1, sys, react, m2], query: "alice"), ["m1"])
     }
+
+    @MainActor
+    func test_publicChatModelTracksUnreadMeshMessagesAndClearsOnViewing() {
+        let store = ConversationStore()
+        let myID = PeerID(str: "0000111122223333")
+        let aliceID = PeerID(str: "aaaabbbbccccdddd")
+        let model = PublicChatModel(conversations: store, myPeerIDProvider: { myID })
+        model.setViewingNearbyMesh(false)
+
+        // System lines, own messages, and reactions do not bump unread count.
+        store.append(
+            BitchatMessage(id: "sys1", sender: "system", content: "joined", timestamp: Date(), isRelay: false, isPrivate: false),
+            to: .mesh
+        )
+        store.append(
+            BitchatMessage(id: "mine1", sender: "me", content: "hello", timestamp: Date(), isRelay: false, isPrivate: false, senderPeerID: myID),
+            to: .mesh
+        )
+        store.append(
+            BitchatMessage(id: "react1", sender: "alice", content: "[react:mine1:👍]", timestamp: Date(), isRelay: false, isPrivate: false, senderPeerID: aliceID),
+            to: .mesh
+        )
+        XCTAssertEqual(model.unreadMeshMessageCount, 0)
+        XCTAssertNil(model.latestUnreadMeshPreview)
+
+        // Incoming peer message bumps unread count & captures preview.
+        store.append(
+            BitchatMessage(id: "peer1", sender: "alice", content: "Anyone around?", timestamp: Date(), isRelay: false, isPrivate: false, senderPeerID: aliceID),
+            to: .mesh
+        )
+        XCTAssertEqual(model.unreadMeshMessageCount, 1)
+        XCTAssertEqual(model.latestUnreadMeshPreview, PublicChatModel.UnreadMeshPreview(sender: "alice", text: "Anyone around?"))
+
+        // Opening Nearby clears unread state and suppresses new increments while viewing.
+        model.setViewingNearbyMesh(true)
+        XCTAssertEqual(model.unreadMeshMessageCount, 0)
+        XCTAssertNil(model.latestUnreadMeshPreview)
+
+        store.append(
+            BitchatMessage(id: "peer2", sender: "alice", content: "Still here", timestamp: Date(), isRelay: false, isPrivate: false, senderPeerID: aliceID),
+            to: .mesh
+        )
+        XCTAssertEqual(model.unreadMeshMessageCount, 0)
+    }
 }
