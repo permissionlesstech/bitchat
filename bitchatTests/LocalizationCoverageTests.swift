@@ -194,6 +194,124 @@ struct LocalizationCoverageTests {
         }
     }
 
+    /// Since #1928 the app targets no longer compile `Localizable.xcstrings`
+    /// into `.lproj` tables: plain strings ship only inside the compressed
+    /// `Localizations.zlib`, and only this module's `String(localized:)`
+    /// overload reads it. A SwiftUI initializer handed a string literal —
+    /// `Text("…")`, `Label("…", …)`, `TextField("…", …)` — or an explicit
+    /// `LocalizedStringKey("…")` resolves through `Bundle.main`'s default
+    /// table instead, finds none, and renders the raw key in every locale,
+    /// even when the catalog translates it. The catalog tests above can't see
+    /// this, because the key may be present and fully covered.
+    ///
+    /// Pass `String(localized:)` instead (or `Text(verbatim:)` for text that
+    /// is not UI copy). Empty labels, comments, and `#Preview` blocks are
+    /// exempt. The share extension is not checked: it still bundles its own
+    /// catalog as `.lproj` tables, so bare keys resolve there.
+    @Test func noSwiftUILiteralKeysBypassTheCompressedCatalog() throws {
+        let offenders = try Self.swiftUILiteralKeyReferences(in: "bitchat")
+            .filter { !Self.swiftUILiteralKeyAllowlist.contains(Self.allowlistEntry(for: $0)) }
+            .map { "\($0.location) \"\($0.key)\"" }
+
+        #expect(
+            offenders.isEmpty,
+            """
+            SwiftUI literal keys under bitchat/ that skip the compressed catalog and \
+            render untranslated in every locale — use String(localized:), or \
+            Text(verbatim:) for non-UI text:
+            \(offenders.sorted().joined(separator: "\n"))
+            """
+        )
+    }
+
+    /// Known literal keys left for an open PR, as `path key`. #1815 restructures
+    /// VerificationViews.swift and replaces these labels, so converting them
+    /// here would only conflict with it. Entries that no longer match are
+    /// harmless and can be dropped once that lands.
+    private static let swiftUILiteralKeyAllowlist: Set<String> = [
+        "bitchat/Views/VerificationViews.swift show my qr",
+        "bitchat/Views/VerificationViews.swift scan someone else's qr",
+        "bitchat/Views/VerificationViews.swift remove verification"
+    ]
+
+    private static func allowlistEntry(for reference: KeyReference) -> String {
+        "\(reference.location.prefix(while: { $0 != ":" })) \(reference.key)"
+    }
+
+    /// Every non-empty string literal handed to a SwiftUI initializer or
+    /// modifier that treats a literal as a `LocalizedStringKey`, plus explicit
+    /// `LocalizedStringKey("…")`, outside comments and `#Preview` blocks.
+    private static func swiftUILiteralKeyReferences(in sourceRoot: String) throws -> [KeyReference] {
+        let initializers = [
+            "Text", "Label", "Button", "TextField", "SecureField", "Toggle", "Section",
+            "Picker", "Menu", "Link", "LabeledContent", "ProgressView", "Stepper",
+            "DatePicker", "ShareLink", "ContentUnavailableView", "LocalizedStringKey",
+            "navigationTitle", "help", "accessibilityLabel", "accessibilityHint",
+            "accessibilityValue", "alert", "confirmationDialog"
+        ].joined(separator: "|")
+        let pattern = try NSRegularExpression(
+            pattern: #"(?<![\w])\.?(?:"# + initializers + #")\(\s*"((?:[^"\\]|\\.)*)""#
+        )
+        let rootURL = repoRoot.appendingPathComponent(sourceRoot)
+        let enumerator = try #require(FileManager.default.enumerator(
+            at: rootURL,
+            includingPropertiesForKeys: nil
+        ))
+
+        var references: [KeyReference] = []
+        for case let fileURL as URL in enumerator where fileURL.pathExtension == "swift" {
+            let source = Self.blankingCommentsAndPreviews(
+                in: try String(contentsOf: fileURL, encoding: .utf8)
+            )
+            let relativePath = fileURL.path.replacingOccurrences(
+                of: repoRoot.path + "/", with: ""
+            )
+            let range = NSRange(source.startIndex..., in: source)
+            pattern.enumerateMatches(in: source, range: range) { match, _, _ in
+                guard let match,
+                      let keyRange = Range(match.range(at: 1), in: source),
+                      let matchStart = Range(match.range, in: source)?.lowerBound,
+                      !source[keyRange].isEmpty
+                else { return }
+                let line = source[source.startIndex..<matchStart].count(where: { $0 == "\n" }) + 1
+                references.append(KeyReference(
+                    key: String(source[keyRange]),
+                    location: "\(relativePath):\(line)"
+                ))
+            }
+        }
+        return references
+    }
+
+    /// Blanks out whole-line `//` comments and `#Preview { … }` bodies while
+    /// keeping every newline, so reported line numbers still match the file.
+    private static func blankingCommentsAndPreviews(in source: String) -> String {
+        var lines = source.components(separatedBy: "\n").map { line -> String in
+            line.trimmingCharacters(in: .whitespaces).hasPrefix("//") ? "" : line
+        }
+        var index = 0
+        while index < lines.count {
+            guard lines[index].trimmingCharacters(in: .whitespaces).hasPrefix("#Preview") else {
+                index += 1
+                continue
+            }
+            // Brace counting ignores braces inside string literals, which
+            // preview bodies here don't contain; it only has to find the end.
+            var depth = 0
+            var opened = false
+            while index < lines.count {
+                for character in lines[index] {
+                    if character == "{" { depth += 1; opened = true }
+                    if character == "}" { depth -= 1 }
+                }
+                lines[index] = ""
+                index += 1
+                if opened && depth <= 0 { break }
+            }
+        }
+        return lines.joined(separator: "\n")
+    }
+
     /// The files under `bitchat/` that the share-extension target compiles, read
     /// from the project's membership exceptions so this cannot drift when the
     /// set changes.

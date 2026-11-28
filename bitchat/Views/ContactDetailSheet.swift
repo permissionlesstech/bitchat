@@ -559,7 +559,9 @@ struct ContactDetailSheet: View {
                                 verificationModel.verifyFingerprint(for: peerID)
                             }
                         } label: {
-                            Text(fpState.isVerified ? LocalizedStringKey("fingerprint.action.remove_verification") : LocalizedStringKey("fingerprint.action.mark_verified"))
+                            Text(fpState.isVerified
+                                ? String(localized: "fingerprint.action.remove_verification", defaultValue: "Remove verification", comment: "Contact sheet button that removes a peer's verified status")
+                                : String(localized: "fingerprint.action.mark_verified", defaultValue: "Mark as verified", comment: "Contact sheet button that marks a peer as verified"))
                                 .bitchatFont(size: 13, weight: .semibold)
                                 .foregroundColor(.white)
                                 .frame(maxWidth: .infinity)

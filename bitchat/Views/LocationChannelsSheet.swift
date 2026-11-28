@@ -413,7 +413,10 @@ struct LocationChannelsSheet: View {
                 Text(verbatim: "#")
                     .bitchatFont(size: 14)
                     .foregroundColor(palette.secondary)
-                TextField("geohash", text: $customGeohash)
+                TextField(
+                    String(localized: "location_channels.custom_geohash_placeholder", defaultValue: "geohash", comment: "Placeholder in the field where a user types a geohash to join"),
+                    text: $customGeohash
+                )
                     #if os(iOS)
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled(true)
