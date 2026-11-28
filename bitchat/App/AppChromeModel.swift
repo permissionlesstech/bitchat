@@ -70,10 +70,6 @@ final class AppChromeModel: ObservableObject {
         }
     }
 
-    func openMostRelevantPrivateChat() {
-        chatViewModel.openMostRelevantPrivateChat()
-    }
-
     func showFingerprint(for peerID: PeerID) {
         showingFingerprintFor = peerID
     }
@@ -128,10 +124,6 @@ final class AppChromeModel: ObservableObject {
         chatViewModel.clearPersistedPrivateHistory()
     }
 
-    func flushPersistedPrivateHistory() {
-        chatViewModel.flushPersistedPrivateHistorySynchronously()
-    }
-
     func buildMyFriendInvite() -> FriendInvite? {
         chatViewModel.buildMyFriendInvite()
     }
@@ -141,10 +133,6 @@ final class AppChromeModel: ObservableObject {
             return .failure(.invalidLink)
         }
         return chatViewModel.acceptFriendInvite(invite)
-    }
-
-    func acceptFriendInvite(_ invite: FriendInvite) -> Result<PeerID, FriendInviteError> {
-        chatViewModel.acceptFriendInvite(invite)
     }
 
     func setPanicPreparation(_ preparation: (@MainActor () -> Void)?) {

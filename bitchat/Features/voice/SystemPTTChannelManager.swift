@@ -23,6 +23,7 @@ import PushToTalk
 #endif
 #endif
 
+#if os(iOS)
 /// Describes a bitchat walkie-talkie channel pinned to iOS system Push-to-Talk.
 struct SystemPTTChannelInfo: Equatable, Sendable {
     let channelKey: String
@@ -48,11 +49,13 @@ struct SystemPTTChannelInfo: Equatable, Sendable {
         return UUID(uuid: tuple)
     }
 }
+#endif
 
 @MainActor
 final class SystemPTTChannelManager: ObservableObject {
     static let shared = SystemPTTChannelManager()
 
+    #if os(iOS)
     enum Status: Equatable {
         case idle
         case connecting
@@ -85,6 +88,7 @@ final class SystemPTTChannelManager: ObservableObject {
     }
 
     private let channelNameCache = ChannelNameCache()
+    #endif
 
     #if os(iOS) && canImport(PushToTalk)
     private var channelManager: PTChannelManager?
@@ -93,6 +97,7 @@ final class SystemPTTChannelManager: ObservableObject {
 
     private init() {}
 
+    #if os(iOS)
     var isActive: Bool {
         if case .active = status { return true }
         return false
@@ -107,7 +112,7 @@ final class SystemPTTChannelManager: ObservableObject {
             return
         }
 
-        #if os(iOS) && canImport(PushToTalk)
+        #if canImport(PushToTalk)
         cacheChannelName(info.displayName, for: info.channelUUID)
         status = .connecting
         Task { @MainActor [weak self] in
@@ -145,6 +150,7 @@ final class SystemPTTChannelManager: ObservableObject {
         )
         #endif
     }
+    #endif
 
     /// Leaves the active iOS system Push-to-Talk channel (also called on panic wipe).
     func leaveCurrentChannel() {
@@ -156,7 +162,7 @@ final class SystemPTTChannelManager: ObservableObject {
         if let manager = channelManager, let uuid = previousUUID {
             manager.leaveChannel(channelUUID: uuid)
         }
-        #else
+        #elseif os(iOS)
         activeChannel = nil
         isSystemTransmitting = false
         status = .idle
@@ -179,9 +185,12 @@ final class SystemPTTChannelManager: ObservableObject {
                 SecureLogger.debug("PTT: failed updating remote speaker on system banner: \(error.localizedDescription)", category: .session)
             }
         }
+        #else
+        _ = nickname
         #endif
     }
 
+    #if os(iOS)
     nonisolated func cachedChannelName(for uuid: UUID) -> String {
         channelNameCache.name(for: uuid)
     }
@@ -189,6 +198,7 @@ final class SystemPTTChannelManager: ObservableObject {
     private func cacheChannelName(_ name: String, for uuid: UUID) {
         channelNameCache.set(name, for: uuid)
     }
+    #endif
 
     #if os(iOS) && canImport(PushToTalk)
     private func ensureChannelManager() async throws -> PTChannelManager {

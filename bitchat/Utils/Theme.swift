@@ -129,22 +129,6 @@ struct ThemePalette {
             buttonRadius: 12
         )
     }
-
-    private static var systemBackground: Color {
-        #if os(iOS)
-        Color(UIColor.systemBackground)
-        #else
-        Color(NSColor.windowBackgroundColor)
-        #endif
-    }
-
-    private static var separator: Color {
-        #if os(iOS)
-        Color(UIColor.separator)
-        #else
-        Color(NSColor.separatorColor)
-        #endif
-    }
 }
 
 private struct AppThemeKey: EnvironmentKey {

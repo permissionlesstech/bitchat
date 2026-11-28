@@ -416,7 +416,6 @@ private struct ContentPrivateChatSheetView: View {
     var isTextFieldFocused: FocusState<Bool>.Binding
     @ObservedObject var voiceRecordingVM: VoiceRecordingViewModel
     @Binding var showWalkieTalkieSheet: Bool
-    @Environment(\.appTheme) private var theme
     @ThemedPalette private var palette
     @State private var showGroupInfoSheet = false
     @State private var isSearchPresented = false

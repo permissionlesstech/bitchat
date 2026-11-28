@@ -35,7 +35,7 @@ protocol VoiceCaptureSession: AnyObject {
 extension VoiceCaptureSession {
     var onAudioLevel: (@Sendable (Float) -> Void)? {
         get { nil }
-        set {}
+        set { _ = newValue }
     }
 }
 

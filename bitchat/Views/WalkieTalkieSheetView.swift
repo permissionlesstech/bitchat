@@ -23,7 +23,9 @@ struct WalkieTalkieSheetView: View {
     @EnvironmentObject private var peerListModel: PeerListModel
     @ObservedObject var voiceRecordingVM: VoiceRecordingViewModel
     @ObservedObject private var pttPreferences = PTTPreferences.shared
+    #if os(iOS)
     @ObservedObject private var systemPTT = SystemPTTChannelManager.shared
+    #endif
     @Environment(\.dismiss) private var dismiss
     @ThemedPalette private var palette
 
@@ -43,12 +45,14 @@ struct WalkieTalkieSheetView: View {
         return .publicMesh
     }
 
+    #if os(iOS)
     private var currentChannelKey: String {
         if let peerID = privateConversationModel.selectedPeerID {
             return privateConversationModel.autoListenPolicyKey(for: peerID)
         }
         return "mesh.public"
     }
+    #endif
 
     private var availability: ChatViewModel.LiveVoiceAvailability {
         conversationUIModel.currentLiveVoiceAvailability()

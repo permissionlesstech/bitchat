@@ -361,18 +361,6 @@ final class EncryptedHistoryStore: ObservableObject {
         persistSnapshot(snapshot, synchronous: synchronous)
     }
 
-    /// Persists an explicit snapshot (used by tests and direct callers).
-    func saveSnapshot(_ snapshot: Snapshot, now: Date = Date(), synchronous: Bool = false) {
-        guard persistenceEnabledProvider() else {
-            clearDiskFileOnly()
-            return
-        }
-        guard !loadUnavailable else { return }
-        let sanitized = Self.prunedSnapshot(snapshot, now: now)
-        applyLoadedTimers(sanitized.timersByPeerID)
-        persistSnapshot(sanitized, synchronous: synchronous)
-    }
-
     /// Removes persisted history from disk while leaving the encryption key
     /// untouched (e.g., when switching to Stealth Mode).
     func clearPersistedHistory() {

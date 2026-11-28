@@ -255,6 +255,7 @@ private extension ContentComposerView {
                     .lineLimit(1)
                     .truncationMode(.tail)
             }
+            .accessibilityIdentifier("reply-banner-\(target.messageID)")
 
             Spacer(minLength: 4)
 

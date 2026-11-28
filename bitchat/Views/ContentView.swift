@@ -213,14 +213,11 @@ struct ContentView: View {
     @State private var showSidebar = false
     @State private var selectedMessageSender: String?
     @State private var selectedMessageSenderID: PeerID?
-    @FocusState private var isNicknameFieldFocused: Bool
     @State private var isAtBottomPublic = true
     @State private var isAtBottomPrivate = true
     @State private var imagePreviewURL: URL?
     @State private var mediaPickerMode: MediaPickerMode?
     @ScaledMetric(relativeTo: .body) private var headerHeight: CGFloat = 44
-    @ScaledMetric(relativeTo: .subheadline) private var headerPeerIconSize: CGFloat = 11
-    @ScaledMetric(relativeTo: .subheadline) private var headerPeerCountFontSize: CGFloat = 12
     @State private var windowCountPublic: Int = TransportConfig.uiWindowInitialCountPublic
     @State private var windowCountPrivate: [PeerID: Int] = [:]
     @State private var topChromeHeight: CGFloat = ChromeMetrics.barHeight + 4
@@ -342,6 +339,7 @@ struct ContentView: View {
                 voiceRecordingVM.sessionProvider = { [weak uiModel] in
                     uiModel?.makeVoiceCaptureSession() ?? VoiceNoteCaptureSession()
                 }
+                #if os(iOS)
                 SystemPTTChannelManager.shared.onSystemTransmitBegan = { [weak voiceRecordingVM, weak uiModel] target in
                     guard let voiceRecordingVM, let uiModel else { return }
                     voiceRecordingVM.start(shouldShow: uiModel.canSendVoiceInCurrentContext, target: target)
@@ -350,6 +348,7 @@ struct ContentView: View {
                     guard let voiceRecordingVM, let uiModel else { return }
                     voiceRecordingVM.finish(completion: uiModel.sendVoiceNote(at:target:))
                 }
+                #endif
                 appChromeModel.setPanicPreparation { [weak voiceRecordingVM, weak draftModel] in
                     SystemPTTChannelManager.shared.leaveCurrentChannel()
                     voiceRecordingVM?.panicWipe()
@@ -360,7 +359,6 @@ struct ContentView: View {
                 }
                 #if os(macOS)
                 DispatchQueue.main.async {
-                    isNicknameFieldFocused = false
                     isTextFieldFocused = true
                 }
                 #endif
@@ -824,10 +822,6 @@ struct ContentView: View {
         return VStack(spacing: 0) {
             ContentHeaderView(
                 showSidebar: $showSidebar,
-                isNicknameFieldFocused: $isNicknameFieldFocused,
-                headerHeight: headerHeight,
-                headerPeerIconSize: headerPeerIconSize,
-                headerPeerCountFontSize: headerPeerCountFontSize,
                 navItems: rootNavItems,
                 onSelectTab: selectRootTab,
                 onBack: onBack,

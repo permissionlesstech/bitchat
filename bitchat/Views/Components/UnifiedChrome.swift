@@ -107,7 +107,6 @@ enum AppTopBarStyle {
 /// Unified top navigation bar used across root tabs, active Place rooms, and
 /// DM/group sheets.
 struct AppTopBar<Leading: View, Trailing: View>: View {
-    @ThemedPalette private var palette
     @ScaledMetric(relativeTo: .body) private var barHeight: CGFloat = ChromeMetrics.barHeight
 
     let style: AppTopBarStyle

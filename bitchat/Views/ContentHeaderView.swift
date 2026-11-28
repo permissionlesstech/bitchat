@@ -19,15 +19,10 @@ struct ContentHeaderView: View {
     @EnvironmentObject private var conversationUIModel: ConversationUIModel
     @ObservedObject private var bridgeService = BridgeService.shared
     @ObservedObject private var pttPreferences = PTTPreferences.shared
-    @Environment(\.appTheme) private var theme
     @ThemedPalette private var palette
 
     @Binding var showSidebar: Bool
-    var isNicknameFieldFocused: FocusState<Bool>.Binding
 
-    let headerHeight: CGFloat
-    let headerPeerIconSize: CGFloat
-    let headerPeerCountFontSize: CGFloat
     var navItems: [SectionNavItem<AppRootTab>] = []
     var onSelectTab: ((AppRootTab) -> Void)? = nil
     var onBack: (() -> Void)? = nil
@@ -301,13 +296,6 @@ private extension ContentHeaderView {
             return .geo
         }
         return .mesh
-    }
-
-    var noticesGeoScope: String? {
-        if case .location(let channel) = locationChannelsModel.selectedChannel {
-            return channel.geohash
-        }
-        return locationChannelsModel.currentBuildingGeohash
     }
 
     var scopeHasNotices: Bool {

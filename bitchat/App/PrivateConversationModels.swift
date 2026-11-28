@@ -190,10 +190,6 @@ final class PrivateConversationModel: ObservableObject {
         objectWillChange.send()
     }
 
-    func clearPersistedHistory() {
-        chatViewModel.clearPersistedPrivateHistory()
-    }
-
     // MARK: - Group Management
 
     func group(for peerID: PeerID) -> BitchatGroup? {

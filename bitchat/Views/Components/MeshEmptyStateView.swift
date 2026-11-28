@@ -16,8 +16,6 @@ struct MeshEmptyStateView: View {
     /// Ambient-footer mode, appended below archived echoes: skips the
     /// intro/help narration (the timeline isn't empty), keeping live hints visible.
     var compact: Bool = false
-    /// Preserved for call-site compatibility.
-    var bluetoothAvailable: Bool = true
 
     @EnvironmentObject private var locationChannelsModel: LocationChannelsModel
     @ObservedObject private var activityTracker = GeohashChatActivityTracker.shared

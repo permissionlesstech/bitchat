@@ -67,7 +67,7 @@ struct FingerprintView: View {
 
         VStack(spacing: 0) {
             ThemedSheetHeader(
-                title: String(localized: "fingerprint.title", defaultValue: "Security Verification", comment: "Title for fingerprint verification sheet"),
+                title: Strings.title,
                 onClose: { dismiss() }
             )
 

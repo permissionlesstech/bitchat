@@ -71,7 +71,6 @@ struct PublicMessageListView: View {
             messages: publicChatModel.messages,
             contextKey: publicChatModel.activeChannel.contextKey,
             selectedPublicChannel: locationChannelsModel.selectedChannel,
-            bluetoothCanScan: bluetoothCanScan,
             topContentInset: topContentInset,
             bottomContentInset: bottomContentInset,
             highlightedMessageID: highlightedMessageID,
@@ -90,15 +89,6 @@ struct PublicMessageListView: View {
         .onAppear { updateNotesCounterHold() }
         .onDisappear { releaseNotesCounterHold() }
         .onChange(of: locationChannelsModel.selectedChannel) { _ in updateNotesCounterHold() }
-    }
-
-    /// Whether the radio could be scanning at all — the empty-state radar
-    /// must not sweep over a switched-off or denied radio.
-    private var bluetoothCanScan: Bool {
-        switch appChromeModel.bluetoothState {
-        case .poweredOff, .unauthorized, .unsupported: return false
-        default: return true
-        }
     }
 
     /// The nearby-notes counter is held whenever the mesh public timeline is
@@ -120,51 +110,6 @@ struct PublicMessageListView: View {
         guard holdsNotesCounter else { return }
         holdsNotesCounter = false
         NearbyNotesCounter.shared.deactivate()
-    }
-}
-
-/// Tappable strip beneath the header while notes are pinned at this place
-/// on the mesh channel: opens the notices sheet on the geo tab. Hosted
-/// inside `ContentView.headerView` rather than a nested `.safeAreaInset`
-/// so the header chrome contributes a single measured top inset.
-struct NearbyNotesStripView: View {
-    @EnvironmentObject private var locationChannelsModel: LocationChannelsModel
-    @EnvironmentObject private var appChromeModel: AppChromeModel
-    @ObservedObject private var nearbyNotes = NearbyNotesCounter.shared
-    @Environment(\.appTheme) private var theme
-    @ThemedPalette private var palette
-
-    var body: some View {
-        if case .mesh = locationChannelsModel.selectedChannel,
-           nearbyNotes.noteCount > 0 {
-            let text: String = nearbyNotes.noteCount == 1
-                ? String(localized: "content.empty.notes_one", comment: "Hint when exactly one note was left at this place")
-                : String(
-                    format: String(localized: "content.empty.notes_many", comment: "Hint counting notes left at this place"),
-                    locale: .current,
-                    nearbyNotes.noteCount
-                )
-
-            Button {
-                appChromeModel.presentNotices(geoTab: true)
-            } label: {
-                HStack(spacing: 6) {
-                    Text(verbatim: "📍 \(text)")
-                        .bitchatFont(size: 12)
-                        .foregroundColor(palette.primary)
-                    Spacer()
-                    Image(systemName: "chevron.right")
-                        .font(.bitchatSystem(size: 10))
-                        .foregroundColor(palette.secondary)
-                }
-                .padding(.horizontal, 12)
-                .padding(.vertical, 7)
-                .background(palette.secondary.opacity(0.08))
-                .background(theme.usesGlassChrome ? AnyShapeStyle(.ultraThinMaterial) : AnyShapeStyle(palette.background))
-                .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-        }
     }
 }
 
@@ -191,7 +136,6 @@ struct PrivateMessageListView: View {
             messages: privateInboxModel.messages(for: privatePeer),
             contextKey: Self.contextKey(for: privatePeer),
             selectedPublicChannel: nil,
-            bluetoothCanScan: false,
             topContentInset: 0,
             bottomContentInset: 0,
             highlightedMessageID: highlightedMessageID,
@@ -236,7 +180,6 @@ private struct MessageListContentView: View {
     let messages: [BitchatMessage]
     let contextKey: String
     let selectedPublicChannel: ChannelID?
-    let bluetoothCanScan: Bool
     let topContentInset: CGFloat
     let bottomContentInset: CGFloat
     let highlightedMessageID: String?
@@ -413,7 +356,7 @@ private struct MessageListContentView: View {
                         // sightings, live hints) stays visible below it instead of
                         // vanishing the moment echoes exist.
                         if privatePeer == nil, showsAmbientFooter(messageItems: messageItems) {
-                            MeshEmptyStateView(compact: true, bluetoothAvailable: bluetoothCanScan)
+                            MeshEmptyStateView(compact: true)
                                 .padding(.horizontal, 12)
                                 .padding(.top, 20)
                                 .padding(.bottom, 8)
@@ -628,8 +571,7 @@ private extension MessageListContentView {
             switch selectedPublicChannel {
             case .mesh, .none:
                 MeshEmptyStateView(
-                    fillHeight: max(0, fillHeight - 24),
-                    bluetoothAvailable: bluetoothCanScan
+                    fillHeight: max(0, fillHeight - 24)
                 )
             case .location(let channel):
                 emptyStateLine(

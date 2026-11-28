@@ -64,14 +64,6 @@ final class MeshSightingsTracker: ObservableObject {
         }
     }
 
-    /// Re-evaluates the day boundary for the UI. `recordSightings` handles
-    /// rollover when peers are seen, but an idle app open across midnight
-    /// would otherwise keep showing yesterday's tally until the next sighting;
-    /// the empty-state view calls this on its periodic refresh tick.
-    func refreshForDisplay() {
-        rollOverIfNeeded(at: now())
-    }
-
     func clear() {
         seenHashes.removeAll()
         seenPeerIDsToday.removeAll()

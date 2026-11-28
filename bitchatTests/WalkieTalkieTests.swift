@@ -337,6 +337,7 @@ struct WalkieTalkieTests {
         #expect(PTTSettings.chatAutoListenPolicy(for: "fp-alice", in: defaults) == .automatic)
     }
 
+    #if os(iOS)
     @Test("SystemPTTChannelInfo generates deterministic distinct UUIDs per channel")
     func test_systemPTTChannelDeterministicUUIDAndLifecycle() {
         let nearby1 = SystemPTTChannelInfo(channelKey: "mesh.public", displayName: "Nearby (#mesh)", target: .publicMesh)
@@ -354,4 +355,5 @@ struct WalkieTalkieTests {
         #expect(!manager.isActive)
         #expect(manager.activeChannel == nil)
     }
+    #endif
 }
