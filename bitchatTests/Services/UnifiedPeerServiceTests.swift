@@ -218,6 +218,56 @@ struct UnifiedPeerServiceTests {
         #expect(service.setBlocked(peerID, blocked: true) == nil)
         #expect(!service.isBlocked(peerID))
     }
+
+    @Test @MainActor
+    func toggleFavorite_rejectsPeerWithMissingNoiseKey() async {
+        let transport = MockTransport()
+        let service = UnifiedPeerService(meshService: transport, identityManager: TestIdentityManager())
+        let peerID = PeerID(str: "0011223344556699")
+        let snapshots = [TransportPeerSnapshot(
+            peerID: peerID,
+            nickname: "no-key-peer",
+            isConnected: true,
+            noisePublicKey: nil,
+            lastSeen: Date()
+        )]
+        transport.updatePeerSnapshots(snapshots)
+        service.didUpdatePeerSnapshots(snapshots)
+
+        #expect(service.toggleFavorite(peerID) == false)
+        #expect(FavoritesPersistenceService.shared.getFavoriteStatus(for: Data()) == nil)
+    }
+
+    @Test @MainActor
+    func setBlocked_removesFavoriteAndBlocksAssociatedNostrKey() async throws {
+        let favoritesService = FavoritesPersistenceService.shared
+        let transport = MockTransport()
+        let identity = TestIdentityManager()
+        let service = UnifiedPeerService(meshService: transport, identityManager: identity)
+
+        let noiseKey = Data(repeating: 0x7A, count: 32)
+        let peerID = PeerID(hexData: noiseKey)
+        let nostrIdentity = try NostrIdentity.generate()
+        favoritesService.establishMutualFavorite(
+            peerNoisePublicKey: noiseKey,
+            peerNostrPublicKey: nostrIdentity.npub,
+            peerNickname: "blocked-fav"
+        )
+        defer {
+            favoritesService.updatePeerFavoritedUs(peerNoisePublicKey: noiseKey, favorited: false)
+            favoritesService.removeFavorite(peerNoisePublicKey: noiseKey)
+        }
+        service.didUpdatePeerSnapshots([])
+
+        let fp = service.setBlocked(peerID, blocked: true)
+        #expect(fp == noiseKey.sha256Fingerprint())
+        #expect(!favoritesService.isFavorite(noiseKey))
+        #expect(!favoritesService.isMutualFavorite(noiseKey))
+        #expect(identity.isNostrBlocked(pubkeyHexLowercased: nostrIdentity.publicKeyHex.lowercased()))
+
+        _ = service.setBlocked(peerID, blocked: false)
+        #expect(!identity.isNostrBlocked(pubkeyHexLowercased: nostrIdentity.publicKeyHex.lowercased()))
+    }
 }
 
 private final class TestIdentityManager: SecureIdentityStateManagerProtocol {

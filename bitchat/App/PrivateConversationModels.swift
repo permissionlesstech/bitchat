@@ -447,9 +447,10 @@ final class PrivateConversationModel: ObservableObject {
         if let nickname = chatViewModel.meshService.peerNickname(peerID: headerPeerID) {
             return nickname
         }
-        if let favorite = FavoritesPersistenceService.shared.getFavoriteStatus(
-            for: Data(hexString: headerPeerID.id) ?? Data()
-        ), !favorite.peerNickname.isEmpty {
+        let favoriteStatus = headerPeerID.noiseKey.flatMap {
+            FavoritesPersistenceService.shared.getFavoriteStatus(for: $0)
+        } ?? FavoritesPersistenceService.shared.getFavoriteStatus(forPeerID: headerPeerID)
+        if let favorite = favoriteStatus, !favorite.peerNickname.isEmpty {
             return favorite.peerNickname
         }
         if headerPeerID.id.count == 16 {
@@ -487,12 +488,14 @@ final class PrivateConversationModel: ObservableObject {
         if chatViewModel.meshService.isPeerReachable(headerPeerID) {
             return .meshReachable
         }
-        if let noiseKey = Data(hexString: headerPeerID.id),
-           let favoriteStatus = FavoritesPersistenceService.shared.getFavoriteStatus(for: noiseKey),
+        let favoriteStatus = headerPeerID.noiseKey.flatMap {
+            FavoritesPersistenceService.shared.getFavoriteStatus(for: $0)
+        } ?? FavoritesPersistenceService.shared.getFavoriteStatus(forPeerID: headerPeerID)
+        if let favoriteStatus,
            favoriteStatus.isMutual,
            // No stored recipient key means no Nostr delivery — and the
            // "end-to-end encrypted" caption keys off .nostrAvailable.
-           favoriteStatus.peerNostrPublicKey != nil {
+           favoriteStatus.hasValidNostrPublicKey {
             return .nostrAvailable
         }
         if chatViewModel.meshService.isPeerConnected(headerPeerID) || chatViewModel.connectedPeers.contains(headerPeerID) {

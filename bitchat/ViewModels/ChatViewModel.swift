@@ -1486,10 +1486,15 @@ final class ChatViewModel: ObservableObject, SynchronousMessageTransportEventDel
 
         // Remove any favorite entry for this contact so the deleted chat
         // doesn't immediately reappear as an empty favorite row in the inbox.
+        // Notify the peer first so they don't keep treating the relationship
+        // as mutual.
         if let targetFingerprint {
-            for (noiseKey, _) in FavoritesPersistenceService.shared.favorites
+            for (noiseKey, rel) in FavoritesPersistenceService.shared.favorites
             where noiseKey.sha256Fingerprint() == targetFingerprint {
-                FavoritesPersistenceService.shared.removeFavorite(peerNoisePublicKey: noiseKey)
+                if rel.isFavorite {
+                    messageRouter.sendFavoriteNotification(to: PeerID(hexData: noiseKey), isFavorite: false)
+                    FavoritesPersistenceService.shared.removeFavorite(peerNoisePublicKey: noiseKey)
+                }
             }
         }
 
@@ -1643,7 +1648,8 @@ final class ChatViewModel: ObservableObject, SynchronousMessageTransportEventDel
     }
 
     @MainActor
-    func toggleFavorite(peerID: PeerID) {
+    @discardableResult
+    func toggleFavorite(peerID: PeerID) -> Bool {
         peerIdentityCoordinator.toggleFavorite(peerID: peerID)
     }
 
@@ -1690,18 +1696,13 @@ final class ChatViewModel: ObservableObject, SynchronousMessageTransportEventDel
         )
 
         // Accepting someone's personal invite link establishes mutual Nostr
-        // reachability immediately and sends our signed identity bundle so the
-        // remote inviter can verify and store our Noise/signing/Nostr keys.
-        FavoritesPersistenceService.shared.addFavorite(
+        // reachability immediately (single atomic Keychain write + notification)
+        // and sends our signed identity bundle so the remote inviter can verify
+        // and store our Noise/signing/Nostr keys.
+        FavoritesPersistenceService.shared.establishMutualFavorite(
             peerNoisePublicKey: invite.noisePublicKey,
             peerNostrPublicKey: invite.nostrNpub,
             peerNickname: invite.nickname
-        )
-        FavoritesPersistenceService.shared.updatePeerFavoritedUs(
-            peerNoisePublicKey: invite.noisePublicKey,
-            favorited: true,
-            peerNickname: invite.nickname,
-            peerNostrPublicKey: invite.nostrNpub
         )
 
         if let (hrp, data) = try? Bech32.decode(invite.nostrNpub), hrp == "npub" {

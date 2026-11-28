@@ -11,14 +11,35 @@ final class FavoritesPersistenceServiceTests: XCTestCase {
         let keychain = MockKeychain()
         let service = FavoritesPersistenceService(keychain: keychain)
         let peerKey = Data((0..<32).map(UInt8.init))
+        let aliceNpub = try NostrIdentity.generate().npub
         let expectation = expectation(forNotification: .favoriteStatusChanged, object: nil)
 
-        service.addFavorite(peerNoisePublicKey: peerKey, peerNostrPublicKey: "npub1alice", peerNickname: "Alice")
+        let added = service.addFavorite(peerNoisePublicKey: peerKey, peerNostrPublicKey: aliceNpub, peerNickname: "Alice")
 
         wait(for: [expectation], timeout: TestConstants.settleTimeout)
+        XCTAssertTrue(added)
         XCTAssertTrue(service.isFavorite(peerKey))
         XCTAssertEqual(service.getFavoriteStatus(for: peerKey)?.peerNickname, "Alice")
+        XCTAssertEqual(service.getFavoriteStatus(for: peerKey)?.peerNostrPublicKey, aliceNpub)
         XCTAssertNotNil(keychain.load(key: storageKey, service: serviceKey))
+    }
+
+    func test_addFavorite_rejectsInvalidNoiseKeyAndInvalidNpubAndPreservesNickname() throws {
+        let service = FavoritesPersistenceService(keychain: MockKeychain())
+
+        XCTAssertFalse(service.addFavorite(peerNoisePublicKey: Data(), peerNickname: "Empty"))
+        XCTAssertFalse(service.addFavorite(peerNoisePublicKey: Data(repeating: 0x11, count: 16), peerNickname: "Short"))
+        XCTAssertTrue(service.favorites.isEmpty)
+
+        let peerKey = Data((10..<42).map(UInt8.init))
+        XCTAssertTrue(service.addFavorite(peerNoisePublicKey: peerKey, peerNostrPublicKey: "npub1notvalidbech32", peerNickname: "Alice"))
+        XCTAssertNil(service.getFavoriteStatus(for: peerKey)?.peerNostrPublicKey)
+
+        // Unknown/empty nickname must not clobber a real stored nickname.
+        XCTAssertTrue(service.addFavorite(peerNoisePublicKey: peerKey, peerNickname: "Unknown"))
+        XCTAssertEqual(service.getFavoriteStatus(for: peerKey)?.peerNickname, "Alice")
+        XCTAssertTrue(service.addFavorite(peerNoisePublicKey: peerKey, peerNickname: ""))
+        XCTAssertEqual(service.getFavoriteStatus(for: peerKey)?.peerNickname, "Alice")
     }
 
     func test_removeFavorite_preservesRelationshipWhenPeerStillFavoritesUs() {
@@ -64,11 +85,12 @@ final class FavoritesPersistenceServiceTests: XCTestCase {
         XCTAssertEqual(service.getFavoriteStatus(for: peerKey)?.peerNickname, "Erin2")
     }
 
-    func test_getFavoriteStatus_forPeerID_returnsMutualFavorite() {
+    func test_getFavoriteStatus_forPeerID_returnsMutualFavorite() throws {
         let service = FavoritesPersistenceService(keychain: MockKeychain())
         let peerKey = Data((96..<128).map(UInt8.init))
+        let danNpub = try NostrIdentity.generate().npub
 
-        service.addFavorite(peerNoisePublicKey: peerKey, peerNostrPublicKey: "npub1dan", peerNickname: "Dan")
+        service.addFavorite(peerNoisePublicKey: peerKey, peerNostrPublicKey: danNpub, peerNickname: "Dan")
         service.updatePeerFavoritedUs(peerNoisePublicKey: peerKey, favorited: true, peerNickname: "Dan")
 
         let relationship = service.getFavoriteStatus(forPeerID: PeerID(publicKey: peerKey))
@@ -79,22 +101,25 @@ final class FavoritesPersistenceServiceTests: XCTestCase {
     func test_init_deduplicatesPersistedRelationshipsByPublicKey() throws {
         let keychain = MockKeychain()
         let peerKey = Data((128..<160).map(UInt8.init))
+        let olderNpub = try NostrIdentity.generate().npub
         let older = FavoritesPersistenceService.FavoriteRelationship(
             peerNoisePublicKey: peerKey,
-            peerNostrPublicKey: nil,
+            peerNostrPublicKey: olderNpub,
             peerNickname: "Older",
             isFavorite: true,
             theyFavoritedUs: false,
             favoritedAt: Date(timeIntervalSince1970: 100),
             lastUpdated: Date(timeIntervalSince1970: 100)
         )
+        // Newer record has updated flags (mutual) but nil npub — dedup must
+        // keep the newer record's flags while backfilling the older npub.
         let newer = FavoritesPersistenceService.FavoriteRelationship(
             peerNoisePublicKey: peerKey,
-            peerNostrPublicKey: "npub1newer",
+            peerNostrPublicKey: nil,
             peerNickname: "Newer",
             isFavorite: true,
             theyFavoritedUs: true,
-            favoritedAt: Date(timeIntervalSince1970: 100),
+            favoritedAt: Date(timeIntervalSince1970: 120),
             lastUpdated: Date(timeIntervalSince1970: 200)
         )
         let encoded = try JSONEncoder().encode([older, newer])
@@ -103,8 +128,11 @@ final class FavoritesPersistenceServiceTests: XCTestCase {
         let service = FavoritesPersistenceService(keychain: keychain)
 
         XCTAssertEqual(service.favorites.count, 1)
-        XCTAssertEqual(service.getFavoriteStatus(for: peerKey)?.peerNickname, "Newer")
-        XCTAssertEqual(service.getFavoriteStatus(for: peerKey)?.peerNostrPublicKey, "npub1newer")
+        let merged = try XCTUnwrap(service.getFavoriteStatus(for: peerKey))
+        XCTAssertEqual(merged.peerNickname, "Newer")
+        XCTAssertEqual(merged.peerNostrPublicKey, olderNpub)
+        XCTAssertTrue(merged.isMutual)
+        XCTAssertEqual(merged.favoritedAt, Date(timeIntervalSince1970: 100))
 
         let cleaned = try XCTUnwrap(keychain.load(key: storageKey, service: serviceKey))
         let decoded = try JSONDecoder().decode([FavoritesPersistenceService.FavoriteRelationship].self, from: cleaned)
@@ -134,9 +162,10 @@ final class FavoritesPersistenceServiceTests: XCTestCase {
     func test_lockedBoot_doesNotOverwriteExistingFavoritesOnLaterMutation() throws {
         let keychain = MockKeychain()
         let existingKey = Data((200..<232).map(UInt8.init))
+        let existingNpub = try NostrIdentity.generate().npub
         let existing = FavoritesPersistenceService.FavoriteRelationship(
             peerNoisePublicKey: existingKey,
-            peerNostrPublicKey: "npub1existing",
+            peerNostrPublicKey: existingNpub,
             peerNickname: "Existing",
             isFavorite: true,
             theyFavoritedUs: true,
@@ -156,8 +185,32 @@ final class FavoritesPersistenceServiceTests: XCTestCase {
         service.addFavorite(peerNoisePublicKey: newKey, peerNickname: "NewDuringLock")
 
         keychain.simulatedGenericReadError = nil
-        let reloaded = FavoritesPersistenceService(keychain: keychain)
-        XCTAssertEqual(reloaded.favorites.count, 1)
-        XCTAssertEqual(reloaded.getFavoriteStatus(for: existingKey)?.peerNickname, "Existing")
+        let reloadedBeforeRecovery = FavoritesPersistenceService(keychain: keychain)
+        XCTAssertEqual(reloadedBeforeRecovery.favorites.count, 1)
+        XCTAssertEqual(reloadedBeforeRecovery.getFavoriteStatus(for: existingKey)?.peerNickname, "Existing")
+
+        // Once protected data unlocks, retryDeferredLoad recovers durable
+        // favorites AND merges + persists the in-session mutation.
+        service.retryDeferredLoad()
+        XCTAssertEqual(service.favorites.count, 2)
+        XCTAssertEqual(service.getFavoriteStatus(for: existingKey)?.peerNickname, "Existing")
+        XCTAssertEqual(service.getFavoriteStatus(for: newKey)?.peerNickname, "NewDuringLock")
+
+        let reloadedAfterRecovery = FavoritesPersistenceService(keychain: keychain)
+        XCTAssertEqual(reloadedAfterRecovery.favorites.count, 2)
+    }
+
+    func test_establishMutualFavorite_atomicallySetsBothSides() throws {
+        let service = FavoritesPersistenceService(keychain: MockKeychain())
+        let peerKey = Data((1..<33).map(UInt8.init))
+        let npub = try NostrIdentity.generate().npub
+
+        XCTAssertTrue(service.establishMutualFavorite(
+            peerNoisePublicKey: peerKey,
+            peerNostrPublicKey: npub,
+            peerNickname: "Grace"
+        ))
+        XCTAssertTrue(service.isMutualFavorite(peerKey))
+        XCTAssertEqual(service.getFavoriteStatus(for: peerKey)?.peerNostrPublicKey, npub)
     }
 }

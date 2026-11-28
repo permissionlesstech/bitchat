@@ -88,14 +88,21 @@ private final class MockChatPeerIdentityContext: ChatPeerIdentityContext {
     var fingerprintsByPeerID: [PeerID: String] = [:]
     var peerIDsByNickname: [String: PeerID] = [:]
     var ephemeralPeerIDsByNoiseKey: [Data: PeerID] = [:]
+    var knownNoiseKeysByShortPeerID: [PeerID: Data] = [:]
     private(set) var toggledFavoritePeers: [PeerID] = []
+    private(set) var favoriteEventLog: [String] = []
 
     func unifiedPeer(for peerID: PeerID) -> BitchatPeer? { peersByID[peerID] }
     func unifiedIsBlocked(_ peerID: PeerID) -> Bool { blockedPeers.contains(peerID) }
-    func unifiedToggleFavorite(_ peerID: PeerID) { toggledFavoritePeers.append(peerID) }
+    @discardableResult
+    func unifiedToggleFavorite(_ peerID: PeerID) -> Bool {
+        toggledFavoritePeers.append(peerID)
+        return true
+    }
     func unifiedFingerprint(for peerID: PeerID) -> String? { fingerprintsByPeerID[peerID] }
     func unifiedPeerID(forNickname nickname: String) -> PeerID? { peerIDsByNickname[nickname] }
     func ephemeralPeerID(forNoiseKey noiseKey: Data) -> PeerID? { ephemeralPeerIDsByNoiseKey[noiseKey] }
+    func knownNoiseKey(forShortPeerID peerID: PeerID) -> Data? { knownNoiseKeysByShortPeerID[peerID] }
 
     // Mesh & Noise sessions
     var nicknamesByPeerID: [PeerID: String] = [:]
@@ -186,6 +193,7 @@ private final class MockChatPeerIdentityContext: ChatPeerIdentityContext {
 
     func sendFavoriteNotificationViaNostr(noisePublicKey: Data, isFavorite: Bool) {
         nostrFavoriteNotifications.append((noisePublicKey, isFavorite))
+        favoriteEventLog.append("notify:\(isFavorite)")
     }
 
     // Favorites
@@ -204,10 +212,12 @@ private final class MockChatPeerIdentityContext: ChatPeerIdentityContext {
 
     func addFavorite(noiseKey: Data, nostrPublicKey: String?, nickname: String) {
         addedFavorites.append((noiseKey, nostrPublicKey, nickname))
+        favoriteEventLog.append("add")
     }
 
     func removeFavorite(noiseKey: Data) {
         removedFavorites.append(noiseKey)
+        favoriteEventLog.append("remove")
     }
 }
 
@@ -489,15 +499,50 @@ struct ChatPeerIdentityCoordinatorContextTests {
         #expect(context.addedFavorites.last?.nickname == "alice")
         #expect(context.nostrFavoriteNotifications.map(\.isFavorite) == [true])
 
-        // Existing favorite: toggling removes it and notifies the unfavorite.
+        // Existing favorite: toggling removes it and notifies the unfavorite
+        // BEFORE removing so the peer's npub is still resolvable.
         context.favoriteRelationshipsByNoiseKey[noiseKey] = makeFavoriteRelationship(
             noiseKey: noiseKey,
             isFavorite: true
         )
         #expect(coordinator.isFavorite(peerID: peerID) == true)
-        coordinator.toggleFavorite(peerID: peerID)
+        let removed = coordinator.toggleFavorite(peerID: peerID)
+        #expect(removed == true)
         #expect(context.removedFavorites == [noiseKey])
         #expect(context.nostrFavoriteNotifications.map(\.isFavorite) == [true, false])
+        #expect(context.favoriteEventLog.suffix(2) == ["notify:false", "remove"])
+    }
+
+    @Test @MainActor
+    func toggleFavorite_offlineShortPeerID_resolvesFavoriteAndKnownNoiseKey() async {
+        let context = MockChatPeerIdentityContext()
+        let coordinator = ChatPeerIdentityCoordinator(context: context)
+        let noiseKey = Data(repeating: 0xCD, count: 32)
+        let shortPeerID = PeerID(publicKey: noiseKey)
+
+        // Offline one-sided favorite keyed by 16-hex short ID (absent from unifiedPeerService).
+        let rel = makeFavoriteRelationship(noiseKey: noiseKey, nickname: "bob", isFavorite: true, theyFavoritedUs: false)
+        context.favoriteRelationshipsByNoiseKey[noiseKey] = rel
+        context.favoriteRelationshipsByPeerID[shortPeerID] = rel
+
+        #expect(coordinator.isFavorite(peerID: shortPeerID) == true)
+        #expect(coordinator.toggleFavorite(peerID: shortPeerID) == true)
+        #expect(context.removedFavorites == [noiseKey])
+        #expect(context.favoriteEventLog == ["notify:false", "remove"])
+
+        // Offline passerby not in favorites or unifiedPeerService, resolved via persisted crypto identity.
+        let strangerKey = Data(repeating: 0xEF, count: 32)
+        let strangerShortID = PeerID(publicKey: strangerKey)
+        context.knownNoiseKeysByShortPeerID[strangerShortID] = strangerKey
+        context.nicknamesByPeerID[strangerShortID] = "carol"
+
+        #expect(coordinator.isFavorite(peerID: strangerShortID) == false)
+        #expect(coordinator.toggleFavorite(peerID: strangerShortID) == true)
+        #expect(context.addedFavorites.last?.noiseKey == strangerKey)
+        #expect(context.addedFavorites.last?.nickname == "carol")
+
+        // Completely unknown short ID returns false cleanly.
+        #expect(coordinator.toggleFavorite(peerID: PeerID(str: "0123456789abcdef")) == false)
     }
 
 }

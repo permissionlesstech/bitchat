@@ -213,8 +213,23 @@ private final class MockChatPrivateConversationContext: ChatPrivateConversationC
 
     // Favorites & notifications
     var favoriteRelationshipsByNoiseKey: [Data: FavoritesPersistenceService.FavoriteRelationship] = [:]
+    var favoriteNoiseKeysByNostrKey: [String: Data] = [:]
+    var myNoiseKey = Data(repeating: 0x01, count: 32)
+    private(set) var registeredFriendInvites: [FriendInvite] = []
     private(set) var peerFavoritedUsUpdates: [(noiseKey: Data, favorited: Bool, nickname: String, nostrPublicKey: String?)] = []
     private(set) var privateMessageNotifications: [(senderName: String, message: String, peerID: PeerID)] = []
+
+    func registerVerifiedFriendInviteIdentity(_ invite: FriendInvite) {
+        registeredFriendInvites.append(invite)
+    }
+
+    func favoriteNoiseKey(forNostrPubkey nostrPubkey: String) -> Data? {
+        favoriteNoiseKeysByNostrKey[nostrPubkey] ?? favoriteNoiseKeysByNostrKey[nostrPubkey.lowercased()]
+    }
+
+    func myNoisePublicKey() -> Data {
+        myNoiseKey
+    }
 
     func favoriteRelationship(forNoiseKey noiseKey: Data) -> FavoritesPersistenceService.FavoriteRelationship? {
         favoriteRelationshipsByNoiseKey[noiseKey]
@@ -1117,18 +1132,19 @@ struct ChatPrivateConversationCoordinatorContextTests {
     }
 
     @Test @MainActor
-    func handleFavoriteNotification_persistsAndAnnouncesTransitionsOnly() async {
+    func handleFavoriteNotification_persistsAndAnnouncesTransitionsOnly() async throws {
         let context = MockChatPrivateConversationContext()
         let coordinator = ChatPrivateConversationCoordinator(context: context)
         let noiseKey = Data(repeating: 0xAB, count: 32)
         let peerID = PeerID(hexData: noiseKey)
+        let aliceNpub = try NostrIdentity.generate().npub
 
         // First [FAVORITED] flips theyFavoritedUs: store write + announcement.
-        coordinator.handleFavoriteNotification("[FAVORITED]:npub1alice", from: peerID, senderNickname: "alice")
+        coordinator.handleFavoriteNotification("[FAVORITED]:\(aliceNpub)", from: peerID, senderNickname: "alice")
         #expect(context.peerFavoritedUsUpdates.count == 1)
         #expect(context.peerFavoritedUsUpdates.first?.noiseKey == noiseKey)
         #expect(context.peerFavoritedUsUpdates.first?.favorited == true)
-        #expect(context.peerFavoritedUsUpdates.first?.nostrPublicKey == "npub1alice")
+        #expect(context.peerFavoritedUsUpdates.first?.nostrPublicKey == aliceNpub)
         #expect(context.meshOnlySystemMessages == ["alice favorited you"])
 
         // Same state again: store write still happens, but no repeat announcement.
@@ -1136,7 +1152,7 @@ struct ChatPrivateConversationCoordinatorContextTests {
             noiseKey: noiseKey,
             theyFavoritedUs: true
         )
-        coordinator.handleFavoriteNotification("[FAVORITED]:npub1alice", from: peerID, senderNickname: "alice")
+        coordinator.handleFavoriteNotification("[FAVORITED]:\(aliceNpub)", from: peerID, senderNickname: "alice")
         #expect(context.peerFavoritedUsUpdates.count == 2)
         #expect(context.meshOnlySystemMessages == ["alice favorited you"])
 
@@ -1144,6 +1160,92 @@ struct ChatPrivateConversationCoordinatorContextTests {
         coordinator.handleFavoriteNotification("[UNFAVORITED]", from: peerID, senderNickname: "alice")
         #expect(context.peerFavoritedUsUpdates.last?.favorited == false)
         #expect(context.meshOnlySystemMessages == ["alice favorited you", "alice unfavorited you"])
+    }
+
+    @Test @MainActor
+    func handleFavoriteNotification_rejectsSpoofedAndHijackedNpubs() async throws {
+        let context = MockChatPrivateConversationContext()
+        let coordinator = ChatPrivateConversationCoordinator(context: context)
+        let aliceKey = Data(repeating: 0xA1, count: 32)
+        let bobKey = Data(repeating: 0xB2, count: 32)
+        let aliceIdentity = try NostrIdentity.generate()
+        let bobIdentity = try NostrIdentity.generate()
+        context.favoriteNoiseKeysByNostrKey[bobIdentity.npub] = bobKey
+
+        // Over Nostr: Alice cannot claim Bob's npub (mismatched with NIP-17 senderPubkey).
+        coordinator.handleFavoriteNotification(
+            "[FAVORITED]:\(bobIdentity.npub)",
+            from: PeerID(hexData: aliceKey),
+            senderNickname: "alice",
+            senderNostrPubkeyHex: aliceIdentity.publicKeyHex
+        )
+        #expect(context.peerFavoritedUsUpdates.isEmpty)
+
+        // Over BLE: Alice cannot hijack Bob's already-bound npub — favorite still
+        // records, but the hijacked npub is stripped.
+        coordinator.handleFavoriteNotification(
+            "[FAVORITED]:\(bobIdentity.npub)",
+            from: PeerID(hexData: aliceKey),
+            senderNickname: "alice"
+        )
+        #expect(context.peerFavoritedUsUpdates.count == 1)
+        #expect(context.peerFavoritedUsUpdates.first?.nostrPublicKey == nil)
+    }
+
+    @Test @MainActor
+    func nostrPrivateMessage_geoDMNeverMutatesFavoritesOrIdentities() async throws {
+        let context = MockChatPrivateConversationContext()
+        let coordinator = ChatPrivateConversationCoordinator(context: context)
+        let strangerIdentity = try NostrIdentity.generate()
+        let strangerNoise = Data(repeating: 0x77, count: 32)
+        let strangerSigning = Data(repeating: 0x88, count: 32)
+        let invite = try #require(FriendInvite.makeSigned(
+            nickname: "stranger",
+            noisePublicKey: strangerNoise,
+            signingPublicKey: strangerSigning,
+            nostrIdentity: strangerIdentity
+        ))
+        let convKey = PeerID(nostr_: strangerIdentity.publicKeyHex)
+        let payloadData = PrivateMessagePacket(
+            messageID: "geo-fav-inject",
+            content: invite.favoriteAcceptancePayload()
+        ).encode()!
+
+        coordinator.handlePrivateMessage(
+            NoisePayload(type: .privateMessage, data: payloadData),
+            senderPubkey: strangerIdentity.publicKeyHex,
+            convKey: convKey,
+            id: MockChatPrivateConversationContext.dummyIdentity,
+            messageTimestamp: Date(),
+            isGeohashDM: true
+        )
+
+        #expect(context.registeredFriendInvites.isEmpty)
+        #expect(context.peerFavoritedUsUpdates.isEmpty)
+        #expect(context.meshOnlySystemMessages.isEmpty)
+    }
+
+    @Test @MainActor
+    func nostrPrivateMessage_blockedNoisePeerIsDroppedWithoutNostrBlockEntry() async throws {
+        let context = MockChatPrivateConversationContext()
+        let coordinator = ChatPrivateConversationCoordinator(context: context)
+        let blockedNoise = Data(repeating: 0x99, count: 32)
+        let convKey = PeerID(hexData: blockedNoise)
+        let sender = try NostrIdentity.generate()
+        context.blockedPeers = [convKey]
+        let payloadData = PrivateMessagePacket(messageID: "blocked-dm-1", content: "hi").encode()!
+
+        coordinator.handlePrivateMessage(
+            NoisePayload(type: .privateMessage, data: payloadData),
+            senderPubkey: sender.publicKeyHex,
+            convKey: convKey,
+            id: MockChatPrivateConversationContext.dummyIdentity,
+            messageTimestamp: Date()
+        )
+
+        #expect(context.geoDeliveryAcks.isEmpty)
+        #expect(context.privateChats[convKey] == nil)
+        #expect(context.privateMessageNotifications.isEmpty)
     }
 
     /// A Nostr DM whose sender resolved to a known noise key must be labeled
@@ -1181,16 +1283,17 @@ struct ChatPrivateConversationCoordinatorContextTests {
     /// Over Nostr, [FAVORITED] markers arrive as embedded PMs on the convKey
     /// path; they must update the relationship, not render as chat text.
     @Test @MainActor
-    func nostrPrivateMessage_favoritedMarkerUpdatesRelationshipInsteadOfAppending() async {
+    func nostrPrivateMessage_favoritedMarkerUpdatesRelationshipInsteadOfAppending() async throws {
         let context = MockChatPrivateConversationContext()
         let coordinator = ChatPrivateConversationCoordinator(context: context)
         let noiseKey = Data(repeating: 0xEE, count: 32)
         // The inbound pipeline resolves known favorites to their noise-key ID.
         let convKey = PeerID(hexData: noiseKey)
-        let senderPubkey = "feedface99887766"
+        let aliceIdentity = try NostrIdentity.generate()
+        let senderPubkey = aliceIdentity.publicKeyHex
         context.displayNamesByPubkey[senderPubkey] = "alice#1234"
 
-        let payloadData = PrivateMessagePacket(messageID: "fav-1", content: "[FAVORITED]:npub1alice").encode()!
+        let payloadData = PrivateMessagePacket(messageID: "fav-1", content: "[FAVORITED]:\(aliceIdentity.npub)").encode()!
         let payload = NoisePayload(type: .privateMessage, data: payloadData)
 
         coordinator.handlePrivateMessage(
@@ -1204,7 +1307,7 @@ struct ChatPrivateConversationCoordinatorContextTests {
         #expect(context.peerFavoritedUsUpdates.count == 1)
         #expect(context.peerFavoritedUsUpdates.first?.noiseKey == noiseKey)
         #expect(context.peerFavoritedUsUpdates.first?.favorited == true)
-        #expect(context.peerFavoritedUsUpdates.first?.nostrPublicKey == "npub1alice")
+        #expect(context.peerFavoritedUsUpdates.first?.nostrPublicKey == aliceIdentity.npub)
         #expect(context.privateChats[convKey, default: []].isEmpty)
         #expect(context.meshOnlySystemMessages == ["alice#1234 favorited you"])
     }

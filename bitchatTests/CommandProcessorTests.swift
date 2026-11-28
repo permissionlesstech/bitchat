@@ -353,6 +353,31 @@ struct CommandProcessorTests {
     }
 
     @MainActor
+    @Test func favoriteCommandReturnsErrorWhenToggleFails() async {
+        let identityManager = MockIdentityManager(MockKeychain())
+        let context = MockCommandContextProvider()
+        context.toggleFavoriteResult = false
+        let processor = CommandProcessor(
+            contextProvider: context,
+            meshService: MockTransport(),
+            identityManager: identityManager
+        )
+        let peerID = PeerID(str: "00aa00bb00cc00ee")
+        context.nicknameToPeerID["ghost"] = peerID
+
+        let result = await withSelectedChannel(.mesh, context: context) {
+            processor.process("/fav ghost")
+        }
+
+        switch result {
+        case .error:
+            break
+        default:
+            Issue.record("Expected error result when toggleFavorite returns false")
+        }
+    }
+
+    @MainActor
     @Test func favoriteCommandIsRejectedOutsideMesh() async {
         let identityManager = MockIdentityManager(MockKeychain())
         let context = MockCommandContextProvider()
@@ -704,8 +729,12 @@ private final class MockCommandContextProvider: CommandContextProvider {
         commandOutputDestinations.append(destination)
     }
 
-    func toggleFavorite(peerID: PeerID) {
+    var toggleFavoriteResult = true
+
+    @discardableResult
+    func toggleFavorite(peerID: PeerID) -> Bool {
         toggledFavorites.append(peerID)
+        return toggleFavoriteResult
     }
 
     // Groups: record the parsed subcommand + argument the processor forwarded.

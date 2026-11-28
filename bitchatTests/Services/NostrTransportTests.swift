@@ -220,6 +220,62 @@ struct NostrTransportTests {
         #expect(privateMessage.content == "[FAVORITED]:\(sender.npub)")
     }
 
+    @Test("Non-mutual favorite is not DM-reachable but can send favorite notifications")
+    @MainActor
+    func nonMutualFavoriteReachabilityAndUnfavoriteSnapshot() async throws {
+        let keychain = MockKeychain()
+        let idBridge = NostrIdentityBridge(keychain: keychain)
+        let sender = try NostrIdentity.generate()
+        let recipient = try NostrIdentity.generate()
+        let noiseKey = Data((100..<132).map(UInt8.init))
+        let fullPeerID = PeerID(hexData: noiseKey)
+        let notificationCenter = NotificationCenter()
+        var favorites: [Data: FavoriteRelationship] = [
+            noiseKey: FavoriteRelationship(
+                peerNoisePublicKey: noiseKey,
+                peerNostrPublicKey: recipient.npub,
+                peerNickname: "OneSided",
+                isFavorite: true,
+                theyFavoritedUs: false,
+                favoritedAt: Date(timeIntervalSince1970: 1),
+                lastUpdated: Date(timeIntervalSince1970: 2)
+            )
+        ]
+        let probe = NostrTransportProbe()
+        let transport = NostrTransport(
+            keychain: keychain,
+            idBridge: idBridge,
+            dependencies: makeDependencies(
+                notificationCenter: notificationCenter,
+                loadFavorites: { favorites },
+                favoriteStatusForNoiseKey: { favorites[$0] },
+                favoriteStatusForPeerID: { _ in nil },
+                currentIdentity: { sender },
+                sendEvent: probe.record(event:)
+            )
+        )
+        transport.senderPeerID = PeerID(str: "0123456789abcdef")
+
+        // One-sided favorite is NOT DM-reachable, but CAN receive [UNFAVORITED].
+        #expect(!transport.isPeerReachable(fullPeerID))
+        #expect(transport.canSendFavoriteNotification(to: fullPeerID))
+
+        // Send [UNFAVORITED] and immediately delete the favorite entry on the
+        // very next line: the captured npub snapshot must still deliver it.
+        transport.sendFavoriteNotification(to: fullPeerID, isFavorite: false)
+        favorites.removeAll()
+        notificationCenter.post(name: .favoriteStatusChanged, object: nil)
+
+        // Reachability & notification cache updated synchronously on MainActor.
+        #expect(!transport.canSendFavoriteNotification(to: fullPeerID))
+
+        let didSend = await TestHelpers.waitUntil({ probe.sentEvents.count == 1 }, timeout: TestConstants.settleTimeout)
+        #expect(didSend)
+        let result = try decodeEmbeddedPayload(from: probe.sentEvents[0], recipient: recipient)
+        let privateMessage = try decodePrivateMessage(from: result.payload)
+        #expect(privateMessage.content == "[UNFAVORITED]:\(sender.npub)")
+    }
+
     @Test("Delivery ACK encodes delivered payload type")
     @MainActor
     func sendDeliveryAckEmitsDeliveredAck() async throws {

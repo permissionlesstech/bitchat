@@ -561,6 +561,10 @@ final class MessageRouter {
             transport.sendFavoriteNotification(to: peerID, isFavorite: isFavorite)
         } else if let transport = reachableTransport(for: peerID) {
             transport.sendFavoriteNotification(to: peerID, isFavorite: isFavorite)
+        } else if let nostr = nostrTransport, nostr.canSendFavoriteNotification(to: peerID) {
+            // One-sided relationships aren't Nostr-reachable for normal DMs,
+            // but still need [FAVORITED]/[UNFAVORITED] routed over Nostr.
+            nostr.sendFavoriteNotification(to: peerID, isFavorite: isFavorite)
         }
     }
 

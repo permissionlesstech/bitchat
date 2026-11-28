@@ -12,6 +12,7 @@ struct MeshPeerRow: Identifiable, Equatable {
     let isConnected: Bool
     let isReachable: Bool
     let isMutualFavorite: Bool
+    let isNostrAvailable: Bool
     let encryptionStatus: EncryptionStatus
     let showsVerifiedBadgeWhenOffline: Bool
     /// Vouched-for by someone I verified, without an explicit verification of
@@ -275,9 +276,9 @@ final class PeerListModel: ObservableObject {
             )
         }
 
-        // 2. Nostr favorites with pinned signing keys (e.g. added via Friend Invite)
+        // 2. Mutual Nostr favorites with pinned signing keys (e.g. added via Friend Invite)
         for (noiseKey, rel) in FavoritesPersistenceService.shared.favorites {
-            guard rel.peerNostrPublicKey != nil else { continue }
+            guard rel.isMutual && rel.hasValidNostrPublicKey else { continue }
             let peerID = PeerID(hexData: noiseKey)
             guard !chatViewModel.isPeerBlocked(peerID),
                   let identity = chatViewModel.cryptoIdentity(for: peerID),
@@ -564,6 +565,7 @@ final class PeerListModel: ObservableObject {
                 isConnected: peer.isConnected,
                 isReachable: peer.isReachable,
                 isMutualFavorite: peer.isMutualFavorite,
+                isNostrAvailable: peer.connectionState == .nostrAvailable,
                 encryptionStatus: chatViewModel.getEncryptionStatus(for: peer.peerID),
                 showsVerifiedBadgeWhenOffline: verifiedBadge,
                 showsVouchedBadge: vouchedBadge
@@ -666,7 +668,7 @@ final class PeerListModel: ObservableObject {
             let reachability: InboxChatRow.Reachability = {
                 if meshRow?.isConnected == true { return .meshConnected }
                 if meshRow?.isReachable == true { return .meshReachable }
-                if rel.peerNostrPublicKey != nil { return .nostr }
+                if rel.isMutual && rel.hasValidNostrPublicKey { return .nostr }
                 return .offline
             }()
             let fallbackSubtitle: String = {
