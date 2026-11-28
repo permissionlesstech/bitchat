@@ -12,15 +12,10 @@ import Foundation
 final class AutocompleteService {
     private typealias Patterns = MessageFormattingEngine.Patterns
 
-    /// Whether the text before the cursor ends in an `@` mention token: the
-    /// only case `getSuggestions` can return anything for, whatever the peers.
-    /// Lets callers skip assembling the peer list after every keystroke.
-    static func hasMentionToken(in text: String, cursorPosition: Int) -> Bool {
-        mentionPrefix(in: text, cursorPosition: cursorPosition) != nil
-    }
-
     /// Returns the normalized lowercased prefix of a trailing `@mention` token
     /// ending at `cursorPosition`, or `nil` when the cursor is not inside one.
+    /// `nil` is the only case where `getSuggestions` returns nothing whatever
+    /// the peers, so callers skip assembling the peer list after a keystroke.
     /// Fast-rejects texts without `@` without allocating or bridging to NSString.
     static func mentionPrefix(in text: String, cursorPosition: Int) -> String? {
         guard cursorPosition > 0, text.contains("@") else { return nil }
