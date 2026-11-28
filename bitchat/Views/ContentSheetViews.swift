@@ -107,7 +107,9 @@ struct ContentPeopleSheetView: View {
                       !hasModalPresentationBesidesVoiceAlert else {
                     return
                 }
-                voiceRecordingVM.showAlert = false
+                Task { @MainActor in
+                    voiceRecordingVM.showAlert = false
+                }
             }
         )
     }

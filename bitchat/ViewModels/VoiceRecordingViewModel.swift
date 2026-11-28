@@ -59,7 +59,8 @@ final class VoiceRecordingViewModel: ObservableObject {
             }
         }
         set {
-            if !newValue { state = .idle }
+            guard !newValue, showAlert else { return }
+            state = .idle
         }
     }
 

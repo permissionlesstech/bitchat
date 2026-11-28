@@ -226,7 +226,12 @@ struct WalkieTalkieSheetView: View {
             Text(String(localized: "voice.error.title", defaultValue: "Recording error", comment: "Title of the voice recording error alert")),
             isPresented: Binding(
                 get: { voiceRecordingVM.showAlert },
-                set: { if !$0 { voiceRecordingVM.showAlert = false } }
+                set: { isPresented in
+                    guard !isPresented, voiceRecordingVM.showAlert else { return }
+                    Task { @MainActor in
+                        voiceRecordingVM.showAlert = false
+                    }
+                }
             ),
             actions: {
                 Button(String(localized: "common.ok"), role: .cancel) {}
