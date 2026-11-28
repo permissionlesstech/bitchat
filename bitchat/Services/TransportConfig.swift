@@ -227,6 +227,16 @@ enum TransportConfig {
     static let nostrDMSubscribeLookbackSeconds: TimeInterval = 86400
     // Tolerated clock skew for client-side Nostr DM timestamp windows.
     static let nostrDMMaxClockSkewSeconds: TimeInterval = 900
+    /// Outer gift-wrap `created_at` randomization floor when *sending*.
+    /// Match Android's `NIP17_DEFAULT_MAX_PAST_SECONDS` (79_200 = 22h): every
+    /// installed build still subscribes `since: now − 86400`, and that window
+    /// keeps receding after send, so lookback − skew (85_500) still loses DMs
+    /// to a peer who comes online hours later. The two-hour margin reserves
+    /// room for that recession on peers that still filter at 24h.
+    /// Receive-side age limits independently allow queued older wraps.
+    /// The true send time lives on the inner rumor either way.
+    static let nostrGiftWrapTimestampRandomizationSeconds: TimeInterval = 79_200
+
     // Outer gift-wrap age ceiling. Android (and NIP-17-style clients) may
     // randomize the wrap's created_at up to 48h into the past; relays that
     // honor `since` will not deliver those wraps under a 24h filter. The
@@ -265,7 +275,10 @@ enum TransportConfig {
     // Reconnect delays get ±20% random jitter so relays that dropped together
     // (e.g. a network blip) don't thundering-herd the same reconnect instant.
     static let nostrRelayBackoffJitterRatio: Double = 0.2
-    static let nostrRelayDefaultFetchLimit: Int = 100
+    // Randomized envelope timestamps can put a recent DM behind older rumors.
+    // Match the existing location backfill allowance, while keeping requests bounded.
+    // Relays may impose a lower cap; this is not complete history pagination.
+    static let nostrGiftWrapFetchLimit: Int = 1000
     // How many consecutive Tor-readiness waits (each bounded by TorManager's
     // bootstrap deadline) to attempt before unblocking pending EOSE callers.
     static let nostrTorReadyMaxWaitAttempts: Int = 3
