@@ -294,6 +294,8 @@ extension BLEService {
         let capabilities = localIdentityState.snapshot().advertisedCapabilities
         let state = AuthenticatedPeerStatePacket(
             capabilities: capabilities,
+            // Do not advertise the header sanity bound as capacity. Our byte
+            // budget cannot promise a fragment count without a payload size.
             signingPublicKey: noiseService.getSigningPublicKeyData()
         )
         guard let payload = BLENoisePayloadFactory.authenticatedPeerState(state) else {
@@ -368,7 +370,8 @@ extension BLEService {
                     for: normalizedPeerID,
                     fingerprint: fingerprint,
                     generation: generation,
-                    capabilities: state.capabilities
+                    capabilities: state.capabilities,
+                    maxReassemblyFragments: state.maxReassemblyFragments
                 ) else {
                     return (false, [])
                 }
