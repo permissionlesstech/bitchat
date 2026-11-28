@@ -63,14 +63,19 @@ final class ChatMessageFormatter {
 
         let isDark = colorScheme == .dark
         let isVerifiedSender = !isSelf && isVerifiedSender(of: message)
+        let selfColor = PeerColorContrast.selfColor(isDark: isDark)
+        let baseColor: Color = isSelf ? selfColor : peerColor(for: message, isDark: isDark)
+        // The text shows the sender's color and highlights mentions of my
+        // nickname. Both can change after the first draw (a geochat sender
+        // joins the roster; a rename), so both are part of the key. The
+        // cache lives in memory only, so the color's hash can stand for it.
         let cacheVariant = theme.formatCacheVariant + (isVerifiedSender ? "-vf" : "")
+            + "|\(baseColor.hashValue)|" + viewModel.nickname
         if let cachedText = message.getCachedFormattedText(isDark: isDark, isSelf: isSelf, variant: cacheVariant) {
             return cachedText
         }
 
         var result = AttributedString()
-        let selfColor = PeerColorContrast.selfColor(isDark: isDark)
-        let baseColor: Color = isSelf ? selfColor : peerColor(for: message, isDark: isDark)
 
         if message.sender != "system" {
             let (baseName, suffix) = message.sender.splitSuffix()
@@ -371,14 +376,15 @@ final class ChatMessageFormatter {
 
         let isDark = colorScheme == .dark
         let isVerifiedSender = !isSelf && isVerifiedSender(of: message)
-        // Same key ingredients as the full-text cache, in a namespace of its
-        // own so a header and a full text never answer each other's lookups.
+        let baseColor: Color = isSelf ? PeerColorContrast.selfColor(isDark: isDark) : peerColor(for: message, isDark: isDark)
+        // Same key ingredients as the full-text cache, minus my nickname (a
+        // header has no mentions), in a namespace of its own so a header and
+        // a full text never answer each other's lookups.
         let cacheVariant = Self.headerCacheNamespace + theme.formatCacheVariant + (isVerifiedSender ? "-vf" : "")
+            + "|\(baseColor.hashValue)"
         if let cachedHeader = message.getCachedFormattedText(isDark: isDark, isSelf: isSelf, variant: cacheVariant) {
             return cachedHeader
         }
-
-        let baseColor: Color = isSelf ? PeerColorContrast.selfColor(isDark: isDark) : peerColor(for: message, isDark: isDark)
 
         if message.sender == "system" {
             var style = AttributeContainer()
