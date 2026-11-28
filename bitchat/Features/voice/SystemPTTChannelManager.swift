@@ -228,6 +228,22 @@ final class SystemPTTChannelManager: ObservableObject {
         }
     }
 
+    fileprivate func handleFailedToJoin(channelUUID: UUID, error: Error) {
+        SecureLogger.warning("PTT: failed to join system PushToTalk channel \(channelUUID): \(error.localizedDescription)", category: .session)
+        if activeChannel?.channelUUID == channelUUID || activeChannel == nil {
+            activeChannel = nil
+            isSystemTransmitting = false
+            status = .unavailable(reason: error.localizedDescription)
+        }
+    }
+
+    fileprivate func handleFailedToTransmit(channelUUID: UUID, error: Error) {
+        SecureLogger.warning("PTT: failed to transmit on system PushToTalk channel \(channelUUID): \(error.localizedDescription)", category: .session)
+        if activeChannel?.channelUUID == channelUUID {
+            isSystemTransmitting = false
+        }
+    }
+
     fileprivate func handleTransmitBegan(channelUUID: UUID) {
         guard activeChannel?.channelUUID == channelUUID else { return }
         isSystemTransmitting = true
@@ -240,12 +256,31 @@ final class SystemPTTChannelManager: ObservableObject {
         onSystemTransmitEnded?()
     }
 
-    private static func channelAvatarImage() -> UIImage? {
-        UIImage(systemName: "radio.fill")
+    nonisolated fileprivate static func channelAvatarImage() -> UIImage? {
+        renderBadgeImage(systemName: "radio.fill", backgroundColor: .systemBlue)
     }
 
-    private static func speakerAvatarImage() -> UIImage? {
-        UIImage(systemName: "waveform.circle.fill")
+    nonisolated private static func speakerAvatarImage() -> UIImage? {
+        renderBadgeImage(systemName: "waveform", backgroundColor: .systemGreen)
+    }
+
+    nonisolated private static func renderBadgeImage(systemName: String, backgroundColor: UIColor) -> UIImage? {
+        let size = CGSize(width: 96, height: 96)
+        let renderer = UIGraphicsImageRenderer(size: size)
+        return renderer.image { ctx in
+            backgroundColor.setFill()
+            ctx.cgContext.fillEllipse(in: CGRect(origin: .zero, size: size))
+            let config = UIImage.SymbolConfiguration(pointSize: 44, weight: .semibold)
+            if let symbol = UIImage(systemName: systemName, withConfiguration: config)?
+                .withTintColor(.white, renderingMode: .alwaysOriginal) {
+                let symSize = symbol.size
+                let origin = CGPoint(
+                    x: (size.width - symSize.width) / 2,
+                    y: (size.height - symSize.height) / 2
+                )
+                symbol.draw(at: origin)
+            }
+        }
     }
     #endif
 }
@@ -268,6 +303,18 @@ private final class SystemPTTDelegateProxy: NSObject, PTChannelManagerDelegate, 
     func channelManager(_ channelManager: PTChannelManager, didLeaveChannel channelUUID: UUID, reason: PTChannelLeaveReason) {
         Task { @MainActor [weak owner] in
             owner?.handleDidLeave(channelUUID: channelUUID)
+        }
+    }
+
+    func channelManager(_ channelManager: PTChannelManager, failedToJoinChannel channelUUID: UUID, error: Error) {
+        Task { @MainActor [weak owner] in
+            owner?.handleFailedToJoin(channelUUID: channelUUID, error: error)
+        }
+    }
+
+    func channelManager(_ channelManager: PTChannelManager, failedToBeginTransmittingInChannel channelUUID: UUID, error: Error) {
+        Task { @MainActor [weak owner] in
+            owner?.handleFailedToTransmit(channelUUID: channelUUID, error: error)
         }
     }
 
@@ -301,7 +348,7 @@ private final class SystemPTTDelegateProxy: NSObject, PTChannelManagerDelegate, 
 
     func channelDescriptor(restoredChannelUUID channelUUID: UUID) -> PTChannelDescriptor {
         let name = owner?.cachedChannelName(for: channelUUID) ?? "bitchat"
-        return PTChannelDescriptor(name: name, image: UIImage(systemName: "radio.fill"))
+        return PTChannelDescriptor(name: name, image: SystemPTTChannelManager.channelAvatarImage())
     }
 }
 #endif
