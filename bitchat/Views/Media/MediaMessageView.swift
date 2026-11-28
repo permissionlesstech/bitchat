@@ -39,12 +39,10 @@ struct MediaMessageView: View {
             && conversationUIModel.isSentByCurrentUser(message)
             && deliveryStatus != .notSentYet
 
-        // Baseline alignment (via the header text inside the VStack) keeps the
-        // lock on the header line; a fixed top padding left its solid body
-        // hanging below the line's visual center.
+        // Baseline alignment (via the header text inside the VStack) keeps
+        // leading badges aligned with the header line.
         HStack(alignment: .firstTextBaseline, spacing: 0) {
             MessageLeadingBadges(
-                isPrivate: message.isPrivate,
                 showsVerifiedSeal: conversationUIModel.showsVerifiedSeal(for: message)
             )
             VStack(alignment: .leading, spacing: 2) {

@@ -97,13 +97,11 @@ struct TextMessageView: View, Equatable {
                 .buttonStyle(.plain)
                 .padding(.bottom, 4)
             }
-            // Baseline alignment keeps the lock and delivery glyphs on the
-            // first text line; a fixed top padding left the lock's solid body
-            // hanging below the line's visual center.
+            // Baseline alignment keeps leading badges and delivery glyphs on
+            // the first text line rather than hanging below its visual center.
             HStack(alignment: .firstTextBaseline, spacing: 0) {
                 let isExpanded = expandedMessageIDs.contains(message.id)
                 MessageLeadingBadges(
-                    isPrivate: message.isPrivate,
                     showsVerifiedSeal: conversationUIModel.showsVerifiedSeal(for: message),
                     isBridged: message.isBridged
                 )
