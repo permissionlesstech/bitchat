@@ -87,7 +87,12 @@ struct ContentComposerView: View {
                 .bitchatFont(size: 15)
                 .foregroundColor(palette.primary)
                 .focused(isTextFieldFocused)
-                .autocorrectionDisabled(true)
+                .autocorrectionDisabled(
+                    Self.shouldDisableAutocorrection(
+                        for: messageText,
+                        isAutocompleting: conversationUIModel.showAutocomplete
+                    )
+                )
                 #if os(iOS)
                 .textInputAutocapitalization(.sentences)
                 #endif
@@ -150,6 +155,12 @@ struct ContentComposerView: View {
         .onDisappear {
             draftModel.cancelAutocompleteDebounce()
         }
+    }
+}
+
+extension ContentComposerView {
+    static func shouldDisableAutocorrection(for text: String, isAutocompleting: Bool) -> Bool {
+        isAutocompleting || text.trimmingCharacters(in: .whitespacesAndNewlines).hasPrefix("/")
     }
 }
 
