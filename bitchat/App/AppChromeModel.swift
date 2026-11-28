@@ -79,7 +79,7 @@ final class AppChromeModel: ObservableObject {
     }
 
     /// Presents the App Info sheet. Pass a pane when the launching control
-    /// promises one (e.g., the gateway globe opens settings); nil keeps the
+    /// promises one (e.g., the Chats nickname button opens settings); nil keeps the
     /// sheet's own sticky last-used pane.
     func presentAppInfo(pane: AppInfoView.Pane? = nil) {
         if let pane {
