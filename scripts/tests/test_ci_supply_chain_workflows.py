@@ -4,6 +4,7 @@ import unittest
 
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
+WORKFLOWS_DIR = REPOSITORY_ROOT / ".github/workflows"
 SOURCE_MANIFEST_WORKFLOW = REPOSITORY_ROOT / ".github/workflows/source-manifest.yml"
 ARTI_PROVENANCE_WORKFLOW = REPOSITORY_ROOT / ".github/workflows/arti-provenance.yml"
 SWIFT_TESTS_WORKFLOW = REPOSITORY_ROOT / ".github/workflows/swift-tests.yml"
@@ -30,12 +31,14 @@ def extract_run_blocks(text: str) -> list[str]:
     i = 0
     while i < len(lines):
         line = lines[i]
-        match = re.match(r"^(\s*)run:\s*(.*)$", line)
+        match = re.match(r"^(\s*)(-\s+)?run:\s*(.*)$", line)
         if not match:
             i += 1
             continue
-        indent = len(match.group(1))
-        rest = match.group(2).strip()
+        # Block lines sit deeper than the `run` key. In the list form
+        # `- run: |` that key starts after the dash.
+        indent = len(match.group(1)) + len(match.group(2) or "")
+        rest = match.group(3).strip()
         if rest in ("|", ">", "|-", ">-"):
             block_lines: list[str] = []
             i += 1
@@ -128,6 +131,31 @@ class ArtiProvenanceWorkflowTests(unittest.TestCase):
         # Checkout already has full history. A second --depth fetch cuts the
         # history of a newer base tip, and "base...HEAD" has no merge base.
         self.assertNotIn("--depth", self.directives)
+
+
+class AllWorkflowFilesTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.workflows = sorted(WORKFLOWS_DIR.glob("*.yml"))
+
+    def test_workflow_files_are_found(self) -> None:
+        self.assertTrue(self.workflows, f"no workflow files in {WORKFLOWS_DIR}")
+
+    def test_all_actions_are_pinned_by_commit_sha(self) -> None:
+        for path in self.workflows:
+            directives = strip_comments(path.read_text(encoding="utf-8"))
+            for line in directives.splitlines():
+                if "uses:" in line:
+                    with self.subTest(workflow=path.name, line=line.strip()):
+                        self.assertRegex(line, SHA_PINNED_USES)
+
+    def test_no_expression_interpolation_in_run_blocks(self) -> None:
+        # Raw text: GitHub expands ${{ }} in every line of a run: block,
+        # shell comment lines included.
+        for path in self.workflows:
+            for block in extract_run_blocks(path.read_text(encoding="utf-8")):
+                with self.subTest(workflow=path.name):
+                    self.assertNotIn("${{", block)
 
 
 class BuildIosAndSwiftTestsHardeningTests(unittest.TestCase):
