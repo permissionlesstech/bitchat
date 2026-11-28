@@ -137,14 +137,6 @@ private final class MockChatPeerIdentityContext: ChatPeerIdentityContext {
         fingerprintsByPeerID[peerID] = fingerprint
     }
 
-    func migrateFingerprintMapping(from oldPeerID: PeerID, to newPeerID: PeerID, fallback: String?) -> String? {
-        let fingerprint = fingerprintsByPeerID.removeValue(forKey: oldPeerID) ?? fallback
-        if let fingerprint {
-            fingerprintsByPeerID[newPeerID] = fingerprint
-        }
-        return fingerprint
-    }
-
     func isVerifiedFingerprint(_ fingerprint: String) -> Bool {
         verifiedFingerprintSet.contains(fingerprint)
     }

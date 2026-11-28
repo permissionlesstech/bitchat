@@ -11,7 +11,6 @@ struct MeshPeerRow: Identifiable, Equatable {
     let isFavorite: Bool
     let isConnected: Bool
     let isReachable: Bool
-    let isMutualFavorite: Bool
     let isNostrAvailable: Bool
     let encryptionStatus: EncryptionStatus
     let showsVerifiedBadgeWhenOffline: Bool
@@ -564,7 +563,6 @@ final class PeerListModel: ObservableObject {
                 isFavorite: peer.favoriteStatus?.isFavorite ?? false,
                 isConnected: peer.isConnected,
                 isReachable: peer.isReachable,
-                isMutualFavorite: peer.isMutualFavorite,
                 isNostrAvailable: peer.connectionState == .nostrAvailable,
                 encryptionStatus: chatViewModel.getEncryptionStatus(for: peer.peerID),
                 showsVerifiedBadgeWhenOffline: verifiedBadge,

@@ -73,9 +73,6 @@ protocol ChatPeerIdentityContext: AnyObject {
 
     // MARK: Identity store (fingerprints & encryption status)
     func setStoredFingerprint(_ fingerprint: String, for peerID: PeerID)
-    /// Moves the stored fingerprint mapping from `oldPeerID` to `newPeerID`,
-    /// falling back to `fallback` when none was stored. Returns the migrated fingerprint.
-    func migrateFingerprintMapping(from oldPeerID: PeerID, to newPeerID: PeerID, fallback: String?) -> String?
     func isVerifiedFingerprint(_ fingerprint: String) -> Bool
     func setEncryptionStatus(_ status: EncryptionStatus?, for peerID: PeerID)
     func cachedEncryptionStatus(for peerID: PeerID) -> EncryptionStatus?
@@ -179,10 +176,6 @@ extension ChatViewModel: ChatPeerIdentityContext {
 
     func setStoredFingerprint(_ fingerprint: String, for peerID: PeerID) {
         peerIdentityStore.setFingerprint(fingerprint, for: peerID)
-    }
-
-    func migrateFingerprintMapping(from oldPeerID: PeerID, to newPeerID: PeerID, fallback: String?) -> String? {
-        peerIdentityStore.migrateFingerprintMapping(from: oldPeerID, to: newPeerID, fallback: fallback)
     }
 
     func isVerifiedFingerprint(_ fingerprint: String) -> Bool {
