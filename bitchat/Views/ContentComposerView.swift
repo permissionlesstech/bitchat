@@ -13,6 +13,7 @@ struct ContentComposerView: View {
     @EnvironmentObject private var locationChannelsModel: LocationChannelsModel
     @ObservedObject private var bridgeService = BridgeService.shared
     @ObservedObject private var pttPreferences = PTTPreferences.shared
+    @Environment(\.colorScheme) private var colorScheme
     @Environment(\.appTheme) private var theme
     @ThemedPalette private var palette
 
@@ -227,9 +228,13 @@ private extension ContentComposerView {
     }
 
     func replyBanner(for target: MessageReplyTarget) -> some View {
-        HStack(spacing: 8) {
+        let senderTint = conversationUIModel.colorForSenderName(
+            target.sender,
+            isDark: colorScheme == .dark
+        )
+        return HStack(spacing: 8) {
             Capsule()
-                .fill(palette.accent)
+                .fill(senderTint)
                 .frame(width: 3, height: 28)
 
             VStack(alignment: .leading, spacing: 1) {
@@ -241,7 +246,7 @@ private extension ContentComposerView {
                     )
                 )
                 .bitchatFont(size: 11, weight: .semibold)
-                .foregroundColor(palette.accent)
+                .foregroundColor(senderTint)
                 .lineLimit(1)
 
                 Text(verbatim: target.snippet)

@@ -122,6 +122,10 @@ final class ConversationUIModel: ObservableObject {
         chatViewModel.formatMessageHeader(message, colorScheme: colorScheme, theme: theme)
     }
 
+    func colorForSenderName(_ senderName: String, isDark: Bool) -> Color {
+        chatViewModel.colorForSenderName(senderName, isDark: isDark)
+    }
+
     func mediaAttachment(for message: BitchatMessage) -> BitchatMessage.Media? {
         // The model loads from outgoing/ exactly when the row's sender equals
         // the name it is given. Ask with the row's own sender first: text rows,

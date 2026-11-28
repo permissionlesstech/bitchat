@@ -213,6 +213,10 @@ final class PeerListModel: ObservableObject {
         chatViewModel.colorForMeshPeer(id: peerID, isDark: isDark)
     }
 
+    func colorForPeer(id peerID: PeerID, isDark: Bool) -> Color {
+        chatViewModel.colorForPeer(id: peerID, isDark: isDark)
+    }
+
     func colorForGeohashPerson(id: String, isDark: Bool) -> Color {
         chatViewModel.colorForNostrPubkey(id, isDark: isDark)
     }

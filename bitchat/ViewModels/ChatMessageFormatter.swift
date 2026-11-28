@@ -59,7 +59,8 @@ final class ChatMessageFormatter {
         }
 
         var result = AttributedString()
-        let baseColor: Color = isSelf ? .orange : peerColor(for: message, isDark: isDark)
+        let selfColor = PeerColorContrast.selfColor(isDark: isDark)
+        let baseColor: Color = isSelf ? selfColor : peerColor(for: message, isDark: isDark)
 
         if message.sender != "system" {
             let (baseName, suffix) = message.sender.splitSuffix()
@@ -258,7 +259,7 @@ final class ChatMessageFormatter {
                                 weight: isSelf ? .bold : .semibold,
                                 design: design
                             )
-                            let mentionColor: Color = isMentionToMe ? .orange : baseColor
+                            let mentionColor: Color = isMentionToMe ? selfColor : baseColor
                             mentionStyle.foregroundColor = mentionColor
                             let at = "@"
                             result.append(AttributedString("\(at)").mergingAttributes(mentionStyle))
@@ -298,7 +299,7 @@ final class ChatMessageFormatter {
                                 design: design
                             )
                             if type == "url" {
-                                matchStyle.foregroundColor = isSelf ? .orange : .blue
+                                matchStyle.foregroundColor = isSelf ? selfColor : .blue
                                 matchStyle.underlineStyle = .single
                                 if let url = URL(string: matchText) {
                                     matchStyle.link = url
@@ -367,7 +368,7 @@ final class ChatMessageFormatter {
             return cachedHeader
         }
 
-        let baseColor: Color = isSelf ? .orange : peerColor(for: message, isDark: isDark)
+        let baseColor: Color = isSelf ? PeerColorContrast.selfColor(isDark: isDark) : peerColor(for: message, isDark: isDark)
 
         if message.sender == "system" {
             var style = AttributeContainer()
@@ -432,6 +433,42 @@ final class ChatMessageFormatter {
     func colorForMeshPeer(id peerID: PeerID, isDark: Bool) -> Color {
         getPeerPaletteColor(for: peerID, isDark: isDark)
     }
+
+    /// Resolves the assigned palette color for any `PeerID` (Nostr GeoDM /
+    /// geochat vs Bluetooth mesh) so avatars and chat messages always match.
+    func colorForPeer(id peerID: PeerID, isDark: Bool) -> Color {
+        if peerID.isGeoDM || peerID.isGeoChat {
+            let full = viewModel.fullNostrHex(forSenderPeerID: peerID)?.lowercased()
+                ?? viewModel.nostrKeyMapping[peerID]?.lowercased()
+                ?? peerID.bare.lowercased()
+            return getNostrPaletteColor(for: full, isDark: isDark)
+        }
+        return getPeerPaletteColor(for: peerID, isDark: isDark)
+    }
+
+    /// Resolves a quoted sender's color by matching self, active mesh peers,
+    /// active geohash participants, or deterministic seed fallback.
+    func colorForSenderName(_ senderName: String, isDark: Bool) -> Color {
+        let trimmed = senderName.trimmingCharacters(in: .whitespacesAndNewlines)
+        let (baseName, _) = trimmed.splitSuffix()
+        let normalizedBase = baseName.normalizedNickname
+        let myNormalized = viewModel.nickname.normalizedNickname
+        if trimmed == viewModel.nickname || normalizedBase == myNormalized {
+            return PeerColorContrast.selfColor(isDark: isDark)
+        }
+        if let peer = viewModel.allPeers.first(where: {
+            $0.nickname == trimmed || $0.nickname.normalizedNickname == normalizedBase
+        }) {
+            return getPeerPaletteColor(for: peer.peerID, isDark: isDark)
+        }
+        if let person = viewModel.participantTracker.visiblePeople.first(where: {
+            let (personBase, _) = $0.displayName.splitSuffix()
+            return $0.displayName == trimmed || personBase.normalizedNickname == normalizedBase
+        }) {
+            return getNostrPaletteColor(for: person.id.lowercased(), isDark: isDark)
+        }
+        return Color(peerSeed: trimmed.lowercased(), isDark: isDark)
+    }
 }
 
 private extension ChatMessageFormatter {
@@ -481,7 +518,7 @@ private extension ChatMessageFormatter {
 
     func getPeerPaletteColor(for peerID: PeerID, isDark: Bool) -> Color {
         if peerID == viewModel.meshService.myPeerID {
-            return .orange
+            return PeerColorContrast.selfColor(isDark: isDark)
         }
 
         ensureMeshPalette()
@@ -511,7 +548,7 @@ private extension ChatMessageFormatter {
     func getNostrPaletteColor(for pubkeyHexLowercased: String, isDark: Bool) -> Color {
         let myHex = currentGeohashIdentityHex()
         if let myHex, pubkeyHexLowercased == myHex {
-            return .orange
+            return PeerColorContrast.selfColor(isDark: isDark)
         }
 
         ensureNostrPalette(excluding: myHex)

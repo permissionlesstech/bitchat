@@ -65,17 +65,21 @@ struct TextMessageView: View, Equatable {
                 && deliveryStatus != .notSentYet
 
             if let parsedReply {
+                let quoteTint = conversationUIModel.colorForSenderName(
+                    parsedReply.quotedSender,
+                    isDark: colorScheme == .dark
+                )
                 Button {
                     onTapQuote?(parsedReply.quotedSender, parsedReply.quotedSnippet)
                 } label: {
                     HStack(spacing: 6) {
                         Capsule()
-                            .fill(palette.accent.opacity(0.75))
+                            .fill(quoteTint.opacity(0.85))
                             .frame(width: 2.5)
                         VStack(alignment: .leading, spacing: 1) {
                             Text(verbatim: "@\(parsedReply.quotedSender)")
                                 .bitchatFont(size: 11, weight: .semibold)
-                                .foregroundColor(palette.accent)
+                                .foregroundColor(quoteTint)
                                 .lineLimit(1)
                             Text(verbatim: parsedReply.quotedSnippet)
                                 .bitchatFont(size: 11)
@@ -87,7 +91,7 @@ struct TextMessageView: View, Equatable {
                     }
                     .padding(.horizontal, 8)
                     .padding(.vertical, 5)
-                    .background(palette.secondary.opacity(0.08))
+                    .background(quoteTint.opacity(0.08))
                     .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
                 }
                 .buttonStyle(.plain)

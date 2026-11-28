@@ -62,7 +62,7 @@ struct ContactDetailSheet: View {
         let isBlocked = privateConversationModel.isBlocked(peerID: peerID)
         let activeTimer = privateConversationModel.disappearingTimer(for: conversationPeerID)
         let displayName = headerState?.displayName ?? fpState.peerNickname
-        let avatarTint = peerListModel.colorForMeshPeer(id: peerID, isDark: colorScheme == .dark)
+        let avatarTint = peerListModel.colorForPeer(id: peerID, isDark: colorScheme == .dark)
 
         VStack(spacing: 0) {
             ThemedSheetHeader(

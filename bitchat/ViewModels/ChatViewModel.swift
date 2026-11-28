@@ -2306,6 +2306,16 @@ final class ChatViewModel: ObservableObject, SynchronousMessageTransportEventDel
         messageFormatter.colorForMeshPeer(id: peerID, isDark: isDark)
     }
 
+    @MainActor
+    func colorForPeer(id peerID: PeerID, isDark: Bool) -> Color {
+        messageFormatter.colorForPeer(id: peerID, isDark: isDark)
+    }
+
+    @MainActor
+    func colorForSenderName(_ senderName: String, isDark: Bool) -> Color {
+        messageFormatter.colorForSenderName(senderName, isDark: isDark)
+    }
+
     // Clear the current public channel's timeline (visible + persistent buffer)
     @MainActor
     func clearCurrentPublicTimeline() {

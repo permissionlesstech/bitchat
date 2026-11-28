@@ -459,7 +459,7 @@ struct ChatsInboxView: View {
     private func avatarView(for row: InboxChatRow) -> some View {
         let tint: Color = row.isGroup
             ? palette.accent
-            : peerListModel.colorForMeshPeer(id: row.peerID, isDark: colorScheme == .dark)
+            : peerListModel.colorForPeer(id: row.peerID, isDark: colorScheme == .dark)
         return ZStack {
             Circle()
                 .fill(tint.opacity(0.18))
