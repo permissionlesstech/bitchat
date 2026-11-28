@@ -147,7 +147,7 @@ pub async fn handle_socks_connection(
         }
     };
 
-    let tor_stream = match client.connect(tor_addr).await {
+    let mut tor_stream = match client.connect(tor_addr).await {
         Ok(s) => s,
         Err(e) => {
             tracing::debug!("Tor connect failed: {}", e);
@@ -172,31 +172,21 @@ pub async fn handle_socks_connection(
     ];
     stream.write_all(&reply).await?;
 
-    // Bidirectional copy
-    let (mut client_read, mut client_write) = stream.into_split();
-    let (mut tor_read, mut tor_write) = tor_stream.split();
-
-    let client_to_tor = async {
-        tokio::io::copy(&mut client_read, &mut tor_write).await
-    };
-    let tor_to_client = async {
-        tokio::io::copy(&mut tor_read, &mut client_write).await
-    };
-
-    tokio::select! {
-        result = client_to_tor => {
-            if let Err(e) = result {
-                tracing::debug!("Client to Tor copy error: {}", e);
-            }
-        }
-        result = tor_to_client => {
-            if let Err(e) = result {
-                tracing::debug!("Tor to client copy error: {}", e);
-            }
-        }
+    // Full-duplex bidirectional copy that preserves TCP half-close semantics
+    // (client EOF propagates shutdown to Tor without truncating the response).
+    if let Err(e) = proxy_bidirectional(&mut stream, &mut tor_stream).await {
+        tracing::debug!("SOCKS bidirectional copy error for {}: {}", peer_addr, e);
     }
 
     Ok(())
+}
+
+async fn proxy_bidirectional<A, B>(a: &mut A, b: &mut B) -> io::Result<(u64, u64)>
+where
+    A: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin + ?Sized,
+    B: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin + ?Sized,
+{
+    tokio::io::copy_bidirectional(a, b).await
 }
 
 async fn send_reply(stream: &mut TcpStream, rep: u8) -> io::Result<()> {
@@ -209,4 +199,40 @@ async fn send_reply(stream: &mut TcpStream, rep: u8) -> io::Result<()> {
         0, 0, // BND.PORT
     ];
     stream.write_all(&reply).await
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn proxy_bidirectional_preserves_response_after_client_half_close() {
+        let (mut client_end, mut proxy_client) = tokio::io::duplex(256);
+        let (mut proxy_remote, mut remote_end) = tokio::io::duplex(256);
+
+        let proxy = tokio::spawn(async move {
+            proxy_bidirectional(&mut proxy_client, &mut proxy_remote).await
+        });
+
+        // Client sends request and half-closes its write side before server replies.
+        client_end.write_all(b"GET / HTTP/1.0\r\n\r\n").await.unwrap();
+        client_end.shutdown().await.unwrap();
+
+        // Remote reads until EOF, then writes the full response.
+        let mut req = Vec::new();
+        remote_end.read_to_end(&mut req).await.unwrap();
+        assert_eq!(req, b"GET / HTTP/1.0\r\n\r\n");
+
+        remote_end.write_all(b"HTTP/1.0 200 OK\r\n\r\nhello").await.unwrap();
+        remote_end.shutdown().await.unwrap();
+
+        // Client must still receive the entire response after half-closing.
+        let mut resp = Vec::new();
+        client_end.read_to_end(&mut resp).await.unwrap();
+        assert_eq!(resp, b"HTTP/1.0 200 OK\r\n\r\nhello");
+
+        let (c_to_r, r_to_c) = proxy.await.unwrap().unwrap();
+        assert_eq!(c_to_r, 18);
+        assert_eq!(r_to_c, 24);
+    }
 }
