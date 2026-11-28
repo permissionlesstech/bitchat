@@ -49,6 +49,7 @@
 	<string>bitchat lets you pick images from your photo library to share with nearby peers.</string>
 	<key>UIBackgroundModes</key>
 	<array>
+		<string>audio</string>
 		<string>bluetooth-central</string>
 		<string>bluetooth-peripheral</string>
 		<string>push-to-talk</string>

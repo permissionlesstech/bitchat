@@ -105,6 +105,23 @@ final class SystemPTTChannelManager: ObservableObject {
         return false
     }
 
+    /// Instantiates `PTChannelManager` early on launch as required by Apple's
+    /// PushToTalk framework so active channels and background triggers survive
+    /// background/restore transitions.
+    func warmUpIfNeeded() {
+        #if canImport(PushToTalk) && !targetEnvironment(simulator)
+        guard !TestEnvironment.isRunningTests, channelManager == nil else { return }
+        Task { @MainActor [weak self] in
+            guard let self else { return }
+            do {
+                _ = try await self.ensureChannelManager()
+            } catch {
+                SecureLogger.debug("PTT: launch PTChannelManager warmup skipped: \(error.localizedDescription)", category: .session)
+            }
+        }
+        #endif
+    }
+
     /// Joins or switches the iOS system Push-to-Talk channel (Lock Screen /
     /// Dynamic Island Talk button).
     func joinChannel(_ info: SystemPTTChannelInfo) {
@@ -116,6 +133,10 @@ final class SystemPTTChannelManager: ObservableObject {
 
         #if canImport(PushToTalk)
         cacheChannelName(info.displayName, for: info.channelUUID)
+        // Pre-configure exclusive `.playAndRecord` while still in the foreground
+        // (without activating) so iOS PushToTalk can activate the session cleanly
+        // when Talk is pressed from the Lock Screen.
+        AudioSessionCoordinator.shared.prepareForExternalActivation(.capture)
         status = .connecting
         Task { @MainActor [weak self] in
             guard let self else { return }
@@ -125,7 +146,7 @@ final class SystemPTTChannelManager: ObservableObject {
                     manager.leaveChannel(channelUUID: current.channelUUID)
                 }
                 let descriptor = PTChannelDescriptor(
-                    name: info.displayName,
+                    name: "\(info.displayName) · PTT",
                     image: Self.channelAvatarImage()
                 )
                 self.activeChannel = info
@@ -353,6 +374,7 @@ private final class SystemPTTDelegateProxy: NSObject, PTChannelManagerDelegate, 
     }
 
     func channelManager(_ channelManager: PTChannelManager, didLeaveChannel channelUUID: UUID, reason: PTChannelLeaveReason) {
+        SecureLogger.info("PTT: system PushToTalk didLeaveChannel (uuid=\(channelUUID), reason=\(reason.rawValue))", category: .session)
         Task { @MainActor [weak owner] in
             owner?.handleDidLeave(channelUUID: channelUUID)
         }
@@ -364,14 +386,23 @@ private final class SystemPTTDelegateProxy: NSObject, PTChannelManagerDelegate, 
         }
     }
 
+    func channelManager(_ channelManager: PTChannelManager, failedToLeaveChannel channelUUID: UUID, error: Error) {
+        SecureLogger.warning("PTT: system PushToTalk failedToLeaveChannel (uuid=\(channelUUID)): \(error.localizedDescription)", category: .session)
+    }
+
     func channelManager(_ channelManager: PTChannelManager, failedToBeginTransmittingInChannel channelUUID: UUID, error: Error) {
         Task { @MainActor [weak owner] in
             owner?.handleFailedToTransmit(channelUUID: channelUUID, error: error)
         }
     }
 
+    func channelManager(_ channelManager: PTChannelManager, failedToStopTransmittingInChannel channelUUID: UUID, error: Error) {
+        SecureLogger.warning("PTT: system PushToTalk failedToStopTransmitting (uuid=\(channelUUID)): \(error.localizedDescription)", category: .session)
+    }
+
     func channelManager(_ channelManager: PTChannelManager, channelUUID: UUID, didBeginTransmittingFrom source: PTChannelTransmitRequestSource) {
-        // Configure AVAudioSession category BEFORE iOS PushToTalk activates it
+        SecureLogger.info("PTT: system PushToTalk didBeginTransmitting (uuid=\(channelUUID), source=\(source.rawValue))", category: .session)
+        // Configure exclusive AVAudioSession category BEFORE iOS PushToTalk activates it
         // (must NOT call setActive(true); wait for didActivateAudioSession).
         AudioSessionCoordinator.shared.prepareForExternalActivation(.capture)
         Task { @MainActor [weak owner] in
@@ -380,6 +411,7 @@ private final class SystemPTTDelegateProxy: NSObject, PTChannelManagerDelegate, 
     }
 
     func channelManager(_ channelManager: PTChannelManager, channelUUID: UUID, didEndTransmittingFrom source: PTChannelTransmitRequestSource) {
+        SecureLogger.info("PTT: system PushToTalk didEndTransmitting (uuid=\(channelUUID), source=\(source.rawValue))", category: .session)
         Task { @MainActor [weak owner] in
             owner?.handleTransmitEnded(channelUUID: channelUUID)
         }
@@ -390,7 +422,7 @@ private final class SystemPTTDelegateProxy: NSObject, PTChannelManagerDelegate, 
     }
 
     func channelManager(_ channelManager: PTChannelManager, didActivate audioSession: AVAudioSession) {
-        SecureLogger.info("PTT: system PushToTalk audio session activated", category: .session)
+        SecureLogger.info("PTT: system PushToTalk audio session activated (category=\(audioSession.category.rawValue), mode=\(audioSession.mode.rawValue))", category: .session)
         AudioSessionCoordinator.shared.handleExternalActivation()
         Task { @MainActor [weak owner] in
             owner?.handleAudioSessionActivated()

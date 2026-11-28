@@ -847,7 +847,7 @@ struct WalkieTalkieSheetView: View {
                         .font(.system(size: 13, weight: .semibold))
                     Text(
                         systemPTT.isActive
-                        ? String(localized: "walkie.system_ptt.active", defaultValue: "Lock-Screen PTT Active · Tap to Leave", comment: "Button when iOS PushToTalk channel is active on Lock Screen and Dynamic Island")
+                        ? String(localized: "walkie.system_ptt.active", defaultValue: "Pinned to Lock Screen · Tap to Unpin", comment: "Button when iOS PushToTalk channel is active on Lock Screen and Dynamic Island")
                         : String(localized: "walkie.system_ptt.join", defaultValue: "Pin to Lock Screen & Dynamic Island", comment: "Button to join iOS system PushToTalk channel")
                     )
                     .bitchatFont(size: 12, weight: .semibold)

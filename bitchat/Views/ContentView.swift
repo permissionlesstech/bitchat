@@ -340,6 +340,7 @@ struct ContentView: View {
                     uiModel?.makeVoiceCaptureSession() ?? VoiceNoteCaptureSession()
                 }
                 #if os(iOS)
+                SystemPTTChannelManager.shared.warmUpIfNeeded()
                 SystemPTTChannelManager.shared.onSystemTransmitBegan = { [weak voiceRecordingVM, weak uiModel] target in
                     guard let voiceRecordingVM, let uiModel else { return }
                     if case .error = voiceRecordingVM.state {

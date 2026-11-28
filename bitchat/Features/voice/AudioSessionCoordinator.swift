@@ -22,7 +22,18 @@ import Foundation
 protocol SessionApplying: Sendable {
     func setCategory(_ category: AudioSessionCoordinator.Category) throws
     func setActive(_ active: Bool, notifyOthersOnDeactivation: Bool) throws
+    #if os(iOS)
+    func setCategoryForPushToTalk() throws
+    #endif
 }
+
+#if os(iOS)
+extension SessionApplying {
+    func setCategoryForPushToTalk() throws {
+        try setCategory(.playAndRecord)
+    }
+}
+#endif
 
 /// Sole owner of `AVAudioSession` category/activation for voice features.
 ///
@@ -422,13 +433,18 @@ final class AudioSessionCoordinator: @unchecked Sendable {
     #if os(iOS)
     /// Pre-configures the audio session category before iOS `PushToTalk`
     /// activates the session on our behalf (must NOT call `setActive(true)`).
+    /// Uses exclusive `.playAndRecord` (without `.mixWithOthers`) so iOS
+    /// PushToTalk grants background transmission audio priority.
     func prepareForExternalActivation(_ use: Use) {
         queue.sync {
             guard self.holders.isEmpty else { return }
             let target: Category = (use == .capture || self.currentCategory == .playAndRecord) ? .playAndRecord : .playback
-            guard target != self.currentCategory else { return }
             do {
-                try self.session.setCategory(target)
+                if target == .playAndRecord {
+                    try self.session.setCategoryForPushToTalk()
+                } else {
+                    try self.session.setCategory(target)
+                }
                 self.currentCategory = target
             } catch {
                 SecureLogger.warning("AudioSession: failed configuring category for external activation: \(error)", category: .session)
@@ -445,7 +461,7 @@ final class AudioSessionCoordinator: @unchecked Sendable {
             self.sessionActive = true
             if self.holders.isEmpty, self.currentCategory != .playAndRecord {
                 do {
-                    try self.session.setCategory(.playAndRecord)
+                    try self.session.setCategoryForPushToTalk()
                     self.currentCategory = .playAndRecord
                 } catch {
                     SecureLogger.warning("AudioSession: failed setting playAndRecord after external activation: \(error)", category: .session)
@@ -539,6 +555,23 @@ private struct SystemAudioSession: SessionApplying {
             )
             #endif
         }
+    }
+
+    func setCategoryForPushToTalk() throws {
+        let session = AVAudioSession.sharedInstance()
+        #if targetEnvironment(simulator)
+        try session.setCategory(
+            .playAndRecord,
+            mode: .default,
+            options: [.defaultToSpeaker, .allowBluetoothA2DP]
+        )
+        #else
+        try session.setCategory(
+            .playAndRecord,
+            mode: .default,
+            options: [.defaultToSpeaker, .allowBluetoothA2DP, .allowBluetoothHFP]
+        )
+        #endif
     }
 
     func setActive(_ active: Bool, notifyOthersOnDeactivation: Bool) throws {
