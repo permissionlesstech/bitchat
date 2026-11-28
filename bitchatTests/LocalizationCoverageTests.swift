@@ -333,7 +333,9 @@ struct LocalizationCoverageTests {
     /// repo-relative file and line so a failure points at the call site
     /// instead of just naming a file.
     private static func localizedKeyReferences(in sourceRoot: String) throws -> [KeyReference] {
-        let pattern = try NSRegularExpression(pattern: #"String\(\s*localized:\s*"([^"\\]+)""#)
+        let pattern = try NSRegularExpression(
+            pattern: #"(?:String\(\s*localized:\s*|NSLocalizedString\(\s*)"([^"\\]+)""#
+        )
         let rootURL = repoRoot.appendingPathComponent(sourceRoot)
         let enumerator = try #require(FileManager.default.enumerator(
             at: rootURL,
@@ -360,5 +362,31 @@ struct LocalizationCoverageTests {
             }
         }
         return references
+    }
+
+    /// A variable count has to keep an integer specifier in every locale.
+    /// English also needs one/other. Dropping `%lld` used to stay green
+    /// because coverage only checks that a locale entry exists.
+    @Test func privateMediaFragmentLimitKeepsACountSpecifier() throws {
+        let url = Self.repoRoot.appendingPathComponent(Self.mainCatalogPath)
+        let data = try Data(contentsOf: url)
+        let root = try #require(try JSONSerialization.jsonObject(with: data) as? [String: Any])
+        let strings = try #require(root["strings"] as? [String: Any])
+        let entry = try #require(
+            strings["content.delivery.reason.private_media_too_many_fragments"] as? [String: Any]
+        )
+        let localizations = try #require(entry["localizations"] as? [String: Any])
+        let english = try #require(localizations["en"] as? [String: Any])
+        let plural = try #require(
+            ((english["variations"] as? [String: Any])?["plural"]) as? [String: Any]
+        )
+        #expect(plural["one"] != nil)
+        #expect(plural["other"] != nil)
+
+        for (locale, value) in localizations {
+            let blob = String(describing: value)
+            let hasSpecifier = blob.contains("%lld") || blob.contains("%d") || blob.contains("%#@")
+            #expect(hasSpecifier, "\(locale) dropped the fragment-count specifier")
+        }
     }
 }
